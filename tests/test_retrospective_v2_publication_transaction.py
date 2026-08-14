@@ -1151,7 +1151,10 @@ class DurablePublicationTests(unittest.TestCase):
             schedule = (
                 "FREQ=DAILY;BYHOUR=3" if mode == "daily" else "FREQ=WEEKLY;BYDAY=MO"
             )
-            prompt = f"Run python3 {installed_cli} start --mode {mode} for the exact production window."
+            prompt = (
+                f"Run python3 -I -B -S {installed_cli} start --mode {mode} "
+                "for the exact production window."
+            )
             (record_dir / "automation.toml").write_text(
                 "\n".join(
                     (

@@ -259,7 +259,7 @@ class SessionShardsAdapterCliTests(unittest.TestCase):
 
     def invoke(self, *arguments: str) -> tuple[dict[str, object], str]:
         completed = subprocess.run(
-            [sys.executable, str(CLI), *arguments],
+            [sys.executable, "-I", "-B", "-S", str(CLI), *arguments],
             cwd=self.root,
             env=self.environment,
             text=True,

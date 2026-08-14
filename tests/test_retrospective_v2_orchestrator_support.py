@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
 import textwrap
+import time
 from unittest import mock
 import unittest
 
@@ -25,6 +27,7 @@ class PublisherCanaryProcessTests(unittest.TestCase):
         self.gnupg_home.mkdir(mode=0o700)
         self.gpg_program = self.root / "fake-gpg"
         self.gpg_mode = self.root / "fake-gpg-mode"
+        self.gpg_child_pids = self.root / "fake-gpg-child-pids"
         self.gpg_sentinel = self.root / "fake-gpg-sentinel"
         self.gpg_mode.write_text("success", encoding="ascii")
         self.gpg_program.write_text(
@@ -33,6 +36,7 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                 #!{sys.executable}
                 import os
                 from pathlib import Path
+                import subprocess
                 import sys
                 import time
 
@@ -46,6 +50,24 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                     stream = sys.stderr.buffer
                 else:
                     stream = None
+                if mode in {{"spawn_closed_child", "spawn_inherited_child"}}:
+                    closed_stream = (
+                        subprocess.DEVNULL
+                        if mode == "spawn_closed_child"
+                        else None
+                    )
+                    child = subprocess.Popen(
+                        [sys.executable, "-c", "import time;time.sleep(60)"],
+                        stdin=subprocess.DEVNULL,
+                        stdout=closed_stream,
+                        stderr=closed_stream,
+                        close_fds=True,
+                    )
+                    with Path({str(self.gpg_child_pids)!r}).open(
+                        "a", encoding="ascii"
+                    ) as child_stream:
+                        child_stream.write(str(child.pid) + chr(10))
+                        child_stream.flush()
                 if stream is not None:
                     stream.write(b"x" * (limit + 1))
                     stream.flush()
@@ -67,7 +89,33 @@ class PublisherCanaryProcessTests(unittest.TestCase):
         self.gpg_program.chmod(0o700)
 
     def tearDown(self) -> None:
+        if self.gpg_child_pids.exists():
+            for value in self.gpg_child_pids.read_text(encoding="ascii").splitlines():
+                try:
+                    os.kill(int(value), signal.SIGKILL)
+                except (ProcessLookupError, ValueError):
+                    pass
         self.temporary_directory.cleanup()
+
+    def _spawned_child_pids(self) -> list[int]:
+        return [
+            int(value)
+            for value in self.gpg_child_pids.read_text(encoding="ascii").splitlines()
+        ]
+
+    def _assert_spawned_children_absent(self, expected_count: int) -> None:
+        pids = self._spawned_child_pids()
+        self.assertEqual(expected_count, len(pids))
+        deadline = time.monotonic() + 3.0
+        for pid in pids:
+            while True:
+                try:
+                    os.kill(pid, 0)
+                except ProcessLookupError:
+                    break
+                if time.monotonic() >= deadline:
+                    self.fail(f"publisher canary child {pid} survived cleanup")
+                time.sleep(0.01)
 
     def test_bounded_canary_accepts_valid_sign_and_verify_output(self) -> None:
         self.assertTrue(
@@ -133,6 +181,50 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             self.assertEqual(environment["LANG"], "C")
             self.assertEqual(environment["LC_ALL"], "C")
             self.assertEqual(environment["TZ"], "UTC")
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_canary_closes_spawned_process_groups_after_success(self) -> None:
+        self.gpg_mode.write_text("spawn_closed_child", encoding="ascii")
+
+        self.assertTrue(
+            orchestrator_support.publisher_sign_verify_canary(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+        )
+
+        self._assert_spawned_children_absent(2)
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_canary_timeout_closes_group_after_leader_exit(self) -> None:
+        self.gpg_mode.write_text("spawn_inherited_child", encoding="ascii")
+        payload = self.root / "timeout-payload"
+        signature = self.root / "timeout-payload.sig"
+        payload.write_bytes(b"payload\n")
+        environment = (
+            orchestrator_support.publication_support._strict_subprocess_environment(
+                home=self.gnupg_home
+            )
+        )
+        environment["GNUPGHOME"] = str(self.gnupg_home)
+
+        with self.assertRaisesRegex(
+            orchestrator_support._PublisherCanaryProcessError,
+            "deadline",
+        ):
+            orchestrator_support._run_bounded_publisher_canary_process(
+                [
+                    str(self.gpg_program),
+                    "--detach-sign",
+                    "--output",
+                    str(signature),
+                    str(payload),
+                ],
+                environment=environment,
+                timeout_seconds=0.5,
+            )
+
+        self._assert_spawned_children_absent(1)
 
     def test_canary_rejects_gpg_content_change_after_sign(self) -> None:
         def mutate_after_sign(command, *, environment):

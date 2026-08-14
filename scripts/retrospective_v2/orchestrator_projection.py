@@ -771,7 +771,9 @@ class StateProjectionOperations(OrchestratorComponent):
                     "action": "accept-source",
                     "command": [
                         lease.command_argv[0],
+                        "-I",
                         "-B",
+                        "-S",
                         str(cli_path),
                         "accept-source",
                         "--run-dir",

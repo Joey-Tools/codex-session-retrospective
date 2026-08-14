@@ -42,6 +42,16 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("`ps -eo` / `ps -axo`", skill)
         self.assertIn("full `sample` output", skill)
 
+    def test_public_coordinator_requires_isolated_python(self) -> None:
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        cli_reference = (ROOT / "references" / "v2-cli.md").read_text(encoding="utf-8")
+
+        self.assertIn("`python3 -I -B -S`", skill)
+        self.assertIn("python3 -I -B -S", readme)
+        self.assertNotIn('python3 "$V2_CLI"', cli_reference)
+        self.assertEqual(10, cli_reference.count('python3 -I -B -S "$V2_CLI"'))
+
     def test_references_and_entry_points_exist(self) -> None:
         for name in (
             "v2-agent-prompts.md",

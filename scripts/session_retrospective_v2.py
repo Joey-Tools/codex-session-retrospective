@@ -1,7 +1,22 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -I -B -S
 """Machine-only CLI for the Session Retrospective v2 engine."""
 
 from __future__ import annotations
+
+import sys
+
+
+if __name__ == "__main__" and not (
+    sys.flags.isolated and sys.flags.no_site and sys.flags.dont_write_bytecode
+):
+    sys.stdout.write(
+        '{"command":"startup","error":{"code":"unsafe_python_runtime",'
+        '"message":"invoke with python3 -I -B -S",'
+        '"reason_code":"readiness_failed","recovery_action":'
+        '"satisfy_readiness_gate","retryable":false},"exit_code":9,'
+        '"ok":false,"result":null,"schema":"cli_result_v2"}\n'
+    )
+    raise SystemExit(9)
 
 import argparse
 from collections.abc import Callable, Iterable, Mapping
@@ -15,7 +30,6 @@ import math
 import os
 from pathlib import Path
 import re
-import sys
 from typing import Any, NoReturn, Optional
 
 

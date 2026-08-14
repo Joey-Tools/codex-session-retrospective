@@ -136,6 +136,55 @@ class CliContractTests(unittest.TestCase):
 
         self.assertLess(runtime_guard.lineno, first_engine_import.lineno)
 
+    def test_entrypoint_requires_all_python_isolation_flags(self) -> None:
+        entrypoint = SCRIPTS / "session_retrospective_v2.py"
+        for arguments in (("-B", "-S"), ("-I", "-S"), ("-I", "-B")):
+            with self.subTest(arguments=arguments):
+                completed = subprocess.run(
+                    [sys.executable, *arguments, str(entrypoint), "--help"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                result = json.loads(completed.stdout)
+                self.assertEqual(9, completed.returncode)
+                self.assertEqual("unsafe_python_runtime", result["error"]["code"])
+                self.assertEqual("startup", result["command"])
+
+    def test_isolated_entrypoint_ignores_pythonpath_and_cwd_poison(self) -> None:
+        entrypoint = SCRIPTS / "session_retrospective_v2.py"
+        poison = self.root / "python-poison"
+        poison.mkdir(mode=0o700)
+        site_marker = self.root / "sitecustomize-executed"
+        argparse_marker = self.root / "argparse-executed"
+        poison.joinpath("sitecustomize.py").write_text(
+            f"from pathlib import Path\nPath({str(site_marker)!r}).touch()\n",
+            encoding="ascii",
+        )
+        poison.joinpath("argparse.py").write_text(
+            f"from pathlib import Path\nPath({str(argparse_marker)!r}).touch()\n",
+            encoding="ascii",
+        )
+        environment = {**os.environ, "PYTHONPATH": str(poison)}
+
+        completed = subprocess.run(
+            [sys.executable, "-I", "-B", "-S", str(entrypoint), "--help"],
+            cwd=poison,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        result = json.loads(completed.stdout)
+        self.assertTrue(result["ok"])
+        self.assertEqual("help", result["result"]["action"])
+        self.assertFalse(site_marker.exists())
+        self.assertFalse(argparse_marker.exists())
+
     def parse_dispatch(self, *arguments: str) -> cli.CommandResult:
         return cli.dispatch(self.parser.parse_args(arguments))
 
@@ -174,7 +223,8 @@ class CliContractTests(unittest.TestCase):
         record_dir.mkdir(parents=True, exist_ok=True)
         schedule = "FREQ=DAILY;BYHOUR=3" if mode == "daily" else "FREQ=WEEKLY;BYDAY=MO"
         prompt = (
-            f"Run python3 {authority.installed_v2_cli_path()} start --mode {mode} "
+            "Run python3 -I -B -S "
+            f"{authority.installed_v2_cli_path()} start --mode {mode} "
             f"for the exact production window.{prompt_suffix}"
         )
         fields = [
@@ -484,6 +534,32 @@ class CliContractTests(unittest.TestCase):
                         cli_path=authority.installed_v2_cli_path(),
                     )
                 self.assertTrue(record.is_file())
+
+    def test_cutover_record_rejects_nonisolated_python_prompt(self) -> None:
+        automation_root = self.automation_root()
+        snapshot = self.capture_cutover_snapshot("nonisolated-python")
+        for automation_id, mode in authority.STABLE_AUTOMATION_MODES.items():
+            record = self.write_automation_record(automation_id, mode)
+            if automation_id == "daily-session-retrospective":
+                record.write_text(
+                    record.read_text(encoding="utf-8").replace(
+                        "python3 -I -B -S", "python3"
+                    ),
+                    encoding="utf-8",
+                )
+
+        with self.assertRaisesRegex(
+            authority.AutomationCutoverBlocked,
+            "not an active v2 production coordinator",
+        ):
+            authority.issue_automation_cutover_record(
+                self.root / "nonisolated-cutover.json",
+                identity=self.identity,
+                capability_result=self.automation_result(snapshot),
+                pre_update_snapshot=snapshot,
+                installed_commit="a" * 40,
+                automation_root=automation_root,
+            )
 
     def test_cutover_authority_rejects_opaque_or_tampered_controller_evidence(
         self,

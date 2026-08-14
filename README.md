@@ -22,7 +22,7 @@ not own SSH host registry or private overlay installation.
 After private sync integration, the supported coordinator path is:
 
 ```bash
-python3 "$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py" --help
+python3 -I -B -S "$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py" --help
 ```
 
 The coordinator requires Python 3.13 or newer. See

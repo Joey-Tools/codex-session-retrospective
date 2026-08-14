@@ -323,6 +323,8 @@ def publisher_readiness(
 _PUBLISHER_CANARY_TIMEOUT_SECONDS = 15.0
 _PUBLISHER_CANARY_STREAM_LIMIT_BYTES = 1024 * 1024
 _PUBLISHER_CANARY_READ_CHUNK_BYTES = 64 * 1024
+_PUBLISHER_CANARY_CLEANUP_SECONDS = 1.0
+_PUBLISHER_CANARY_GROUP_POLL_SECONDS = 0.01
 
 
 class _PublisherCanaryProcessError(RuntimeError):
@@ -362,6 +364,82 @@ def _run_bounded_publisher_canary_process(
     stdout = bytearray()
     stderr = bytearray()
     deadline = time.monotonic() + timeout_seconds
+    process_group_id = process.pid if os.name == "posix" else None
+    process_group_cleanup_complete = False
+
+    def close_process_group(*, cleanup_deadline: float) -> int:
+        nonlocal process_group_cleanup_complete
+        if process_group_cleanup_complete:
+            assert process.returncode is not None
+            return process.returncode
+        if process_group_id is not None:
+            try:
+                observed = os.waitid(
+                    os.P_PID,
+                    process.pid,
+                    os.WEXITED | os.WNOHANG | os.WNOWAIT,
+                )
+            except (AttributeError, ChildProcessError, OSError) as error:
+                raise _PublisherCanaryProcessError(
+                    "publisher canary leader status could not be observed"
+                ) from error
+            leader_terminal = observed is not None and observed.si_pid == process.pid
+            try:
+                os.killpg(process_group_id, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            except PermissionError as error:
+                if not leader_terminal:
+                    raise _PublisherCanaryProcessError(
+                        "publisher canary process group could not be terminated"
+                    ) from error
+            except OSError as error:
+                raise _PublisherCanaryProcessError(
+                    "publisher canary process group could not be terminated"
+                ) from error
+        else:
+            try:
+                process.kill()
+            except ProcessLookupError:
+                pass
+            except OSError as error:
+                raise _PublisherCanaryProcessError(
+                    "publisher canary process could not be terminated"
+                ) from error
+
+        remaining = cleanup_deadline - time.monotonic()
+        if remaining <= 0:
+            raise _PublisherCanaryProcessError(
+                "publisher canary process group cleanup exceeded its deadline"
+            )
+        try:
+            return_code = process.wait(timeout=remaining)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise _PublisherCanaryProcessError(
+                "publisher canary leader could not be reaped"
+            ) from error
+
+        if process_group_id is not None:
+            while True:
+                try:
+                    os.killpg(process_group_id, 0)
+                except ProcessLookupError:
+                    break
+                except PermissionError:
+                    pass
+                except OSError as error:
+                    raise _PublisherCanaryProcessError(
+                        "publisher canary process group closure is unproven"
+                    ) from error
+                remaining = cleanup_deadline - time.monotonic()
+                if remaining <= 0:
+                    raise _PublisherCanaryProcessError(
+                        "publisher canary process group closure is unproven"
+                    )
+                time.sleep(min(_PUBLISHER_CANARY_GROUP_POLL_SECONDS, remaining))
+        process_group_cleanup_complete = True
+        return return_code
+
     try:
         for stream, target, limit in (
             (process.stdout, stdout, max_stdout_bytes),
@@ -406,31 +484,20 @@ def _run_bounded_publisher_canary_process(
             raise _PublisherCanaryProcessError(
                 "publisher canary process exceeded its deadline"
             )
-        try:
-            return_code = process.wait(timeout=remaining)
-        except subprocess.TimeoutExpired as error:
-            raise _PublisherCanaryProcessError(
-                "publisher canary process exceeded its deadline"
-            ) from error
+        return_code = close_process_group(cleanup_deadline=deadline)
         return subprocess.CompletedProcess(
             args=list(command),
             returncode=return_code,
             stdout=bytes(stdout),
             stderr=bytes(stderr),
         )
-    except (OSError, _PublisherCanaryProcessError):
-        if process.poll() is None:
-            try:
-                if os.name == "posix":
-                    os.killpg(process.pid, signal.SIGKILL)
-                else:
-                    process.kill()
-            except OSError:
-                pass
+    except BaseException as error:
         try:
-            process.wait(timeout=1)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+            close_process_group(
+                cleanup_deadline=(time.monotonic() + _PUBLISHER_CANARY_CLEANUP_SECONDS)
+            )
+        except BaseException as cleanup_error:
+            error.add_note(f"process group cleanup failed: {cleanup_error}")
         raise
     finally:
         selector.close()

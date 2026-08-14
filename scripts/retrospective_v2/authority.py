@@ -2428,6 +2428,7 @@ def _validate_installed_automation(
         "reference_only",
         "session_retrospective.py",
     )
+    isolated_launch = f"python3 -I -B -S {cli_path} start"
     if (
         document.get("version") != 1
         or document.get("id") != automation_id
@@ -2436,6 +2437,7 @@ def _validate_installed_automation(
         or document.get("reference_only") is not None
         or not isinstance(prompt, str)
         or prompt.count(str(cli_path)) != 1
+        or prompt.count(isolated_launch) != 1
         or f"--mode {expected_mode}" not in prompt
         or any(token in prompt for token in forbidden_prompt_tokens)
         or not isinstance(schedule, str)

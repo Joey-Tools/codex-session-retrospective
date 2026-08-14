@@ -1007,7 +1007,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertTrue(Path(command[10]).is_file())
         accept_command = lease_view["native_coordinator_actions"][1]["command"]
         self.assertEqual(command[0], accept_command[0])
-        self.assertEqual("-B", accept_command[1])
+        self.assertEqual(["-I", "-B", "-S"], accept_command[1:4])
         isolated = subprocess.run(
             [
                 sys.executable,

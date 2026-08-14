@@ -20,8 +20,8 @@ redefine event time, session identity, or episode boundaries.
 
 The only supported installed coordinator is
 `~/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py`.
-It requires Python 3.13 or newer. Do not invoke the migration-only v1 helper for
-a v2 run.
+It requires Python 3.13 or newer and must be launched with
+`python3 -I -B -S`. Do not invoke the migration-only v1 helper for a v2 run.
 
 1. Run the installed v2 coordinator's `doctor` command and require the
    configured identity, policy, history, and transport contracts to match.

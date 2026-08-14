@@ -101,6 +101,27 @@ superseded_by:
   publication caller must supply a GPG executable under an admitted private
   path. The authorized disposable-GPG publication fixture is covered by the
   successful full discovery.
+- The next fresh-context Codex review of `a3836660..add6f4a` found two further
+  launch-boundary gaps: the public coordinator documentation and native action
+  used Python without the complete isolation flags, and canary cleanup could
+  reap its leader while leaving a same-group descendant alive.
+- The public coordinator now requires `python3 -I -B -S` in the skill,
+  operator reference, README, automation cutover records, native coordinator
+  actions, and its direct-entry startup guard. Runtime regressions prove that
+  missing flags fail closed and that poisoned `PYTHONPATH`, `sitecustomize`,
+  and current-directory modules do not execute.
+- Canary supervision retains the launch PGID before leader reaping, kills the
+  complete group on every terminal path, reaps the leader, and waits for exact
+  group absence. Darwin `EPERM` from a killed orphan zombie remains unproven
+  and is polled until `ESRCH`; persistent `EPERM` still fails closed. Real
+  closed-pipe success and inherited-pipe timeout descendants are both covered.
+- Canary-focused tests pass 7/7; focused CLI/skill tests pass 11/11; module
+  boundaries pass 19/19 with the CLI's 1,950-line cap unchanged and the exact
+  branch proxy updated from 8,568 to 8,591. The complete affected authority,
+  projection, CLI, transport, orchestrator, and skill matrix passes 292/292 in
+  294.832 seconds.
+- Final Python 3.13 repository discovery passes 1,582/1,582 in 2,833.264
+  seconds on the isolated-launch and complete process-group cleanup tree.
 
 ## Acceptance
 
