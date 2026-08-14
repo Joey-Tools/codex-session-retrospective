@@ -16,10 +16,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPTS = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-)
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from retrospective_v2 import (  # noqa: E402
@@ -1462,9 +1459,8 @@ class OrchestratorTests(unittest.TestCase):
             )
         session_selector = "session-host-policy"
         session_target = str(
-            self.identity.derive_ref(
-                RefType.SESSION,
-                {"session_id": session_selector},
+            self.identity.derive_session_ref(
+                transport.session_selector_commitment(session_selector)
             )
         )
         for name, hosts, message in (
@@ -1890,9 +1886,8 @@ class OrchestratorTests(unittest.TestCase):
             end=DAILY_END,
             hosts=DEFAULT_HOSTS,
             session_target=str(
-                self.identity.derive_ref(
-                    RefType.SESSION,
-                    {"session_id": selector},
+                self.identity.derive_session_ref(
+                    transport.session_selector_commitment(selector)
                 )
             ),
             session_target_selector=selector,

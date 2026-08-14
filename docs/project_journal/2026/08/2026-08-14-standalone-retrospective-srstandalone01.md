@@ -1,7 +1,7 @@
 ---
 id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
-status: active
+status: completed
 created: 2026-08-14
 updated: 2026-08-14
 branch: wip/standalone-retrospective
@@ -27,13 +27,15 @@ superseded_by:
 
 - The standalone repository and task-scoped `wip/standalone-retrospective`
   branch exist.
-- The migrated implementation includes the uncommitted source/session policy
-  follow-up from the former #69 owner worktree.
+- Signed migration commit `fad88a480f40061424191fafea7d4b0b1f932da0`
+  preserves the standalone source snapshot before the first local review.
 - Catalog schema v3 and transport manifest v2 bind a closed
   `session_identity` witness independently of the mutable source label.
-- Session acceptance re-derives the source reference from the authenticated
-  witness and rejects relabeling of non-target, unresolved, or exact-target
-  evidence into another accounting class.
+- Session identity now derives from the same domain-separated selector
+  commitment in Session, Daily, Weekly, and Baseline modes. Session acceptance
+  re-derives that source reference from the authenticated witness and rejects
+  relabeling of non-target, unresolved, or exact-target evidence into another
+  accounting class.
 - Private sync, installed release changes, workspace registry changes, and the
   legacy deletion PR are intentionally out of scope until this repository is
   complete.
@@ -50,8 +52,20 @@ superseded_by:
 - The installed OpenAI skill validator passes through an isolated Python 3.13
   environment with PyYAML.
 - Python 3.13 full repository discovery: 1,569 passed in 2,605.189 seconds.
-- Signed commit, exact-secret admission, review, and hosted PR evidence remain
-  pending.
+- Exact-secret admission for `a3836660..fad88a48` was clean with complete
+  temporary cleanup.
+- A fresh-context Codex review of `a3836660..fad88a48` found three issues: a
+  cross-mode Session identity split, an ambiguous-witness state-table hole,
+  and exact-tuple matching that could miss target gap variants. The follow-up
+  centralizes commitment-derived Session references, uses an explicit closed
+  three-state policy, and rejects forbidden target reasons independently of
+  stage metadata.
+- Reviewer-fix focused tests pass 8/8; identity, CLI, and module-boundary tests
+  pass 104/104; full source-transport and orchestrator tests pass 207/207.
+- Final Python 3.13 full repository discovery passes 1,572/1,572 in 2,686.649
+  seconds. Ruff 0.13.2, both workflow files under `actionlint`, the OpenAI
+  skill validator, the project-journal validator, and `git diff --check` also
+  pass on the reviewer-fix tree.
 
 ## Acceptance
 

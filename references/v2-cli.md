@@ -265,9 +265,12 @@ record and an `installed_commits` inventory containing its installed commit.
 - Weekly windows are exactly seven days.
 - Baseline windows are exactly 90 days and carry no campaign identity.
 - Session mode requires both `--session-target` and
-  `--session-target-selector`; the target must equal the identity-derived
-  reference for that selector. These arguments are rejected for all other
-  modes. Session runs always scan the complete canonical five-host set and all
+  `--session-target-selector`; the target must equal the stable Session
+  reference derived from that selector's domain-separated commitment. Raw
+  selector bytes are used only to recompute this commitment at start, so the
+  same source session has one identity in Session, Daily, Weekly, and Baseline
+  modes. These arguments are rejected for all other modes. Session runs always
+  scan the complete canonical five-host set and all
   four required source kinds (20 coverage cells); subsets, unknown hosts, and
   partial publication are rejected. They structurally account discovered
   non-target records and reject any non-target consumed record.

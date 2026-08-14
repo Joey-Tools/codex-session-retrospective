@@ -54,6 +54,9 @@ from retrospective_v2.orchestrator import (  # noqa: E402
     InvalidTransitionError,
     RetrospectiveOrchestrator,
 )
+from retrospective_v2.source_session_policy import (  # noqa: E402
+    validate_session_record_binding,
+)
 from tests.test_retrospective_v2_orchestrator import (  # noqa: E402
     bind_remote_host_context_helper_fixture,
     execution_provenance,
@@ -602,9 +605,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
             None
             if session_target_selector is None
             else str(
-                self.identity.derive_ref(
-                    RefType.SESSION,
-                    {"session_id": session_target_selector},
+                self.identity.derive_session_ref(
+                    transport.session_selector_commitment(session_target_selector)
                 )
             )
         )
@@ -635,11 +637,25 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self,
         name: str,
         *,
+        mode: RunMode = RunMode.DAILY,
+        session_target_selector: str | None = None,
         window_start: str = WINDOW_START,
         window_end: str = WINDOW_END,
     ) -> dict[str, object]:
+        session_target = (
+            None
+            if session_target_selector is None
+            else str(
+                self.identity.derive_session_ref(
+                    transport.session_selector_commitment(session_target_selector)
+                )
+            )
+        )
         coordinator = self._coordinator(
             name,
+            mode=mode,
+            session_target=session_target,
+            session_target_selector=session_target_selector,
             window_start=window_start,
             window_end=window_end,
         )
@@ -665,6 +681,52 @@ class SourceTransportProtocolTests(unittest.TestCase):
         if coordinator.status()["stage"] == "source_catalog":
             coordinator.advance()
         return coordinator.store.read().state
+
+    def test_session_identity_is_stable_across_run_modes(self) -> None:
+        session_id = "cross-mode-session"
+        selector_commitment = transport.session_selector_commitment(session_id)
+        expected_ref = str(self.identity.derive_session_ref(selector_commitment))
+        self._write_sources(session_id)
+
+        daily_state = self._complete_native_sources("identity-daily")
+        session_state = self._complete_native_sources(
+            "identity-session",
+            mode=RunMode.SESSION,
+            session_target_selector=session_id,
+        )
+
+        for mode, state in (("daily", daily_state), ("session", session_state)):
+            with self.subTest(mode=mode):
+                records = [
+                    record
+                    for manifest in catalog.SourceCatalog.from_dict(
+                        state["source"]["catalog"]
+                    ).manifests
+                    for record in manifest.records
+                ]
+                matching = [
+                    record
+                    for record in records
+                    if record.session_identity is not None
+                    and selector_commitment
+                    in record.session_identity.effective_commitments
+                ]
+                self.assertTrue(
+                    matching,
+                    [
+                        (
+                            record.accounting_class.value,
+                            record.session_identity.to_dict()
+                            if record.session_identity is not None
+                            else None,
+                        )
+                        for record in records
+                    ],
+                )
+                self.assertEqual(
+                    {expected_ref},
+                    {record.coordinate.source_ref for record in matching},
+                )
 
     def test_all_source_kinds_execute_and_session_mode_filters_every_record(
         self,
@@ -696,9 +758,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         other_rollout.write_bytes(other_rollout.read_bytes() + other_payload)
         target = str(
-            self.identity.derive_ref(
-                RefType.SESSION,
-                {"session_id": "target-session"},
+            self.identity.derive_session_ref(
+                transport.session_selector_commitment("target-session")
             )
         )
         coordinator = self._coordinator(
@@ -1114,7 +1175,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
         session_id = "remote-session-target"
         selector = transport.session_selector_commitment(session_id)
         target = str(
-            self.identity.derive_ref(RefType.SESSION, {"session_id": session_id})
+            self.identity.derive_session_ref(
+                transport.session_selector_commitment(session_id)
+            )
         )
         self.codex_root.joinpath("history.jsonl").write_bytes(self._line(session_id))
         frames = self._direct_source_frames(
@@ -3007,7 +3070,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
             encoding="ascii",
         )
         target = str(
-            self.identity.derive_ref(RefType.SESSION, {"session_id": target_id})
+            self.identity.derive_session_ref(
+                transport.session_selector_commitment(target_id)
+            )
         )
         coordinator = self._coordinator(
             "session-unresolved-explicit-gap",
@@ -3895,9 +3960,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
     def test_session_mode_rejects_a_validly_signed_mismatched_record(self) -> None:
         target = str(
-            self.identity.derive_ref(
-                RefType.SESSION,
-                {"session_id": "target-session"},
+            self.identity.derive_session_ref(
+                transport.session_selector_commitment("target-session")
             )
         )
         other = str(
@@ -3993,11 +4057,120 @@ class SourceTransportProtocolTests(unittest.TestCase):
             )
         self.assertFalse(any((coordinator.run_dir / "raw-inputs").glob("*.bin")))
 
-    def test_session_mode_rejects_relabelled_non_target_classifications(self) -> None:
-        target = str(
+    def test_session_policy_accepts_ambiguous_witness_on_both_hash_sides(
+        self,
+    ) -> None:
+        selector_commitment = transport.session_selector_commitment(
+            "ambiguous-policy-target"
+        )
+        target = str(self.identity.derive_session_ref(selector_commitment))
+        host_ref = str(self.identity.derive_ref(RefType.HOST, {"host": "local"}))
+        content_commitment = catalog.content_commitment(b"ambiguous-policy")
+        unresolved_ref = str(
             self.identity.derive_ref(
                 RefType.SESSION,
-                {"session_id": "classification-target"},
+                {
+                    "host_ref": host_ref,
+                    "unresolved_record_commitment": content_commitment,
+                },
+            )
+        )
+
+        for other_commitment in (
+            "sha256:" + "0" * 64,
+            "sha256:" + "f" * 64,
+        ):
+            with self.subTest(other_commitment=other_commitment):
+                commitments = tuple(sorted((selector_commitment, other_commitment)))
+                record = catalog.CatalogRecord(
+                    unit_ref=str(
+                        self.identity.derive_ref(
+                            RefType.SOURCE_UNIT,
+                            {"ambiguous_commitments": list(commitments)},
+                        )
+                    ),
+                    source_kind=SourceKind.HISTORY,
+                    coordinate=catalog.StableSourceCoordinate(
+                        host_ref=host_ref,
+                        source_ref=unresolved_ref,
+                        record_ref="ambiguous-record",
+                        byte_start=0,
+                        byte_end=1,
+                    ),
+                    accounting_class=catalog.AccountingClass.EXPLICIT_GAP,
+                    content_commitment=content_commitment,
+                    turn_count=0,
+                    gap=catalog.ExplicitGap(
+                        reason="session_identity_unresolved",
+                        stage="source_transport",
+                    ),
+                    session_identity=catalog.SessionIdentityWitness(
+                        direct_commitments=commitments,
+                        locator_commitments=commitments,
+                    ),
+                )
+                validate_session_record_binding(
+                    self.identity,
+                    active=True,
+                    host_ref=host_ref,
+                    session_target=target,
+                    session_selector_commitment=selector_commitment,
+                    record=record,
+                )
+
+    def test_session_policy_rejects_target_gap_reason_variants(self) -> None:
+        selector_commitment = transport.session_selector_commitment("target-gap-policy")
+        target = str(self.identity.derive_session_ref(selector_commitment))
+        host_ref = str(self.identity.derive_ref(RefType.HOST, {"host": "local"}))
+        content_commitment = catalog.content_commitment(b"target-gap-policy")
+
+        for reason, stage in (
+            ("session_identity_unresolved", "agent_review"),
+            ("session_target_mismatch", "source_transport"),
+            ("session_target_mismatch", "agent_review"),
+        ):
+            with self.subTest(reason=reason, stage=stage):
+                record = catalog.CatalogRecord(
+                    unit_ref=str(
+                        self.identity.derive_ref(
+                            RefType.SOURCE_UNIT,
+                            {"reason": reason, "stage": stage},
+                        )
+                    ),
+                    source_kind=SourceKind.HISTORY,
+                    coordinate=catalog.StableSourceCoordinate(
+                        host_ref=host_ref,
+                        source_ref=target,
+                        record_ref="target-gap-record",
+                        byte_start=0,
+                        byte_end=1,
+                    ),
+                    accounting_class=catalog.AccountingClass.EXPLICIT_GAP,
+                    content_commitment=content_commitment,
+                    turn_count=0,
+                    gap=catalog.ExplicitGap(reason=reason, stage=stage),
+                    session_identity=catalog.SessionIdentityWitness(
+                        direct_commitments=(selector_commitment,),
+                        locator_commitments=(selector_commitment,),
+                    ),
+                )
+                with self.assertRaisesRegex(
+                    InvalidInputError,
+                    "identity-inconsistent classification",
+                ):
+                    validate_session_record_binding(
+                        self.identity,
+                        active=True,
+                        host_ref=host_ref,
+                        session_target=target,
+                        session_selector_commitment=selector_commitment,
+                        record=record,
+                    )
+
+    def test_session_mode_rejects_relabelled_non_target_classifications(self) -> None:
+        target = str(
+            self.identity.derive_session_ref(
+                transport.session_selector_commitment("classification-target")
             )
         )
         coordinator = self._coordinator(

@@ -141,7 +141,9 @@ rather than silently resuming without these commitments. Catalog schema v3 and
 transport manifest v2 copy both arrays into each record's closed
 `session_identity` witness. The catalog snapshot and authenticated transport
 receipt therefore bind that witness independently of the mutable `source_ref`
-label supplied at acceptance.
+label supplied at acceptance. Every uniquely identified source session derives
+its stable Session reference from that selector commitment in every run mode;
+the raw source identifier is never an alternate identity input.
 
 Each invocation may spend at most three 64 KiB internal reads on resume probes;
 budget exhaustion is the explicit `source_resume_probe_budget_exhausted` gap.

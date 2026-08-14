@@ -20,8 +20,8 @@ _NON_TARGET_CLASSIFICATION = (
     None,
     None,
 )
-_TARGET_FORBIDDEN_CLASSIFICATIONS = frozenset(
-    {_UNRESOLVED_CLASSIFICATION, _NON_TARGET_CLASSIFICATION}
+_TARGET_FORBIDDEN_GAP_REASONS = frozenset(
+    {"session_identity_unresolved", "session_target_mismatch"}
 )
 
 
@@ -54,29 +54,27 @@ def _validate_active(
     )
     assert witness is not None
     effective = witness.effective_commitments
-    unique = (effective + (None,))[0]
-    identity_case = (len(effective) == 1, unique == session_selector_commitment)
-    unresolved_ref = str(
-        identity.derive_ref(
-            RefType.SESSION,
-            {
-                "host_ref": host_ref,
-                "unresolved_record_commitment": record.content_commitment,
-            },
-        )
-    )
-    non_target_ref = str(
-        identity.derive_ref(RefType.SESSION, {"session_selector_commitment": unique})
-    )
-    expected_ref = {
-        (False, False): unresolved_ref,
-        (True, False): non_target_ref,
-        (True, True): session_target,
-    }[identity_case]
     _require(
         record.content_commitment is not None,
         "session_target source record lacks a content commitment",
     )
+    if len(effective) != 1:
+        identity_case = "unresolved"
+        expected_ref = str(
+            identity.derive_ref(
+                RefType.SESSION,
+                {
+                    "host_ref": host_ref,
+                    "unresolved_record_commitment": record.content_commitment,
+                },
+            )
+        )
+    elif effective[0] != session_selector_commitment:
+        identity_case = "non_target"
+        expected_ref = str(identity.derive_session_ref(effective[0]))
+    else:
+        identity_case = "target"
+        expected_ref = session_target
     _require(
         record.coordinate.source_ref == expected_ref,
         "session_target source record identity does not match receipt-bound evidence",
@@ -87,11 +85,23 @@ def _validate_active(
         getattr(record.gap, "reason", None),
         getattr(record.gap, "stage", None),
     )
-    classification_ok = {
-        (False, False): observed == _UNRESOLVED_CLASSIFICATION,
-        (True, False): observed == _NON_TARGET_CLASSIFICATION,
-        (True, True): observed not in _TARGET_FORBIDDEN_CLASSIFICATIONS,
-    }[identity_case]
+    if identity_case == "unresolved":
+        classification_ok = observed == _UNRESOLVED_CLASSIFICATION
+    elif identity_case == "non_target":
+        classification_ok = observed == _NON_TARGET_CLASSIFICATION
+    else:
+        classification_ok = not (
+            (
+                record.accounting_class is catalog.AccountingClass.STRUCTURALLY_EXCLUDED
+                and record.exclusion_reason
+                is catalog.StructuralExclusionReason.SOURCE_POLICY_EXCLUDED
+            )
+            or (
+                record.accounting_class is catalog.AccountingClass.EXPLICIT_GAP
+                and record.gap is not None
+                and record.gap.reason in _TARGET_FORBIDDEN_GAP_REASONS
+            )
+        )
     _require(
         classification_ok,
         "session_target source record has an identity-inconsistent classification",

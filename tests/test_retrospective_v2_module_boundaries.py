@@ -370,7 +370,7 @@ BOUNDED_MODULE_LINES = {
     "source_acceptance.py": 275,
     "source_inputs.py": 400,
     "source_payloads.py": 100,
-    "source_session_policy.py": 120,
+    "source_session_policy.py": 127,
     "source_spool.py": 350,
     "source_staging.py": 350,
     "source_capacity.py": 150,
@@ -1156,7 +1156,7 @@ spec.loader.exec_module(module)
                     )
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
-        self.assertEqual(8_512, branch_total)
+        self.assertEqual(8_520, branch_total)
         self.assertLessEqual(branch_total, 8_525)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)

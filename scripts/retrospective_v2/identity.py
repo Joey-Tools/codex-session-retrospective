@@ -10,7 +10,13 @@ from pathlib import Path
 import re
 import secrets
 
-from .contracts import JsonValue, RefType, TypedRef, canonical_json_bytes
+from .contracts import (
+    JsonValue,
+    RefType,
+    TypedRef,
+    canonical_json_bytes,
+    normalize_locator_session_commitments,
+)
 from .safe_io import (
     InvalidJsonError,
     atomic_create_json,
@@ -299,6 +305,18 @@ class IdentityKey:
         payload: JsonValue = {"parts": [value, *additional_values]}
         digest = self.derive_digest(f"stable-ref/{ref_type.value}", payload)
         return TypedRef(kind=ref_type, digest=digest)
+
+    def derive_session_ref(self, selector_commitment: str) -> TypedRef:
+        try:
+            normalized = normalize_locator_session_commitments((selector_commitment,))[
+                0
+            ]
+        except (IndexError, ValueError) as error:
+            raise ValueError("session selector commitment is invalid") from error
+        return self.derive_ref(
+            RefType.SESSION,
+            {"session_selector_commitment": normalized},
+        )
 
     derive_id = derive_ref
 

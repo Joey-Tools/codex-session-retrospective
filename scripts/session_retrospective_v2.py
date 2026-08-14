@@ -825,12 +825,10 @@ def command_start(args: argparse.Namespace) -> CommandResult:
                 if identity_path is None
                 else identity_path
             )
-            expected_target = str(
-                identity.derive_ref(
-                    contract_api.RefType.SESSION,
-                    {"session_id": args.session_target_selector},
-                )
+            selector_commitment = contract_api.session_selector_commitment(
+                args.session_target_selector
             )
+            expected_target = str(identity.derive_session_ref(selector_commitment))
         except (
             FileNotFoundError,
             TypeError,

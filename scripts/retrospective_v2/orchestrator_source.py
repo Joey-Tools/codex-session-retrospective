@@ -321,10 +321,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
                 source_ref = str(session_target)
             elif isinstance(row_session_commitment, str):
                 source_ref = str(
-                    self.identity.derive_ref(
-                        RefType.SESSION,
-                        {"session_selector_commitment": row_session_commitment},
-                    )
+                    self.identity.derive_session_ref(row_session_commitment)
                 )
             else:
                 source_ref = str(

@@ -208,14 +208,11 @@ class RunLifecycleOperations(OrchestratorComponent):
                     "session mode requires the raw session selector at start"
                 )
             try:
-                derived_target = str(
-                    self.identity.derive_ref(
-                        RefType.SESSION,
-                        {"session_id": session_target_selector},
-                    )
-                )
                 session_selector_ref = source_transport.session_selector_commitment(
                     session_target_selector
+                )
+                derived_target = str(
+                    self.identity.derive_session_ref(session_selector_ref)
                 )
             except (
                 TypeError,

@@ -28,6 +28,7 @@ from retrospective_v2.contracts import (  # noqa: E402
     RunMode,
     RunStage,
     SourceKind,
+    session_selector_commitment,
 )
 from retrospective_v2.identity import IdentityKey  # noqa: E402
 from retrospective_v2.orchestrator import RetrospectiveOrchestrator  # noqa: E402
@@ -624,7 +625,7 @@ class CliContractTests(unittest.TestCase):
     def test_start_cli_reaches_all_four_modes_with_exact_bindings(self) -> None:
         selector = "direct-cli-session-selector"
         session_target = str(
-            self.identity.derive_ref(RefType.SESSION, {"session_id": selector})
+            self.identity.derive_session_ref(session_selector_commitment(selector))
         )
         cases = (
             ("daily", "2026-07-06T00:00:00Z", "2026-07-07T00:00:00Z", ()),
@@ -671,12 +672,11 @@ class CliContractTests(unittest.TestCase):
     def test_start_cli_rejects_invalid_windows_and_session_bindings(self) -> None:
         selector = "session-binding-selector"
         target = str(
-            self.identity.derive_ref(RefType.SESSION, {"session_id": selector})
+            self.identity.derive_session_ref(session_selector_commitment(selector))
         )
         wrong_target = str(
-            self.identity.derive_ref(
-                RefType.SESSION,
-                {"session_id": "different-session-selector"},
+            self.identity.derive_session_ref(
+                session_selector_commitment("different-session-selector")
             )
         )
         cases = (
