@@ -161,6 +161,15 @@ superseded_by:
   deterministic shards: 375, 427, 437, and 353 tests pass in 1,494.843,
   1,231.485, 1,305.869, and 1,137.495 seconds respectively. The slowest shard
   remains below the 40-minute CI timeout, and the combined error scan is empty.
+- The first hosted sharded run exposed a platform-specific fixture boundary:
+  Ubuntu's default `/tmp` is world-writable, so the changed-GPG regression's
+  copied executable was correctly rejected by the production authority before
+  the test reached its intended same-path mutation. Each CI shard now creates
+  an independent mode-`0700` directory below `RUNNER_TEMP` and supplies it
+  as `TMPDIR` only to that shard's isolated Python process. The CI contract
+  group passes 6/6, the exact formerly failing authority regression passes
+  1/1 in 30.649 seconds under the explicit private temp root, and `actionlint`,
+  Ruff, formatting, and diff checks remain clean.
 
 ## Acceptance
 
