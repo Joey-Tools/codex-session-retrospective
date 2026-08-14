@@ -82,6 +82,25 @@ superseded_by:
   exact branch-proxy fixture is updated from 8,520 to 8,568.
 - Final Python 3.13 full repository discovery passes 1,575/1,575 in 2,675.201
   seconds on the Git discovery and shallow-revalidation implementation tree.
+- The next fresh-context Codex review of `a3836660..322fe97b` found that the
+  publisher sign/verify canary inherited the complete host environment even
+  though its GPG executable bytes were bound. That exposed the production
+  `GNUPGHOME` to dynamic-loader, Python, shell, Git, and agent injection
+  variables outside the executable-authority contract.
+- The canary now reuses the publication layer's strict subprocess environment,
+  adds only the dedicated `GNUPGHOME`, and keeps the fixed locale, `PATH`, and
+  timezone contract. A real fake-GPG regression captures both sign and verify
+  process environments and proves that poisoned host variables are absent.
+- The canary-focused suite passes 5/5, the affected orchestrator suite passes
+  111/111 in 194.853 seconds, and the module-boundary suite passes 19/19.
+  Final Python 3.13 repository discovery passes 1,576/1,576 in 2,839.720
+  seconds on the closed-environment implementation tree.
+- A direct default-host canary probe is non-counting: executable authority
+  rejected the ambient Homebrew GPG before keyring access because its `Cellar`
+  ancestor is group-writable. This is the intended deployment boundary; the
+  publication caller must supply a GPG executable under an admitted private
+  path. The authorized disposable-GPG publication fixture is covered by the
+  successful full discovery.
 
 ## Acceptance
 

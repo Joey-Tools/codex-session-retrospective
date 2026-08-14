@@ -15,6 +15,7 @@ from typing import Any, Mapping, Sequence
 from . import (
     executable_authority,
     finalize,
+    publication_support,
     result_validation,
     safe_io,
     sharding,
@@ -451,9 +452,8 @@ def publisher_sign_verify_canary(
     if fingerprint != PUBLISHER_FINGERPRINT:
         return False
     home = Path(gnupg_home).expanduser().absolute()
-    environment = dict(os.environ)
+    environment = publication_support._strict_subprocess_environment(home=home)
     environment["GNUPGHOME"] = str(home)
-    environment["LC_ALL"] = "C"
     try:
         gpg_authority = executable_authority.resolve_executable(
             gpg_program,
