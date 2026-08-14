@@ -62,10 +62,26 @@ superseded_by:
   stage metadata.
 - Reviewer-fix focused tests pass 8/8; identity, CLI, and module-boundary tests
   pass 104/104; full source-transport and orchestrator tests pass 207/207.
-- Final Python 3.13 full repository discovery passes 1,572/1,572 in 2,686.649
+- The first reviewer-fix Python 3.13 full repository discovery passes
+  1,572/1,572 in 2,686.649
   seconds. Ruff 0.13.2, both workflow files under `actionlint`, the OpenAI
   skill validator, the project-journal validator, and `git diff --check` also
   pass on the reviewer-fix tree.
+- A second fresh-context Codex review of `a3836660..e50d6466` found two
+  retained-history Git gaps: post-admission commands could rediscover mutable
+  `.git` control files, and a later shallow boundary was not revalidated.
+- The follow-up binds `.git`, `commondir`, and `gitdir` identity and content,
+  enters the held common-dir descriptor before every post-admission Git
+  command, verifies the relative git-dir and object store, and runs the closed
+  object/ref command set with explicit bare metadata paths and a fixed
+  discovery ceiling. Shallow history is an exact forbidden-metadata absence
+  checked before and after every command.
+- Six focused discovery, linked-worktree, shallow-drift, path-replacement, and
+  ABA regressions pass. The complete publication transaction module passes
+  91/91 in 2,470.280 seconds; the engine boundary suite passes 19/19 after its
+  exact branch-proxy fixture is updated from 8,520 to 8,568.
+- Final Python 3.13 full repository discovery passes 1,575/1,575 in 2,675.201
+  seconds on the Git discovery and shallow-revalidation implementation tree.
 
 ## Acceptance
 

@@ -1245,7 +1245,7 @@ def history_repository_binding(
     git_safety.validate_history_target_ref(
         lambda args: repo.run(*args, check=False), target_ref
     )
-    common_dir = repo.text("rev-parse", "--path-format=absolute", "--git-common-dir")
+    common_dir = os.fspath(repo._repository_admission.common_dir)
     remote = repo.run("remote", "get-url", "origin", check=False)
     remote_value = (
         "no_origin"

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 import hashlib
+import hmac
 import os
 from pathlib import Path
 import re
@@ -61,6 +62,17 @@ def validate_history_target_ref(run: GitRunner, target_ref: object) -> str:
 
 
 @dataclass(frozen=True)
+class GitDiscoveryFileBinding:
+    """Identity and content binding for one Git discovery control file."""
+
+    parent: Path
+    name: str
+    path: Path
+    identity: tuple[int, ...]
+    sha256: str
+
+
+@dataclass(frozen=True)
 class LocalRepositoryAdmission:
     """Filesystem binding shared by history readers and publishers."""
 
@@ -72,6 +84,10 @@ class LocalRepositoryAdmission:
     forbidden_metadata: tuple[tuple[Path, str], ...]
     config_path: Path
     config_sha256: str
+    git_dir_relative: str
+    git_marker_is_directory: bool
+    discovery_files: tuple[GitDiscoveryFileBinding, ...]
+    absent_discovery_files: tuple[tuple[Path, str, Path], ...]
 
 
 @dataclass
@@ -106,8 +122,12 @@ class LocalRepositoryCommandBinding:
             "-S",
             "-c",
             _DESCRIPTOR_CWD_EXEC_SOURCE,
-            str(self.repository_fd),
+            str(self.common_dir_fd),
+            str(self.git_dir_fd),
+            str(self.object_store_fd),
+            self.admission.git_dir_relative,
             executable,
+            "--bare",
             "-C",
             ".",
             *arguments,
@@ -115,11 +135,58 @@ class LocalRepositoryCommandBinding:
 
 
 _CONFIG_LIMIT_BYTES = 1024 * 1024
+_GIT_DISCOVERY_FILE_LIMIT_BYTES = 4096
+_BOUND_GIT_ENVIRONMENT_KEYS = frozenset(
+    {
+        "GIT_CEILING_DIRECTORIES",
+        "GIT_COMMON_DIR",
+        "GIT_DIR",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_WORK_TREE",
+    }
+)
 _DESCRIPTOR_CWD_EXEC_SOURCE = (
-    "import os,sys\n"
-    "descriptor=int(sys.argv[1])\n"
-    "os.fchdir(descriptor)\n"
-    "os.execve(sys.argv[2],sys.argv[2:],os.environ)\n"
+    "import os,stat,sys\n"
+    "common_fd,git_fd,object_fd=map(int,sys.argv[1:4])\n"
+    "relative_git_dir=sys.argv[4]\n"
+    "flags=os.O_RDONLY|os.O_DIRECTORY|getattr(os,'O_CLOEXEC',0)|getattr(os,'O_NOFOLLOW',0)\n"
+    "def identity(fd):\n"
+    " metadata=os.fstat(fd)\n"
+    " return metadata.st_dev,metadata.st_ino,metadata.st_mode,metadata.st_uid\n"
+    "def open_relative(root_fd,path):\n"
+    " descriptor=os.dup(root_fd)\n"
+    " try:\n"
+    "  parts=() if path=='.' else tuple(path.split(os.sep))\n"
+    "  if any(part in {'','.', '..'} for part in parts): raise OSError('unsafe relative Git metadata path')\n"
+    "  for part in parts:\n"
+    "   child=os.open(part,flags,dir_fd=descriptor)\n"
+    "   os.close(descriptor)\n"
+    "   descriptor=child\n"
+    "   metadata=os.fstat(descriptor)\n"
+    "   if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid!=os.geteuid() or stat.S_IMODE(metadata.st_mode)&0o022: raise OSError('unsafe Git metadata directory')\n"
+    "  return descriptor\n"
+    " except BaseException:\n"
+    "  os.close(descriptor)\n"
+    "  raise\n"
+    "os.fchdir(common_fd)\n"
+    "cwd_fd=os.open('.',flags)\n"
+    "try:\n"
+    " if identity(common_fd)!=identity(cwd_fd): raise OSError('Git common directory changed')\n"
+    "finally:\n"
+    " os.close(cwd_fd)\n"
+    "opened_git=open_relative(common_fd,relative_git_dir)\n"
+    "opened_objects=open_relative(common_fd,'objects')\n"
+    "try:\n"
+    " if identity(opened_git)!=identity(git_fd) or identity(opened_objects)!=identity(object_fd): raise OSError('Git metadata identity changed')\n"
+    "finally:\n"
+    " os.close(opened_git)\n"
+    " os.close(opened_objects)\n"
+    "os.environ['GIT_CEILING_DIRECTORIES']=os.getcwd()\n"
+    "os.environ['GIT_COMMON_DIR']='.'\n"
+    "os.environ['GIT_DIR']=relative_git_dir\n"
+    "os.environ['GIT_OBJECT_DIRECTORY']='objects'\n"
+    "os.environ.pop('GIT_WORK_TREE',None)\n"
+    "os.execve(sys.argv[5],sys.argv[5:],os.environ)\n"
 )
 
 
@@ -136,6 +203,175 @@ def _config_stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
         metadata.st_gid,
         metadata.st_nlink,
         metadata.st_size,
+    )
+
+
+def _closed_git_dir_relative(common_dir: Path, git_dir: Path) -> str:
+    try:
+        relative = git_dir.relative_to(common_dir)
+    except ValueError as error:
+        raise LocalRepositorySafetyError(
+            "discovery-path-not-closed",
+            "Git directory must be contained by the admitted common directory",
+        ) from error
+    if not relative.parts:
+        return "."
+    if any(part in {"", ".", ".."} for part in relative.parts):
+        raise LocalRepositorySafetyError(
+            "discovery-path-not-closed", "Git directory path is not closed"
+        )
+    return os.path.join(*relative.parts)
+
+
+def _validate_git_discovery_file_stat(
+    metadata: os.stat_result,
+    display_path: Path,
+) -> None:
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != os.geteuid()
+        or stat.S_IMODE(metadata.st_mode) & 0o022
+        or metadata.st_nlink != 1
+        or metadata.st_size > _GIT_DISCOVERY_FILE_LIMIT_BYTES
+    ):
+        raise LocalRepositorySafetyError(
+            "discovery-file-unsafe",
+            f"Git discovery file is not owner-controlled: {display_path}",
+        )
+
+
+def _read_git_discovery_file_at(
+    parent_fd: int,
+    name: str,
+    display_path: Path,
+) -> tuple[tuple[int, ...], bytes]:
+    try:
+        descriptor = safe_io.open_checked_file_at(
+            parent_fd,
+            name,
+            display_path=display_path,
+            require_owner_only=False,
+        )
+    except (OSError, safe_io.UnsafePathError) as error:
+        raise LocalRepositorySafetyError(
+            "discovery-file-unreadable",
+            f"Git discovery file cannot be authenticated: {display_path}",
+        ) from error
+    try:
+        before = os.fstat(descriptor)
+        named_before = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        _validate_git_discovery_file_stat(before, display_path)
+        _validate_git_discovery_file_stat(named_before, display_path)
+        if safe_io.descriptor_has_extended_acl(descriptor):
+            raise LocalRepositorySafetyError(
+                "discovery-file-unsafe",
+                f"Git discovery file has an extended ACL: {display_path}",
+            )
+
+        def read_once() -> bytes:
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            payload = bytearray()
+            while len(payload) <= _GIT_DISCOVERY_FILE_LIMIT_BYTES:
+                chunk = os.read(
+                    descriptor,
+                    min(
+                        64 * 1024,
+                        _GIT_DISCOVERY_FILE_LIMIT_BYTES - len(payload) + 1,
+                    ),
+                )
+                if not chunk:
+                    break
+                payload.extend(chunk)
+            if len(payload) > _GIT_DISCOVERY_FILE_LIMIT_BYTES:
+                raise LocalRepositorySafetyError(
+                    "discovery-file-unsafe",
+                    f"Git discovery file exceeds its bound: {display_path}",
+                )
+            return bytes(payload)
+
+        first = read_once()
+        middle = os.fstat(descriptor)
+        second = read_once()
+        after = os.fstat(descriptor)
+        named_after = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        for metadata in (middle, after, named_after):
+            _validate_git_discovery_file_stat(metadata, display_path)
+        expected_identity = _config_stat_identity(before)
+        if (
+            any(
+                _config_stat_identity(metadata) != expected_identity
+                for metadata in (named_before, middle, after, named_after)
+            )
+            or len(first) != before.st_size
+            or not hmac.compare_digest(first, second)
+        ):
+            raise LocalRepositorySafetyError(
+                "discovery-file-changed",
+                f"Git discovery file changed while read: {display_path}",
+            )
+        return expected_identity, first
+    except LocalRepositorySafetyError:
+        raise
+    except OSError as error:
+        raise LocalRepositorySafetyError(
+            "discovery-file-unreadable",
+            f"Git discovery file cannot be authenticated: {display_path}",
+        ) from error
+    finally:
+        _close_descriptors((descriptor,), "Git discovery file")
+
+
+def _bind_git_discovery_file(
+    parent: Path,
+    parent_fd: int,
+    name: str,
+) -> tuple[GitDiscoveryFileBinding, bytes]:
+    path = parent / name
+    identity, payload = _read_git_discovery_file_at(parent_fd, name, path)
+    return (
+        GitDiscoveryFileBinding(
+            parent=parent,
+            name=name,
+            path=path,
+            identity=identity,
+            sha256=hashlib.sha256(payload).hexdigest(),
+        ),
+        payload,
+    )
+
+
+def _git_pointer_path(parent: Path, payload: bytes, *, marker: bool) -> Path:
+    prefix = b"gitdir: " if marker else b""
+    if not payload.startswith(prefix):
+        raise LocalRepositorySafetyError(
+            "discovery-file-invalid", "Git discovery file syntax is invalid"
+        )
+    raw = payload[len(prefix) :]
+    if raw.endswith(b"\n"):
+        raw = raw[:-1]
+    if not raw or any(character in raw for character in (b"\x00", b"\r", b"\n")):
+        raise LocalRepositorySafetyError(
+            "discovery-file-invalid", "Git discovery file syntax is invalid"
+        )
+    candidate = Path(os.fsdecode(raw))
+    if not candidate.is_absolute():
+        candidate = parent / candidate
+    return Path(os.path.abspath(candidate))
+
+
+def _require_discovery_file_absent(parent_fd: int, name: str, path: Path) -> None:
+    try:
+        os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise LocalRepositorySafetyError(
+            "discovery-file-unreadable",
+            f"Git discovery file absence cannot be authenticated: {path}",
+        ) from error
+    raise LocalRepositorySafetyError(
+        "discovery-file-changed",
+        f"unexpected Git discovery file is present: {path}",
     )
 
 
@@ -238,6 +474,136 @@ def _open_bound_directory(
     return descriptor
 
 
+def _admit_repository_discovery(
+    *,
+    repository: Path,
+    repository_fd: int,
+    git_dir: Path,
+    git_dir_fd: int,
+    common_dir: Path,
+    directory_identities: Mapping[Path, tuple[int, ...]],
+) -> tuple[
+    bool,
+    tuple[GitDiscoveryFileBinding, ...],
+    tuple[tuple[Path, str, Path], ...],
+]:
+    files: list[GitDiscoveryFileBinding] = []
+    absent: list[tuple[Path, str, Path]] = []
+    marker_path = repository / ".git"
+    try:
+        marker_stat = os.stat(".git", dir_fd=repository_fd, follow_symlinks=False)
+    except OSError as error:
+        raise LocalRepositorySafetyError(
+            "discovery-file-unreadable",
+            "Git worktree marker cannot be authenticated",
+        ) from error
+    if stat.S_ISDIR(marker_stat.st_mode):
+        marker_is_directory = True
+        if (
+            git_dir != marker_path
+            or _stat_identity(marker_stat) != directory_identities[git_dir]
+            or _stat_identity(os.fstat(git_dir_fd)) != directory_identities[git_dir]
+        ):
+            raise LocalRepositorySafetyError(
+                "discovery-path-mismatch",
+                "Git worktree marker does not bind the admitted Git directory",
+            )
+    elif stat.S_ISREG(marker_stat.st_mode):
+        marker_is_directory = False
+        marker_binding, marker_payload = _bind_git_discovery_file(
+            repository, repository_fd, ".git"
+        )
+        if _git_pointer_path(repository, marker_payload, marker=True) != git_dir:
+            raise LocalRepositorySafetyError(
+                "discovery-path-mismatch",
+                "Git worktree marker does not bind the admitted Git directory",
+            )
+        files.append(marker_binding)
+    else:
+        raise LocalRepositorySafetyError(
+            "discovery-file-unsafe", "Git worktree marker has an unsupported type"
+        )
+
+    commondir_path = git_dir / "commondir"
+    if common_dir == git_dir:
+        _require_discovery_file_absent(git_dir_fd, "commondir", commondir_path)
+        absent.append((git_dir, "commondir", commondir_path))
+    else:
+        commondir_binding, commondir_payload = _bind_git_discovery_file(
+            git_dir, git_dir_fd, "commondir"
+        )
+        if _git_pointer_path(git_dir, commondir_payload, marker=False) != common_dir:
+            raise LocalRepositorySafetyError(
+                "discovery-path-mismatch",
+                "Git commondir does not bind the admitted common directory",
+            )
+        files.append(commondir_binding)
+
+    back_pointer_path = git_dir / "gitdir"
+    try:
+        os.stat("gitdir", dir_fd=git_dir_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        if common_dir != git_dir:
+            raise LocalRepositorySafetyError(
+                "discovery-file-unreadable",
+                "linked Git worktree back-pointer is missing",
+            ) from None
+        absent.append((git_dir, "gitdir", back_pointer_path))
+    except OSError as error:
+        raise LocalRepositorySafetyError(
+            "discovery-file-unreadable",
+            "Git worktree back-pointer cannot be authenticated",
+        ) from error
+    else:
+        back_pointer, back_pointer_payload = _bind_git_discovery_file(
+            git_dir, git_dir_fd, "gitdir"
+        )
+        if (
+            _git_pointer_path(git_dir, back_pointer_payload, marker=False)
+            != marker_path
+        ):
+            raise LocalRepositorySafetyError(
+                "discovery-path-mismatch",
+                "Git worktree back-pointer does not bind the admitted marker",
+            )
+        files.append(back_pointer)
+    return marker_is_directory, tuple(files), tuple(absent)
+
+
+def _revalidate_repository_discovery(
+    admission: LocalRepositoryAdmission,
+    parent_descriptors: Mapping[Path, int],
+) -> None:
+    repository_fd = parent_descriptors[admission.repository]
+    if admission.git_marker_is_directory:
+        try:
+            marker = os.stat(".git", dir_fd=repository_fd, follow_symlinks=False)
+        except OSError as error:
+            raise LocalRepositorySafetyError(
+                "discovery-file-changed",
+                "Git worktree marker changed after validation",
+            ) from error
+        expected = dict(admission.directory_identities)[admission.git_dir]
+        if not stat.S_ISDIR(marker.st_mode) or _stat_identity(marker) != expected:
+            raise LocalRepositorySafetyError(
+                "discovery-file-changed",
+                "Git worktree marker changed after validation",
+            )
+    for binding in admission.discovery_files:
+        identity, payload = _read_git_discovery_file_at(
+            parent_descriptors[binding.parent], binding.name, binding.path
+        )
+        if identity != binding.identity or not hmac.compare_digest(
+            hashlib.sha256(payload).hexdigest(), binding.sha256
+        ):
+            raise LocalRepositorySafetyError(
+                "discovery-file-changed",
+                f"Git discovery file changed after validation: {binding.path}",
+            )
+    for parent, name, path in admission.absent_discovery_files:
+        _require_discovery_file_absent(parent_descriptors[parent], name, path)
+
+
 def _revalidate_command_binding(binding: LocalRepositoryCommandBinding) -> None:
     identities = dict(binding.admission.directory_identities)
     for path, descriptor in (
@@ -258,6 +624,13 @@ def _revalidate_command_binding(binding: LocalRepositoryCommandBinding) -> None:
             raise LocalRepositorySafetyError(
                 "metadata-changed", "Git metadata changed after validation"
             )
+    _revalidate_repository_discovery(
+        binding.admission,
+        {
+            binding.admission.repository: binding.repository_fd,
+            binding.admission.git_dir: binding.git_dir_fd,
+        },
+    )
     if (
         _config_commitment(binding.common_dir_fd, binding.admission.config_path)
         != binding.admission.config_sha256
@@ -325,9 +698,15 @@ def repository_git_invocation(
     )
     with executable_authority.executable_invocation(python_authority):
         with bind_local_repository_command(admission, directory_identity) as binding:
+            bound_environment = dict(environment)
+            if _BOUND_GIT_ENVIRONMENT_KEYS & bound_environment.keys():
+                raise LocalRepositorySafetyError(
+                    "discovery-environment-conflict",
+                    "caller supplied a protected Git discovery environment key",
+                )
             yield (
                 binding.command(python_authority.path, executable, arguments),
-                dict(environment),
+                bound_environment,
                 binding.descriptors,
             )
 
@@ -477,10 +856,16 @@ def admit_local_repository(
         )
     git_dir = _absolute_git_path(run, "--git-dir")
     common_dir = _absolute_git_path(run, "--git-common-dir")
+    git_dir_relative = _closed_git_dir_relative(common_dir, git_dir)
     object_store = common_dir / "objects"
     if _absolute_git_path(run, "--git-path", "objects") != object_store:
         raise LocalRepositorySafetyError(
             "object-store-not-closed", "Git object store path is not closed"
+        )
+    shallow_path = common_dir / "shallow"
+    if _absolute_git_path(run, "--git-path", "shallow") != shallow_path:
+        raise LocalRepositorySafetyError(
+            "shallow-path-not-closed", "Git shallow boundary path is not closed"
         )
     identities.extend(
         map(
@@ -493,6 +878,7 @@ def admit_local_repository(
         common_dir / "info" / "grafts": "Git grafts",
         common_dir / "config.worktree": "Git worktree configurations",
         git_dir / "config.worktree": "Git worktree configurations",
+        shallow_path: "Git shallow boundaries",
     }
     forbidden = tuple(forbidden_by_path.items())
     _reject_forbidden_metadata(forbidden)
@@ -502,12 +888,27 @@ def admit_local_repository(
         raise LocalRepositorySafetyError(
             "incomplete", "repository must be complete and non-promisor"
         ) from exc
-    _normalized, common_dir_fd = safe_io.open_owner_controlled_directory(common_dir)
+    expected = dict(identities)
+    repository_fd = _open_bound_directory(repository, expected[repository])
+    git_dir_fd = _open_bound_directory(git_dir, expected[git_dir])
+    common_dir_fd = _open_bound_directory(common_dir, expected[common_dir])
     try:
+        (
+            git_marker_is_directory,
+            discovery_files,
+            absent_discovery_files,
+        ) = _admit_repository_discovery(
+            repository=repository,
+            repository_fd=repository_fd,
+            git_dir=git_dir,
+            git_dir_fd=git_dir_fd,
+            common_dir=common_dir,
+            directory_identities=expected,
+        )
         config_path = common_dir / "config"
         config_sha256 = _config_commitment(common_dir_fd, config_path)
     finally:
-        _close_descriptors((common_dir_fd,), "Git common directory")
+        _close_descriptors((repository_fd, git_dir_fd, common_dir_fd), "Git admission")
     admission = LocalRepositoryAdmission(
         repository=repository,
         git_dir=git_dir,
@@ -517,6 +918,10 @@ def admit_local_repository(
         forbidden_metadata=forbidden,
         config_path=config_path,
         config_sha256=config_sha256,
+        git_dir_relative=git_dir_relative,
+        git_marker_is_directory=git_marker_is_directory,
+        discovery_files=discovery_files,
+        absent_discovery_files=absent_discovery_files,
     )
     revalidate_local_repository(admission, directory_identity)
     return admission
@@ -534,10 +939,22 @@ def revalidate_local_repository(
                 "metadata-changed", "Git metadata changed after validation"
             )
     _reject_forbidden_metadata(admission.forbidden_metadata)
-    _normalized, common_dir_fd = safe_io.open_owner_controlled_directory(
-        admission.common_dir
+    expected = dict(admission.directory_identities)
+    repository_fd = _open_bound_directory(
+        admission.repository, expected[admission.repository]
+    )
+    git_dir_fd = _open_bound_directory(admission.git_dir, expected[admission.git_dir])
+    common_dir_fd = _open_bound_directory(
+        admission.common_dir, expected[admission.common_dir]
     )
     try:
+        _revalidate_repository_discovery(
+            admission,
+            {
+                admission.repository: repository_fd,
+                admission.git_dir: git_dir_fd,
+            },
+        )
         if (
             _config_commitment(common_dir_fd, admission.config_path)
             != admission.config_sha256
@@ -546,7 +963,9 @@ def revalidate_local_repository(
                 "config-changed", "local Git configuration changed after validation"
             )
     finally:
-        _close_descriptors((common_dir_fd,), "Git common directory")
+        _close_descriptors(
+            (repository_fd, git_dir_fd, common_dir_fd), "Git revalidation"
+        )
 
 
 def admit_history_repository(

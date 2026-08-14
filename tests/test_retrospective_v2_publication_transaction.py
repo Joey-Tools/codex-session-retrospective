@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -3248,6 +3249,141 @@ class DurablePublicationTests(unittest.TestCase):
             adapter._git(("rev-parse", "HEAD")).stdout.decode("ascii").strip(),
         )
 
+    def test_linked_worktree_rejects_discovery_file_replacement(self) -> None:
+        linked = self.root / "linked-discovery-binding"
+        run_command(
+            ["git", "worktree", "add", "--detach", str(linked), self.base_head],
+            cwd=self.repo,
+        )
+        git_dir = Path(
+            run_command(
+                ["git", "rev-parse", "--path-format=absolute", "--git-dir"],
+                cwd=linked,
+            ).stdout.strip()
+        )
+        adapter = LocalGitPublicationAdapter(
+            linked,
+            self.root / "linked-discovery-provider-state",
+            signing_key=self.fingerprint,
+            gnupg_home=self.gnupg_home,
+            expected_signer_uid=DEFAULT_PUBLISHER_UID,
+            signing_program=self.gpg,
+        )
+
+        for index, path in enumerate(
+            (linked / ".git", git_dir / "commondir", git_dir / "gitdir")
+        ):
+            with self.subTest(path=path.name):
+                displaced = path.with_name(f"{path.name}.original-{index}")
+                original_mode = stat.S_IMODE(path.stat().st_mode)
+                original = path.read_bytes()
+                path.rename(displaced)
+                path.write_bytes(original)
+                path.chmod(original_mode)
+                try:
+                    with self.assertRaisesRegex(
+                        publication_support.LocalGitPublicationError,
+                        "discovery file changed|safety binding",
+                    ):
+                        adapter._git(("rev-parse", "HEAD"))
+                finally:
+                    path.unlink()
+                    displaced.rename(path)
+
+        commondir = git_dir / "commondir"
+        original = commondir.read_bytes()
+        commondir.write_bytes(original + b"\n")
+        try:
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "discovery file changed|safety binding",
+            ):
+                adapter._git(("rev-parse", "HEAD"))
+        finally:
+            commondir.write_bytes(original)
+
+    def test_linked_worktree_commands_ignore_discovery_file_aba(self) -> None:
+        linked = self.root / "linked-discovery-aba"
+        replacement = self.root / "replacement-discovery-aba"
+        run_command(
+            ["git", "worktree", "add", "--detach", str(linked), self.base_head],
+            cwd=self.repo,
+        )
+        run_command(["git", "init", "-q", str(replacement)])
+        git_dir = Path(
+            run_command(
+                ["git", "rev-parse", "--path-format=absolute", "--git-dir"],
+                cwd=linked,
+            ).stdout.strip()
+        )
+        repository = authority._GitRepository(
+            linked,
+            gnupg_home=self.gnupg_home,
+            git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+            gpg_program=self.gpg,
+        )
+        malicious_git_dir = replacement / ".git"
+
+        for index, (path, payload) in enumerate(
+            (
+                (linked / ".git", f"gitdir: {malicious_git_dir}\n".encode()),
+                (git_dir / "commondir", f"{malicious_git_dir}\n".encode()),
+                (git_dir / "gitdir", f"{malicious_git_dir}\n".encode()),
+            )
+        ):
+            with self.subTest(path=path.name):
+                real_run = authority._run_bounded
+                displaced = path.with_name(f"{path.name}.aba-{index}")
+                observed = False
+
+                def swap_after_binding(argv, **kwargs):
+                    nonlocal observed
+                    if not observed:
+                        observed = True
+                        path.rename(displaced)
+                        path.write_bytes(payload)
+                        try:
+                            return real_run(argv, **kwargs)
+                        finally:
+                            path.unlink()
+                            displaced.rename(path)
+                    return real_run(argv, **kwargs)
+
+                with mock.patch.object(
+                    authority, "_run_bounded", side_effect=swap_after_binding
+                ):
+                    subject = repository.text(
+                        "show", "-s", "--format=%s", self.base_head
+                    )
+
+                self.assertTrue(observed)
+                self.assertEqual("Initialize history", subject)
+
+    def test_history_reader_and_publisher_reject_shallow_drift(self) -> None:
+        repository = authority._GitRepository(
+            self.repo,
+            gnupg_home=self.gnupg_home,
+            git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+            gpg_program=self.gpg,
+        )
+        common_dir = repository._repository_admission.common_dir
+        shallow = common_dir / "shallow"
+        shallow.write_text(f"{self.base_head}\n", encoding="ascii")
+        try:
+            with self.assertRaisesRegex(
+                authority.HistoryValidationError, "safety binding changed"
+            ):
+                repository.text("merge-base", "--is-ancestor", self.base_head, "HEAD")
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "Git shallow boundaries are not allowed",
+            ):
+                self.adapter._git(
+                    ("merge-base", "--is-ancestor", self.base_head, "HEAD")
+                )
+        finally:
+            shallow.unlink()
+
     def test_history_reader_and_publisher_share_repository_admission(self) -> None:
         alias = self.root / "history-repository-alias"
         alias.symlink_to(self.repo, target_is_directory=True)
@@ -3438,16 +3574,16 @@ class DurablePublicationTests(unittest.TestCase):
                 observed = True
                 self.assertIn(("-C", "."), tuple(zip(argv, argv[1:])))
                 self.assertNotIn(str(self.repo), argv)
-                self.assertFalse(
-                    {
-                        "GIT_COMMON_DIR",
-                        "GIT_DIR",
-                        "GIT_OBJECT_DIRECTORY",
-                        "GIT_WORK_TREE",
-                    }
-                    & kwargs["env"].keys()
+                descriptors = kwargs["pass_fds"]
+                self.assertEqual(4, len(descriptors))
+                environment = kwargs["env"]
+                self.assertTrue(
+                    git_safety._BOUND_GIT_ENVIRONMENT_KEYS.isdisjoint(environment)
                 )
-                self.assertEqual(4, len(kwargs["pass_fds"]))
+                self.assertEqual(str(descriptors[2]), argv[6])
+                self.assertEqual(str(descriptors[1]), argv[7])
+                self.assertEqual(str(descriptors[3]), argv[8])
+                self.assertEqual(".", argv[9])
                 self.repo.rename(displaced)
                 replacement.rename(self.repo)
                 try:
@@ -3480,16 +3616,16 @@ class DurablePublicationTests(unittest.TestCase):
                 observed = True
                 self.assertIn(("-C", "."), tuple(zip(argv, argv[1:])))
                 self.assertNotIn(str(self.repo), argv)
-                self.assertFalse(
-                    {
-                        "GIT_COMMON_DIR",
-                        "GIT_DIR",
-                        "GIT_OBJECT_DIRECTORY",
-                        "GIT_WORK_TREE",
-                    }
-                    & kwargs["environment"].keys()
+                descriptors = kwargs["inherited_descriptors"]
+                self.assertEqual(4, len(descriptors))
+                environment = kwargs["environment"]
+                self.assertTrue(
+                    git_safety._BOUND_GIT_ENVIRONMENT_KEYS.isdisjoint(environment)
                 )
-                self.assertEqual(4, len(kwargs["inherited_descriptors"]))
+                self.assertEqual(str(descriptors[2]), argv[6])
+                self.assertEqual(str(descriptors[1]), argv[7])
+                self.assertEqual(str(descriptors[3]), argv[8])
+                self.assertEqual(".", argv[9])
                 self.repo.rename(displaced)
                 replacement.rename(self.repo)
                 try:

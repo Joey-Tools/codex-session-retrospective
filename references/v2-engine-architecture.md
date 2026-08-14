@@ -238,14 +238,19 @@ authority inventory is exactly 1,000/1,000 lines: `run_state_authority.py` 243/2
 `run_state_contracts.py` 37/50, `run_state_cursors.py` 219/225,
 `run_state_holdouts.py` 236/240, and `run_state_lineage.py` 265/275. Including
 this full slice, the orchestrator foundation is 3,297/3,350 lines. The global
-branch proxy is 8,520/8,525 nodes after making the receipt-bound Session selector
-commitment the canonical identity input across run modes, alongside executable
-path, content, and access-policy authority in
-the existing descriptor-custody, closed-config,
-transport-isolation, canonical-runtime, and locator predicates. The closed
+branch proxy is 8,568/8,575 nodes after making the receipt-bound Session selector
+commitment the canonical identity input across run modes and binding retained-history
+Git discovery controls. Post-admission Git subprocesses enter the held common-dir
+descriptor, verify the closed relative git-dir and object-store identities, and run
+with explicit bare metadata paths and a fixed discovery ceiling. The `.git`,
+`commondir`, and `gitdir` controls are bounded, no-follow, content-bound inputs;
+shallow history remains absent and is revalidated with other forbidden metadata.
+These checks extend the existing executable path, content, access-policy,
+descriptor-custody, closed-config, transport-isolation, canonical-runtime, and
+locator predicates. The closed
 nine-module publication slice is 8,689/8,700 lines; within it,
 `publication_support.py` is 1,317/1,320 and `executable_authority.py` is
-314/320. The durable `authority.py` integration is 3,259/3,275 lines. The
+314/320. The durable `authority.py` integration is 3,270/3,275 lines. The
 source coordinator and
 its support slice are 3,049/3,050 lines; `source_session_policy.py` is tightly
 bounded at 127/127 lines, while the three source-staging modules
