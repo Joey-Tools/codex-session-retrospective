@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Prepare owner-controlled Python
+        run: |
+          python3 -I -B -S -m venv --copies "$RUNNER_TEMP/codex-python"
+          chmod 0755 "$RUNNER_TEMP/codex-python/bin/python3"
+          "$RUNNER_TEMP/codex-python/bin/python3" -B -S -m unittest discover \
+            -s tests -p test_ci_contract.py
+      - name: Run tests
+        run: |
+          "$RUNNER_TEMP/codex-python/bin/python3" -B -S -m unittest discover -s tests
