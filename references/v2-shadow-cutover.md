@@ -95,6 +95,9 @@ or lease protocol:
 The internal cutover authority verifies the installed TOML records, exact
 installed v2 CLI path, active mode-specific production prompts, authenticated
 pre-update state, operation lineage, and complete capability-result commitment.
+Each admitted prompt must provide exactly one explicit
+`--publisher-gpg-program`; the CLI then authenticates and binds the selected
+absolute executable at run start.
 It rejects reference-only templates, v1 paths, shadow/partial coverage controls,
 and unrelated IDs. The separate controller writes
 `~/.codex/session-retrospective/automation-cutover-v2.json`; production marker

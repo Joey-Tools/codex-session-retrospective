@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-14
+updated: 2026-08-15
 branch: wip/standalone-retrospective
 pr:
 supersedes:
@@ -122,6 +122,45 @@ superseded_by:
   294.832 seconds.
 - Final Python 3.13 repository discovery passes 1,582/1,582 in 2,833.264
   seconds on the isolated-launch and complete process-group cleanup tree.
+- The next fresh-context Codex review of `a3836660..43a79368` found two release
+  blockers: production finalize did not bind a persisted trusted GPG
+  executable, and the single 1,582-test CI job had no deterministic sharding or
+  job timeout.
+- `doctor` and `start` now require an absolute `--publisher-gpg-program`.
+  Start persists the executable's canonical path plus a digest over its
+  identity, bytes, and ancestor access policy; every authenticated history read
+  and final publication revalidates that exact authority. Finalize has no
+  ambient or caller override. Real publication regressions prove that a
+  stripped `PATH` still uses the persisted executable and that same-path
+  content mutation fails before the publication adapter starts.
+- CI now assigns every discovered test ID to one of four stable SHA-256 shards,
+  runs each shard under Python 3.13 with a 40-minute timeout, preserves the
+  aggregate `test` check, and cancels superseded workflow runs. The isolated
+  sharder entrypoint and partition contract have dedicated regressions.
+- The complete affected authority, publication, CLI, transport, skill, and CI
+  module group passes 384/384 in 2,862.198 seconds. Ruff lint, edited-file
+  formatting, `actionlint`, the OpenAI skill validator, and the module/skill/CI
+  contract group also pass.
+- A first local four-shard attempt is non-counting because its task wrapper
+  accidentally propagated `RLIMIT_FSIZE` into five oversized-file fixtures.
+  The corrected wrapper bounds only the retained output pipe. The clean rerun
+  covers all 1,589 tests exactly once: shard counts 374, 427, 435, and 353 all
+  pass in 1,146.277, 917.407, 914.556, and 830.574 seconds respectively. The
+  slowest shard remains below half of the CI timeout.
+- A final read-only GPG authority audit found two related release-boundary
+  gaps: the formal publication request did not compare its persisted GPG
+  program and authority digest with the adapter's exact admitted executable,
+  and the keyring probe re-resolved the path without first requiring the
+  adapter's captured authority digest. The adapter now captures that digest at
+  construction, the keyring probe rejects any replacement before keyring or
+  home access, and formal publication requires an exact fingerprint,
+  `GNUPGHOME`, executable path, and authority-digest match before side effects.
+- The three new authority regressions plus the complete CI, module-boundary,
+  and publication-focused group pass 28/28 in 62.706 seconds. The final
+  post-fix Python 3.13 run covers all 1,592 tests exactly once across the
+  deterministic shards: 375, 427, 437, and 353 tests pass in 1,494.843,
+  1,231.485, 1,305.869, and 1,137.495 seconds respectively. The slowest shard
+  remains below the 40-minute CI timeout, and the combined error scan is empty.
 
 ## Acceptance
 

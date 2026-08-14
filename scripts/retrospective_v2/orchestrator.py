@@ -8,7 +8,14 @@ import os
 from pathlib import Path
 import sys
 from typing import Any, Callable, Iterable, Mapping, Sequence
-from . import authority, finalize, safe_io, sharding, transport as source_transport
+from . import (
+    authority,
+    executable_authority,
+    finalize,
+    safe_io,
+    sharding,
+    transport as source_transport,
+)
 from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
 from .contracts import (
     MIN_SESSION_RECORD_PROCESSING_BUDGET_BYTES,
@@ -89,6 +96,7 @@ def doctor(
     publisher_fingerprint: str = authority.DEFAULT_PUBLISHER_FINGERPRINT,
     publisher_gnupg_home: str
     | os.PathLike[str] = authority.DEFAULT_PUBLISHER_GNUPG_HOME,
+    publisher_gpg_program: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     """Run actual capability probes and return a safe readiness report."""
 
@@ -120,30 +128,54 @@ def doctor(
         record("fixed_identity", True, resolved_identity.key_id)
     except (IdentityKeyMismatchError, OSError, ValueError) as error:
         record("fixed_identity", False, type(error).__name__)
+    publisher_program: str | None = None
+    publisher_authority_sha256: str | None = None
     try:
-        publisher = dict(
-            publisher_readiness(
-                gnupg_home=publisher_gnupg_home,
-                fingerprint=publisher_fingerprint,
+        if publisher_gpg_program is None:
+            raise executable_authority.ExecutableAuthorityError(
+                "publisher GPG executable is not configured"
             )
-            if publisher_probe is None
-            else publisher_probe()
+        gpg_authority = executable_authority.resolve_executable(
+            publisher_gpg_program,
+            label="GPG",
         )
-        canary_ready = (
-            publisher_sign_verify_canary(
-                gnupg_home=publisher_gnupg_home,
-                fingerprint=publisher_fingerprint,
+        publisher_program = gpg_authority.path
+        publisher_authority_sha256 = executable_authority.authority_digest(
+            gpg_authority
+        )
+        with executable_authority.executable_invocation(gpg_authority):
+            publisher = dict(
+                publisher_readiness(
+                    gnupg_home=publisher_gnupg_home,
+                    fingerprint=publisher_fingerprint,
+                    gpg_program=publisher_program,
+                )
+                if publisher_probe is None
+                else publisher_probe()
             )
-            if publisher_canary is None and publisher_probe is None
-            else publisher.get("ready") is True
-            if publisher_canary is None
-            else publisher_canary()
-        )
-    except (OSError, TypeError, ValueError):
+            canary_ready = (
+                publisher_sign_verify_canary(
+                    gnupg_home=publisher_gnupg_home,
+                    fingerprint=publisher_fingerprint,
+                    gpg_program=publisher_program,
+                )
+                if publisher_canary is None and publisher_probe is None
+                else publisher.get("ready") is True
+                if publisher_canary is None
+                else publisher_canary()
+            )
+    except (
+        OSError,
+        TypeError,
+        ValueError,
+        executable_authority.ExecutableAuthorityError,
+    ):
         publisher = {"fingerprint": None, "ready": False}
         canary_ready = False
     publisher_safe = {
         "fingerprint": publisher_fingerprint,
+        "gpg_authority_sha256": publisher_authority_sha256,
+        "gpg_program": publisher_program,
         "ready": publisher.get("ready") is True
         and publisher.get("fingerprint") == publisher_fingerprint,
     }
@@ -214,6 +246,8 @@ def doctor(
         or history_repo is None
         or not isinstance(history_target_ref, str)
         or not history_target_ref
+        or publisher_program is None
+        or publisher_authority_sha256 is None
     ):
         record(
             "durable_history_contract",
@@ -228,6 +262,8 @@ def doctor(
                 identity=resolved_identity,
                 expected_fingerprint=publisher_fingerprint,
                 gnupg_home=publisher_gnupg_home,
+                gpg_program=publisher_program,
+                expected_gpg_authority_sha256=publisher_authority_sha256,
             )
             history_binding = authority.history_repository_binding(
                 Path(history_repo).expanduser().absolute(),

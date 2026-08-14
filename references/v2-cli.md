@@ -24,10 +24,15 @@ All examples use the same installed path:
 
 ```bash
 V2_CLI="$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
+PUBLISHER_GPG="/absolute/owner-controlled/path/to/gpg"
 ```
 
 Every invocation must use `python3 -I -B -S`. The coordinator fails closed
 before importing its engine when any required isolation flag is absent.
+`doctor` and `start` also require the same absolute `--publisher-gpg-program`.
+The coordinator authenticates that executable's path identity, content, and
+ancestor access policy, persists the authority digest in the run specification,
+and rejects later substitution. `finalize` accepts no caller override.
 
 ## Identity
 
@@ -38,6 +43,15 @@ Shadow `doctor` and `start` require both an explicit `--identity-path` and
 ## Run Loop
 
 ```bash
+python3 -I -B -S "$V2_CLI" doctor \
+  --shadow \
+  --identity-path "$IDENTITY" \
+  --require-existing-identity \
+  --run-config "$RUN_CONFIG" \
+  --history-repo "$HISTORY" \
+  --history-target-ref refs/heads/main \
+  --publisher-gpg-program "$PUBLISHER_GPG"
+
 python3 -I -B -S "$V2_CLI" start \
   --shadow \
   --identity-path "$IDENTITY" \
@@ -48,7 +62,8 @@ python3 -I -B -S "$V2_CLI" start \
   --run-dir "$RUN" \
   --run-config "$RUN_CONFIG" \
   --history-repo "$HISTORY" \
-  --history-target-ref refs/heads/main
+  --history-target-ref refs/heads/main \
+  --publisher-gpg-program "$PUBLISHER_GPG"
 
 python3 -I -B -S "$V2_CLI" status \
   --identity-path "$IDENTITY" \
@@ -185,7 +200,8 @@ python3 -I -B -S "$V2_CLI" start \
   --run-dir "$PARTIAL_RUN" \
   --run-config "$RUN_CONFIG" \
   --history-repo "$HISTORY" \
-  --history-target-ref refs/heads/main
+  --history-target-ref refs/heads/main \
+  --publisher-gpg-program "$PUBLISHER_GPG"
 
 python3 -I -B -S "$V2_CLI" advance \
   --identity-path "$IDENTITY" \
@@ -211,6 +227,7 @@ python3 -I -B -S "$V2_CLI" start \
   --run-config "$RUN_CONFIG" \
   --history-repo "$HISTORY" \
   --history-target-ref refs/heads/main \
+  --publisher-gpg-program "$PUBLISHER_GPG" \
   --shadow-successor-of "$PARTIAL_RUN"
 ```
 

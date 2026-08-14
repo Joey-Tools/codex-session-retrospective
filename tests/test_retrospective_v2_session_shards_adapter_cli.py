@@ -37,6 +37,7 @@ from retrospective_v2.orchestrator import (  # noqa: E402
 from tests.test_retrospective_v2_orchestrator import (  # noqa: E402
     bind_remote_host_context_helper_fixture,
     execution_provenance,
+    TEST_PUBLISHER_GPG,
 )
 
 
@@ -143,6 +144,7 @@ class SessionShardsAdapterCliTests(unittest.TestCase):
             created_at=self.created_at,
             history_repo=self.root / "history",
             history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
             provenance=execution_provenance(),
             allow_partial=True,
             shadow=True,

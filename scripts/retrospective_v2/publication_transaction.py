@@ -954,6 +954,8 @@ class PublicationTransaction:
             identity=identity,
             expected_fingerprint=binding["publisher_fingerprint"],
             gnupg_home=binding["publisher_gnupg_home"],
+            gpg_program=binding["publisher_gpg_program"],
+            expected_gpg_authority_sha256=binding["publisher_gpg_authority_sha256"],
         )
         marker = authority.load_production_marker(
             binding["production_marker"],

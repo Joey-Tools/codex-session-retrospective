@@ -73,6 +73,7 @@ class LocalGitPublicationAdapter(
         expected_signer_uid: str = DEFAULT_PUBLISHER_UID,
         allowed_signers_file: str | os.PathLike[str] | None = None,
         signing_program: str | os.PathLike[str] | None = None,
+        expected_signing_authority_sha256: str | None = None,
         policy_generation: str = "policy_generation_v2:initial",
         key_generation: str = "key_generation_v2:initial",
         capacity_limit_bytes: int = DEFAULT_PUBLICATION_CAPACITY_BYTES,
@@ -103,6 +104,14 @@ class LocalGitPublicationAdapter(
                     label="GPG",
                 )
             )
+            self._signing_authority_sha256 = executable_authority.authority_digest(
+                self._signing_executable_authority
+            )
+            if expected_signing_authority_sha256 is not None:
+                executable_authority.require_authority_digest(
+                    self._signing_executable_authority,
+                    expected_signing_authority_sha256,
+                )
         except executable_authority.ExecutableAuthorityError as exc:
             raise LocalGitPublicationError(
                 "publication executable authority is not trusted"

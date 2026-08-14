@@ -34,6 +34,7 @@ from retrospective_v2 import (  # noqa: E402
     git_safety,
     orchestrator as orchestrator_module,
     publication_git_commits,
+    publication_git_storage,
     publication_support,
     safe_io,
     transport,
@@ -196,6 +197,88 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 "changed after validation",
             ):
                 executable_authority.revalidate_executable(authority_receipt)
+
+    def test_executable_authority_digest_binds_content_identity_and_policy(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as temporary_directory:
+            executable = Path(temporary_directory) / "trusted-tool"
+            executable.write_bytes(b"#!/bin/sh\nexit 0\n")
+            executable.chmod(0o700)
+            initial = executable_authority.resolve_executable(
+                executable,
+                label="Fixture",
+            )
+            initial_digest = executable_authority.authority_digest(initial)
+
+            metadata = executable.stat()
+            os.utime(executable, ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 1))
+            timestamp_only = executable_authority.resolve_executable(
+                executable,
+                label="Fixture",
+            )
+            self.assertEqual(
+                initial_digest,
+                executable_authority.authority_digest(timestamp_only),
+            )
+
+            executable.chmod(0o500)
+            policy_changed = executable_authority.resolve_executable(
+                executable,
+                label="Fixture",
+            )
+            self.assertNotEqual(
+                initial_digest,
+                executable_authority.authority_digest(policy_changed),
+            )
+
+            executable.chmod(0o700)
+            executable.write_bytes(b"#!/bin/sh\nexit 1\n")
+            content_changed = executable_authority.resolve_executable(
+                executable,
+                label="Fixture",
+            )
+            self.assertNotEqual(
+                initial_digest,
+                executable_authority.authority_digest(content_changed),
+            )
+
+    def test_keyring_probe_rejects_changed_expected_gpg_before_home_access(
+        self,
+    ) -> None:
+        expected = executable_authority.resolve_executable(
+            "/usr/bin/true",
+            label="GPG",
+        )
+        replacement = executable_authority.resolve_executable(
+            "/usr/bin/false",
+            label="GPG",
+        )
+        with (
+            mock.patch.object(
+                publication_support.executable_authority,
+                "resolve_executable",
+                return_value=replacement,
+            ),
+            mock.patch.object(
+                publication_support,
+                "_publisher_home_subprocess_binding",
+            ) as publisher_home,
+            self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "GPG executable is not trusted",
+            ),
+        ):
+            publication_support.validate_publisher_keyring(
+                gnupg_home="/private/tmp/not-opened-publisher-home",
+                fingerprint="A" * 40,
+                expected_uid=DEFAULT_PUBLISHER_UID,
+                gpg_program=expected.path,
+                expected_gpg_authority_sha256=(
+                    executable_authority.authority_digest(expected)
+                ),
+            )
+        publisher_home.assert_not_called()
 
     def test_executable_invocation_detects_post_resolution_replacement(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as temporary_directory:
@@ -1153,6 +1236,7 @@ class DurablePublicationTests(unittest.TestCase):
             )
             prompt = (
                 f"Run python3 -I -B -S {installed_cli} start --mode {mode} "
+                "--publisher-gpg-program /usr/bin/true "
                 "for the exact production window."
             )
             (record_dir / "automation.toml").write_text(
@@ -1349,6 +1433,7 @@ class DurablePublicationTests(unittest.TestCase):
             "hosts": hosts,
             "mode": mode,
             "publisher_fingerprint": self.fingerprint,
+            "publisher_gpg_program": self.gpg,
             "publisher_gnupg_home": self.gnupg_home,
             "provenance": self.provenance,
             "shadow": True,
@@ -1505,6 +1590,7 @@ class DurablePublicationTests(unittest.TestCase):
         controlled_gap_receipt: Mapping[str, object] | None = None,
         bind_export: bool = True,
         persist_descriptor: bool = False,
+        publisher_gpg_program: str | None = None,
     ) -> tuple[RetrospectiveOrchestrator, Path]:
         coordinator = RetrospectiveOrchestrator(
             self.root / "runs" / name,
@@ -1528,6 +1614,7 @@ class DurablePublicationTests(unittest.TestCase):
             provider_state=self.provider_state,
             production_marker=self.marker_path,
             publisher_fingerprint=self.fingerprint,
+            publisher_gpg_program=publisher_gpg_program or self.gpg,
             publisher_gnupg_home=self.gnupg_home,
         )
         if holdout_host is not None:
@@ -1789,6 +1876,43 @@ class DurablePublicationTests(unittest.TestCase):
                 gnupg_home=self.gnupg_home,
                 gpg_program=self.gpg,
             )
+
+    def test_adapter_keyring_probe_binds_captured_gpg_authority(self) -> None:
+        with mock.patch.object(
+            publication_git_storage,
+            "validate_publisher_keyring",
+            return_value={"fingerprint": self.fingerprint},
+        ) as probe:
+            self.adapter._validate_signing_identity()
+
+        self.assertEqual(
+            executable_authority.authority_digest(
+                self.adapter._signing_executable_authority
+            ),
+            probe.call_args.kwargs["expected_gpg_authority_sha256"],
+        )
+
+    def test_formal_request_requires_exact_adapter_gpg_authority(self) -> None:
+        coordinator, bundle = self.build_exportable_run("adapter-gpg-authority")
+        transaction = self.transaction(coordinator, bundle)
+        request = transaction.operation_request("prepare")
+        conflicting_authority = executable_authority.resolve_executable(
+            "/usr/bin/true",
+            label="GPG",
+        )
+        binding = copy.deepcopy(dict(request.publication_authority))
+        binding["publisher_gpg_program"] = conflicting_authority.path
+        binding["publisher_gpg_authority_sha256"] = (
+            executable_authority.authority_digest(conflicting_authority)
+        )
+        conflicting_request = replace(request, publication_authority=binding)
+
+        with self.assertRaisesRegex(
+            publication_support.LocalGitPublicationError,
+            "provider configuration differs",
+        ):
+            self.adapter.preflight_prepare(conflicting_request)
+        self.assertIsNone(self.adapter.inspect_attempt(request.attempt_ref))
 
     def test_history_rejects_signed_retained_artifact_mutation(self) -> None:
         coordinator, bundle = self.build_exportable_run("artifact-mutation")
@@ -2458,6 +2582,7 @@ class DurablePublicationTests(unittest.TestCase):
                 production_marker=self.marker_path,
                 provenance=self.provenance,
                 publisher_fingerprint=self.fingerprint,
+                publisher_gpg_program=self.gpg,
                 publisher_gnupg_home=self.gnupg_home,
             )
 
@@ -4781,6 +4906,58 @@ class DurablePublicationTests(unittest.TestCase):
         )
         self.assertIn(str(bundle.resolve()), collected["deleted"])
         self.assertFalse(bundle.exists())
+
+    def test_finalize_cli_uses_only_the_persisted_gpg_authority(self) -> None:
+        coordinator, _bundle = self.build_exportable_run(
+            "cli-persisted-gpg-authority",
+            persist_descriptor=True,
+        )
+        orchestrator_class = cli_module.orchestrator_api.RetrospectiveOrchestrator
+
+        with (
+            mock.patch.object(
+                cli_module.orchestrator_api,
+                "RetrospectiveOrchestrator",
+                side_effect=lambda *args, **kwargs: orchestrator_class(
+                    *args,
+                    clock=lambda: "2026-07-15T00:00:00Z",
+                    **kwargs,
+                ),
+            ),
+            mock.patch.dict(os.environ, {"PATH": "/usr/bin:/bin"}),
+        ):
+            finalized = self.finalize_cli(coordinator)
+
+        self.assertEqual("prepared", finalized.result["transaction_phase"])
+
+    def test_finalize_cli_rejects_changed_persisted_gpg_authority(self) -> None:
+        gpg_copy = self.root / "publisher-gpg-copy"
+        shutil.copyfile(self.gpg, gpg_copy)
+        gpg_copy.chmod(0o700)
+        coordinator, _bundle = self.build_exportable_run(
+            "cli-changed-gpg-authority",
+            persist_descriptor=True,
+            publisher_gpg_program=str(gpg_copy),
+        )
+        gpg_copy.write_bytes(b"#!/bin/sh\nexit 1\n")
+        gpg_copy.chmod(0o700)
+        args = cli_module.build_parser().parse_args(
+            [
+                "finalize",
+                "--identity-path",
+                str(self.identity_path),
+                "--require-existing-identity",
+                "--run-dir",
+                str(coordinator.run_dir),
+            ]
+        )
+
+        with self.assertRaises(cli_module.CliContractError) as raised:
+            cli_module.command_finalize(args)
+        self.assertEqual("publication_authority_invalid", raised.exception.code)
+        self.assertIn(
+            "persisted publisher GPG authority", raised.exception.safe_message
+        )
 
     def test_finalize_cli_preserves_aborted_export_disposition(self) -> None:
         coordinator, bundle = self.build_exportable_run(

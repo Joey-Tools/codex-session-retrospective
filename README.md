@@ -30,6 +30,10 @@ The coordinator requires Python 3.13 or newer. See
 [`references/v2-engine-architecture.md`](references/v2-engine-architecture.md)
 for ownership boundaries.
 
+Production and shadow readiness require one explicit absolute
+`--publisher-gpg-program`. Its executable identity, bytes, and ancestor access
+policy are committed into each run and reused without a `finalize` override.
+
 ## Development
 
 Run the repository contract first, then the complete Python 3.13 suite:
@@ -42,8 +46,9 @@ chmod 0755 .codex-tmp/python/bin/python3
 .codex-tmp/python/bin/python3 -B -S -m unittest discover -s tests
 ```
 
-The tests are intentionally standard-library-only. CI creates an
-owner-controlled Python 3.13 virtual environment and disables bytecode writes.
+The tests are intentionally standard-library-only. CI creates owner-controlled
+Python 3.13 virtual environments, disables bytecode writes, and runs four
+stable, disjoint test-ID shards under explicit job timeouts.
 
 ## Migration State
 

@@ -488,6 +488,7 @@ def validate_publisher_keyring(
     fingerprint: str = DEFAULT_PUBLISHER_FINGERPRINT,
     expected_uid: str = DEFAULT_PUBLISHER_UID,
     gpg_program: str | os.PathLike[str] = executable_authority.DEFAULT_GPG_EXECUTABLE,
+    expected_gpg_authority_sha256: str | None = None,
     timeout_seconds: float = 10.0,
 ) -> dict[str, str]:
     """Validate only the dedicated owner-only OpenPGP publisher keyring."""
@@ -505,6 +506,11 @@ def validate_publisher_keyring(
         gpg_authority = executable_authority.resolve_executable(
             gpg_program, label="GPG"
         )
+        if expected_gpg_authority_sha256 is not None:
+            executable_authority.require_authority_digest(
+                gpg_authority,
+                expected_gpg_authority_sha256,
+            )
     except executable_authority.ExecutableAuthorityError as exc:
         raise LocalGitPublicationError("GPG executable is not trusted") from exc
 
@@ -728,6 +734,8 @@ def _load_run_publication_authority(
         "production_marker",
         "provider_state",
         "publisher_fingerprint",
+        "publisher_gpg_authority_sha256",
+        "publisher_gpg_program",
         "publisher_gnupg_home",
     }
     if set(run_authority) != required_authority_fields:
@@ -746,6 +754,10 @@ def _load_run_publication_authority(
             identity=identity,
             expected_fingerprint=run_authority["publisher_fingerprint"],
             gnupg_home=run_authority["publisher_gnupg_home"],
+            gpg_program=run_authority["publisher_gpg_program"],
+            expected_gpg_authority_sha256=run_authority[
+                "publisher_gpg_authority_sha256"
+            ],
         )
         if canonical_json_bytes(current_history.provider_projection()) != (
             canonical_json_bytes(expected_history.provider_projection())
@@ -830,6 +842,10 @@ def _load_run_publication_authority(
         "proposed_durable_state": deepcopy(raw_durable),
         "provider_state": run_authority["provider_state"],
         "publisher_fingerprint": run_authority["publisher_fingerprint"],
+        "publisher_gpg_authority_sha256": run_authority[
+            "publisher_gpg_authority_sha256"
+        ],
+        "publisher_gpg_program": run_authority["publisher_gpg_program"],
         "publisher_gnupg_home": run_authority["publisher_gnupg_home"],
         "run_dir": str(run_dir),
         "schema": FORMAL_AUTHORIZATION_SCHEMA,

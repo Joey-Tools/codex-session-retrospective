@@ -939,6 +939,8 @@ def _normalize_publication_authority(value: Mapping[str, Any]) -> dict[str, Any]
         "proposed_durable_state",
         "provider_state",
         "publisher_fingerprint",
+        "publisher_gpg_authority_sha256",
+        "publisher_gpg_program",
         "publisher_gnupg_home",
         "run_dir",
         "schema",
@@ -954,6 +956,7 @@ def _normalize_publication_authority(value: Mapping[str, Any]) -> dict[str, Any]
         "identity_path",
         "production_marker",
         "provider_state",
+        "publisher_gpg_program",
         "publisher_gnupg_home",
         "run_dir",
     ):
@@ -965,6 +968,11 @@ def _normalize_publication_authority(value: Mapping[str, Any]) -> dict[str, Any]
         or _SHA256_RE.fullmatch(value["candidate_digest"]) is None
     ):
         raise ValueError("publication authority candidate digest is invalid")
+    if (
+        not isinstance(value["publisher_gpg_authority_sha256"], str)
+        or _SHA256_RE.fullmatch(value["publisher_gpg_authority_sha256"]) is None
+    ):
+        raise ValueError("publication authority GPG digest is invalid")
     if (
         not isinstance(value["configuration_root"], str)
         or _SHA256_RE.fullmatch(value["configuration_root"]) is None

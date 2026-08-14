@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 import hashlib
+import json
 import os
 from pathlib import Path
 import shutil
@@ -56,6 +57,29 @@ class ExecutableAuthority:
     executable: PathObjectAuthority
     size: int
     sha256: str
+
+
+def authority_digest(authority: ExecutableAuthority) -> str:
+    """Commit to the executable's identity, content, and access-policy receipt."""
+
+    payload = json.dumps(
+        asdict(authority),
+        ensure_ascii=True,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("ascii")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def require_authority_digest(
+    authority: ExecutableAuthority,
+    expected_digest: str,
+) -> None:
+    if authority_digest(authority) != expected_digest:
+        raise ExecutableAuthorityError(
+            f"{authority.label} executable authority digest changed"
+        )
 
 
 def _close_descriptors(descriptors: list[int], label: str) -> None:

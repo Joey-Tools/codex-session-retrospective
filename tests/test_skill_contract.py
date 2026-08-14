@@ -50,7 +50,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("`python3 -I -B -S`", skill)
         self.assertIn("python3 -I -B -S", readme)
         self.assertNotIn('python3 "$V2_CLI"', cli_reference)
-        self.assertEqual(10, cli_reference.count('python3 -I -B -S "$V2_CLI"'))
+        self.assertEqual(11, cli_reference.count('python3 -I -B -S "$V2_CLI"'))
 
     def test_references_and_entry_points_exist(self) -> None:
         for name in (

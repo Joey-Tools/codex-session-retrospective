@@ -223,6 +223,7 @@ class LocalGitStorageOperations:
             fingerprint=self._signing_key,
             expected_uid=self._expected_signer_uid,
             gpg_program=self._signing_program,
+            expected_gpg_authority_sha256=self._signing_authority_sha256,
             timeout_seconds=self._subprocess_timeout_seconds,
         )
         self._signing_key = identity["fingerprint"]
@@ -384,6 +385,11 @@ class LocalGitStorageOperations:
             or binding["destination"] != request.destination
             or binding["candidate_digest"]
             != request.inventory.retained_bundle_digest_v2
+            or Path(binding["publisher_gnupg_home"]).absolute() != self._gnupg_home
+            or binding["publisher_fingerprint"] != self._signing_key
+            or binding["publisher_gpg_program"] != self._signing_program
+            or binding["publisher_gpg_authority_sha256"]
+            != self._signing_authority_sha256
         ):
             raise LocalGitPublicationError(
                 "provider configuration differs from persisted publication authority"

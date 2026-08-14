@@ -41,6 +41,7 @@ from tests.test_retrospective_v2_orchestrator import (  # noqa: E402
     bind_remote_host_context_helper_fixture,
     execution_provenance,
     no_activity_manifest,
+    TEST_PUBLISHER_GPG,
 )
 
 
@@ -209,6 +210,8 @@ class CliContractTests(unittest.TestCase):
             str(self.history_repo),
             "--history-target-ref",
             "refs/heads/main",
+            "--publisher-gpg-program",
+            TEST_PUBLISHER_GPG,
         )
 
     def write_automation_record(
@@ -225,6 +228,7 @@ class CliContractTests(unittest.TestCase):
         prompt = (
             "Run python3 -I -B -S "
             f"{authority.installed_v2_cli_path()} start --mode {mode} "
+            f"--publisher-gpg-program {TEST_PUBLISHER_GPG} "
             f"for the exact production window.{prompt_suffix}"
         )
         fields = [
@@ -304,6 +308,7 @@ class CliContractTests(unittest.TestCase):
             provenance=execution_provenance(),
             history_repo=self.history_repo,
             history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
             created_at=self.created_at,
             raw_retention_days=raw_retention_days,
             working_retention_days=working_retention_days,
@@ -672,6 +677,8 @@ class CliContractTests(unittest.TestCase):
             str(self.history_repo),
             "--history-target-ref",
             "refs/heads/main",
+            "--publisher-gpg-program",
+            TEST_PUBLISHER_GPG,
             "--shadow-successor-of",
             str(self.root / "partial-run"),
         ]
@@ -837,6 +844,8 @@ class CliContractTests(unittest.TestCase):
             str(self.history_repo),
             "--history-target-ref",
             "refs/heads/main",
+            "--publisher-gpg-program",
+            TEST_PUBLISHER_GPG,
         )
         for label, mode_arguments, expected_code in cases:
             with (
@@ -880,6 +889,8 @@ class CliContractTests(unittest.TestCase):
                 str(self.history_repo),
                 "--history-target-ref",
                 "refs/heads/main",
+                "--publisher-gpg-program",
+                TEST_PUBLISHER_GPG,
             )
             accepted = self.parse_dispatch(*self.shadow_start_arguments())
 
@@ -928,6 +939,8 @@ class CliContractTests(unittest.TestCase):
                 str(self.history_repo),
                 "--history-target-ref",
                 "refs/heads/main",
+                "--publisher-gpg-program",
+                TEST_PUBLISHER_GPG,
             )
             accepted = self.parse_dispatch(
                 "doctor",
@@ -941,6 +954,8 @@ class CliContractTests(unittest.TestCase):
                 str(self.history_repo),
                 "--history-target-ref",
                 "refs/heads/main",
+                "--publisher-gpg-program",
+                TEST_PUBLISHER_GPG,
             )
         self.assertEqual(cli.ExitCode.SECURITY, missing.exit_code)
         self.assertTrue(accepted.ok)
@@ -981,6 +996,7 @@ class CliContractTests(unittest.TestCase):
             provenance=execution_provenance(),
             history_repo=self.history_repo,
             history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
             created_at=self.created_at,
         )
         for _ in range(4):

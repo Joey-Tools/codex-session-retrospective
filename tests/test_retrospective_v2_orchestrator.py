@@ -31,6 +31,7 @@ from retrospective_v2 import (  # noqa: E402
     controlled_gaps,
     extracted_turns,
     episode_review,
+    executable_authority,
     reporting,
     retained_inputs,
     result_validation,
@@ -99,6 +100,7 @@ from retrospective_v2.orchestrator_core import (  # noqa: E402
 WINDOW_START = "2026-07-06T00:00:00Z"
 WINDOW_END = "2026-07-13T00:00:00Z"
 DAILY_END = "2026-07-07T00:00:00Z"
+TEST_PUBLISHER_GPG = "/usr/bin/true"
 REMOTE_HOST = "miku-bot-dev"
 REMOTE_HOST_CONTEXT_HELPER_FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "remote_host_context_helper.py"
@@ -827,6 +829,7 @@ class OrchestratorTests(unittest.TestCase):
         return {
             "history_repo": self.root / "history",
             "history_target_ref": "refs/heads/main",
+            "publisher_gpg_program": TEST_PUBLISHER_GPG,
             "production_marker": self.root / "production-marker.json",
             "provenance": execution_provenance(),
             "provider_state": self.root / "provider",
@@ -1357,6 +1360,7 @@ class OrchestratorTests(unittest.TestCase):
             shadow=True,
             history_repo=self.root / "history",
             history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
             publisher_probe=lambda: {
                 "fingerprint": PUBLISHER_FINGERPRINT,
                 "ready": True,
@@ -1382,6 +1386,7 @@ class OrchestratorTests(unittest.TestCase):
             provenance=execution_provenance(),
             history_repo=self.root / "history",
             history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
             provider_state=self.root / "provider",
             production_marker=self.root / "production-marker.json",
             publisher_probe=lambda: {
@@ -1396,6 +1401,7 @@ class OrchestratorTests(unittest.TestCase):
             provenance=execution_provenance(),
             history_repo=self.root / "history",
             history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
             production_marker=self.root / "production-marker.json",
             publisher_probe=lambda: {
                 "fingerprint": PUBLISHER_FINGERPRINT,
@@ -1416,6 +1422,7 @@ class OrchestratorTests(unittest.TestCase):
             shadow=True,
             history_repo=self.root / "history",
             history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
             publisher_probe=lambda: {
                 "fingerprint": PUBLISHER_FINGERPRINT,
                 "ready": True,
@@ -1641,6 +1648,16 @@ class OrchestratorTests(unittest.TestCase):
             **first_authority,
         )
         run_ref = first_result["run_ref"]
+        run_authority = first.load_state()["authority"]
+        expected_gpg = executable_authority.resolve_executable(
+            TEST_PUBLISHER_GPG,
+            label="GPG",
+        )
+        self.assertEqual(expected_gpg.path, run_authority["publisher_gpg_program"])
+        self.assertEqual(
+            executable_authority.authority_digest(expected_gpg),
+            run_authority["publisher_gpg_authority_sha256"],
+        )
 
         resumed = first.start(
             mode=RunMode.DAILY,

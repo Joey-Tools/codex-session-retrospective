@@ -780,22 +780,39 @@ class _GitRepository:
         *,
         gnupg_home: Path,
         git_binary: str,
-        gpg_program: str = executable_authority.DEFAULT_GPG_EXECUTABLE,
+        gpg_program: str | None = executable_authority.DEFAULT_GPG_EXECUTABLE,
+        expected_gpg_authority_sha256: str | None = None,
     ) -> None:
         self.path = path.absolute()
         try:
             self._git_executable_authority = executable_authority.resolve_executable(
                 git_binary, label="Git"
             )
-            self._gpg_executable_authority = executable_authority.resolve_executable(
-                gpg_program, label="GPG"
+            gpg_authority = (
+                None
+                if gpg_program is None
+                else executable_authority.resolve_executable(gpg_program, label="GPG")
             )
+            self._gpg_executable_authority = gpg_authority
+            if expected_gpg_authority_sha256 is not None:
+                if gpg_authority is None:
+                    raise executable_authority.ExecutableAuthorityError(
+                        "GPG executable authority digest lacks an executable"
+                    )
+                executable_authority.require_authority_digest(
+                    gpg_authority,
+                    expected_gpg_authority_sha256,
+                )
         except executable_authority.ExecutableAuthorityError as exc:
             raise HistoryValidationError(
                 "history executable authority is not trusted"
             ) from exc
         self.git = self._git_executable_authority.path
-        self.gpg = self._gpg_executable_authority.path
+        self.gpg = (
+            "/usr/bin/false"
+            if self._gpg_executable_authority is None
+            else self._gpg_executable_authority.path
+        )
         self.gnupg_home = gnupg_home.expanduser().absolute()
         self.env = git_safety.history_git_environment(
             home=str(Path.home()), gnupg_home=str(self.gnupg_home)
@@ -830,7 +847,12 @@ class _GitRepository:
         )
         executable_authorities = [self._git_executable_authority]
         if args and args[0] in {"verify-commit", "verify-tag"}:
-            executable_authorities.append(self._gpg_executable_authority)
+            gpg_authority = self._gpg_executable_authority
+            if gpg_authority is None:
+                raise HistoryValidationError(
+                    "history signature verification lacks GPG authority"
+                )
+            executable_authorities.append(gpg_authority)
         try:
             with executable_authority.executable_invocation(*executable_authorities):
                 with git_safety.history_repository_git_invocation(
@@ -1053,6 +1075,7 @@ def load_durable_publication_commitment(
     gnupg_home: str | os.PathLike[str] = DEFAULT_PUBLISHER_GNUPG_HOME,
     git_binary: str = executable_authority.DEFAULT_GIT_EXECUTABLE,
     gpg_program: str = executable_authority.DEFAULT_GPG_EXECUTABLE,
+    expected_gpg_authority_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Load the exact signed attempt, plan, parent, bundle, and durable manifest."""
 
@@ -1063,6 +1086,7 @@ def load_durable_publication_commitment(
         gnupg_home=Path(gnupg_home),
         git_binary=git_binary,
         gpg_program=gpg_program,
+        expected_gpg_authority_sha256=expected_gpg_authority_sha256,
     )
     resolved = repo.text("rev-parse", "--verify", commit)
     if resolved != commit:
@@ -1084,6 +1108,7 @@ def load_durable_history(
     gnupg_home: str | os.PathLike[str] = DEFAULT_PUBLISHER_GNUPG_HOME,
     git_binary: str = executable_authority.DEFAULT_GIT_EXECUTABLE,
     gpg_program: str = executable_authority.DEFAULT_GPG_EXECUTABLE,
+    expected_gpg_authority_sha256: str | None = None,
 ) -> DurableHistoryState:
     """Validate every publication state transition reachable from ``target_ref``."""
 
@@ -1093,6 +1118,7 @@ def load_durable_history(
         gnupg_home=Path(gnupg_home),
         git_binary=git_binary,
         gpg_program=gpg_program,
+        expected_gpg_authority_sha256=expected_gpg_authority_sha256,
     )
     git_safety.validate_history_target_ref(
         lambda args: repo.run(*args, check=False), target_ref
@@ -1184,6 +1210,7 @@ def load_prior_period_from_history(
     gnupg_home: str | os.PathLike[str] = DEFAULT_PUBLISHER_GNUPG_HOME,
     git_binary: str = executable_authority.DEFAULT_GIT_EXECUTABLE,
     gpg_program: str = executable_authority.DEFAULT_GPG_EXECUTABLE,
+    expected_gpg_authority_sha256: str | None = None,
 ) -> dict[str, Any]:
     """Load the latest trend from the fully verified signed history chain."""
 
@@ -1195,6 +1222,7 @@ def load_prior_period_from_history(
         gnupg_home=gnupg_home,
         git_binary=git_binary,
         gpg_program=gpg_program,
+        expected_gpg_authority_sha256=expected_gpg_authority_sha256,
     )
     commit = history.publication_commit
     if commit is None:
@@ -1206,6 +1234,7 @@ def load_prior_period_from_history(
         gnupg_home=Path(gnupg_home),
         git_binary=git_binary,
         gpg_program=gpg_program,
+        expected_gpg_authority_sha256=expected_gpg_authority_sha256,
     )
     if repo.text("rev-parse", "--verify", target_ref) != history.head_commit:
         raise HistoryValidationError("durable history changed during prior-period load")
@@ -1241,6 +1270,7 @@ def history_repository_binding(
         Path(repo_path),
         gnupg_home=DEFAULT_PUBLISHER_GNUPG_HOME,
         git_binary=git_binary,
+        gpg_program=None,
     )
     git_safety.validate_history_target_ref(
         lambda args: repo.run(*args, check=False), target_ref
@@ -2439,6 +2469,7 @@ def _validate_installed_automation(
         or prompt.count(str(cli_path)) != 1
         or prompt.count(isolated_launch) != 1
         or f"--mode {expected_mode}" not in prompt
+        or prompt.count("--publisher-gpg-program ") != 1
         or any(token in prompt for token in forbidden_prompt_tokens)
         or not isinstance(schedule, str)
         or not schedule.startswith(expected_frequency)

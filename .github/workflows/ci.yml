@@ -9,9 +9,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  contract:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -21,8 +26,37 @@ jobs:
         run: |
           python3 -I -B -S -m venv --copies "$RUNNER_TEMP/codex-python"
           chmod 0755 "$RUNNER_TEMP/codex-python/bin/python3"
-          "$RUNNER_TEMP/codex-python/bin/python3" -B -S -m unittest discover \
+          "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S -m unittest discover \
             -s tests -p test_ci_contract.py
-      - name: Run tests
+  test-shard:
+    needs: contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Prepare owner-controlled Python
         run: |
-          "$RUNNER_TEMP/codex-python/bin/python3" -B -S -m unittest discover -s tests
+          python3 -I -B -S -m venv --copies "$RUNNER_TEMP/codex-python"
+          chmod 0755 "$RUNNER_TEMP/codex-python/bin/python3"
+      - name: Run test shard
+        run: |
+          "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S scripts/run_test_shard.py \
+            --shard-index "${{ matrix.shard }}" --shard-count 4
+
+  test:
+    if: always()
+    needs: [contract, test-shard]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every test producer
+        run: |
+          test "${{ needs.contract.result }}" = success
+          test "${{ needs.test-shard.result }}" = success

@@ -24,7 +24,10 @@ It requires Python 3.13 or newer and must be launched with
 `python3 -I -B -S`. Do not invoke the migration-only v1 helper for a v2 run.
 
 1. Run the installed v2 coordinator's `doctor` command and require the
-   configured identity, policy, history, and transport contracts to match.
+   configured identity, policy, history, transport, and publisher executable
+   contracts to match. Supply one stable absolute owner-controlled GPG path as
+   `--publisher-gpg-program` to both `doctor` and `start`; do not resolve it
+   from ambient `PATH` or attempt to override it during `finalize`.
 2. Start one immutable `daily`, `weekly`, `baseline`, or `session` run.
 3. Repeat the machine-readable coordinator loop. Execute rollout leases only
    through `$remote-host-context session-shards`:

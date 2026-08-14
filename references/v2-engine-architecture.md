@@ -209,6 +209,14 @@ do not claim to exclude an actively malicious same-UID ABA after the final
 pre-launch check. A repository that finalize would reject is therefore blocked
 by doctor/start before an expensive retrospective run begins.
 
+The publisher GPG executable uses the same authority model. `doctor` and
+`start` require its absolute configured path; start persists a digest over the
+path-object identities, executable bytes, and ancestor access policies in the
+authenticated run specification. Every later signed-history read and
+publication phase supplies and rechecks that exact path/digest. `finalize` has
+no caller-selected signer override. Timestamp-only changes are benign because
+they are not part of the protected authority receipt.
+
 Source-program and remote-helper Python bootstraps run with `-I -B -S`; the
 captured bootstrap itself verifies isolated, no-site, no-bytecode flags before
 authenticating or compiling retained source. Global or user site initialization

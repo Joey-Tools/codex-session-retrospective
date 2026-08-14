@@ -60,6 +60,7 @@ from retrospective_v2.source_session_policy import (  # noqa: E402
 from tests.test_retrospective_v2_orchestrator import (  # noqa: E402
     bind_remote_host_context_helper_fixture,
     execution_provenance,
+    TEST_PUBLISHER_GPG,
 )
 
 
@@ -467,6 +468,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             created_at="2026-07-15T00:00:00Z",
             history_repo=self.root / "history",
             history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
             provenance=provenance or execution_provenance(),
             shadow=True,
         )

@@ -650,6 +650,8 @@ class LocalGitCommitOperations:
             identity=identity,
             expected_fingerprint=binding["publisher_fingerprint"],
             gnupg_home=binding["publisher_gnupg_home"],
+            gpg_program=binding["publisher_gpg_program"],
+            expected_gpg_authority_sha256=binding["publisher_gpg_authority_sha256"],
         )
         if canonical_json_bytes(current_history.provider_projection()) != (
             canonical_json_bytes(expected_history.provider_projection())
@@ -761,6 +763,8 @@ class LocalGitCommitOperations:
             identity=identity,
             expected_fingerprint=binding["publisher_fingerprint"],
             gnupg_home=binding["publisher_gnupg_home"],
+            gpg_program=binding["publisher_gpg_program"],
+            expected_gpg_authority_sha256=binding["publisher_gpg_authority_sha256"],
         )
         target_head = state["receipts"]["promotion"]["target_head"]
         if published.publication_commit != target_head or not self._is_ancestor(

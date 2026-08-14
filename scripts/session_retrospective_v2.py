@@ -67,6 +67,7 @@ from retrospective_v2 import authority as authority_api  # noqa: E402
 from retrospective_v2 import catalog as catalog_api  # noqa: E402
 from retrospective_v2 import contracts as contract_api  # noqa: E402
 from retrospective_v2 import export as export_api  # noqa: E402
+from retrospective_v2 import executable_authority as executable_authority_api  # noqa: E402
 from retrospective_v2 import finalize as finalize_api  # noqa: E402
 from retrospective_v2 import identity as identity_api  # noqa: E402
 from retrospective_v2 import orchestrator as orchestrator_api  # noqa: E402
@@ -326,6 +327,7 @@ def build_parser() -> MachineArgumentParser:
     doctor_parser.add_argument("--run-config", required=True)
     doctor_parser.add_argument("--history-repo", required=True)
     doctor_parser.add_argument("--history-target-ref", required=True)
+    doctor_parser.add_argument("--publisher-gpg-program", required=True)
     doctor_parser.add_argument("--provider-state")
     doctor_parser.add_argument("--production-marker")
 
@@ -350,6 +352,7 @@ def build_parser() -> MachineArgumentParser:
     start_parser.add_argument("--session-target-selector")
     start_parser.add_argument("--history-repo", required=True)
     start_parser.add_argument("--history-target-ref", required=True)
+    start_parser.add_argument("--publisher-gpg-program", required=True)
     start_parser.add_argument("--provider-state")
     start_parser.add_argument("--production-marker")
 
@@ -700,6 +703,7 @@ def command_doctor(args: argparse.Namespace) -> CommandResult:
             provenance=provenance,
             history_repo=_absolute_path(args.history_repo),
             history_target_ref=args.history_target_ref,
+            publisher_gpg_program=_absolute_path(args.publisher_gpg_program),
             provider_state=(
                 None
                 if args.provider_state is None
@@ -890,6 +894,7 @@ def command_start(args: argparse.Namespace) -> CommandResult:
         session_target_selector=args.session_target_selector,
         history_repo=_absolute_path(args.history_repo),
         history_target_ref=args.history_target_ref,
+        publisher_gpg_program=_absolute_path(args.publisher_gpg_program),
         provider_state=(
             None if args.provider_state is None else _absolute_path(args.provider_state)
         ),
@@ -1390,6 +1395,10 @@ def command_export(args: argparse.Namespace) -> CommandResult:
             identity=orchestrator.identity,
             expected_fingerprint=run_authority["publisher_fingerprint"],
             gnupg_home=run_authority["publisher_gnupg_home"],
+            gpg_program=run_authority["publisher_gpg_program"],
+            expected_gpg_authority_sha256=run_authority[
+                "publisher_gpg_authority_sha256"
+            ],
         )
     else:
         prior_period = _load_prior_period(args.prior_period)
@@ -1588,22 +1597,45 @@ def command_finalize(args: argparse.Namespace) -> CommandResult:
     provider_state = _absolute_path(str(binding.get("provider_state", "")))
     target_ref = binding.get("history_target_ref")
     history_snapshot = binding.get("history_snapshot")
+    publisher_gpg_program = binding.get("publisher_gpg_program")
+    publisher_gpg_authority_sha256 = binding.get("publisher_gpg_authority_sha256")
     if (
         not isinstance(target_ref, str)
         or not isinstance(history_snapshot, Mapping)
         or not isinstance(history_snapshot.get("history_commit"), str)
+        or not isinstance(publisher_gpg_program, str)
+        or not Path(publisher_gpg_program).is_absolute()
+        or not isinstance(publisher_gpg_authority_sha256, str)
+        or SHA256_RE.fullmatch(publisher_gpg_authority_sha256) is None
     ):
         raise CliContractError(
             exit_code=ExitCode.INVALID_STATE,
             code="publication_authority_invalid",
             message="the persisted publication authority is invalid",
         )
+    try:
+        publisher_gpg_authority = executable_authority_api.resolve_executable(
+            publisher_gpg_program,
+            label="GPG",
+        )
+        executable_authority_api.require_authority_digest(
+            publisher_gpg_authority,
+            publisher_gpg_authority_sha256,
+        )
+    except executable_authority_api.ExecutableAuthorityError as error:
+        raise CliContractError(
+            exit_code=ExitCode.SECURITY,
+            code="publication_authority_invalid",
+            message="the persisted publisher GPG authority is no longer valid",
+        ) from error
     adapter = finalize_api.LocalGitPublicationAdapter(
         history_repo,
         provider_state,
         signing_key=str(binding.get("publisher_fingerprint", "")),
         gnupg_home=_absolute_path(str(binding.get("publisher_gnupg_home", ""))),
         expected_signer_uid=finalize_api.DEFAULT_PUBLISHER_UID,
+        signing_program=publisher_gpg_authority.path,
+        expected_signing_authority_sha256=publisher_gpg_authority_sha256,
     )
     journal = run_dir / PUBLICATION_JOURNAL_NAME
     destination = _publication_destination(run_state)

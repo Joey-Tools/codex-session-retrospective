@@ -13,6 +13,7 @@ from . import (
     cleanup_inventory,
     cleanup_sidecars,
     controlled_gaps,
+    executable_authority,
     export as retained_export_api,
     finalize,
     reporting,
@@ -85,6 +86,76 @@ class RunLifecycleOperations(OrchestratorComponent):
         self._history = history
         self._source = source
 
+    def _load_start_authority(
+        self,
+        *,
+        history_path: Path,
+        history_target_ref: str,
+        provider_path: Path | None,
+        marker_path: Path | None,
+        shadow: bool,
+        publisher_fingerprint: str,
+        publisher_gnupg_home: str | os.PathLike[str],
+        publisher_gpg_program: str | os.PathLike[str],
+        configuration_root: str,
+        configuration_ref: str,
+        model_era: str,
+        policy_era: str,
+    ) -> tuple[
+        authority.DurableHistoryState,
+        executable_authority.ExecutableAuthority,
+        str,
+    ]:
+        try:
+            gpg_authority = executable_authority.resolve_executable(
+                publisher_gpg_program,
+                label="GPG",
+            )
+            gpg_authority_sha256 = executable_authority.authority_digest(gpg_authority)
+            with executable_authority.executable_invocation(gpg_authority):
+                durable_history = authority.load_durable_history(
+                    history_path,
+                    history_target_ref,
+                    identity=self.identity,
+                    expected_fingerprint=publisher_fingerprint,
+                    gnupg_home=publisher_gnupg_home,
+                    gpg_program=gpg_authority.path,
+                    expected_gpg_authority_sha256=gpg_authority_sha256,
+                )
+                if provider_path is not None:
+                    authority.assert_provider_cache_matches(
+                        provider_path,
+                        durable_history,
+                        identity=self.identity,
+                    )
+                elif not shadow:
+                    raise InvalidInputError(
+                        "production start requires an initialized provider cache"
+                    )
+                if not shadow:
+                    if marker_path is None:
+                        raise InvalidInputError(
+                            "production start requires the completed cutover marker"
+                        )
+                    authority.load_production_marker(
+                        marker_path,
+                        identity=self.identity,
+                        history_repo=history_path,
+                        target_ref=history_target_ref,
+                        configuration_root=configuration_root,
+                        configuration_ref=configuration_ref,
+                        model_era=model_era,
+                        policy_era=policy_era,
+                    )
+        except (
+            authority.AuthorityError,
+            executable_authority.ExecutableAuthorityError,
+        ) as error:
+            raise RunConflictError(
+                "durable history, provider cache, or publisher authority validation failed"
+            ) from error
+        return durable_history, gpg_authority, gpg_authority_sha256
+
     def start(
         self,
         *,
@@ -117,6 +188,7 @@ class RunLifecycleOperations(OrchestratorComponent):
         publisher_gnupg_home: str | os.PathLike[str] = (
             authority.DEFAULT_PUBLISHER_GNUPG_HOME
         ),
+        publisher_gpg_program: str | os.PathLike[str] | None = None,
         run_ref: str | None = None,
         created_at: str | None = None,
         raw_retention_days: int = MAX_RETENTION_DAYS,
@@ -137,6 +209,8 @@ class RunLifecycleOperations(OrchestratorComponent):
         history_path = Path(history_repo).expanduser().absolute()
         if not isinstance(history_target_ref, str) or not history_target_ref:
             raise InvalidInputError("history_target_ref is invalid")
+        if publisher_gpg_program is None:
+            raise InvalidInputError("publisher_gpg_program is required")
         provider_path = (
             None
             if provider_state is None
@@ -263,43 +337,24 @@ class RunLifecycleOperations(OrchestratorComponent):
             "policy",
             "source_policy_v2",
         )
-        try:
-            durable_history = authority.load_durable_history(
-                history_path,
-                history_target_ref,
-                identity=self.identity,
-                expected_fingerprint=publisher_fingerprint,
-                gnupg_home=publisher_gnupg_home,
-            )
-            if provider_path is not None:
-                authority.assert_provider_cache_matches(
-                    provider_path,
-                    durable_history,
-                    identity=self.identity,
-                )
-            elif not shadow:
-                raise InvalidInputError(
-                    "production start requires an initialized provider cache"
-                )
-            if not shadow:
-                if marker_path is None:
-                    raise InvalidInputError(
-                        "production start requires the completed cutover marker"
-                    )
-                authority.load_production_marker(
-                    marker_path,
-                    identity=self.identity,
-                    history_repo=history_path,
-                    target_ref=history_target_ref,
-                    configuration_root=normalized_provenance["configuration_root"],
-                    configuration_ref=configuration_ref,
-                    model_era=model_era,
-                    policy_era=policy_era,
-                )
-        except authority.AuthorityError as error:
-            raise RunConflictError(
-                "durable history, provider cache, or production marker validation failed"
-            ) from error
+        (
+            durable_history,
+            publisher_gpg_authority,
+            publisher_gpg_authority_sha256,
+        ) = self._load_start_authority(
+            history_path=history_path,
+            history_target_ref=history_target_ref,
+            provider_path=provider_path,
+            marker_path=marker_path,
+            shadow=shadow,
+            publisher_fingerprint=publisher_fingerprint,
+            publisher_gnupg_home=publisher_gnupg_home,
+            publisher_gpg_program=publisher_gpg_program,
+            configuration_root=normalized_provenance["configuration_root"],
+            configuration_ref=configuration_ref,
+            model_era=model_era,
+            policy_era=policy_era,
+        )
 
         normalized_prior_heads = [
             copy.deepcopy(item) for item in durable_history.episode_heads
@@ -466,6 +521,8 @@ class RunLifecycleOperations(OrchestratorComponent):
                     None if provider_path is None else str(provider_path)
                 ),
                 "publisher_fingerprint": publisher_fingerprint,
+                "publisher_gpg_authority_sha256": (publisher_gpg_authority_sha256),
+                "publisher_gpg_program": publisher_gpg_authority.path,
                 "publisher_gnupg_home": str(
                     Path(publisher_gnupg_home).expanduser().absolute()
                 ),
@@ -2115,6 +2172,8 @@ class RunLifecycleOperations(OrchestratorComponent):
                 identity=self.identity,
                 expected_fingerprint=binding["publisher_fingerprint"],
                 gnupg_home=binding["publisher_gnupg_home"],
+                gpg_program=binding["publisher_gpg_program"],
+                expected_gpg_authority_sha256=binding["publisher_gpg_authority_sha256"],
             )
             publication_commit = published.publication_commit
             if publication_commit is None:
@@ -2127,6 +2186,8 @@ class RunLifecycleOperations(OrchestratorComponent):
                 identity=self.identity,
                 expected_fingerprint=binding["publisher_fingerprint"],
                 gnupg_home=binding["publisher_gnupg_home"],
+                gpg_program=binding["publisher_gpg_program"],
+                expected_gpg_authority_sha256=binding["publisher_gpg_authority_sha256"],
             )
             authority.load_production_marker(
                 binding["production_marker"],
