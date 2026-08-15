@@ -39,17 +39,6 @@ class CiContractTests(unittest.TestCase):
             "scripts/run_test_shard.py \\",
             workflow,
         )
-        self.assertIn(
-            'install -d -m 0700 "$RUNNER_TEMP/test-tmp-${{ matrix.shard }}"',
-            workflow,
-        )
-        self.assertIn(
-            'TMPDIR="$RUNNER_TEMP/test-tmp-${{ matrix.shard }}" \\\n'
-            '            "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S '
-            "scripts/run_test_shard.py \\",
-            workflow,
-        )
-        self.assertNotIn("TMPDIR=/tmp", workflow)
         self.assertIn('--shard-index "${{ matrix.shard }}" --shard-count 4', workflow)
         self.assertNotIn("\n          python3 -m unittest discover -s tests", workflow)
 

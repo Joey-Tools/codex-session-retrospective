@@ -164,12 +164,15 @@ superseded_by:
 - The first hosted sharded run exposed a platform-specific fixture boundary:
   Ubuntu's default `/tmp` is world-writable, so the changed-GPG regression's
   copied executable was correctly rejected by the production authority before
-  the test reached its intended same-path mutation. Each CI shard now creates
-  an independent mode-`0700` directory below `RUNNER_TEMP` and supplies it
-  as `TMPDIR` only to that shard's isolated Python process. The CI contract
-  group passes 6/6, the exact formerly failing authority regression passes
-  1/1 in 30.649 seconds under the explicit private temp root, and `actionlint`,
-  Ruff, formatting, and diff checks remain clean.
+  the test reached its intended same-path mutation. A global private `TMPDIR`
+  attempt is non-counting: it made two deliberate writable-ancestor negative
+  tests invalid and both corresponding shards failed.
+- The final fixture fix scopes only the trusted mutable GPG copy to a private
+  temporary directory below the repository root. The two negative fixtures
+  continue to exercise the real world-writable temporary ancestor. All three
+  exact regressions pass in 27.310 seconds; the CI contract passes 6/6, module
+  boundaries pass 19/19, and the skill contract passes 5/5. `actionlint`, Ruff
+  lint and formatting, and `git diff --check` remain clean.
 
 ## Acceptance
 

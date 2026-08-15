@@ -47,9 +47,7 @@ jobs:
           chmod 0755 "$RUNNER_TEMP/codex-python/bin/python3"
       - name: Run test shard
         run: |
-          install -d -m 0700 "$RUNNER_TEMP/test-tmp-${{ matrix.shard }}"
-          TMPDIR="$RUNNER_TEMP/test-tmp-${{ matrix.shard }}" \
-            "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S scripts/run_test_shard.py \
+          "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S scripts/run_test_shard.py \
             --shard-index "${{ matrix.shard }}" --shard-count 4
 
   test:

@@ -4931,33 +4931,34 @@ class DurablePublicationTests(unittest.TestCase):
         self.assertEqual("prepared", finalized.result["transaction_phase"])
 
     def test_finalize_cli_rejects_changed_persisted_gpg_authority(self) -> None:
-        gpg_copy = self.root / "publisher-gpg-copy"
-        shutil.copyfile(self.gpg, gpg_copy)
-        gpg_copy.chmod(0o700)
-        coordinator, _bundle = self.build_exportable_run(
-            "cli-changed-gpg-authority",
-            persist_descriptor=True,
-            publisher_gpg_program=str(gpg_copy),
-        )
-        gpg_copy.write_bytes(b"#!/bin/sh\nexit 1\n")
-        gpg_copy.chmod(0o700)
-        args = cli_module.build_parser().parse_args(
-            [
-                "finalize",
-                "--identity-path",
-                str(self.identity_path),
-                "--require-existing-identity",
-                "--run-dir",
-                str(coordinator.run_dir),
-            ]
-        )
+        with tempfile.TemporaryDirectory(dir=ROOT) as trusted_directory:
+            gpg_copy = Path(trusted_directory) / "publisher-gpg-copy"
+            shutil.copyfile(self.gpg, gpg_copy)
+            gpg_copy.chmod(0o700)
+            coordinator, _bundle = self.build_exportable_run(
+                "cli-changed-gpg-authority",
+                persist_descriptor=True,
+                publisher_gpg_program=str(gpg_copy),
+            )
+            gpg_copy.write_bytes(b"#!/bin/sh\nexit 1\n")
+            gpg_copy.chmod(0o700)
+            args = cli_module.build_parser().parse_args(
+                [
+                    "finalize",
+                    "--identity-path",
+                    str(self.identity_path),
+                    "--require-existing-identity",
+                    "--run-dir",
+                    str(coordinator.run_dir),
+                ]
+            )
 
-        with self.assertRaises(cli_module.CliContractError) as raised:
-            cli_module.command_finalize(args)
-        self.assertEqual("publication_authority_invalid", raised.exception.code)
-        self.assertIn(
-            "persisted publisher GPG authority", raised.exception.safe_message
-        )
+            with self.assertRaises(cli_module.CliContractError) as raised:
+                cli_module.command_finalize(args)
+            self.assertEqual("publication_authority_invalid", raised.exception.code)
+            self.assertIn(
+                "persisted publisher GPG authority", raised.exception.safe_message
+            )
 
     def test_finalize_cli_preserves_aborted_export_disposition(self) -> None:
         coordinator, bundle = self.build_exportable_run(
