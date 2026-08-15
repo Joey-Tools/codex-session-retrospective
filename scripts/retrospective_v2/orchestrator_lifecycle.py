@@ -18,6 +18,7 @@ from . import (
     finalize,
     publication_claims,
     reporting,
+    retained_export_coordination as retained_exports,
     retained_inputs,
     safe_io,
     source_inputs,
@@ -649,16 +650,26 @@ class RunLifecycleOperations(OrchestratorComponent):
         return self._projection._status_view(snapshot)
 
     def gc_expired_raw(self) -> dict[str, Any]:
+        try:
+            preflight = self.store.read().state
+        except CheckpointNotFoundError as error:
+            raise RunNotStartedError("run has not been started") from error
+        self._state._assert_state_identity(preflight)
+        if retained_exports.raw_cleanup_ineligible(
+            preflight,
+            clock=self._state._now(),
+        ):
+            return {"cleaned": False, "eligible": False}
+        locked_staging_dir, retention_lock = retained_exports.lock_from_checkpoint(
+            preflight
+        )
+
         def claim(
             current: dict[str, Any],
         ) -> tuple[dict[str, Any], dict[str, Any]]:
             self._state._assert_state_identity(current)
             publication = current["publication"]
             phase = publication.get("phase")
-            now = _parse_timestamp(self._state._now(), label="clock")
-            deadline = _parse_timestamp(
-                current["deadlines"]["raw"], label="raw deadline"
-            )
             if phase == "expired_cleanup_complete":
                 self._validate_completed_raw_cleanup(
                     current,
@@ -666,10 +677,9 @@ class RunLifecycleOperations(OrchestratorComponent):
                 )
                 current["retained_export"] = None
                 return current, {"disposition": "expired_complete"}
-            if (
-                now < deadline
-                or current["stage"] == RunStage.COMPLETE.value
-                or phase in {"complete", "shadow_complete"}
+            if retained_exports.raw_cleanup_ineligible(
+                current,
+                clock=self._state._now(),
             ):
                 return current, {"disposition": "ineligible"}
             if phase in {"published_cleanup_pending", "published_cleanup_claimed"}:
@@ -683,6 +693,17 @@ class RunLifecycleOperations(OrchestratorComponent):
                     "claim": copy.deepcopy(dict(publication_claim)),
                     "disposition": "publication_claim",
                 }
+            if publication.get("bundle_digest") is not None:
+                if publication.get("staging_dir") != locked_staging_dir:
+                    return current, {"disposition": "publication_binding_unverified"}
+                if retention_binding is not None:
+                    classification = retained_exports.classify_retained_export_for_gc(
+                        current,
+                        retention_binding,
+                        bundle_dir=Path(locked_staging_dir),
+                    )
+                    if classification != "exported":
+                        return current, {"disposition": classification}
             existing = publication.get("expired_cleanup_claim")
             if phase == "expired_cleanup_claimed":
                 if not isinstance(existing, Mapping):
@@ -716,10 +737,15 @@ class RunLifecycleOperations(OrchestratorComponent):
             }
 
         try:
-            claimed = self.store.transaction(claim)
+            with retention_lock as retention_binding:
+                claimed = self.store.transaction(claim)
         except CheckpointNotFoundError as error:
             raise RunNotStartedError("run has not been started") from error
-        except (OSError, safe_io.UnsafePathError) as error:
+        except (
+            OSError,
+            retained_export_api.RetainedExportError,
+            safe_io.UnsafePathError,
+        ) as error:
             return {
                 "cleaned": False,
                 "cleanup_error": type(error).__name__,
@@ -766,6 +792,17 @@ class RunLifecycleOperations(OrchestratorComponent):
                 "eligible": True,
                 "publication_claimed": True,
                 "published": True,
+            }
+        if disposition in {
+            "publication_binding_unverified",
+            "publication_preclaim",
+            "publication_terminal",
+        }:
+            return {
+                "cleaned": False,
+                "eligible": False,
+                "publication_preclaim": disposition == "publication_preclaim",
+                "retained_publication": True,
             }
         cleanup_claim = claimed.value["claim"]
         try:
@@ -1722,6 +1759,7 @@ class RunLifecycleOperations(OrchestratorComponent):
     def mark_exported(
         self,
         bundle_digest: str,
+        staging_dir: str | os.PathLike[str],
         retention_deadline: str | None = None,
     ) -> dict[str, Any]:
         if (
@@ -1729,6 +1767,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             or _SHA256_RE.fullmatch(bundle_digest) is None
         ):
             raise InvalidInputError("bundle_digest must be a lowercase SHA-256 digest")
+        locator = retained_export_api.normalize_retained_export_destination(staging_dir)
         deadline_value = retention_deadline or self.export_retention_deadline()
 
         def mutate(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1744,6 +1783,9 @@ class RunLifecycleOperations(OrchestratorComponent):
             existing = publication.get("bundle_digest")
             if existing is not None and existing != bundle_digest:
                 raise RunConflictError("export bundle digest changed")
+            existing_locator = publication.get("staging_dir")
+            if existing_locator is not None and existing_locator != str(locator):
+                raise RunConflictError("export staging directory changed")
             normalized_deadline = self._validate_export_retention_deadline(
                 state,
                 deadline_value,
@@ -1763,8 +1805,11 @@ class RunLifecycleOperations(OrchestratorComponent):
                             else publication["phase"]
                         ),
                         "retention_deadline": normalized_deadline,
+                        "staging_dir": str(locator),
                     }
                 )
+            elif existing_locator is None:
+                publication["staging_dir"] = str(locator)
             return state, {"recorded": existing is None}
 
         result = self.store.transaction(mutate)
@@ -1876,11 +1921,31 @@ class RunLifecycleOperations(OrchestratorComponent):
                 validate_claim=self._validate_publication_claim,
             )
             if existing_claim is None:
-                binding = publication_claims.bind_preclaim_export(
+
+                def validate_before_bind(observed: Mapping[str, Any]) -> None:
+                    current = self.store.read().state
+                    _, current_claim = publication_claims.publication_claim_context(
+                        current,
+                        attempt_ref=attempt_ref,
+                        plan_digest=plan_digest,
+                        allowed_stages=_PUBLICATION_PRECLAIM_STAGES,
+                        assert_state_identity=self._state._assert_state_identity,
+                        validate_claim=self._validate_publication_claim,
+                    )
+                    retained_exports.validate_preclaim_transition(
+                        current,
+                        observed,
+                        attempt_ref=attempt_ref,
+                        bundle_dir=normalized_bundle,
+                        existing_claim=current_claim,
+                    )
+
+                binding = retained_exports.bind_preclaim_export(
                     preflight,
                     normalized_bundle,
                     attempt_ref=attempt_ref,
                     clock=self._state._now(),
+                    before_bind=validate_before_bind,
                 )
 
         while True:
@@ -1908,23 +1973,23 @@ class RunLifecycleOperations(OrchestratorComponent):
                     raise InvalidTransitionError(
                         "completed run cannot start publication"
                     )
-                retention_expired = self._state._retention_expired(state)
                 if binding is None:
-                    if retention_expired:
-                        raise InvalidTransitionError("retention deadline expired")
-                else:
-                    assert normalized_bundle is not None
-                    publication_claims.validate_preclaim_export_binding(
+                    raise InvalidInputError(
+                        "bundle_dir is required for a new publication claim"
+                    )
+                retention_expired = self._state._retention_expired(state)
+                assert normalized_bundle is not None
+                retained_exports.validate_preclaim_export_binding(
+                    state,
+                    binding,
+                    attempt_ref=attempt_ref,
+                    bundle_dir=normalized_bundle,
+                )
+                if retention_expired:
+                    retained_exports.validate_preclaim_expiry_recovery(
                         state,
                         binding,
-                        attempt_ref=attempt_ref,
-                        bundle_dir=normalized_bundle,
                     )
-                    if retention_expired:
-                        publication_claims.validate_preclaim_expiry_recovery(
-                            state,
-                            binding,
-                        )
                 publication["publication_claim"] = self._publication_claim_value(
                     state,
                     attempt_ref=attempt_ref,
@@ -3214,6 +3279,7 @@ class RunLifecycleOperations(OrchestratorComponent):
                 "phase": "created",
                 "retention_deadline": None,
                 "shadow_staging_dir": None,
+                "staging_dir": None,
             },
             "resolved_reviews": {},
             "retained_export": None,

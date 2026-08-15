@@ -24,6 +24,7 @@ import retrospective_v2.reporting as reporting_module  # noqa: E402
 from retrospective_v2.export import (  # noqa: E402
     ExportConflictError,
     ExportLocationError,
+    RetainedExportError,
     bind_staged_export,
     export_retained_bundle,
     garbage_collect_expired_exports,
@@ -2350,11 +2351,24 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
                 renew_heartbeat=False,
             )
             inspected = inspect_staged_export_retention(output)
+            with self.assertRaisesRegex(
+                RetainedExportError,
+                "expired publication-bound export",
+            ):
+                bind_staged_export(
+                    output,
+                    attempt_ref,
+                    now=now + dt.timedelta(days=8),
+                    renew_heartbeat=False,
+                )
+            preconditions: list[dict[str, object]] = []
             replayed = bind_staged_export(
                 output,
                 attempt_ref,
-                now=now + dt.timedelta(days=6),
+                now=now + dt.timedelta(days=8),
                 renew_heartbeat=False,
+                allow_stale_bound=True,
+                before_bind=preconditions.append,
             )
 
             self.assertEqual("publication_bound", inspected["status"])
@@ -2363,6 +2377,9 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
             self.assertEqual(
                 bound["publication_heartbeat_at"],
                 replayed["publication_heartbeat_at"],
+            )
+            self.assertEqual(
+                [attempt_ref], [preconditions[0]["publication_attempt_ref"]]
             )
 
     def test_stage_checks_bundle_budget_before_deep_validation(self) -> None:

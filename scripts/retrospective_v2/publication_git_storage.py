@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import stat
 from typing import Any
-from . import git_safety, safe_io
+from . import git_safety, retained_export_binding, safe_io
 
 from .publication_support import (
     ARTIFACT_NAMES_BYTEWISE,
@@ -638,7 +638,6 @@ class LocalGitStorageOperations:
     ) -> int:
         if not units:
             raise StateCorruptionError("publication retention has no export units")
-        bundles: list[Path] = []
         for unit in units:
             bundle_dir = Path(str(unit["bundle_dir"]))
             sidecar = bundle_dir.parent / f".{bundle_dir.name}.retention-v2.json"
@@ -652,13 +651,14 @@ class LocalGitStorageOperations:
                 raise StateCorruptionError(
                     "retained export sidecar is not a regular file"
                 )
-            bundles.append(bundle_dir)
-        for bundle_dir in bundles:
-            self._retained_export_lifecycle.bind_staged_export(
+            retained_export_binding.bind_publication_plan_export(
+                self._retained_export_lifecycle,
                 bundle_dir,
-                request.attempt_ref,
+                attempt_ref=request.attempt_ref,
+                bundle_digest=str(unit["inventory"]["retained_bundle_digest_v2"]),
+                conflict_error=StateCorruptionError,
             )
-        return len(bundles)
+        return len(units)
 
     def _release_export_retention_sidecars(
         self,

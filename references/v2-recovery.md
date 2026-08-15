@@ -262,11 +262,18 @@ authorize recovery or raw cleanup.
 
 A publication-bound standalone export carries an authenticated heartbeat. A
 live transaction may renew it only while its immutable plan remains resumable.
-Once the heartbeat is more than seven days old, internal maintenance first
-drives the exact transaction through recovery or a terminal abort and then may
-delete its retained export. The public `export` command never performs this
-maintenance against the caller's output parent, including when run validation
-fails.
+Once the heartbeat is more than seven days old, generic sidecar replay fails
+closed. Recovery may cross that age only through a non-renewing bind whose
+callback, while holding the exact bundle lock, reauthenticates the applicable
+durable authority: the checkpoint transition for preclaim recovery or the
+terminal journal operation plan for provider recovery. Both paths bind the
+attempt, bundle digest, staging locator, original heartbeat, and pre-expiry
+start. Raw-expiry GC takes the same lock: it retains every verified bound or
+terminal sidecar, and a cleanup claim persisted first prevents the waiting
+recovery bind. Internal maintenance must then drive the exact
+transaction through recovery or a terminal abort before it may delete the
+retained export. The public `export` command never performs this maintenance
+against the caller's output parent, including when run validation fails.
 
 History verification and publication disable system and global Git
 configuration, credential helpers, interactive prompts, lazy fetching, pagers,

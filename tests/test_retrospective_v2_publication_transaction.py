@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+from contextlib import nullcontext
 from dataclasses import replace
 import datetime as dt
 import hashlib
@@ -36,6 +37,8 @@ from retrospective_v2 import (  # noqa: E402
     publication_git_commits,
     publication_git_storage,
     publication_support,
+    reporting,
+    retained_export_binding,
     safe_io,
     transport,
 )
@@ -49,7 +52,6 @@ from retrospective_v2.checkpoints import CheckpointIntegrityError  # noqa: E402
 from retrospective_v2.export import (  # noqa: E402
     ExportConflictError,
     RetainedExportError,
-    bind_staged_export,
     export_retained_bundle,
     garbage_collect_expired_exports,
     inspect_staged_export_retention,
@@ -113,6 +115,34 @@ def run_command(
 
 
 class PublicationInvariantUnitTests(unittest.TestCase):
+    def test_retained_export_binding_receipt_schema_is_closed(self) -> None:
+        receipt = {
+            "artifact_names": list(reporting.RETAINED_ARTIFACT_NAMES),
+            "bundle_digest": "b" * 64,
+            "exported_at": "2026-07-15T00:00:00Z",
+            "git_commit_created": False,
+            "idempotent": True,
+            "publication_attempt_ref": "attempt_ref_v2:" + "a" * 64,
+            "publication_heartbeat_at": "2026-07-15T00:00:00Z",
+            "retention_deadline": "2026-07-15T01:00:00Z",
+            "schema_version": 2,
+            "staging_dir": "/private/tmp/retained-v2",
+            "state_advanced": False,
+            "status": "publication_bound",
+            "terminal_at": None,
+            "terminal_disposition": None,
+        }
+        retained_export_binding.validate_retention_receipt_shape(
+            receipt,
+            conflict_error=StateCorruptionError,
+        )
+        receipt["unexpected"] = True
+        with self.assertRaisesRegex(StateCorruptionError, "unexpected shape"):
+            retained_export_binding.validate_retention_receipt_shape(
+                receipt,
+                conflict_error=StateCorruptionError,
+            )
+
     def test_history_target_ref_requires_a_valid_fully_qualified_branch(self) -> None:
         observed: list[tuple[str, ...]] = []
 
@@ -894,7 +924,35 @@ class PublicationInvariantUnitTests(unittest.TestCase):
         calls: list[tuple[str, Path, str, str | None]] = []
 
         class FakeRetainedExportLifecycle:
-            def bind_staged_export(self, output_dir: Path, attempt_ref: str) -> dict:
+            def bind_staged_export(
+                self,
+                output_dir: Path,
+                attempt_ref: str,
+                *,
+                renew_heartbeat: bool,
+                allow_stale_bound: bool,
+                before_bind,
+            ) -> dict:
+                if (renew_heartbeat, allow_stale_bound) != (False, True):
+                    raise AssertionError("adapter did not request bound recovery")
+                before_bind(
+                    {
+                        "artifact_names": list(reporting.RETAINED_ARTIFACT_NAMES),
+                        "bundle_digest": "b" * 64,
+                        "exported_at": "2026-07-15T00:00:00Z",
+                        "git_commit_created": False,
+                        "idempotent": True,
+                        "publication_attempt_ref": attempt_ref,
+                        "publication_heartbeat_at": "2026-07-15T00:00:00Z",
+                        "retention_deadline": "2026-07-15T01:00:00Z",
+                        "schema_version": 2,
+                        "staging_dir": str(output_dir),
+                        "state_advanced": False,
+                        "status": "publication_bound",
+                        "terminal_at": None,
+                        "terminal_disposition": None,
+                    }
+                )
                 calls.append(("bind", Path(output_dir), attempt_ref, None))
                 return {}
 
@@ -928,7 +986,12 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             adapter = object.__new__(LocalGitPublicationAdapter)
             adapter._retained_export_lifecycle = FakeRetainedExportLifecycle()
             request = mock.Mock(attempt_ref="attempt_ref_v2:" + "a" * 64)
-            units = ({"bundle_dir": str(bundle)},)
+            units = (
+                {
+                    "bundle_dir": str(bundle),
+                    "inventory": {"retained_bundle_digest_v2": "b" * 64},
+                },
+            )
 
             self.assertEqual(
                 1,
@@ -1706,12 +1769,14 @@ class DurablePublicationTests(unittest.TestCase):
                 bundle,
                 publication_role="standalone",
             )
+        export_clock = export_now or dt.datetime(2026, 7, 15, tzinfo=dt.UTC)
+        export_deadline = export_retention_deadline or "2026-07-15T01:00:00Z"
         receipt = export_retained_bundle(
             bundle,
             run_state,
             review_data,
-            now=export_now,
-            retention_deadline=export_retention_deadline,
+            now=export_clock,
+            retention_deadline=export_deadline,
         )
         if persist_descriptor:
             cli_module._persist_export_descriptor(
@@ -1726,7 +1791,8 @@ class DurablePublicationTests(unittest.TestCase):
             else:
                 coordinator.mark_exported(
                     receipt["bundle_digest"],
-                    retention_deadline=export_retention_deadline,
+                    bundle,
+                    retention_deadline=receipt["retention_deadline"],
                 )
         return coordinator, bundle
 
@@ -2078,7 +2144,10 @@ class DurablePublicationTests(unittest.TestCase):
         )
 
     def test_gc_rejects_same_root_publication_from_another_attempt(self) -> None:
-        original, original_bundle = self.build_exportable_run("same-root-original")
+        original, original_bundle = self.build_exportable_run(
+            "same-root-original",
+            bind_export=False,
+        )
         impostor_run_dir = self.root / "runs" / "same-root-impostor"
         shutil.copytree(original.run_dir, impostor_run_dir)
         impostor = RetrospectiveOrchestrator(
@@ -2104,10 +2173,19 @@ class DurablePublicationTests(unittest.TestCase):
             impostor_bundle,
             run_state,
             review_data,
+            now=dt.datetime(2026, 7, 15, tzinfo=dt.UTC),
+            retention_deadline="2026-07-15T01:00:00Z",
         )
-        self.assertEqual(
-            impostor_state["publication"]["bundle_digest"],
+        original_export = inspect_staged_export_retention(original_bundle)
+        original.mark_exported(
+            original_export["bundle_digest"],
+            original_bundle,
+            original_export["retention_deadline"],
+        )
+        impostor.mark_exported(
             impostor_export["bundle_digest"],
+            impostor_bundle,
+            impostor_export["retention_deadline"],
         )
         original_transaction = self.transaction(original, original_bundle)
         impostor_transaction = self.transaction(impostor, impostor_bundle)
@@ -3002,7 +3080,7 @@ class DurablePublicationTests(unittest.TestCase):
             orchestrator_module.InvalidTransitionError,
             "staging locator",
         ):
-            coordinator.mark_exported("a" * 64)
+            coordinator.mark_exported("a" * 64, bundle)
 
         state = coordinator.load_state()
         first_host = next(iter(state["source"]["cells"]))
@@ -4958,7 +5036,7 @@ class DurablePublicationTests(unittest.TestCase):
     def test_finalize_recovers_preclaim_crashes_across_expiry_and_gc(self) -> None:
         started = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
         deadline = "2026-07-15T01:00:00Z"
-        resumed_at = dt.datetime(2026, 7, 15, 2, 0, tzinfo=dt.UTC)
+        resumed_at = started + dt.timedelta(days=8)
         for crash_point in ("after_binding", "after_checkpoint_claim"):
             with self.subTest(crash_point=crash_point):
                 coordinator, bundle = self.build_exportable_run(
@@ -4975,14 +5053,6 @@ class DurablePublicationTests(unittest.TestCase):
                     claimed_attempt_ref: str,
                     plan_digest: str,
                 ) -> Mapping[str, object]:
-                    if crash_point == "after_binding":
-                        bind_staged_export(
-                            bundle,
-                            claimed_attempt_ref,
-                            now=started,
-                            renew_heartbeat=False,
-                        )
-                        raise RuntimeError("simulated crash after retention binding")
                     return coordinator.claim_publication(
                         claimed_attempt_ref,
                         plan_digest,
@@ -4996,12 +5066,24 @@ class DurablePublicationTests(unittest.TestCase):
                     ):
                         raise RuntimeError("simulated crash after checkpoint claim")
 
+                claim_crash = (
+                    mock.patch.object(
+                        coordinator.store,
+                        "transaction",
+                        side_effect=RuntimeError(
+                            "simulated crash after retention binding"
+                        ),
+                    )
+                    if crash_point == "after_binding"
+                    else nullcontext()
+                )
                 with (
                     mock.patch.object(
                         cli_module.export_api,
                         "_utc_now",
                         return_value=started,
                     ),
+                    claim_crash,
                     self.assertRaisesRegex(RuntimeError, "simulated crash"),
                 ):
                     PublicationTransaction.create(
@@ -5041,6 +5123,19 @@ class DurablePublicationTests(unittest.TestCase):
                     identity_path=self.identity_path,
                     require_existing_identity=True,
                 )
+                raw_marker = coordinator.run_dir / "raw-inputs" / "preclaim.bin"
+                raw_marker.write_bytes(b"must survive preclaim expiry")
+                os.chmod(raw_marker, 0o600)
+                protected = resumed.status()
+                self.assertEqual(RunStage.EXPORT.value, protected["stage"])
+                self.assertNotIn(
+                    "expired_cleanup_claim",
+                    resumed.load_state()["publication"],
+                )
+                self.assertEqual(
+                    b"must survive preclaim expiry",
+                    raw_marker.read_bytes(),
+                )
                 with (
                     mock.patch.object(
                         cli_module.orchestrator_api,
@@ -5061,6 +5156,78 @@ class DurablePublicationTests(unittest.TestCase):
                     "publication_claim"
                 ]
                 self.assertEqual(attempt_ref, recovered_claim["attempt_ref"])
+
+    def test_expired_gc_claim_prevents_waiting_predeadline_bind(self) -> None:
+        coordinator, bundle = self.build_exportable_run(
+            "gc-wins-before-preclaim-bind",
+            persist_descriptor=True,
+        )
+        started = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+        deadline = dt.datetime(2026, 7, 15, 1, 0, tzinfo=dt.UTC)
+        gc_coordinator = RetrospectiveOrchestrator(
+            coordinator.run_dir,
+            clock=lambda: started + dt.timedelta(days=8),
+            identity_path=self.identity_path,
+            require_existing_identity=True,
+        )
+        bind_coordinator = RetrospectiveOrchestrator(
+            coordinator.run_dir,
+            clock=lambda: deadline - dt.timedelta(seconds=1),
+            identity_path=self.identity_path,
+            require_existing_identity=True,
+        )
+        gc_holds_bundle_lock = threading.Event()
+        allow_gc_claim = threading.Event()
+        real_transaction = gc_coordinator.store.transaction
+        errors: list[BaseException] = []
+        gc_results: list[dict[str, object]] = []
+
+        def delayed_gc_transaction(*args, **kwargs):
+            gc_holds_bundle_lock.set()
+            if not allow_gc_claim.wait(timeout=5):
+                raise RuntimeError("timed out waiting for raw GC claim")
+            return real_transaction(*args, **kwargs)
+
+        def run_gc() -> None:
+            try:
+                gc_results.append(gc_coordinator.gc_expired_raw())
+            except BaseException as error:  # pragma: no cover - assertion payload
+                errors.append(error)
+
+        def run_bind() -> None:
+            try:
+                bind_coordinator.claim_publication(
+                    "attempt_ref_v2:" + "9" * 64,
+                    "8" * 64,
+                    bundle_dir=bundle,
+                )
+            except BaseException as error:  # pragma: no cover - assertion payload
+                errors.append(error)
+
+        with mock.patch.object(
+            gc_coordinator.store,
+            "transaction",
+            side_effect=delayed_gc_transaction,
+        ):
+            gc_thread = threading.Thread(target=run_gc)
+            gc_thread.start()
+            self.assertTrue(gc_holds_bundle_lock.wait(timeout=5))
+            bind_thread = threading.Thread(target=run_bind)
+            bind_thread.start()
+            time.sleep(0.05)
+            self.assertTrue(bind_thread.is_alive())
+            allow_gc_claim.set()
+            gc_thread.join(timeout=10)
+            bind_thread.join(timeout=10)
+
+        self.assertFalse(gc_thread.is_alive())
+        self.assertFalse(bind_thread.is_alive())
+        self.assertTrue(gc_results[0]["cleaned"])
+        self.assertEqual(1, len(errors))
+        self.assertIsInstance(errors[0], orchestrator_module.InvalidTransitionError)
+        retention = inspect_staged_export_retention(bundle)
+        self.assertEqual("exported", retention["status"])
+        self.assertIsNone(retention["publication_attempt_ref"])
 
     def test_finalize_journal_is_gc_protected_before_prepare(self) -> None:
         started = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)

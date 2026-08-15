@@ -234,6 +234,33 @@ superseded_by:
   The exact architecture checks pass 2/2; Ruff lint, changed-file formatting,
   `actionlint`, the installed skill validator, project-journal validation, and
   `git diff --check` are clean.
+- A fresh-context Codex review of `a3836660..5ad3c8c2` found three retained
+  publication recovery gaps: a sidecar could bind before its checkpoint claim
+  and then lose raw input to expiry GC, an expired preclaim could become
+  permanently unrecoverable, and the public checkpoint API could persist a
+  claim without first binding an exact retained bundle.
+- The follow-up persists the canonical staging locator, requires every new
+  publication claim to bind that bundle, and serializes binding and expiry GC
+  on the same bundle lock. Stale recovery is non-renewing and must revalidate
+  either the authenticated checkpoint transition or the terminal publication
+  plan while that exact lock remains held. Receipt validation is closed and
+  split into narrow binding and orchestrator-coordination owners to keep the
+  publication dependency graph acyclic.
+- The first final publication-module attempt exposed one migrated test fixture
+  that copied a checkpoint and then created a different unbound bundle. That
+  run was interrupted and is non-counting. The fixture now forks before export
+  binding and drives both copies through `mark_exported`; its exact same-root,
+  different-attempt regression passes in 50.313 seconds without weakening the
+  production locator contract.
+- Final Python 3.13 affected-module evidence passes: retained export 62/62 in
+  3.703 seconds, orchestrator 112/112 in 180.084 seconds, v2 CLI 43/43 in
+  55.975 seconds, publication transaction 103/103 in 2,329.355 seconds, and
+  architecture/CI/skill contracts 30/30 in 2.500 seconds. Final discovery
+  contains 1,604 unique tests partitioned exactly once as 378, 429, 439, and
+  358 tests across the four deterministic shards.
+- Ruff 0.13.2 lint and changed-file formatting, both workflows under
+  `actionlint`, the installed OpenAI skill validator, and `git diff --check`
+  pass on the frozen implementation tree.
 
 ## Acceptance
 

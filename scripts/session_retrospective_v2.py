@@ -1458,10 +1458,7 @@ def command_export(args: argparse.Namespace) -> CommandResult:
         )
         cleanup = orchestrator.complete_shadow_export()
     else:
-        marked = orchestrator.mark_exported(
-            bundle_digest,
-            receipt_deadline,
-        )
+        marked = orchestrator.mark_exported(bundle_digest, output, receipt_deadline)
     result = {
         "action": "export",
         "artifact_names": receipt.get("artifact_names"),

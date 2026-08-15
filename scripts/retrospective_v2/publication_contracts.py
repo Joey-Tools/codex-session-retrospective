@@ -431,6 +431,10 @@ class RetainedExportLifecycle(Protocol):
         self,
         output_dir: str | os.PathLike[str],
         attempt_ref: str,
+        *,
+        renew_heartbeat: bool = True,
+        allow_stale_bound: bool = False,
+        before_bind: Callable[[Mapping[str, Any]], None] | None = None,
     ) -> Mapping[str, Any]: ...
 
     def release_staged_export(

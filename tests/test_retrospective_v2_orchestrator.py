@@ -33,6 +33,7 @@ from retrospective_v2 import (  # noqa: E402
     episode_review,
     executable_authority,
     reporting,
+    retained_export_coordination,
     retained_inputs,
     result_validation,
     safe_io,
@@ -856,18 +857,55 @@ class OrchestratorTests(unittest.TestCase):
         self,
         coordinator: RetrospectiveOrchestrator,
     ) -> dict[str, object]:
-        run_ref = coordinator.load_state()["run_ref"]
+        state = coordinator.load_state()
+        run_ref = state["run_ref"]
+        bundle_dir = state["publication"]["staging_dir"]
+        self.assertIsInstance(bundle_dir, str)
         attempt_ref = (
             "attempt_ref_v2:"
             + hashlib.sha256(f"test-attempt:{run_ref}".encode("ascii")).hexdigest()
         )
         plan_digest = hashlib.sha256(f"test-plan:{run_ref}".encode("ascii")).hexdigest()
-        claimed = coordinator.claim_publication(attempt_ref, plan_digest)
+        claimed = coordinator.claim_publication(
+            attempt_ref,
+            plan_digest,
+            bundle_dir=bundle_dir,
+        )
         return {
             "attempt_ref": attempt_ref,
             "claim_revision": claimed["checkpoint_revision"],
             "plan_digest": plan_digest,
         }
+
+    def stage_publication_for_test(
+        self,
+        coordinator: RetrospectiveOrchestrator,
+    ) -> Path:
+        state = coordinator.load_state()
+        run_state, review_data = coordinator.retained_export_inputs()
+        run_state["durable_state"] = coordinator.publication_durable_state()
+        bundle = (
+            self.root
+            / ".codex-local"
+            / "formal-publication-tests"
+            / coordinator.run_dir.name
+            / "retained-v2"
+        )
+        deadline = self.clock.value + dt.timedelta(hours=1)
+        receipt = export_retained_bundle(
+            bundle,
+            run_state,
+            review_data,
+            retention_deadline=deadline,
+            now=self.clock.value,
+        )
+        coordinator.mark_exported(
+            receipt["bundle_digest"],
+            bundle,
+            receipt["retention_deadline"],
+        )
+        self.assertEqual(state["run_ref"], coordinator.load_state()["run_ref"])
+        return bundle
 
     def coordinator(
         self,
@@ -6674,7 +6712,10 @@ class OrchestratorTests(unittest.TestCase):
         exported = self.start_daily("retention")
         self.drain_sources(exported)
         exported.advance()
-        exported.mark_exported("a" * 64)
+        exported.mark_exported(
+            "a" * 64,
+            self.root / ".codex-local" / "missing-retention-export",
+        )
         self.clock.value += dt.timedelta(days=8)
         with self.assertRaisesRegex(Exception, "retention"):
             exported.ensure_retention_active()
@@ -7198,7 +7239,9 @@ class OrchestratorTests(unittest.TestCase):
         coordinator = self.start_daily("expired-finalize-race")
         self.drain_sources(coordinator)
         coordinator.advance()
-        coordinator.mark_exported("e" * 64)
+        missing_export = self.root / ".codex-local" / "missing-finalize-race-export"
+        missing_export.parent.mkdir(mode=0o700, exist_ok=True)
+        coordinator.mark_exported("e" * 64, missing_export)
         self.clock.value += dt.timedelta(days=8)
         original_delete = coordinator._delete_claimed_raw_paths
         interleaved = False
@@ -7884,11 +7927,21 @@ class OrchestratorTests(unittest.TestCase):
         coordinator = self.start_daily("claimed-publication-recovery")
         self.drain_sources(coordinator)
         coordinator.advance()
-        coordinator.mark_exported("f" * 64)
+        bundle = self.stage_publication_for_test(coordinator)
         attempt_ref = "attempt_ref_v2:" + "1" * 64
         plan_digest = "2" * 64
 
-        claimed = coordinator.claim_publication(attempt_ref, plan_digest)
+        with self.assertRaisesRegex(InvalidInputError, "bundle_dir is required"):
+            coordinator.claim_publication(attempt_ref, plan_digest)
+        self.assertNotIn(
+            "publication_claim",
+            coordinator.load_state()["publication"],
+        )
+        claimed = coordinator.claim_publication(
+            attempt_ref,
+            plan_digest,
+            bundle_dir=bundle,
+        )
         replay = coordinator.claim_publication(attempt_ref, plan_digest)
 
         self.assertTrue(claimed["claimed"])
@@ -7898,6 +7951,7 @@ class OrchestratorTests(unittest.TestCase):
             coordinator.claim_publication(
                 "attempt_ref_v2:" + "3" * 64,
                 plan_digest,
+                bundle_dir=bundle,
             )
 
         raw_input = coordinator.run_dir / "raw-inputs"
@@ -7937,11 +7991,26 @@ class OrchestratorTests(unittest.TestCase):
         self.assertNotIn("publication_claim", state["publication"])
         self.assertFalse(raw_input.exists())
 
+    def test_raw_gc_before_deadline_does_not_open_retained_export(self) -> None:
+        coordinator = self.start_daily("raw-gc-before-deadline")
+        self.drain_sources(coordinator)
+        coordinator.advance()
+        self.stage_publication_for_test(coordinator)
+
+        with mock.patch.object(
+            retained_export_coordination,
+            "lock_from_checkpoint",
+            side_effect=AssertionError("retained export was opened before expiry"),
+        ):
+            result = coordinator.gc_expired_raw()
+
+        self.assertEqual({"cleaned": False, "eligible": False}, result)
+
     def test_unverified_commit_does_not_claim_published_cleanup_pending(self) -> None:
         coordinator = self.start_daily("unverified-commit")
         self.drain_sources(coordinator)
         coordinator.advance()
-        coordinator.mark_exported("d" * 64)
+        self.stage_publication_for_test(coordinator)
         claim_ack = self.claim_publication_for_test(coordinator)
 
         with mock.patch.object(
@@ -7962,7 +8031,7 @@ class OrchestratorTests(unittest.TestCase):
         coordinator = self.start_daily("formal-cleanup")
         self.drain_sources(coordinator)
         coordinator.advance()
-        coordinator.mark_exported("a" * 64)
+        self.stage_publication_for_test(coordinator)
 
         def attach_legacy_retained_export(current):
             current["retained_export"] = {
@@ -8053,7 +8122,7 @@ class OrchestratorTests(unittest.TestCase):
         coordinator = self.start_daily("nonterminal-cleanup")
         self.drain_sources(coordinator)
         coordinator.advance()
-        coordinator.mark_exported("b" * 64)
+        self.stage_publication_for_test(coordinator)
         raw_input = coordinator.run_dir / "raw-inputs"
         raw_input.mkdir(mode=0o700, exist_ok=True)
 
@@ -8107,7 +8176,7 @@ class OrchestratorTests(unittest.TestCase):
         coordinator = self.start_daily("unsafe-cleanup")
         self.drain_sources(coordinator)
         coordinator.advance()
-        coordinator.mark_exported("c" * 64)
+        self.stage_publication_for_test(coordinator)
         outside = self.root / "outside-raw"
         outside.mkdir(mode=0o700)
         marker = outside / "marker.bin"

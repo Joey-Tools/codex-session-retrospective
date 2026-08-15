@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 import datetime as dt
 import fcntl
@@ -1125,21 +1125,37 @@ def validate_staged_export(
         anchor.close()
 
 
-def inspect_staged_export_retention(
+@contextmanager
+def locked_staged_export_retention(
     output_dir: str | os.PathLike[str],
-) -> dict[str, Any]:
-    """Return the validated retention receipt under the bundle lock."""
+    *,
+    allow_missing: bool = False,
+) -> Iterator[dict[str, Any] | None]:
+    """Hold the bundle lock while the caller coordinates retained state."""
 
     anchor = _AnchoredExport.open(output_dir, create_parent=False)
     try:
         with anchor.lock():
             if not anchor.exists(anchor.retention_name):
+                if allow_missing and not anchor.exists():
+                    yield None
+                    return
                 raise RetainedExportError(
                     "retained export sidecar is missing before publication"
                 )
-            return _receipt_at(anchor, idempotent=True)
+            yield _receipt_at(anchor, idempotent=True)
     finally:
         anchor.close()
+
+
+def inspect_staged_export_retention(
+    output_dir: str | os.PathLike[str],
+) -> dict[str, Any]:
+    """Return the validated retention receipt under the bundle lock."""
+
+    with locked_staged_export_retention(output_dir) as receipt:
+        assert receipt is not None
+        return receipt
 
 
 def _same_artifacts(output: Path, expected: Mapping[str, bytes]) -> bool:
@@ -1319,6 +1335,8 @@ def bind_staged_export(
     *,
     now: dt.datetime | None = None,
     renew_heartbeat: bool = True,
+    allow_stale_bound: bool = False,
+    before_bind: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Bind ordinary export retention to one durable publication attempt."""
 
@@ -1328,6 +1346,12 @@ def bind_staged_export(
         )
     if not isinstance(renew_heartbeat, bool):
         raise RetainedExportError("renew_heartbeat must be a boolean")
+    if not isinstance(allow_stale_bound, bool):
+        raise RetainedExportError("allow_stale_bound must be a boolean")
+    if allow_stale_bound and (renew_heartbeat or before_bind is None):
+        raise RetainedExportError(
+            "stale bound recovery requires a non-renewing precondition"
+        )
     anchor = _AnchoredExport.open(output_dir, create_parent=False)
     try:
         with anchor.lock():
@@ -1343,6 +1367,8 @@ def bind_staged_export(
                 raise ExportConflictError(
                     "retained export state no longer matches staged bytes"
                 )
+            if before_bind is not None:
+                before_bind(_receipt_at(anchor, idempotent=True))
             clock = _normalize_instant(now or _utc_now(), label="now")
             if state["status"] == "publication_terminal":
                 if state["publication_attempt_ref"] != attempt_ref:
@@ -1363,7 +1389,10 @@ def bind_staged_export(
                     raise RetainedExportError(
                         "publication resume clock predates its heartbeat"
                     )
-                if clock >= heartbeat + MAX_PUBLICATION_BOUND_RETENTION:
+                if (
+                    clock >= heartbeat + MAX_PUBLICATION_BOUND_RETENTION
+                    and not allow_stale_bound
+                ):
                     raise RetainedExportError(
                         "expired publication-bound export cannot be resumed"
                     )

@@ -46,6 +46,9 @@ Publication uses an explicit side-effect boundary:
 | `publication_git_capacity.py` | Request-bound capacity ledger and legacy migration |
 | `publication_git_storage.py` | Staging, retention-sidecar, and cleanup ownership |
 | `publication_git_commits.py` | Signed Git object, reachability, and ref operations |
+| `publication_claims.py` | Authenticated checkpoint-claim context and replay validation |
+| `retained_export_coordination.py` | Checkpoint/sidecar identity, locking, expiry, and GC classification |
+| `retained_export_binding.py` | Exact publication-plan binding through the narrow sidecar protocol |
 | `publication_state.py` | Durable publication state and transition validation |
 | `publication_contracts.py` | Side-effect protocols and injected adapter contracts |
 | `publication_support.py` | Immutable contracts, anchored I/O, and pure validation |
@@ -152,6 +155,14 @@ holding the export anchor lock. Two absent objects are an idempotent collected
 state; exactly one present object is a conflict. The lifecycle release must
 complete before the provider persists its abort and cleanup receipt, so a
 one-sided or unreadable retained state cannot authorize reservation release.
+Ordinary export checkpoints also persist the canonical staging locator. Expiry
+GC acquires that exact bundle lock before it claims raw cleanup, then compares
+the authenticated checkpoint and validated sidecar. A publication bootstrap
+uses the same lock and rechecks the checkpoint immediately before binding. The
+winner is therefore explicit: a bound sidecar blocks raw cleanup, while an
+already persisted cleanup claim blocks a waiting bind. A new publication claim
+requires this bundle-bound bootstrap; only an existing exact claim may replay
+without supplying the bundle again.
 
 The transport program commitment includes every runtime module above. Adding a
 module without adding it to the closed allowlist fails source transport.
