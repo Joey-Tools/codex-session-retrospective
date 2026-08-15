@@ -201,6 +201,39 @@ superseded_by:
   scan matches: shard 0 passes 377/377 in 1,616.905 seconds, shard 1 passes
   427/427 in 1,290.111 seconds, the clean shard-2 rerun passes 439/439 in
   822.881 seconds, and shard 3 passes 355/355 in 1,299.679 seconds.
+- A fresh-context Codex review of `a3836660..bb62131` found one final
+  publication-durability gap: transaction creation could persist a journal
+  before the run claim and retained sidecar protected the bundle, allowing
+  expiry GC to remove the only publication input after a crash.
+- Transaction creation now requires a callback that first binds the exact
+  sidecar attempt and persists the identity-authenticated checkpoint claim;
+  creation revalidates that claim before its journal write. The initial
+  heartbeat is immutable across preclaim recovery, and a post-deadline retry is
+  admitted only when the sidecar deadline matches the run and the heartbeat
+  precedes the earliest raw, working, and export deadline. Concurrent GC
+  continues to serialize on the same bundle lock and retains every bound pair.
+- The three new crash-boundary regressions cover binding-before-claim,
+  claim-before-journal, and journal-before-prepare recovery. Together with the
+  existing phased-finalize, missing-sidecar, copied-journal, and symlinked-state
+  regressions, the focused implementation checks pass. One test command used a
+  nonexistent method selector and produced a loader-only error; its five real
+  tests passed, and the corrected exact symlink test passed separately.
+- Recovery also distinguishes an already authenticated same-attempt claim from
+  an unclaimed bootstrap. The former can reopen committed or aborted journals
+  without attempting to mutate the terminal retention sidecar; the latter must
+  still prove the sidecar binding before any claim or journal is persisted.
+- One complete publication-module attempt is non-counting: APFS had only about
+  113 MiB available and the run ended with 51 `ENOSPC` errors after 1,642.900
+  seconds. It nevertheless exposed the terminal-sidecar recovery regression,
+  which was fixed before any final gate was accepted. After disk capacity was
+  restored, the complete publication module passed 101/101 in 2,534.780
+  seconds and the CLI/orchestrator modules passed 161/161 in 240.997 seconds.
+- Final Python 3.13 evidence covers all 1,601 tests exactly once with no error
+  scan matches: shards 0 through 3 pass 378/378 in 955.991 seconds, 428/428 in
+  766.543 seconds, 439/439 in 806.293 seconds, and 356/356 in 771.432 seconds.
+  The exact architecture checks pass 2/2; Ruff lint, changed-file formatting,
+  `actionlint`, the installed skill validator, project-journal validation, and
+  `git diff --check` are clean.
 
 ## Acceptance
 

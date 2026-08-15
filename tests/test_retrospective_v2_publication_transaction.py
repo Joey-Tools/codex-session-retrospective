@@ -48,8 +48,11 @@ from retrospective_v2.contracts import (  # noqa: E402
 from retrospective_v2.checkpoints import CheckpointIntegrityError  # noqa: E402
 from retrospective_v2.export import (  # noqa: E402
     ExportConflictError,
+    RetainedExportError,
+    bind_staged_export,
     export_retained_bundle,
     garbage_collect_expired_exports,
+    inspect_staged_export_retention,
     release_committed_staged_export,
 )
 from retrospective_v2.finalize import (  # noqa: E402
@@ -1605,6 +1608,8 @@ class DurablePublicationTests(unittest.TestCase):
         bind_export: bool = True,
         persist_descriptor: bool = False,
         publisher_gpg_program: str | None = None,
+        export_now: dt.datetime | None = None,
+        export_retention_deadline: str | None = None,
     ) -> tuple[RetrospectiveOrchestrator, Path]:
         coordinator = RetrospectiveOrchestrator(
             self.root / "runs" / name,
@@ -1705,6 +1710,8 @@ class DurablePublicationTests(unittest.TestCase):
             bundle,
             run_state,
             review_data,
+            now=export_now,
+            retention_deadline=export_retention_deadline,
         )
         if persist_descriptor:
             cli_module._persist_export_descriptor(
@@ -1717,7 +1724,10 @@ class DurablePublicationTests(unittest.TestCase):
             if shadow:
                 coordinator.mark_shadow_exported(bundle)
             else:
-                coordinator.mark_exported(receipt["bundle_digest"])
+                coordinator.mark_exported(
+                    receipt["bundle_digest"],
+                    retention_deadline=export_retention_deadline,
+                )
         return coordinator, bundle
 
     def finalize_cli(
@@ -1755,6 +1765,17 @@ class DurablePublicationTests(unittest.TestCase):
         failure_injector=None,
     ) -> PublicationTransaction:
         state = coordinator.load_state()
+
+        def claim_before_persist(
+            attempt_ref: str,
+            plan_digest: str,
+        ) -> Mapping[str, object]:
+            return coordinator.claim_publication(
+                attempt_ref,
+                plan_digest,
+                bundle_dir=bundle,
+            )
+
         transaction = PublicationTransaction.create(
             coordinator.run_dir / journal_name,
             bundle_dir=bundle,
@@ -1769,11 +1790,7 @@ class DurablePublicationTests(unittest.TestCase):
             identity_path=self.identity_path,
             adapter=adapter or self.adapter,
             failure_injector=failure_injector,
-        )
-        transaction_state = transaction.status()
-        coordinator.claim_publication(
-            transaction_state["attempt_ref"],
-            transaction_state["plan_digest"],
+            claim_before_persist=claim_before_persist,
         )
         return transaction
 
@@ -2306,6 +2323,13 @@ class DurablePublicationTests(unittest.TestCase):
                 run_dir=coordinator.run_dir,
                 identity_path=self.identity_path,
                 adapter=self.adapter,
+                claim_before_persist=lambda attempt_ref, plan_digest: (
+                    coordinator.claim_publication(
+                        attempt_ref,
+                        plan_digest,
+                        bundle_dir=bundle,
+                    )
+                ),
             )
         self.assertFalse(journal.exists())
 
@@ -2525,6 +2549,8 @@ class DurablePublicationTests(unittest.TestCase):
     def test_existing_journal_is_bound_to_current_run_before_claim(self) -> None:
         original, original_bundle = self.build_exportable_run("journal-original")
         original_state = original.load_state()
+        copied_run_dir = self.root / "runs" / "journal-current"
+        shutil.copytree(original.run_dir, copied_run_dir)
         PublicationTransaction.create(
             original.run_dir / "publication-transaction-v2.json",
             bundle_dir=original_bundle,
@@ -2536,9 +2562,18 @@ class DurablePublicationTests(unittest.TestCase):
             run_dir=original.run_dir,
             identity_path=self.identity_path,
             adapter=self.adapter,
+            claim_before_persist=lambda attempt_ref, plan_digest: (
+                original.claim_publication(
+                    attempt_ref,
+                    plan_digest,
+                    bundle_dir=original_bundle,
+                )
+            ),
         )
-        copied_run_dir = self.root / "runs" / "journal-current"
-        shutil.copytree(original.run_dir, copied_run_dir)
+        shutil.copy2(
+            original.run_dir / "publication-transaction-v2.json",
+            copied_run_dir / "publication-transaction-v2.json",
+        )
         current = RetrospectiveOrchestrator(
             copied_run_dir,
             identity_path=self.identity_path,
@@ -3289,6 +3324,13 @@ class DurablePublicationTests(unittest.TestCase):
                 run_dir=coordinator.run_dir,
                 identity_path=self.identity_path,
                 adapter=self.adapter,
+                claim_before_persist=lambda attempt_ref, plan_digest: (
+                    coordinator.claim_publication(
+                        attempt_ref,
+                        plan_digest,
+                        bundle_dir=bundle,
+                    )
+                ),
             )
         self.assertFalse((real_parent / "journal-state").exists())
 
@@ -4197,15 +4239,16 @@ class DurablePublicationTests(unittest.TestCase):
         coordinator, bundle = self.build_exportable_run("missing-retention-sidecar")
         sidecar = bundle.with_name(f".{bundle.name}.retention-v2.json")
         sidecar.unlink()
-        transaction = self.transaction(coordinator, bundle)
+        with self.assertRaisesRegex(RetainedExportError, "sidecar is missing"):
+            self.transaction(coordinator, bundle)
 
-        with self.assertRaisesRegex(StateCorruptionError, "sidecar is missing"):
-            transaction.prepare()
-
-        attempt = self.adapter.inspect_attempt(transaction.attempt_ref)
-        self.assertIsNotNone(attempt)
-        assert attempt is not None
-        self.assertFalse(attempt["retention_bound"])
+        self.assertFalse(
+            (coordinator.run_dir / "publication-transaction-v2.json").exists()
+        )
+        self.assertNotIn(
+            "publication_claim",
+            coordinator.load_state()["publication"],
+        )
 
     def test_retention_binding_and_abort_serialize_on_the_attempt_lock(self) -> None:
         for cleanup_first in (False, True):
@@ -4911,6 +4954,203 @@ class DurablePublicationTests(unittest.TestCase):
         retry = self.finalize_cli(coordinator)
         self.assertTrue(retry.result["idempotent"])
         self.assertEqual(RunStage.COMPLETE.value, retry.result["stage"])
+
+    def test_finalize_recovers_preclaim_crashes_across_expiry_and_gc(self) -> None:
+        started = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+        deadline = "2026-07-15T01:00:00Z"
+        resumed_at = dt.datetime(2026, 7, 15, 2, 0, tzinfo=dt.UTC)
+        for crash_point in ("after_binding", "after_checkpoint_claim"):
+            with self.subTest(crash_point=crash_point):
+                coordinator, bundle = self.build_exportable_run(
+                    f"preclaim-crash-{crash_point}",
+                    persist_descriptor=True,
+                    export_now=started,
+                    export_retention_deadline=deadline,
+                )
+                state = coordinator.load_state()
+                journal = coordinator.run_dir / "publication-transaction-v2.json"
+                attempt_ref = finalize_module.new_attempt_ref()
+
+                def claim_before_persist(
+                    claimed_attempt_ref: str,
+                    plan_digest: str,
+                ) -> Mapping[str, object]:
+                    if crash_point == "after_binding":
+                        bind_staged_export(
+                            bundle,
+                            claimed_attempt_ref,
+                            now=started,
+                            renew_heartbeat=False,
+                        )
+                        raise RuntimeError("simulated crash after retention binding")
+                    return coordinator.claim_publication(
+                        claimed_attempt_ref,
+                        plan_digest,
+                        bundle_dir=bundle,
+                    )
+
+                def crash(point, _state):
+                    if (
+                        crash_point == "after_checkpoint_claim"
+                        and point == "create.after_claim_before_persist"
+                    ):
+                        raise RuntimeError("simulated crash after checkpoint claim")
+
+                with (
+                    mock.patch.object(
+                        cli_module.export_api,
+                        "_utc_now",
+                        return_value=started,
+                    ),
+                    self.assertRaisesRegex(RuntimeError, "simulated crash"),
+                ):
+                    PublicationTransaction.create(
+                        journal,
+                        bundle_dir=bundle,
+                        destination=self.destination(state),
+                        target_ref=TARGET_REF,
+                        expected_target_head=state["authority"]["history_snapshot"][
+                            "history_commit"
+                        ],
+                        run_dir=coordinator.run_dir,
+                        identity_path=self.identity_path,
+                        attempt_ref=attempt_ref,
+                        adapter=self.adapter,
+                        claim_before_persist=claim_before_persist,
+                        failure_injector=crash,
+                    )
+
+                self.assertFalse(journal.exists())
+                retention = inspect_staged_export_retention(bundle)
+                self.assertEqual("publication_bound", retention["status"])
+                self.assertEqual(attempt_ref, retention["publication_attempt_ref"])
+                claim = coordinator.load_state()["publication"].get("publication_claim")
+                self.assertEqual(
+                    crash_point == "after_checkpoint_claim",
+                    claim is not None,
+                )
+                collected = garbage_collect_expired_exports(
+                    self.root / ".codex-local" / "exports",
+                    now=dt.datetime(2100, 1, 1, tzinfo=dt.UTC),
+                )
+                self.assertIn(str(bundle.resolve()), collected["retained"])
+
+                resumed = RetrospectiveOrchestrator(
+                    coordinator.run_dir,
+                    clock=lambda: resumed_at,
+                    identity_path=self.identity_path,
+                    require_existing_identity=True,
+                )
+                with (
+                    mock.patch.object(
+                        cli_module.orchestrator_api,
+                        "RetrospectiveOrchestrator",
+                        return_value=resumed,
+                    ),
+                    mock.patch.object(
+                        cli_module.export_api,
+                        "_utc_now",
+                        return_value=resumed_at,
+                    ),
+                ):
+                    recovered = self.finalize_cli(resumed)
+
+                self.assertEqual("prepared", recovered.result["transaction_phase"])
+                self.assertTrue(journal.is_file())
+                recovered_claim = resumed.load_state()["publication"][
+                    "publication_claim"
+                ]
+                self.assertEqual(attempt_ref, recovered_claim["attempt_ref"])
+
+    def test_finalize_journal_is_gc_protected_before_prepare(self) -> None:
+        started = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+        coordinator, bundle = self.build_exportable_run(
+            "pre-prepare-crash",
+            persist_descriptor=True,
+            export_now=started,
+            export_retention_deadline="2026-07-15T01:00:00Z",
+        )
+        state = coordinator.load_state()
+        journal = coordinator.run_dir / "publication-transaction-v2.json"
+        with self.assertRaisesRegex(
+            PublicationRejected,
+            "persistent claim callback",
+        ):
+            PublicationTransaction.create(
+                journal,
+                bundle_dir=bundle,
+                destination=self.destination(state),
+                target_ref=TARGET_REF,
+                expected_target_head=state["authority"]["history_snapshot"][
+                    "history_commit"
+                ],
+                run_dir=coordinator.run_dir,
+                identity_path=self.identity_path,
+                adapter=self.adapter,
+            )
+        self.assertFalse(journal.exists())
+        with self.assertRaisesRegex(
+            PublicationRejected,
+            "persistent publication claim",
+        ):
+            PublicationTransaction.create(
+                journal,
+                bundle_dir=bundle,
+                destination=self.destination(state),
+                target_ref=TARGET_REF,
+                expected_target_head=state["authority"]["history_snapshot"][
+                    "history_commit"
+                ],
+                run_dir=coordinator.run_dir,
+                identity_path=self.identity_path,
+                adapter=self.adapter,
+                claim_before_persist=lambda _attempt, _digest: {"claimed": True},
+            )
+        self.assertFalse(journal.exists())
+        self.assertNotIn(
+            "publication_claim",
+            coordinator.load_state()["publication"],
+        )
+        args = cli_module.build_parser().parse_args(
+            [
+                "finalize",
+                "--identity-path",
+                str(self.identity_path),
+                "--require-existing-identity",
+                "--run-dir",
+                str(coordinator.run_dir),
+            ]
+        )
+        with (
+            mock.patch.object(
+                cli_module.orchestrator_api,
+                "RetrospectiveOrchestrator",
+                return_value=coordinator,
+            ),
+            mock.patch.object(
+                cli_module.export_api,
+                "_utc_now",
+                return_value=started,
+            ),
+            mock.patch.object(
+                finalize_module.PublicationTransaction,
+                "prepare",
+                side_effect=RuntimeError("simulated pre-prepare crash"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "pre-prepare crash"),
+        ):
+            cli_module.command_finalize(args)
+
+        self.assertTrue(journal.is_file())
+        claim = coordinator.load_state()["publication"]["publication_claim"]
+        retention = inspect_staged_export_retention(bundle)
+        self.assertEqual("publication_bound", retention["status"])
+        self.assertEqual(claim["attempt_ref"], retention["publication_attempt_ref"])
+        collected = garbage_collect_expired_exports(
+            self.root / ".codex-local" / "exports",
+            now=dt.datetime(2100, 1, 1, tzinfo=dt.UTC),
+        )
+        self.assertIn(str(bundle.resolve()), collected["retained"])
 
     def test_finalize_cli_releases_export_only_after_committed_checkpoint(
         self,

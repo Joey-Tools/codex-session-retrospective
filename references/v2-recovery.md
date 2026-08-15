@@ -106,11 +106,23 @@ simplification. Every commit-to-parent edge is checked for `runs/` changes; a
 merge is accepted only when its retained tree equals every parent, while every
 linear retained-tree change must be a valid signed publication transition.
 
+Before the first publication journal is written, `finalize` serializes on the
+retained-export lock, binds the exact bundle to one attempt without renewing the
+initial heartbeat, and persists the matching authenticated run claim. Transaction
+creation requires that claim callback and revalidates the durable claim before
+the journal write. A crash after sidecar binding, after checkpoint claiming, or
+after journal creation therefore leaves the bundle `publication_bound`; GC can
+never collect it as an ordinary expired export. A retry with no journal recovers
+the same attempt from the validated sidecar. If the run deadline has since
+passed, recovery is legal only when the sidecar deadline matches the run and its
+unchanged initial heartbeat proves that binding preceded the earliest raw,
+working, and export deadline.
+
 When `finalize` finds an existing journal, it first re-derives the complete
 publication plan from the current run, bundle, history snapshot, provider,
-target, and identity. The journal must match that plan before the run persists a
-publication claim. Copying a valid journal from another run therefore cannot
-claim or poison the current run.
+target, and identity. The journal must match that plan before the existing
+authenticated claim is reused or any adapter action starts. Copying a valid
+journal from another run therefore cannot claim or poison the current run.
 
 Publication recovery is phase-idempotent:
 

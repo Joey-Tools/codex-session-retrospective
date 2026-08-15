@@ -16,10 +16,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPTS_DIR = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-)
+SCRIPTS_DIR = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS_DIR))
 
 import retrospective_v2.export as export_module  # noqa: E402
@@ -30,6 +27,7 @@ from retrospective_v2.export import (  # noqa: E402
     bind_staged_export,
     export_retained_bundle,
     garbage_collect_expired_exports,
+    inspect_staged_export_retention,
     release_committed_staged_export,
     release_staged_export,
     release_staged_export_if_bound,
@@ -2331,6 +2329,41 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
             self.assertEqual(result["deleted"], [])
             self.assertEqual(result["retained"], [str(output.resolve())])
             self.assertTrue(output.exists())
+
+    def test_preclaim_inspection_and_replay_preserve_initial_heartbeat(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".codex-local" / "preclaim-retention"
+            output = root / "retained-v2"
+            now = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+            export_retained_bundle(
+                output,
+                run_state(),
+                review_data(),
+                now=now,
+                retention_deadline=now + dt.timedelta(hours=1),
+            )
+            attempt_ref = f"attempt_ref_v2:{'c' * 64}"
+            bound = bind_staged_export(
+                output,
+                attempt_ref,
+                now=now,
+                renew_heartbeat=False,
+            )
+            inspected = inspect_staged_export_retention(output)
+            replayed = bind_staged_export(
+                output,
+                attempt_ref,
+                now=now + dt.timedelta(days=6),
+                renew_heartbeat=False,
+            )
+
+            self.assertEqual("publication_bound", inspected["status"])
+            self.assertEqual(attempt_ref, inspected["publication_attempt_ref"])
+            self.assertEqual(bound["publication_heartbeat_at"], "2026-07-15T00:00:00Z")
+            self.assertEqual(
+                bound["publication_heartbeat_at"],
+                replayed["publication_heartbeat_at"],
+            )
 
     def test_stage_checks_bundle_budget_before_deep_validation(self) -> None:
         artifacts = assemble_retained_artifacts(run_state(), review_data())

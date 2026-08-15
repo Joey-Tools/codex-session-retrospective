@@ -16,6 +16,7 @@ from . import (
     executable_authority,
     export as retained_export_api,
     finalize,
+    publication_claims,
     reporting,
     retained_inputs,
     safe_io,
@@ -68,6 +69,12 @@ from .orchestrator_support import (
 
 _RAW_CLEANUP_CONTRACTS = cleanup_inventory.RAW_CLEANUP_CONTRACTS
 _SHADOW_CLEANUP_CONTRACTS = cleanup_inventory.SHADOW_CLEANUP_CONTRACTS
+_PUBLICATION_PRECLAIM_STAGES = frozenset(
+    {RunStage.EXPORT.value, RunStage.FINALIZE.value}
+)
+_PUBLICATION_CLAIM_STAGES = frozenset(
+    {*_PUBLICATION_PRECLAIM_STAGES, RunStage.COMPLETE.value}
+)
 
 
 class RunLifecycleOperations(OrchestratorComponent):
@@ -1842,6 +1849,8 @@ class RunLifecycleOperations(OrchestratorComponent):
         self,
         attempt_ref: str,
         plan_digest: str,
+        *,
+        bundle_dir: str | os.PathLike[str] | None = None,
     ) -> dict[str, Any]:
         if (
             not isinstance(attempt_ref, str)
@@ -1854,6 +1863,26 @@ class RunLifecycleOperations(OrchestratorComponent):
         ):
             raise InvalidInputError("publication plan_digest is invalid")
 
+        normalized_bundle = None if bundle_dir is None else Path(bundle_dir).absolute()
+        binding: Mapping[str, Any] | None = None
+        if normalized_bundle is not None:
+            preflight = self.store.read().state
+            _, existing_claim = publication_claims.publication_claim_context(
+                preflight,
+                attempt_ref=attempt_ref,
+                plan_digest=plan_digest,
+                allowed_stages=_PUBLICATION_PRECLAIM_STAGES,
+                assert_state_identity=self._state._assert_state_identity,
+                validate_claim=self._validate_publication_claim,
+            )
+            if existing_claim is None:
+                binding = publication_claims.bind_preclaim_export(
+                    preflight,
+                    normalized_bundle,
+                    attempt_ref=attempt_ref,
+                    clock=self._state._now(),
+                )
+
         while True:
             snapshot = self.store.read()
             claim_revision = snapshot.revision + 1
@@ -1861,44 +1890,41 @@ class RunLifecycleOperations(OrchestratorComponent):
             def mutate(
                 state: dict[str, Any],
             ) -> tuple[dict[str, Any], dict[str, Any]]:
-                self._state._assert_state_identity(state)
-                if state.get("shadow") is True:
-                    raise InvalidTransitionError("shadow runs cannot claim publication")
-                if state["stage"] not in {
-                    RunStage.EXPORT.value,
-                    RunStage.FINALIZE.value,
-                    RunStage.COMPLETE.value,
-                }:
-                    raise InvalidTransitionError("run is not in publication")
-                publication = state["publication"]
-                existing = publication.get("publication_claim")
-                if existing is not None:
-                    verified = self._validate_publication_claim(state, existing)
-                    if (
-                        verified["attempt_ref"] != attempt_ref
-                        or verified["plan_digest"] != plan_digest
-                    ):
-                        raise RunConflictError(
-                            "run is already claimed by another publication attempt"
-                        )
+                publication, verified = publication_claims.publication_claim_context(
+                    state,
+                    attempt_ref=attempt_ref,
+                    plan_digest=plan_digest,
+                    allowed_stages=_PUBLICATION_CLAIM_STAGES,
+                    assert_state_identity=self._state._assert_state_identity,
+                    validate_claim=self._validate_publication_claim,
+                )
+                if verified is not None:
                     return state, {
                         "checkpoint_revision": verified["checkpoint_revision"],
                         "claimed": False,
                         "idempotent": True,
                     }
-                if publication.get("phase") in {
-                    "expired_cleanup_pending",
-                    "expired_cleanup_claimed",
-                }:
-                    raise InvalidTransitionError(
-                        "expired raw cleanup already owns the run"
-                    )
                 if state["stage"] == RunStage.COMPLETE.value:
                     raise InvalidTransitionError(
                         "completed run cannot start publication"
                     )
-                if self._state._retention_expired(state):
-                    raise InvalidTransitionError("retention deadline expired")
+                retention_expired = self._state._retention_expired(state)
+                if binding is None:
+                    if retention_expired:
+                        raise InvalidTransitionError("retention deadline expired")
+                else:
+                    assert normalized_bundle is not None
+                    publication_claims.validate_preclaim_export_binding(
+                        state,
+                        binding,
+                        attempt_ref=attempt_ref,
+                        bundle_dir=normalized_bundle,
+                    )
+                    if retention_expired:
+                        publication_claims.validate_preclaim_expiry_recovery(
+                            state,
+                            binding,
+                        )
                 publication["publication_claim"] = self._publication_claim_value(
                     state,
                     attempt_ref=attempt_ref,

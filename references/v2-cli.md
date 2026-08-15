@@ -104,9 +104,17 @@ Run `export` once. A shadow export cleans raw state and completes locally. For a
 production run, repeat parameterless `finalize --run-dir "$RUN"` until the
 durable commit, provider derivation, and cleanup are complete.
 
-Every `finalize` retry first authenticates the current five-host run checkpoint
-and persistent publication claim. Before any adapter action, it also rebuilds
-and compares the complete inventory of every still-present retained bundle. An
+The first `finalize` binds the validated retained sidecar to one attempt and
+persists the authenticated run claim before transaction-journal creation. A
+retry after either pre-journal crash recovers that same attempt from the locked
+sidecar; it never invents a replacement attempt. The initial binding heartbeat
+is not renewed until the durable claim exists. After the ordinary retention
+deadline, only an exact sidecar/run deadline match whose initial heartbeat
+precedes all raw, working, and export deadlines may recover.
+
+Every `finalize` retry authenticates the current five-host run checkpoint and
+persistent publication claim. Before any adapter action, it also rebuilds and
+compares the complete inventory of every still-present retained bundle. An
 exactly absent bundle is not accepted as pre-CAS evidence; it is usable only by
 the post-CAS durable-recovery path described below. Direct abort recovery repeats
 the claim check before it releases an adapter reservation. Before target CAS,

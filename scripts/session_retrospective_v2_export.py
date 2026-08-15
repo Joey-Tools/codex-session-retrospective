@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 import os
 from typing import Any
@@ -21,6 +21,24 @@ EXPORT_RESERVATION_SCHEMA = records.EXPORT_RESERVATION_SCHEMA
 LEGACY_EXPORT_DESCRIPTOR_NAME = records.LEGACY_EXPORT_DESCRIPTOR_NAME
 ExportCliContractError = records.ExportCliContractError
 JsonReader = records.JsonReader
+
+
+def publication_attempt_ref(
+    output: Path,
+    *,
+    new_attempt_ref: Callable[[], str],
+) -> str:
+    retention = export_api.inspect_staged_export_retention(output)
+    status = retention["status"]
+    if status == "exported":
+        return new_attempt_ref()
+    if status == "publication_bound":
+        return retention["publication_attempt_ref"]
+    records.raise_cli_error(
+        "INVALID_STATE",
+        "publication_not_resumable",
+        "the retained export has a terminal publication disposition",
+    )
 
 
 def _folded_path_component(component: str) -> str:

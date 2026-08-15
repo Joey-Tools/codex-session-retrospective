@@ -1125,6 +1125,23 @@ def validate_staged_export(
         anchor.close()
 
 
+def inspect_staged_export_retention(
+    output_dir: str | os.PathLike[str],
+) -> dict[str, Any]:
+    """Return the validated retention receipt under the bundle lock."""
+
+    anchor = _AnchoredExport.open(output_dir, create_parent=False)
+    try:
+        with anchor.lock():
+            if not anchor.exists(anchor.retention_name):
+                raise RetainedExportError(
+                    "retained export sidecar is missing before publication"
+                )
+            return _receipt_at(anchor, idempotent=True)
+    finally:
+        anchor.close()
+
+
 def _same_artifacts(output: Path, expected: Mapping[str, bytes]) -> bool:
     actual = _read_exact_artifacts(output)
     validate_retained_artifacts(actual)
@@ -1301,6 +1318,7 @@ def bind_staged_export(
     attempt_ref: str,
     *,
     now: dt.datetime | None = None,
+    renew_heartbeat: bool = True,
 ) -> dict[str, Any]:
     """Bind ordinary export retention to one durable publication attempt."""
 
@@ -1308,6 +1326,8 @@ def bind_staged_export(
         raise RetainedExportError(
             "attempt_ref must be an opaque v2 publication attempt reference"
         )
+    if not isinstance(renew_heartbeat, bool):
+        raise RetainedExportError("renew_heartbeat must be a boolean")
     anchor = _AnchoredExport.open(output_dir, create_parent=False)
     try:
         with anchor.lock():
@@ -1347,7 +1367,7 @@ def bind_staged_export(
                     raise RetainedExportError(
                         "expired publication-bound export cannot be resumed"
                     )
-                if clock != heartbeat:
+                if renew_heartbeat and clock != heartbeat:
                     updated = dict(state)
                     updated["publication_heartbeat_at"] = _format_instant(clock)
                     _write_retention_at(anchor, updated)

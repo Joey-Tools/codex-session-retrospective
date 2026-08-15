@@ -381,6 +381,7 @@ BOUNDED_MODULE_LINES = {
     "orchestrator_transport.py": 1_100,
     "orchestrator_state.py": 300,
     "publication_contracts.py": 1_350,
+    "publication_claims.py": 200,
     "publication_git.py": 1_100,
     "publication_git_capacity.py": 300,
     "publication_git_commits.py": 1_000,
@@ -1161,7 +1162,7 @@ spec.loader.exec_module(module)
                     )
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
-        self.assertEqual(8_605, branch_total)
+        self.assertEqual(8_622, branch_total)
         self.assertLessEqual(branch_total, 8_625)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)

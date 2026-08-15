@@ -102,6 +102,7 @@ class PublicationTransaction:
         shadow: bool = False,
         adapter: PublicationAdapter | None = None,
         failure_injector: FailureInjector | None = None,
+        claim_before_persist: Callable[[str, str], Mapping[str, Any]] | None = None,
         max_bundle_bytes: int = MAX_BUNDLE_BYTES,
     ) -> PublicationTransaction:
         journal = Path(journal_path).absolute()
@@ -188,13 +189,36 @@ class PublicationTransaction:
         state["state_digest"] = _state_digest(state)
         cls._validate_state(state)
 
+        if claim_before_persist is None:
+            raise PublicationRejected("persistent claim callback required")
+
         state_directory = _AnchoredStateDirectory.open(journal.parent, create=True)
-        with _anchored_lock(state_directory, f".{journal.name}.lock"):
-            if state_directory.exists(journal.name):
-                raise StateCorruptionError(
-                    f"publication journal already exists: {journal}"
+        try:
+            with _anchored_lock(state_directory, f".{journal.name}.lock"):
+                if state_directory.exists(journal.name):
+                    raise StateCorruptionError(
+                        f"publication journal already exists: {journal}"
+                    )
+                claim = claim_before_persist(attempt, plan_digest)
+                if not isinstance(claim, Mapping):
+                    raise PublicationRejected(
+                        "publication claim callback returned an invalid result"
+                    )
+                _validate_persistent_publication_claim(
+                    run_dir=authoritative_run_dir,
+                    identity_path=authoritative_identity_path,
+                    attempt_ref=attempt,
+                    plan_digest=plan_digest,
                 )
-            state_directory.create_json(journal.name, state)
+                if failure_injector is not None:
+                    failure_injector(
+                        "create.after_claim_before_persist",
+                        deepcopy(state),
+                    )
+                state_directory.create_json(journal.name, state)
+        except Exception:
+            state_directory.close()
+            raise
         transaction = cls(
             journal,
             state,

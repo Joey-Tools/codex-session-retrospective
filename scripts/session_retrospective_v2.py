@@ -1655,6 +1655,7 @@ def command_finalize(args: argparse.Namespace) -> CommandResult:
         claim_result = orchestrator.claim_publication(
             local_transaction_state["attempt_ref"],
             local_transaction_state["plan_digest"],
+            bundle_dir=bundle_dir,
         )
         transaction = finalize_api.PublicationTransaction.open(
             journal,
@@ -1662,6 +1663,25 @@ def command_finalize(args: argparse.Namespace) -> CommandResult:
             expected_attempt_ref=local_transaction_state["attempt_ref"],
         )
     else:
+        attempt_ref = _export_cli_contract(
+            export_cli_api.publication_attempt_ref,
+            bundle_dir,
+            new_attempt_ref=finalize_api.new_attempt_ref,
+        )
+        claim_result_holder: dict[str, Mapping[str, Any]] = {}
+
+        def claim_before_persist(
+            claimed_attempt_ref: str,
+            claimed_plan_digest: str,
+        ) -> Mapping[str, Any]:
+            claim = orchestrator.claim_publication(
+                claimed_attempt_ref,
+                claimed_plan_digest,
+                bundle_dir=bundle_dir,
+            )
+            claim_result_holder["claim"] = claim
+            return claim
+
         transaction = finalize_api.PublicationTransaction.create(
             journal,
             bundle_dir=bundle_dir,
@@ -1670,13 +1690,12 @@ def command_finalize(args: argparse.Namespace) -> CommandResult:
             expected_target_head=expected_history_commit,
             run_dir=run_dir,
             identity_path=identity_path,
+            attempt_ref=attempt_ref,
             adapter=adapter,
+            claim_before_persist=claim_before_persist,
         )
         local_transaction_state = transaction.status()
-        claim_result = orchestrator.claim_publication(
-            local_transaction_state["attempt_ref"],
-            local_transaction_state["plan_digest"],
-        )
+        claim_result = claim_result_holder["claim"]
     transaction_state = transaction.status()
     previous_phase = transaction.phase.value
     if previous_phase == "created":
