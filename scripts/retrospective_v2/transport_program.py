@@ -121,7 +121,7 @@ def _program_component_at(
         ) from exc
     try:
         before = os.fstat(descriptor)
-        _require_program_component_policy(before, role)
+        _require_program_component_policy(before, descriptor, role)
         if before.st_size > maximum_bytes:
             raise TransportValidationError(
                 f"source transport {role} exceeds the program component bound"
@@ -149,7 +149,7 @@ def _program_component_at(
             != expected_identity
         ):
             raise TransportValidationError(changed_message)
-        _require_program_component_policy(after, role)
+        _require_program_component_policy(after, descriptor, role)
         component: dict[str, JsonValue] = {
             "content_commitment": "sha256:" + hashlib.sha256(retained).hexdigest(),
             "path": str(display_path),

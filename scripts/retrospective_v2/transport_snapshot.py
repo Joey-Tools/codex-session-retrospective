@@ -23,12 +23,27 @@ except (ImportError, ModuleNotFoundError):
     )
 
 
+_BOOTSTRAP_DARWIN_ACL_SOURCE = (
+    "def _no_extended_acl(fd):\n"
+    " if sys.platform!='darwin': return True\n"
+    " import ctypes,errno\n"
+    " try:\n"
+    "  libc=ctypes.CDLL(None,use_errno=True); getter=libc.acl_get_fd_np; releaser=libc.acl_free\n"
+    "  getter.argtypes=(ctypes.c_int,ctypes.c_int); getter.restype=ctypes.c_void_p\n"
+    "  releaser.argtypes=(ctypes.c_void_p,); releaser.restype=ctypes.c_int\n"
+    " except (AttributeError,OSError): return False\n"
+    " ctypes.set_errno(0); acl=getter(fd,0x100)\n"
+    " if not acl: return ctypes.get_errno()==errno.ENOENT\n"
+    " releaser(acl); return False"
+)
+
 _SOURCE_TRANSPORT_SNAPSHOT_BOOTSTRAP_SOURCE = "\n".join(
     (
         "import base64,hashlib,importlib.abc,importlib.util,json,os,stat,sys,zlib",
         "if not sys.flags.isolated or not sys.flags.no_site or not sys.flags.dont_write_bytecode: raise SystemExit('source transport Python isolation failed')",
+        _BOOTSTRAP_DARWIN_ACL_SOURCE,
         "identity=lambda meta:(meta.st_dev,meta.st_ino,meta.st_uid,meta.st_gid,meta.st_mode,meta.st_nlink,meta.st_size)",
-        "def _read(path,limit,p,label):\n flags=os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK\n fd=os.open(path,flags)\n try:\n  before=os.fstat(fd); named_before=os.stat(path,follow_symlinks=False); mode=stat.S_IMODE(before.st_mode)\n  policy=stat.S_ISREG(before.st_mode) and before.st_nlink==1 and before.st_uid in (0,os.geteuid()) and not mode&0o022\n  if p: policy=policy and before.st_uid==os.geteuid() and mode==0o600\n  if not policy or identity(named_before)!=identity(before): raise SystemExit(label+' authentication failed')\n  remaining=limit+1; chunks=[]\n  while remaining:\n   chunk=os.read(fd,min(65536,remaining))\n   if not chunk: break\n   chunks.append(chunk); remaining-=len(chunk)\n  data=b''.join(chunks); after=os.fstat(fd); named_after=os.stat(path,follow_symlinks=False)\n  if identity(after)!=identity(before) or identity(named_after)!=identity(before) or len(data)!=after.st_size or len(data)>limit: raise SystemExit(label+' authentication failed')\n  return data\n finally:\n  os.close(fd)",
+        "def _read(path,limit,p,label):\n flags=os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK\n fd=os.open(path,flags)\n try:\n  before=os.fstat(fd); named_before=os.stat(path,follow_symlinks=False); mode=stat.S_IMODE(before.st_mode); acl_before=_no_extended_acl(fd)\n  policy=stat.S_ISREG(before.st_mode) and before.st_nlink==1 and before.st_uid in (0,os.geteuid()) and not mode&0o022 and acl_before\n  if p: policy=policy and before.st_uid==os.geteuid() and mode==0o600\n  if not policy or identity(named_before)!=identity(before): raise SystemExit(label+' authentication failed')\n  remaining=limit+1; chunks=[]\n  while remaining:\n   chunk=os.read(fd,min(65536,remaining))\n   if not chunk: break\n   chunks.append(chunk); remaining-=len(chunk)\n  data=b''.join(chunks); after=os.fstat(fd); named_after=os.stat(path,follow_symlinks=False); acl_after=_no_extended_acl(fd)\n  if identity(after)!=identity(before) or identity(named_after)!=identity(before) or len(data)!=after.st_size or len(data)>limit or not acl_after: raise SystemExit(label+' authentication failed')\n  return data\n finally:\n  os.close(fd)",
         "marker,digest,snapshot_path=sys.argv[1:4]\npayload=_read(snapshot_path,4194304,True,'source transport snapshot')",
         "if marker!='source_transport_worker_snapshot_v1' or 'sha256:'+hashlib.sha256(payload).hexdigest()!=digest: raise SystemExit('source transport snapshot authentication failed')",
         "snapshot=json.loads(zlib.decompress(payload))\nruntime=snapshot['python_runtime']",
@@ -55,11 +70,12 @@ _REMOTE_HELPER_BOOTSTRAP_SOURCE = "\n".join(
     (
         "import hashlib,os,stat,sys",
         "if not sys.flags.isolated or not sys.flags.no_site or not sys.flags.dont_write_bytecode: raise SystemExit('remote helper Python isolation failed')",
+        _BOOTSTRAP_DARWIN_ACL_SOURCE,
         "schema,digest,path=sys.argv[1:4]",
         "flags=os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK\nfd=os.open(path,flags)",
-        "try:\n before=os.fstat(fd); named_before=os.stat(path,follow_symlinks=False)\n remaining=4194305\n chunks=[]\n while remaining:\n  chunk=os.read(fd,min(65536,remaining))\n  if not chunk: break\n  chunks.append(chunk); remaining-=len(chunk)\n data=b''.join(chunks)\n after=os.fstat(fd); named_after=os.stat(path,follow_symlinks=False)\nfinally:\n os.close(fd)",
+        "try:\n before=os.fstat(fd); named_before=os.stat(path,follow_symlinks=False); acl_before=_no_extended_acl(fd)\n remaining=4194305\n chunks=[]\n while remaining:\n  chunk=os.read(fd,min(65536,remaining))\n  if not chunk: break\n  chunks.append(chunk); remaining-=len(chunk)\n data=b''.join(chunks)\n after=os.fstat(fd); named_after=os.stat(path,follow_symlinks=False); acl_after=_no_extended_acl(fd)\nfinally:\n os.close(fd)",
         "policy=lambda meta: stat.S_ISREG(meta.st_mode) and meta.st_uid==os.geteuid() and stat.S_IMODE(meta.st_mode)==0o600 and meta.st_nlink==1\nidentity=lambda meta:(meta.st_dev,meta.st_ino,meta.st_uid,meta.st_gid,meta.st_mode,meta.st_nlink,meta.st_size)\nvalid=policy(before) and policy(after) and identity(before)==identity(after)==identity(named_before)==identity(named_after) and len(data)==after.st_size and len(data)<=4194304",
-        "if schema!='remote_host_context_helper_snapshot_v1' or not valid or 'sha256:'+hashlib.sha256(data).hexdigest()!=digest: raise SystemExit('remote helper snapshot authentication failed')",
+        "if schema!='remote_host_context_helper_snapshot_v1' or not valid or not acl_before or not acl_after or 'sha256:'+hashlib.sha256(data).hexdigest()!=digest: raise SystemExit('remote helper snapshot authentication failed')",
         "sys.argv=[path,*sys.argv[4:]]\nglobals()['__file__']=path",
         "exec(compile(data,path,'exec'),globals())",
     )

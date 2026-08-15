@@ -16,6 +16,7 @@ import time
 from typing import Any, Callable, Mapping, Sequence
 
 try:
+    from . import safe_io
     from .transport_contracts import TransportValidationError, _canonical_commitment
     from .transport_program import _program_component
     from .transport_snapshot import (
@@ -23,6 +24,7 @@ try:
         REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
     )
 except (ImportError, ModuleNotFoundError):
+    import safe_io  # type: ignore[no-redef]
     from transport_contracts import (  # type: ignore[no-redef]
         TransportValidationError,
         _canonical_commitment,
@@ -242,6 +244,16 @@ def _relay_remote_host_context_command(
         selector.register(process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS
         with tempfile.TemporaryFile(mode="w+b") as output:
+            try:
+                safe_io.harden_created_owner_only_file_descriptor(
+                    output.fileno(),
+                    pathlib.Path("remote-host-context-output-spool"),
+                    single_link=False,
+                )
+            except OSError as exc:
+                raise RuntimeError(
+                    "remote-host-context output spool is unavailable"
+                ) from exc
             input_bytes = 0
             output_bytes = 0
             timed_out = False

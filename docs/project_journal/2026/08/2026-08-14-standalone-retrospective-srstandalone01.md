@@ -5,7 +5,7 @@ status: completed
 created: 2026-08-14
 updated: 2026-08-15
 branch: wip/standalone-retrospective
-pr:
+pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
   - 20260716-srv2e01
 superseded_by:
@@ -173,6 +173,34 @@ superseded_by:
   exact regressions pass in 27.310 seconds; the CI contract passes 6/6, module
   boundaries pass 19/19, and the skill contract passes 5/5. `actionlint`, Ruff
   lint and formatting, and `git diff --check` remain clean.
+- A fresh-context Codex review of `a3836660..1ac8498e` found three remaining
+  access-policy and raw-evidence gaps: transport executable and snapshot
+  authentication omitted Darwin extended ACLs, local `.git/config` admission
+  omitted the same ACL check, and the remote raw-output temporary file was not
+  descriptor-hardened before its first raw byte.
+- Transport program components, committed source snapshots, remote helper
+  snapshots, and the Python runtime now reject any extended ACL at both
+  authenticated observations. Local Git config admission applies the same
+  owner-controlled, no-ACL policy before and after its exact read. The remote
+  relay hardens its anonymous spool through the held descriptor before any
+  filtered or unfiltered raw output can be written; hardening failure enters
+  the existing process-group cleanup path.
+- Six exact ACL/spool regressions pass in 44.114 seconds. The complete source
+  transport module passes 100/100 in 24.509 seconds, module boundaries pass
+  19/19 in 1.870 seconds, and the canary support module passes 7/7 in 2.427
+  seconds. CI and skill contracts pass 6/6 and 5/5; the installed OpenAI skill
+  validator, Ruff 0.13.2 lint, changed-file formatting, `actionlint`, and
+  `git diff --check` are clean.
+- One redundant full publication-module run was interrupted at its declared
+  45-minute cutoff and is non-counting. During that extra fifth heavy producer,
+  the first four-shard attempt had one 15-second publisher-canary timeout in
+  shard 2; the other 438 tests passed, but that shard is not counted. After the
+  extra producer was quiescent, the complete canary support module passed and
+  the exact canary case passed inside a clean shard-2 rerun.
+- Final Python 3.13 evidence covers all 1,598 tests exactly once with no error
+  scan matches: shard 0 passes 377/377 in 1,616.905 seconds, shard 1 passes
+  427/427 in 1,290.111 seconds, the clean shard-2 rerun passes 439/439 in
+  822.881 seconds, and shard 3 passes 355/355 in 1,299.679 seconds.
 
 ## Acceptance
 

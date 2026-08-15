@@ -417,6 +417,7 @@ def _config_commitment(common_dir_fd: int, display_path: Path) -> str:
             or before.st_nlink != 1
             or before.st_size > _CONFIG_LIMIT_BYTES
             or _config_stat_identity(named_before) != _config_stat_identity(before)
+            or safe_io.descriptor_has_extended_acl(descriptor)
         ):
             raise LocalRepositorySafetyError(
                 "config-unsafe", "local Git configuration is not owner-controlled"
@@ -437,6 +438,7 @@ def _config_commitment(common_dir_fd: int, display_path: Path) -> str:
             or _config_stat_identity(named_after) != _config_stat_identity(before)
             or len(payload) != after.st_size
             or len(payload) > _CONFIG_LIMIT_BYTES
+            or safe_io.descriptor_has_extended_acl(descriptor)
         ):
             raise LocalRepositorySafetyError(
                 "config-changed", "local Git configuration changed while read"

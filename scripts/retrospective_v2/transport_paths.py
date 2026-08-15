@@ -8,8 +8,10 @@ import re
 import stat
 
 try:
+    from . import safe_io
     from .transport_contracts import TransportValidationError
 except (ImportError, ModuleNotFoundError):
+    import safe_io  # type: ignore[no-redef]
     from transport_contracts import TransportValidationError  # type: ignore[no-redef]
 
 ACTIVE_ROLLOUT_RELATIVE_RE = re.compile(
@@ -30,13 +32,29 @@ def _program_stat_identity(metadata: os.stat_result) -> tuple[int, ...]:
     return tuple(int(getattr(metadata, field)) for field in fields)
 
 
-def _require_program_component_policy(metadata: os.stat_result, role: str) -> None:
+def _require_program_component_policy(
+    metadata: os.stat_result,
+    descriptor: int,
+    role: str,
+) -> None:
     if not stat.S_ISREG(metadata.st_mode):
         raise TransportValidationError(
             f"source transport {role} must be a regular non-symlink file"
         )
     mode = stat.S_IMODE(metadata.st_mode)
-    if not all((metadata.st_uid in {0, os.geteuid()}, not mode & 0o022)):
+    try:
+        has_extended_acl = safe_io.descriptor_has_extended_acl(descriptor)
+    except OSError as exc:
+        raise TransportValidationError(
+            f"source transport {role} access policy cannot be authenticated"
+        ) from exc
+    if not all(
+        (
+            metadata.st_uid in {0, os.geteuid()},
+            not mode & 0o022,
+            not has_extended_acl,
+        )
+    ):
         raise TransportValidationError(
             f"source transport {role} has an unsafe access policy"
         )

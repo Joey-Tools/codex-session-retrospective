@@ -114,6 +114,20 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.snapshot_cache_patch.stop()
         self.temporary_directory.cleanup()
 
+    def _add_darwin_acl(self, path: Path, entry: str = "everyone allow write") -> None:
+        subprocess.run(
+            ["/bin/chmod", "+a", entry, os.fspath(path)],
+            check=True,
+            capture_output=True,
+        )
+
+    def _remove_darwin_acl(self, path: Path) -> None:
+        subprocess.run(
+            ["/bin/chmod", "-N", os.fspath(path)],
+            check=True,
+            capture_output=True,
+        )
+
     def test_source_acceptance_sidecar_rejects_hardlinks_and_content_change(
         self,
     ) -> None:
@@ -1378,6 +1392,37 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertNotEqual(0, completed.returncode)
         self.assertIn("snapshot authentication failed", completed.stderr)
 
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    def test_remote_helper_launch_rejects_snapshot_extended_acl(self) -> None:
+        helper = self.root / "acl-remote-helper.py"
+        helper.write_text("print('{}')\n", encoding="ascii")
+        snapshot, commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "acl-remote-helper-snapshots",
+            )
+        )
+        arguments = mock.Mock(
+            remote_helper=str(snapshot),
+            remote_helper_commitment=commitment,
+            host="remote.example",
+        )
+        command = transport._remote_host_context_command(arguments, "probe", ())
+        self._add_darwin_acl(snapshot)
+        try:
+            completed = subprocess.run(
+                command,
+                check=False,
+                capture_output=True,
+                env=transport._remote_host_context_environment(),
+                text=True,
+            )
+        finally:
+            self._remove_darwin_acl(snapshot)
+
+        self.assertNotEqual(0, completed.returncode)
+        self.assertIn("snapshot authentication failed", completed.stderr)
+
     def test_remote_helper_bootstrap_revalidates_access_policy_after_read(
         self,
     ) -> None:
@@ -1514,6 +1559,58 @@ class SourceTransportProtocolTests(unittest.TestCase):
             )
 
         self.assertLess(time.monotonic() - started, 1.5)
+
+    def test_remote_relay_hardens_output_spool_before_first_write(self) -> None:
+        actual = tempfile.TemporaryFile(mode="w+b")
+
+        class GuardedOutput:
+            hardened = False
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args) -> None:
+                actual.close()
+
+            def fileno(self) -> int:
+                return actual.fileno()
+
+            def write(self, payload: bytes) -> int:
+                if not self.hardened:
+                    raise AssertionError(
+                        "remote raw output reached an unhardened spool"
+                    )
+                return actual.write(payload)
+
+            def __getattr__(self, name: str):
+                return getattr(actual, name)
+
+        guarded = GuardedOutput()
+        real_harden = safe_io.harden_created_owner_only_file_descriptor
+
+        def mark_hardened(*args, **kwargs) -> None:
+            real_harden(*args, **kwargs)
+            guarded.hardened = True
+
+        with (
+            mock.patch.object(
+                transport_remote.tempfile,
+                "TemporaryFile",
+                return_value=guarded,
+            ),
+            mock.patch.object(
+                transport_remote.safe_io,
+                "harden_created_owner_only_file_descriptor",
+                side_effect=mark_hardened,
+            ),
+            mock.patch.object(transport_remote, "_relay_valid_utf8"),
+        ):
+            transport._relay_remote_host_context_command(
+                (sys.executable, "-I", "-B", "-S", "-c", "print('{}')"),
+                max_output_bytes=1024,
+            )
+
+        self.assertTrue(guarded.hardened)
 
     def test_remote_helper_timeout_closes_detached_inherited_stdout(self) -> None:
         helper = self.root / "remote-helper-with-detached-writer.py"
@@ -4869,6 +4966,27 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         self.assertTrue(restored.stdout)
 
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    def test_committed_program_snapshot_rejects_extended_acl(self) -> None:
+        self._write_sources("snapshot-acl")
+        coordinator = self._coordinator("snapshot-acl")
+        lease = transport.TransportLease.from_dict(
+            self._first_lease(coordinator)["transport_lease"]
+        )
+        snapshot_path = Path(lease.command_argv[10])
+        self._add_darwin_acl(snapshot_path)
+        try:
+            rejected = subprocess.run(
+                lease.command_argv,
+                capture_output=True,
+                env={**os.environ, "HOME": str(self.home)},
+            )
+        finally:
+            self._remove_darwin_acl(snapshot_path)
+
+        self.assertNotEqual(0, rejected.returncode)
+        self.assertIn(b"snapshot authentication failed", rejected.stderr)
+
     def test_program_hash_rejects_path_replacement_after_fd_open(self) -> None:
         component = self.root / "program-component.py"
         replacement = self.root / "program-component-replacement.py"
@@ -4925,6 +5043,59 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 role="writable_component",
                 allow_missing=False,
             )
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    def test_program_hash_rejects_extended_acl_and_late_acl_drift(self) -> None:
+        component = self.root / "acl-program-component.py"
+        component.write_bytes(b"A" * (128 * 1024))
+        os.chmod(component, 0o600)
+
+        self._add_darwin_acl(component)
+        try:
+            with self.assertRaisesRegex(
+                transport.TransportValidationError,
+                "unsafe access policy",
+            ):
+                transport._program_component(
+                    component,
+                    role="acl_component",
+                    allow_missing=False,
+                )
+        finally:
+            self._remove_darwin_acl(component)
+
+        real_read = transport_program._read_program_component
+        read_count = 0
+
+        def add_acl_after_first_read(*args, **kwargs):
+            nonlocal read_count
+            retained = real_read(*args, **kwargs)
+            read_count += 1
+            if read_count == 1:
+                self._add_darwin_acl(component)
+            return retained
+
+        try:
+            with (
+                mock.patch.object(
+                    transport_program,
+                    "_read_program_component",
+                    side_effect=add_acl_after_first_read,
+                ),
+                self.assertRaisesRegex(
+                    transport.TransportValidationError,
+                    "unsafe access policy",
+                ),
+            ):
+                transport._program_component(
+                    component,
+                    role="late_acl_component",
+                    allow_missing=False,
+                )
+        finally:
+            self._remove_darwin_acl(component)
+
+        self.assertEqual(2, read_count)
 
     def test_program_hash_rejects_permission_drift_after_fd_open(self) -> None:
         component = self.root / "permission-drift-component.py"

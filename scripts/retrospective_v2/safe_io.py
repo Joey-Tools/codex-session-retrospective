@@ -16,12 +16,20 @@ import tempfile
 import time
 from typing import Any, Callable, Mapping, Sequence
 
-from .contracts import (
-    JsonValue,
-    StrictJsonError,
-    canonical_json_bytes,
-    strict_json_loads,
-)
+try:
+    from .contracts import (
+        JsonValue,
+        StrictJsonError,
+        canonical_json_bytes,
+        strict_json_loads,
+    )
+except (ImportError, ModuleNotFoundError):
+    from contracts import (  # type: ignore[no-redef]
+        JsonValue,
+        StrictJsonError,
+        canonical_json_bytes,
+        strict_json_loads,
+    )
 
 
 OWNER_DIRECTORY_MODE = 0o700

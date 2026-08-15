@@ -1174,6 +1174,20 @@ class DurablePublicationTests(unittest.TestCase):
     def tearDown(self) -> None:
         self.temporary.cleanup()
 
+    def _add_darwin_acl(self, path: Path, entry: str = "everyone allow write") -> None:
+        subprocess.run(
+            ["/bin/chmod", "+a", entry, os.fspath(path)],
+            check=True,
+            capture_output=True,
+        )
+
+    def _remove_darwin_acl(self, path: Path) -> None:
+        subprocess.run(
+            ["/bin/chmod", "-N", os.fspath(path)],
+            check=True,
+            capture_output=True,
+        )
+
     def test_history_authority_and_provider_reject_non_branch_targets(self) -> None:
         run_command(["git", "tag", "release"], cwd=self.repo)
         for target_ref in ("HEAD", "refs/tags/release", "refs/heads/main..bad"):
@@ -3682,6 +3696,53 @@ class DurablePublicationTests(unittest.TestCase):
                 self.adapter._git(("rev-parse", "HEAD"))
         finally:
             config_path.write_bytes(original)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    def test_history_reader_and_publisher_reject_config_extended_acl(self) -> None:
+        config_path = self.repo / ".git" / "config"
+        self._add_darwin_acl(config_path)
+        try:
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "owner-controlled",
+            ):
+                self.publication_adapter()
+            with self.assertRaisesRegex(
+                authority.HistoryValidationError,
+                "local safety admission",
+            ):
+                authority._GitRepository(
+                    self.repo,
+                    gnupg_home=self.gnupg_home,
+                    git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+                    gpg_program=self.gpg,
+                )
+        finally:
+            self._remove_darwin_acl(config_path)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    def test_history_reader_and_publisher_reject_late_config_acl(self) -> None:
+        repository = authority._GitRepository(
+            self.repo,
+            gnupg_home=self.gnupg_home,
+            git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+            gpg_program=self.gpg,
+        )
+        config_path = self.repo / ".git" / "config"
+        self._add_darwin_acl(config_path)
+        try:
+            with self.assertRaisesRegex(
+                authority.HistoryValidationError,
+                "safety binding changed",
+            ):
+                repository.text("rev-parse", "HEAD")
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "owner-controlled",
+            ):
+                self.adapter._git(("rev-parse", "HEAD"))
+        finally:
+            self._remove_darwin_acl(config_path)
 
     def test_history_git_uses_admitted_directories_after_path_replacement(self) -> None:
         repository = authority._GitRepository(
