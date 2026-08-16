@@ -380,8 +380,12 @@ BOUNDED_MODULE_LINES = {
     "orchestrator_support.py": 600,
     "orchestrator_transport.py": 1_100,
     "orchestrator_state.py": 300,
+    "publication_abort_authority.py": 300,
+    "publication_abort_replay.py": 200,
+    "publication_cli_adapter.py": 75,
     "publication_contracts.py": 1_350,
-    "publication_claims.py": 200,
+    "publication_claims.py": 300,
+    "raw_cleanup_state.py": 100,
     "retained_export_binding.py": 100,
     "retained_export_coordination.py": 250,
     "publication_git.py": 1_100,
@@ -1173,8 +1177,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the sidecar/checkpoint race handling exact with four branches of slack.
-        self.assertEqual(8_656, branch_total)
-        self.assertLessEqual(branch_total, 8_660)
+        self.assertEqual(8_722, branch_total)
+        self.assertLessEqual(branch_total, 8_722)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

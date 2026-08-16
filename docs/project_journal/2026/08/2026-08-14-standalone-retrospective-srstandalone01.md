@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-15
+updated: 2026-08-16
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -36,9 +36,10 @@ superseded_by:
   re-derives that source reference from the authenticated witness and rejects
   relabeling of non-target, unresolved, or exact-target evidence into another
   accounting class.
-- Private sync, installed release changes, workspace registry changes, and the
-  legacy deletion PR are intentionally out of scope until this repository is
-  complete.
+- The superseded old-repository implementation and prior installed/scheduled
+  copy are retired. This repository is the only canonical source.
+- Workspace registration follows this source merge. A replacement private sync
+  and installed release are intentionally deferred to a separate workstream.
 
 ## Validation
 
@@ -261,13 +262,91 @@ superseded_by:
 - Ruff 0.13.2 lint and changed-file formatting, both workflows under
   `actionlint`, the installed OpenAI skill validator, and `git diff --check`
   pass on the frozen implementation tree.
+- A fresh-context Codex review of `a3836660..c490b096` found two terminal
+  recovery gaps: authenticated aborted publications retained raw inputs
+  forever, and the aborted checkpoint discarded its claim before a lost CLI
+  response could retry.
+- The follow-up retains the exact publication claim through aborted finalize
+  acknowledgement, validates the durable abort journal and attempt-bound
+  terminal sidecar before claiming raw cleanup, and records a distinct
+  identity-authenticated `expired_aborted` cleanup disposition. Completed raw
+  cleanup removes the nonformal durable candidate while preserving an
+  authenticated cleanup claim and receipt for idempotent replay.
+- The new integration regression covers lost aborted-checkpoint responses with
+  both a present and already-collected retained bundle, then proves raw input
+  removal after the seven-day deadline. The exact integration passes 1/1 in
+  40.629 seconds; the terminal-binding and unauthenticated-abort fail-closed
+  regressions pass 2/2, and six adjacent publication, preclaim, committed-GC,
+  and ordinary expired-cleanup regressions pass 6/6 in 123.740 seconds.
+- The first full follow-up attempt is non-counting. Shards 1 and 3 passed
+  430/430 and 359/359, while shard 0 exposed one migrated assertion that still
+  expected an aborted acknowledgement to discard its retry claim and shard 2
+  exposed the lifecycle line budget plus the exact branch proxy. The behavior
+  assertion now requires same-claim idempotent replay. Abort/GC coordination
+  moved into bounded `publication_claims.py` and `raw_cleanup_state.py` owners;
+  `orchestrator_lifecycle.py` is 3,321 lines under its 3,325-line ceiling, and
+  the exact branch proxy is 8,669 with four branches of slack.
+- The final reviewer-fix focused matrix passes 6/6 in 75.339 seconds, covering
+  the attempt-bound terminal sidecar, lost abort response replay, pre-reservation
+  abort recovery, unauthenticated abort retention, and both architecture gates.
+  Final Python 3.13 discovery covers all 1,606 tests exactly once: shards 0
+  through 3 pass 378/378 in 863.602 seconds, 430/430 in 693.663 seconds,
+  439/439 in 724.989 seconds, and 359/359 in 755.340 seconds.
 
-## Acceptance
+## Final Separation State
 
-- Python 3.13 focused and full repository tests pass.
+- The implementation is logically separated: this repository is the canonical
+  source and its v1 and v2 CLIs start directly from the repository root under
+  Python 3.13 without importing or reading implementation files from
+  `codex-workflow-hygiene`.
+- The repository has its own public GitHub remote, standalone root layout,
+  tests, workflows, guidance, and project journal. It has no tracked symlink,
+  submodule, or runtime path dependency back to the old repository.
+- Remaining `codex-workflow-hygiene` references are migration provenance or
+  synthetic redaction fixtures. They are not runtime dependencies.
+- Original implementation PRs
+  [`codex-workflow-hygiene#67`](https://github.com/Joey-Tools/codex-workflow-hygiene/pull/67)
+  and
+  [`codex-workflow-hygiene#69`](https://github.com/Joey-Tools/codex-workflow-hygiene/pull/69)
+  are closed without merge. Their signed history remains available.
+- The legacy implementation was removed from `codex-workflow-hygiene` through
+  its dedicated removal PR after extraction. The prior installed and scheduled
+  copy was retired independently; no replacement sync is part of this source
+  PR.
+- Terminal retry preserves the original machine-classified exception when its
+  terminal replay also fails. Aborted and expired checkpoints cannot authorize
+  reconstruction of an active publication journal, while a matching durable
+  aborted journal remains recoverable.
+- Persistent checkpoint-claim validation is owned by bounded
+  `publication_claims.py`; the core publication aggregate and per-module line
+  budgets remain below their existing ceilings.
+- The final implementation-focused matrix passes 1/1 for aborted journal
+  reconstruction and 2/2 for the exact architecture budgets. Complete Python
+  3.13 discovery covers all 1,617 tests exactly once: shards 0 through 3 pass
+  382/382 in 1,055.667 seconds, 431/431 in 815.379 seconds, 444/444 in 910.517
+  seconds, and 360/360 in 873.137 seconds.
+- Two final read-only pre-commit explorer attempts produced no terminal
+  artifact within their 15- and 10-minute bounds and were stopped as
+  inconclusive. They supply no review result; the exact frozen-head Codex
+  review remains an independent delivery gate.
+- Ruff lint, changed-file formatting, both workflows under `actionlint`, the
+  installed skill validator, project-journal validation, CI/skill contracts
+  11/11, and `git diff --check` are clean on the final source tree.
+
+## Follow-up Work
+
+1. Register `Joey-Tools/codex-session-retrospective` in `codex-workspace` after
+   the standalone source PR merges.
+2. Design and review replacement private sync and installed-release
+   integration as a separate workstream.
+
+## Acceptance Criteria
+
+- Python 3.13 focused and full repository tests pass on the final committed
+  tree.
 - Source/session classification is receipt-bound and cannot silently discard
   the exact Session target.
 - The skill and CLI contracts use the standalone root layout.
 - Exact-secret admission, the required local Codex processor, hosted CI, and
   current-head GitHub Codex evidence pass for the final PR head.
-- The signed source PR merges without changing any private sync repository.
+- The signed source PR remains independent of replacement private sync work.

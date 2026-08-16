@@ -71,6 +71,8 @@ from retrospective_v2 import executable_authority as executable_authority_api  #
 from retrospective_v2 import finalize as finalize_api  # noqa: E402
 from retrospective_v2 import identity as identity_api  # noqa: E402
 from retrospective_v2 import orchestrator as orchestrator_api  # noqa: E402
+from retrospective_v2 import publication_abort_replay  # noqa: E402
+from retrospective_v2 import publication_cli_adapter  # noqa: E402
 from retrospective_v2 import reporting as reporting_api  # noqa: E402
 from retrospective_v2 import result_validation as result_validation_api  # noqa: E402
 from retrospective_v2 import safe_io  # noqa: E402
@@ -1525,7 +1527,11 @@ def _publication_destination(state: Mapping[str, Any]) -> str:
     return f"runs/{mode}/{window_name}/{run_digest}"
 
 
-def command_finalize(args: argparse.Namespace) -> CommandResult:
+def _command_finalize_once(
+    args: argparse.Namespace,
+    *,
+    terminal_only: bool = False,
+) -> CommandResult | None:
     run_dir = _absolute_path(args.run_dir)
     identity_path = _command_identity_path(args)
     if identity_path is None:
@@ -1549,19 +1555,16 @@ def command_finalize(args: argparse.Namespace) -> CommandResult:
             code="invalid_publication_state",
             message="the run publication state is invalid",
         )
+    terminal_replay = publication_abort_replay.replay_terminal_finalize(
+        run_dir,
+        run_state,
+        mark_finalized=orchestrator.mark_finalized,
+    )
+    if terminal_replay is not None:
+        return CommandResult.success("finalize", terminal_replay)
+    if terminal_only:
+        return None
     phase = publication.get("phase")
-    if run_state.get("stage") == contract_api.RunStage.COMPLETE.value:
-        return CommandResult.success(
-            "finalize",
-            {
-                "action": "finalize",
-                "cleanup_pending": False,
-                "idempotent": True,
-                "publication_phase": phase,
-                "run_ref": run_state.get("run_ref"),
-                "stage": run_state.get("stage"),
-            },
-        )
     if phase in ("published_cleanup_pending", "published_cleanup_claimed"):
         claim = publication.get("publication_claim")
         attempt_ref = claim.get("attempt_ref") if isinstance(claim, Mapping) else None
@@ -1610,33 +1613,11 @@ def command_finalize(args: argparse.Namespace) -> CommandResult:
             code="publication_authority_invalid",
             message="the persisted publication authority is invalid",
         )
-    try:
-        publisher_gpg_authority = executable_authority_api.resolve_executable(
-            publisher_gpg_program,
-            label="GPG",
-        )
-        executable_authority_api.require_authority_digest(
-            publisher_gpg_authority,
-            publisher_gpg_authority_sha256,
-        )
-    except executable_authority_api.ExecutableAuthorityError as error:
-        raise CliContractError(
-            exit_code=ExitCode.SECURITY,
-            code="publication_authority_invalid",
-            message="the persisted publisher GPG authority is no longer valid",
-        ) from error
-    adapter = finalize_api.LocalGitPublicationAdapter(
-        history_repo,
-        provider_state,
-        signing_key=str(binding.get("publisher_fingerprint", "")),
-        gnupg_home=_absolute_path(str(binding.get("publisher_gnupg_home", ""))),
-        expected_signer_uid=finalize_api.DEFAULT_PUBLISHER_UID,
-        signing_program=publisher_gpg_authority.path,
-        expected_signing_authority_sha256=publisher_gpg_authority_sha256,
-    )
     journal = run_dir / PUBLICATION_JOURNAL_NAME
     destination = _publication_destination(run_state)
     expected_history_commit = history_snapshot["history_commit"]
+    local_transaction_state = None
+    claim_result = None
     if journal.exists() or journal.is_symlink():
         local_transaction_state = (
             finalize_api.PublicationTransaction.inspect_local_for_run(
@@ -1654,6 +1635,19 @@ def command_finalize(args: argparse.Namespace) -> CommandResult:
             local_transaction_state["plan_digest"],
             bundle_dir=bundle_dir,
         )
+    try:
+        adapter = publication_cli_adapter.build(
+            binding,
+            history_repo,
+            provider_state,
+        )
+    except executable_authority_api.ExecutableAuthorityError as error:
+        raise CliContractError(
+            exit_code=ExitCode.SECURITY,
+            code="publication_authority_invalid",
+            message="the persisted publisher GPG authority is no longer valid",
+        ) from error
+    if local_transaction_state is not None:
         transaction = finalize_api.PublicationTransaction.open(
             journal,
             adapter=adapter,
@@ -1742,6 +1736,13 @@ def command_finalize(args: argparse.Namespace) -> CommandResult:
             "stage": run_result.get("stage"),
             "transaction_phase": transaction_state["phase"],
         },
+    )
+
+
+def command_finalize(args: argparse.Namespace) -> CommandResult:
+    return publication_abort_replay.run_with_terminal_retry(
+        lambda terminal_only: _command_finalize_once(args, terminal_only=terminal_only),
+        (CliContractError, *(pair[0] for pair in _EXCEPTION_REASON_CODES)),
     )
 
 

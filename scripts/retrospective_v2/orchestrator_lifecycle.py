@@ -16,7 +16,9 @@ from . import (
     executable_authority,
     export as retained_export_api,
     finalize,
+    publication_abort_authority,
     publication_claims,
+    raw_cleanup_state,
     reporting,
     retained_export_coordination as retained_exports,
     retained_inputs,
@@ -671,9 +673,14 @@ class RunLifecycleOperations(OrchestratorComponent):
             publication = current["publication"]
             phase = publication.get("phase")
             if phase == "expired_cleanup_complete":
+                completed_disposition = (
+                    publication_claims.completed_expired_cleanup_disposition(
+                        publication
+                    )
+                )
                 self._validate_completed_raw_cleanup(
                     current,
-                    disposition="expired_unpublished",
+                    disposition=completed_disposition,
                 )
                 current["retained_export"] = None
                 return current, {"disposition": "expired_complete"}
@@ -686,7 +693,45 @@ class RunLifecycleOperations(OrchestratorComponent):
                 return current, {"disposition": "published"}
             if phase in {"shadow_cleanup_pending", "shadow_cleanup_claimed"}:
                 return current, {"disposition": "shadow"}
+            existing = publication.get("expired_cleanup_claim")
+            if phase == "expired_cleanup_claimed":
+                if not isinstance(existing, Mapping):
+                    raise RunConflictError("expired cleanup claim is malformed")
+                verified = publication_claims.validate_expired_cleanup_replay(
+                    current,
+                    existing,
+                    locked_staging_dir=locked_staging_dir,
+                    retention_binding=retention_binding,
+                    resolve_abort=self._resolve_aborted_publication_authority,
+                    validate_binding=retained_exports.validate_aborted_export_binding,
+                    validate_raw_cleanup=self._validate_raw_cleanup_claim,
+                )
+                return current, {
+                    "claim": verified,
+                    "disposition": "claimed",
+                }
             publication_claim = publication.get("publication_claim")
+            if phase == "aborted":
+                try:
+                    claim_value = publication_claims.claim_expired_aborted_cleanup(
+                        current,
+                        locked_staging_dir=locked_staging_dir,
+                        retention_binding=retention_binding,
+                        inventory=self._raw_cleanup_inventory(),
+                        resolve_abort=self._resolve_aborted_publication_authority,
+                        validate_binding=retained_exports.validate_aborted_export_binding,
+                        build_raw_cleanup_claim=self._raw_cleanup_claim_value,
+                    )
+                except RunConflictError:
+                    if publication_claim is None:
+                        return current, {
+                            "disposition": "publication_binding_unverified"
+                        }
+                    raise
+                return current, {
+                    "claim": claim_value,
+                    "disposition": "claimed",
+                }
             if publication_claim is not None:
                 self._validate_publication_claim(current, publication_claim)
                 return current, {
@@ -704,22 +749,6 @@ class RunLifecycleOperations(OrchestratorComponent):
                     )
                     if classification != "exported":
                         return current, {"disposition": classification}
-            existing = publication.get("expired_cleanup_claim")
-            if phase == "expired_cleanup_claimed":
-                if not isinstance(existing, Mapping):
-                    raise RunConflictError("expired cleanup claim is malformed")
-                verified = self._validate_raw_cleanup_claim(
-                    current,
-                    existing,
-                    disposition="expired_unpublished",
-                    durable_commit=None,
-                    phase_before=str(existing.get("phase_before")),
-                    publication_claim_ref=None,
-                )
-                return current, {
-                    "claim": verified,
-                    "disposition": "claimed",
-                }
             inventory = self._raw_cleanup_inventory()
             claim_value = self._raw_cleanup_claim_value(
                 current,
@@ -844,10 +873,15 @@ class RunLifecycleOperations(OrchestratorComponent):
             durable_claim = self._validate_raw_cleanup_claim(
                 current,
                 cleanup_claim,
-                disposition="expired_unpublished",
+                disposition=cleanup_claim["disposition"],
                 durable_commit=None,
                 phase_before=cleanup_claim["phase_before"],
-                publication_claim_ref=None,
+                publication_claim_ref=cleanup_claim["publication_claim_ref"],
+            )
+            publication_claims.validate_aborted_cleanup_close(
+                current,
+                cleanup_claim,
+                resolve_abort=self._resolve_aborted_publication_authority,
             )
             inventory = self._raw_cleanup_inventory(cleanup_claim["raw_path_inventory"])
             if any(
@@ -858,47 +892,10 @@ class RunLifecycleOperations(OrchestratorComponent):
                     "raw working paths reappeared before expired cleanup commit"
                 )
             cleanup = self._raw_cleanup_receipt_value(durable_claim)
-            current["jobs"] = {}
-            current["extracted_turns"] = {}
-            current["episodes"] = []
-            current["retained_export"] = None
-            current["actions"] = {}
-            current["source"].update(
-                {
-                    "catalog": None,
-                    "materialization": None,
-                    "model_era_by_unit": {},
-                    "model_eras_by_session": {},
-                    "reassembly": {},
-                    "shards": {},
-                }
-            )
-            for cells in current["source"]["cells"].values():
-                for cell in cells.values():
-                    cell.pop("accepted_input_digest", None)
-                    cell.update(
-                        {
-                            "lease_ref": None,
-                            "manifest": None,
-                            "metrics": {"byte_count": 0, "record_count": 0},
-                            "payloads": {},
-                            "snapshot_ref": None,
-                            "status": SourceCellStatus.GAP.value,
-                            "transport_receipt": None,
-                            "transport_receipt_ref": None,
-                            "transport_status": SourceCellStatus.GAP.value,
-                        }
-                    )
-            publication.update(
-                {
-                    "bundle_digest": None,
-                    "cleanup_receipt": cleanup,
-                    "durable_state": None,
-                    "exported_at": None,
-                    "finalized_at": self._state._now(),
-                    "phase": "expired_cleanup_complete",
-                    "retention_deadline": None,
-                }
+            raw_cleanup_state.complete_expired_raw_cleanup(
+                current,
+                cleanup_receipt=cleanup,
+                finalized_at=self._state._now(),
             )
             self._state._block(current, "raw_retention_expired")
             return current, {"cleaned": True, "eligible": True}
@@ -2037,8 +2034,30 @@ class RunLifecycleOperations(OrchestratorComponent):
             snapshot = self.store.read()
             state = snapshot.state
             self._state._assert_state_identity(state)
-            publication_claim = state["publication"].get("publication_claim")
-            if publication_claim is not None:
+            publication = state["publication"]
+            publication_phase = publication.get("phase")
+            publication_claim = publication.get("publication_claim")
+            cleanup_claim = publication.get("expired_cleanup_claim")
+            replay_authority: Mapping[str, Any] | None = None
+            if (
+                phase == "aborted"
+                and publication_phase == "expired_cleanup_complete"
+                and isinstance(cleanup_claim, Mapping)
+                and cleanup_claim.get("disposition") == "expired_aborted"
+            ):
+                recovered = self._validate_completed_aborted_publication_authority(
+                    state
+                )
+                replay_authority = recovered
+                publication_abort_authority.validate_acknowledgement(
+                    self.identity,
+                    state,
+                    recovered,
+                    attempt_ref=attempt_ref,
+                    claim_revision=claim_revision,
+                    plan_digest=plan_digest,
+                )
+            elif publication_claim is not None:
                 verified_claim = self._validate_publication_claim(
                     state, publication_claim
                 )
@@ -2051,10 +2070,28 @@ class RunLifecycleOperations(OrchestratorComponent):
                         "finalize acknowledgement does not match publication claim"
                     )
                 if phase == "aborted":
-                    self._validate_aborted_publication_authority(
+                    replay_authority = self._validate_aborted_publication_authority(
                         state,
                         verified_claim,
                     )
+            elif phase == "aborted" and (
+                publication_phase == "aborted"
+                or (
+                    publication_phase == "expired_cleanup_claimed"
+                    and isinstance(cleanup_claim, Mapping)
+                    and cleanup_claim.get("disposition") == "expired_aborted"
+                )
+            ):
+                recovered = self._resolve_aborted_publication_authority(state)
+                replay_authority = recovered
+                publication_abort_authority.validate_acknowledgement(
+                    self.identity,
+                    state,
+                    recovered,
+                    attempt_ref=attempt_ref,
+                    claim_revision=claim_revision,
+                    plan_digest=plan_digest,
+                )
             elif any(
                 value is not None
                 for value in (attempt_ref, claim_revision, plan_digest)
@@ -2068,12 +2105,6 @@ class RunLifecycleOperations(OrchestratorComponent):
                 current: dict[str, Any],
             ) -> tuple[dict[str, Any], dict[str, Any]]:
                 self._state._assert_state_identity(current)
-                if current["stage"] not in {
-                    RunStage.EXPORT.value,
-                    RunStage.FINALIZE.value,
-                    RunStage.COMPLETE.value,
-                }:
-                    raise InvalidTransitionError("run is not in publication")
                 publication = current["publication"]
                 current_claim = publication.get("publication_claim")
                 if publication_claim is not None:
@@ -2084,17 +2115,28 @@ class RunLifecycleOperations(OrchestratorComponent):
                     self._validate_publication_claim(current, current_claim)
                 elif current_claim is not None:
                     raise RunConflictError("publication claim appeared during finalize")
+                if publication_abort_authority.acknowledgement_is_idempotent(
+                    publication,
+                    phase,
+                ):
+                    value: dict[str, Any] = {"idempotent": True, "phase": phase}
+                    if replay_authority is not None:
+                        value["attempt_ref"] = replay_authority["attempt_ref"]
+                        value["transaction_phase"] = "aborted"
+                    return current, value
+                if current["stage"] not in {
+                    RunStage.EXPORT.value,
+                    RunStage.FINALIZE.value,
+                    RunStage.COMPLETE.value,
+                }:
+                    raise InvalidTransitionError("run is not in publication")
                 if (
                     phase not in {"aborted", "committed"}
                     and current_claim is None
                     and self._state._retention_expired(current)
                 ):
                     raise InvalidTransitionError("retention deadline expired")
-                if phase == "committed" and publication.get("phase") == "complete":
-                    return current, {"idempotent": True, "phase": phase}
                 publication.pop("expired_cleanup_claim", None)
-                if phase == "aborted":
-                    publication.pop("publication_claim", None)
                 publication["phase"] = (
                     "published_cleanup_pending" if phase == "committed" else phase
                 )
@@ -2121,89 +2163,46 @@ class RunLifecycleOperations(OrchestratorComponent):
         state: Mapping[str, Any],
         claim: Mapping[str, Any],
     ) -> dict[str, Any]:
-        journal = self.run_dir / finalize.PUBLICATION_JOURNAL_NAME
-        try:
-            transaction = finalize.PublicationTransaction.inspect_local(journal)
-            if transaction.get("phase") != finalize.PublicationPhase.ABORTED.value:
-                raise RunConflictError(
-                    "publication abort journal is not durably complete"
-                )
-            plan = transaction.get("plan")
-            inventory_value = transaction.get("inventory")
-            receipts = transaction.get("receipts")
-            if (
-                not isinstance(plan, Mapping)
-                or not isinstance(inventory_value, Mapping)
-                or not isinstance(receipts, Mapping)
-            ):
-                raise RunConflictError(
-                    "publication abort journal lacks its durable plan or receipts"
-                )
-            inventory = finalize.ArtifactInventory.from_dict(inventory_value)
-            cleanup = receipts.get("cleanup")
-            release = receipts.get("reservation_release")
-            abort_commitment = receipts.get("abort_commitment")
-            if not all(
-                isinstance(value, Mapping)
-                for value in (cleanup, release, abort_commitment)
-            ):
-                raise RunConflictError(
-                    "publication abort journal lacks complete cleanup evidence"
-                )
-            verified_abort = finalize.verify_publication_abort_commitment(
-                self.identity,
-                abort_commitment,
-            )
-        except (OSError, ValueError, finalize.PublicationError) as error:
-            if isinstance(error, RunConflictError):
-                raise
-            raise RunConflictError("publication abort authority is invalid") from error
-
-        publication = state["publication"]
-        durable_state = publication.get("durable_state")
-        publication_authority = plan.get("publication_authority")
-        if not isinstance(durable_state, Mapping) or not isinstance(
-            publication_authority, Mapping
-        ):
-            raise RunConflictError(
-                "publication abort does not bind the complete durable candidate"
-            )
-        durable_state_digest = self.identity.derive_digest(
-            "publication-claim-durable-state/v2",
-            copy.deepcopy(dict(durable_state)),
+        return publication_abort_authority.validate(
+            self.run_dir,
+            self.identity,
+            state,
+            claim,
         )
-        if (
-            transaction.get("attempt_ref") != claim["attempt_ref"]
-            or transaction.get("plan_digest") != claim["plan_digest"]
-            or plan.get("attempt_ref") != claim["attempt_ref"]
-            or plan.get("expected_target_head") != claim["expected_history_commit"]
-            or plan.get("target_ref") != claim["history_target_ref"]
-            or plan.get("inventory_digest_v2") != inventory.inventory_digest_v2
-            or inventory.retained_bundle_digest_v2 != claim["bundle_digest"]
-            or publication.get("bundle_digest") != claim["bundle_digest"]
-            or durable_state_digest != claim["durable_state_digest"]
-            or publication_authority.get("candidate_digest") != claim["bundle_digest"]
-            or canonical_json_bytes(publication_authority.get("proposed_durable_state"))
-            != canonical_json_bytes(dict(durable_state))
-            or verified_abort["attempt_ref"] != claim["attempt_ref"]
-            or verified_abort["plan_digest"] != claim["plan_digest"]
-            or verified_abort["inventory_digest"] != inventory.inventory_digest_v2
-            or verified_abort["publication_claim_ref"] != claim["receipt_ref"]
-            or verified_abort["run_ref"] != state["run_ref"]
-            or verified_abort["cleanup_receipt_ref"] != cleanup.get("receipt_ref")
-            or verified_abort["reservation_release_receipt_ref"]
-            != release.get("receipt_ref")
-            or release.get("cleanup_receipt_ref") != cleanup.get("receipt_ref")
-            or release.get("cleanup_claim_ref") != cleanup.get("cleanup_claim_ref")
-            or release.get("reservations_released") is not True
-            or cleanup.get("objects_cleaned") is not True
-            or cleanup.get("formal_reachable") is not False
-            or cleanup.get("provisional_reachable") is not False
-        ):
-            raise RunConflictError(
-                "publication abort journal does not bind this exact run claim"
-            )
-        return verified_abort
+
+    def _resolve_aborted_publication_authority(
+        self,
+        state: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        raw_claim = state["publication"].get("publication_claim")
+        claim = (
+            None
+            if raw_claim is None
+            else self._validate_publication_claim(state, raw_claim)
+        )
+        return publication_abort_authority.validate(
+            self.run_dir,
+            self.identity,
+            state,
+            claim,
+        )
+
+    def _validate_completed_aborted_publication_authority(
+        self,
+        state: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        self._validate_completed_raw_cleanup(
+            state,
+            disposition="expired_aborted",
+        )
+        cleanup_claim = state["publication"].get("expired_cleanup_claim")
+        assert isinstance(cleanup_claim, Mapping)
+        return publication_abort_authority.validate_completed(
+            self.run_dir,
+            self.identity,
+            state,
+            cleanup_claim,
+        )
 
     def _authenticated_run_receipt(
         self,
@@ -2563,6 +2562,8 @@ class RunLifecycleOperations(OrchestratorComponent):
                 raise InvalidTransitionError(
                     "published cleanup claim lost publication authority"
                 )
+        elif disposition == "expired_aborted":
+            raw_cleanup_state.validate_completed_aborted_cleanup_claim(claim)
         elif (
             claim.get("durable_commit") is not None
             or claim.get("publication_claim_ref") is not None

@@ -85,6 +85,26 @@ def validate_preclaim_export_binding(
         )
 
 
+def validate_aborted_export_binding(
+    state: Mapping[str, Any],
+    binding: Mapping[str, Any],
+    *,
+    bundle_dir: Path,
+    publication_claim: Mapping[str, Any],
+) -> None:
+    validate_retained_export_identity(state, binding, bundle_dir=bundle_dir)
+    if (
+        binding.get("status") != "publication_terminal"
+        or binding.get("terminal_disposition") != "aborted"
+        or binding.get("publication_attempt_ref")
+        != publication_claim.get("attempt_ref")
+        or not isinstance(binding.get("terminal_at"), str)
+    ):
+        raise RunConflictError(
+            "aborted retained export does not match the authenticated run claim"
+        )
+
+
 def classify_retained_export_for_gc(
     state: Mapping[str, Any],
     binding: Mapping[str, Any],

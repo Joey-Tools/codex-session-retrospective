@@ -19,7 +19,8 @@ not own SSH host registry or private overlay installation.
 
 ## Installed Entry Point
 
-After private sync integration, the supported coordinator path is:
+After a future private sync integration, the supported installed coordinator
+path will be:
 
 ```bash
 python3 -I -B -S "$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py" --help
@@ -53,7 +54,8 @@ stable, disjoint test-ID shards under explicit job timeouts.
 ## Migration State
 
 The implementation was extracted from the closed
-`Joey-Tools/codex-workflow-hygiene` PRs #67 and #69. The old repository remains
-unchanged until this standalone implementation is complete and a later sync
-phase has installed it successfully. See
+`Joey-Tools/codex-workflow-hygiene` PRs #67 and #69. The superseded source was
+removed from that repository after extraction, and the prior installed and
+scheduled copy was retired. This repository is now the only canonical source;
+a new private sync and installed entry point remain a separate future phase. See
 [`docs/migration-provenance.md`](docs/migration-provenance.md).

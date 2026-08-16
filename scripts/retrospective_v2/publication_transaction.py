@@ -10,6 +10,7 @@ from typing import Any
 from . import authority
 from .checkpoints import canonical_json_bytes
 from .identity import IdentityKey
+from .publication_claims import validate_persistent_publication_claim
 
 from .publication_support import (
     AppendOnlyViolation,
@@ -57,7 +58,6 @@ from .publication_support import (
     _validate_event_chain,
     _validate_optional_ref,
     _validate_optional_ref_state,
-    _validate_persistent_publication_claim,
     _validate_phase_receipts,
     _validate_ref,
     _validate_ref_state,
@@ -204,11 +204,10 @@ class PublicationTransaction:
                     raise PublicationRejected(
                         "publication claim callback returned an invalid result"
                     )
-                _validate_persistent_publication_claim(
+                validate_persistent_publication_claim(
                     run_dir=authoritative_run_dir,
                     identity_path=authoritative_identity_path,
-                    attempt_ref=attempt,
-                    plan_digest=plan_digest,
+                    transaction_state=state,
                 )
                 if failure_injector is not None:
                     failure_injector(
@@ -419,11 +418,10 @@ class PublicationTransaction:
             raise AttemptMismatchError(
                 "publication journal does not belong to the current run"
             )
-        _validate_persistent_publication_claim(
+        validate_persistent_publication_claim(
             run_dir=run_dir,
             identity_path=identity_path,
-            attempt_ref=state["attempt_ref"],
-            plan_digest=state["plan_digest"],
+            transaction_state=state,
         )
 
     @property
@@ -943,11 +941,10 @@ class PublicationTransaction:
                 "publication authority",
             )
         )
-        return _validate_persistent_publication_claim(
+        return validate_persistent_publication_claim(
             run_dir=Path(binding["run_dir"]),
             identity_path=Path(binding["identity_path"]),
-            attempt_ref=self.attempt_ref,
-            plan_digest=self._state["plan_digest"],
+            transaction_state=self._state,
         )
 
     def _load_publication_authority_state(

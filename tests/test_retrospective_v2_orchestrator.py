@@ -6721,6 +6721,10 @@ class OrchestratorTests(unittest.TestCase):
             exported.ensure_retention_active()
         aborted = exported.mark_finalized("aborted")
         self.assertEqual("aborted", aborted["publication"]["phase"])
+        unverified = exported.gc_expired_raw()
+        self.assertFalse(unverified["cleaned"])
+        self.assertFalse(unverified["eligible"])
+        self.assertTrue(unverified["retained_publication"])
 
     def test_expired_retention_rejects_source_acceptance_before_mutation(self) -> None:
         coordinator = self.start_daily("expired-source-acceptance")
@@ -6815,7 +6819,19 @@ class OrchestratorTests(unittest.TestCase):
 
         raw_root.unlink()
         real_transaction = coordinator.store.transaction
+        delete_claimed = coordinator._delete_claimed_raw_paths
         response_lost = False
+
+        def reject_abort_during_ordinary_cleanup(cleanup_claim):
+            with self.assertRaises(InvalidTransitionError):
+                coordinator.mark_finalized("aborted")
+            claimed = coordinator.load_state()["publication"]
+            self.assertEqual("expired_cleanup_claimed", claimed["phase"])
+            self.assertEqual(
+                cleanup_claim,
+                claimed["expired_cleanup_claim"],
+            )
+            delete_claimed(cleanup_claim)
 
         def lose_expired_cleanup_response(*args, **kwargs):
             nonlocal response_lost
@@ -6829,10 +6845,17 @@ class OrchestratorTests(unittest.TestCase):
                 raise RuntimeError("lost expired cleanup response")
             return result
 
-        with mock.patch.object(
-            coordinator.store,
-            "transaction",
-            side_effect=lose_expired_cleanup_response,
+        with (
+            mock.patch.object(
+                coordinator,
+                "_delete_claimed_raw_paths",
+                side_effect=reject_abort_during_ordinary_cleanup,
+            ),
+            mock.patch.object(
+                coordinator.store,
+                "transaction",
+                side_effect=lose_expired_cleanup_response,
+            ),
         ):
             with self.assertRaisesRegex(RuntimeError, "lost expired cleanup response"):
                 coordinator.gc_expired_raw()

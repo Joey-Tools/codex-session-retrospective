@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import hmac
 import os
 import re
 import selectors
@@ -855,104 +854,6 @@ def _load_run_publication_authority(
         "policy_era": run_authority["policy_era"],
     }
     return binding, host_cursor_vector, episode_update
-
-
-def _validate_persistent_publication_claim(
-    *,
-    run_dir: Path,
-    identity_path: Path,
-    attempt_ref: str,
-    plan_digest: str,
-) -> dict[str, Any]:
-    identity = IdentityKey.load(identity_path)
-    snapshot = AtomicCheckpointStore(run_dir, identity=identity).read()
-    run_state = snapshot.state
-    publication = run_state.get("publication")
-    authority_binding = run_state.get("authority")
-    if not isinstance(publication, Mapping) or not isinstance(
-        authority_binding, Mapping
-    ):
-        raise PublicationRejected("run lacks a persistent publication claim")
-    try:
-        validate_run_source_authority(
-            identity,
-            run_state,
-            canonical_hosts=CANONICAL_HOSTS,
-        )
-    except RunStateAuthorityError as exc:
-        raise PublicationRejected(str(exc)) from exc
-    claim = publication.get("publication_claim")
-    fields = {
-        "attempt_ref",
-        "authentication_tag",
-        "bundle_digest",
-        "checkpoint_revision",
-        "durable_state_digest",
-        "expected_history_commit",
-        "history_target_ref",
-        "identity_key_id",
-        "plan_digest",
-        "receipt_ref",
-        "run_ref",
-        "schema",
-    }
-    if not isinstance(claim, Mapping) or set(claim) != fields:
-        raise PublicationRejected("run lacks a valid persistent publication claim")
-    checkpoint_revision = claim.get("checkpoint_revision")
-    durable_state = publication.get("durable_state")
-    history_snapshot = authority_binding.get("history_snapshot")
-    if (
-        not isinstance(checkpoint_revision, int)
-        or isinstance(checkpoint_revision, bool)
-        or checkpoint_revision < 1
-        or checkpoint_revision > snapshot.revision
-        or not isinstance(durable_state, Mapping)
-        or not isinstance(history_snapshot, Mapping)
-        or not isinstance(history_snapshot.get("history_commit"), str)
-    ):
-        raise PublicationRejected("publication claim checkpoint fence is invalid")
-    body = {
-        "attempt_ref": attempt_ref,
-        "bundle_digest": publication.get("bundle_digest"),
-        "checkpoint_revision": checkpoint_revision,
-        "durable_state_digest": identity.derive_digest(
-            "publication-claim-durable-state/v2",
-            dict(durable_state),
-        ),
-        "expected_history_commit": history_snapshot["history_commit"],
-        "history_target_ref": authority_binding.get("history_target_ref"),
-        "identity_key_id": identity.key_id,
-        "plan_digest": plan_digest,
-        "run_ref": run_state.get("run_ref"),
-        "schema": PUBLICATION_CLAIM_SCHEMA,
-    }
-    expected_ref = "publication_claim_v2:" + identity.derive_digest(
-        "publication_claim_v2", body
-    )
-    expected_auth = "publication_claim_auth_v2:" + identity.derive_digest(
-        "publication_claim_auth_v2", body
-    )
-    expected = {
-        **body,
-        "authentication_tag": expected_auth,
-        "receipt_ref": expected_ref,
-    }
-    if (
-        claim.get("attempt_ref") != attempt_ref
-        or claim.get("plan_digest") != plan_digest
-        or not isinstance(claim.get("receipt_ref"), str)
-        or _PUBLICATION_CLAIM_REF_RE.fullmatch(claim["receipt_ref"]) is None
-        or not isinstance(claim.get("authentication_tag"), str)
-        or _PUBLICATION_CLAIM_AUTH_RE.fullmatch(claim["authentication_tag"]) is None
-        or not hmac.compare_digest(
-            canonical_json_bytes(dict(claim)),
-            canonical_json_bytes(expected),
-        )
-    ):
-        raise PublicationRejected(
-            "publication claim does not match this checkpoint revision and transaction"
-        )
-    return deepcopy(expected)
 
 
 def _privacy_validate_bundle(

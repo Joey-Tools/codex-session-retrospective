@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import copy
 from contextlib import nullcontext
 from dataclasses import replace
@@ -26,6 +27,7 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import session_retrospective_v2 as cli_module  # noqa: E402
+import session_retrospective_v2_export as export_cli_api  # noqa: E402
 from retrospective_v2 import (  # noqa: E402
     authority,
     calibration,
@@ -34,11 +36,14 @@ from retrospective_v2 import (  # noqa: E402
     finalize as finalize_module,
     git_safety,
     orchestrator as orchestrator_module,
+    publication_abort_authority,
+    publication_abort_replay,
     publication_git_commits,
     publication_git_storage,
     publication_support,
     reporting,
     retained_export_binding,
+    retained_export_coordination,
     safe_io,
     transport,
 )
@@ -115,6 +120,120 @@ def run_command(
 
 
 class PublicationInvariantUnitTests(unittest.TestCase):
+    def test_abort_replay_response_uses_lifecycle_authority(self) -> None:
+        def mark_finalized(*_args, **_kwargs):
+            return {
+                "attempt_ref": "publication_attempt_v2:validated",
+                "publication": {"phase": "aborted"},
+                "run_ref": "run_v2:validated",
+                "stage": "export",
+                "transaction_phase": "aborted",
+            }
+
+        with mock.patch.object(
+            finalize_module.PublicationTransaction,
+            "inspect_local",
+            return_value={
+                "attempt_ref": "publication_attempt_v2:stale",
+                "phase": "created",
+                "plan_digest": "a" * 64,
+            },
+        ):
+            replay = publication_abort_replay.replay_terminal_abort(
+                Path("/private/tmp/retrospective-abort-replay"),
+                {"phase": "aborted"},
+                mark_finalized=mark_finalized,
+            )
+
+        assert replay is not None
+        self.assertEqual("publication_attempt_v2:validated", replay["attempt_ref"])
+        self.assertEqual("aborted", replay["transaction_phase"])
+
+    def test_terminal_retry_failure_preserves_original_error(self) -> None:
+        primary_error = cli_module.CliContractError(
+            exit_code=cli_module.ExitCode.CONFLICT,
+            code="publication_conflict",
+            message="original publication conflict",
+        )
+        retry_error = RunConflictError("terminal replay failed")
+        calls: list[bool] = []
+
+        def operation(terminal_only: bool):
+            calls.append(terminal_only)
+            if terminal_only:
+                raise retry_error
+            raise primary_error
+
+        with self.assertRaises(cli_module.CliContractError) as caught:
+            publication_abort_replay.run_with_terminal_retry(
+                operation,
+                (cli_module.CliContractError,),
+            )
+
+        self.assertIs(primary_error, caught.exception)
+        self.assertEqual(cli_module.ExitCode.CONFLICT, caught.exception.exit_code)
+        self.assertEqual("publication_conflict", caught.exception.code)
+        self.assertIs(retry_error, caught.exception.__cause__)
+        self.assertIn(
+            "terminal retry failed; original error remains primary",
+            caught.exception.__notes__,
+        )
+        self.assertEqual([False, True], calls)
+
+    def test_terminal_publication_acknowledgements_are_monotonic(self) -> None:
+        for current_phase, matching_acknowledgement in (
+            ("aborted", "aborted"),
+            ("expired_cleanup_claimed", "aborted"),
+            ("expired_cleanup_complete", "aborted"),
+            ("published_cleanup_pending", "committed"),
+            ("published_cleanup_claimed", "committed"),
+            ("complete", "committed"),
+        ):
+            with self.subTest(current_phase=current_phase):
+                publication = {"phase": current_phase}
+                if current_phase.startswith("expired_cleanup_"):
+                    publication["expired_cleanup_claim"] = {
+                        "disposition": "expired_aborted"
+                    }
+                self.assertTrue(
+                    publication_abort_authority.acknowledgement_is_idempotent(
+                        publication,
+                        matching_acknowledgement,
+                    )
+                )
+                stale = (
+                    "prepared" if matching_acknowledgement == "aborted" else "aborted"
+                )
+                with self.assertRaises(orchestrator_module.InvalidTransitionError):
+                    publication_abort_authority.acknowledgement_is_idempotent(
+                        publication,
+                        stale,
+                    )
+        self.assertFalse(
+            publication_abort_authority.acknowledgement_is_idempotent(
+                {"phase": "staged"},
+                "sealed",
+            )
+        )
+        for current_phase in (
+            "expired_cleanup_claimed",
+            "expired_cleanup_complete",
+        ):
+            with self.subTest(ordinary_cleanup=current_phase):
+                with self.assertRaisesRegex(
+                    orchestrator_module.InvalidTransitionError,
+                    "cannot rewrite expired cleanup",
+                ):
+                    publication_abort_authority.acknowledgement_is_idempotent(
+                        {
+                            "expired_cleanup_claim": {
+                                "disposition": "expired_unpublished"
+                            },
+                            "phase": current_phase,
+                        },
+                        "aborted",
+                    )
+
     def test_retained_export_binding_receipt_schema_is_closed(self) -> None:
         receipt = {
             "artifact_names": list(reporting.RETAINED_ARTIFACT_NAMES),
@@ -142,6 +261,56 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 receipt,
                 conflict_error=StateCorruptionError,
             )
+
+    def test_aborted_retained_export_binding_is_attempt_and_disposition_bound(
+        self,
+    ) -> None:
+        attempt_ref = "attempt_ref_v2:" + "a" * 64
+        state = {
+            "publication": {
+                "bundle_digest": "b" * 64,
+                "retention_deadline": "2026-07-15T01:00:00Z",
+            }
+        }
+        binding = {
+            "artifact_names": list(reporting.RETAINED_ARTIFACT_NAMES),
+            "bundle_digest": "b" * 64,
+            "exported_at": "2026-07-15T00:00:00Z",
+            "git_commit_created": False,
+            "idempotent": True,
+            "publication_attempt_ref": attempt_ref,
+            "publication_heartbeat_at": "2026-07-15T00:00:00Z",
+            "retention_deadline": "2026-07-15T01:00:00Z",
+            "schema_version": 2,
+            "state_advanced": False,
+            "status": "publication_terminal",
+            "terminal_at": "2026-07-15T00:01:00Z",
+            "terminal_disposition": "aborted",
+            "staging_dir": "/private/tmp/.codex-local/test/retained-v2",
+        }
+        retained_export_coordination.validate_aborted_export_binding(
+            state,
+            binding,
+            bundle_dir=Path(binding["staging_dir"]),
+            publication_claim={"attempt_ref": attempt_ref},
+        )
+        for field, value in (
+            ("publication_attempt_ref", "attempt_ref_v2:" + "c" * 64),
+            ("terminal_disposition", "committed"),
+            ("terminal_at", None),
+        ):
+            with self.subTest(field=field):
+                changed = {**binding, field: value}
+                with self.assertRaisesRegex(
+                    RunConflictError,
+                    "does not match the authenticated run claim",
+                ):
+                    retained_export_coordination.validate_aborted_export_binding(
+                        state,
+                        changed,
+                        bundle_dir=Path(binding["staging_dir"]),
+                        publication_claim={"attempt_ref": attempt_ref},
+                    )
 
     def test_history_target_ref_requires_a_valid_fully_qualified_branch(self) -> None:
         observed: list[tuple[str, ...]] = []
@@ -1824,6 +1993,8 @@ class DurablePublicationTests(unittest.TestCase):
         coordinator: RetrospectiveOrchestrator,
         bundle: Path,
         *,
+        attempt_ref: str | None = None,
+        claim_before_persist: Callable[[str, str], Mapping[str, object]] | None = None,
         journal_name: str = "publication-transaction-v2.json",
         destination: str | None = None,
         expected_head: str | None = None,
@@ -1832,7 +2003,7 @@ class DurablePublicationTests(unittest.TestCase):
     ) -> PublicationTransaction:
         state = coordinator.load_state()
 
-        def claim_before_persist(
+        def claim_publication(
             attempt_ref: str,
             plan_digest: str,
         ) -> Mapping[str, object]:
@@ -1852,11 +2023,12 @@ class DurablePublicationTests(unittest.TestCase):
                 if expected_head is None
                 else expected_head
             ),
+            attempt_ref=attempt_ref,
             run_dir=coordinator.run_dir,
             identity_path=self.identity_path,
             adapter=adapter or self.adapter,
             failure_injector=failure_injector,
-            claim_before_persist=claim_before_persist,
+            claim_before_persist=claim_before_persist or claim_publication,
         )
         return transaction
 
@@ -5446,6 +5618,569 @@ class DurablePublicationTests(unittest.TestCase):
         self.assertEqual("publication_terminal", terminal_state["status"])
         self.assertEqual("aborted", terminal_state["terminal_disposition"])
 
+    def test_aborted_checkpoint_cannot_recreate_a_publication_journal(self) -> None:
+        coordinator, bundle = self.build_exportable_run(
+            "aborted-journal-recreation",
+            persist_descriptor=True,
+        )
+        transaction = self.transaction(coordinator, bundle)
+        transaction.prepare()
+        transaction.abort("test_requested_abort")
+        result = self.finalize_cli(coordinator)
+        self.assertEqual("aborted", result.result["publication_phase"])
+        claim = coordinator.load_state()["publication"]["publication_claim"]
+
+        with self.assertRaisesRegex(
+            orchestrator_module.InvalidTransitionError,
+            "aborted publication cannot be claimed",
+        ):
+            coordinator.claim_publication(
+                claim["attempt_ref"],
+                claim["plan_digest"],
+            )
+
+        recovered = PublicationTransaction.open(
+            transaction.journal_path,
+            adapter=self.publication_adapter(),
+            expected_attempt_ref=transaction.attempt_ref,
+        )
+        self.assertEqual("aborted", recovered.status()["phase"])
+        transaction.journal_path.unlink()
+        with self.assertRaisesRegex(
+            PublicationRejected,
+            "terminal checkpoint cannot authorize an active publication transaction",
+        ):
+            self.transaction(
+                coordinator,
+                bundle,
+                attempt_ref=transaction.attempt_ref,
+                claim_before_persist=lambda *_args: {},
+            )
+        self.assertFalse(transaction.journal_path.exists())
+
+    def test_aborted_finalize_response_loss_retries_and_expired_raw_gc_closes(
+        self,
+    ) -> None:
+        for collect_export in (False, True):
+            with self.subTest(collect_export=collect_export):
+                suffix = "collected" if collect_export else "retained"
+                coordinator, bundle = self.build_exportable_run(
+                    f"aborted-response-loss-{suffix}",
+                    persist_descriptor=True,
+                )
+                raw_marker = coordinator.run_dir / "raw-inputs" / "aborted.bin"
+                raw_marker.write_bytes(
+                    b"raw input must expire after authenticated abort"
+                )
+                os.chmod(raw_marker, 0o600)
+                transaction = self.transaction(coordinator, bundle)
+                transaction.prepare()
+                transaction.abort("test_requested_abort")
+                args = cli_module.build_parser().parse_args(
+                    [
+                        "finalize",
+                        "--identity-path",
+                        str(self.identity_path),
+                        "--require-existing-identity",
+                        "--run-dir",
+                        str(coordinator.run_dir),
+                    ]
+                )
+                real_mark_finalized = RetrospectiveOrchestrator.mark_finalized
+                response_lost = False
+
+                def lose_aborted_checkpoint_response(instance, *call_args, **kwargs):
+                    nonlocal response_lost
+                    result = real_mark_finalized(instance, *call_args, **kwargs)
+                    if (
+                        not response_lost
+                        and result["publication"]["phase"] == "aborted"
+                    ):
+                        response_lost = True
+                        raise RuntimeError("lost aborted checkpoint response")
+                    return result
+
+                with (
+                    mock.patch.object(
+                        RetrospectiveOrchestrator,
+                        "mark_finalized",
+                        new=lose_aborted_checkpoint_response,
+                    ),
+                    self.assertRaisesRegex(
+                        RuntimeError,
+                        "lost aborted checkpoint response",
+                    ),
+                ):
+                    cli_module.command_finalize(args)
+
+                checkpoint = coordinator.load_state()
+                publication_claim = checkpoint["publication"]["publication_claim"]
+                self.assertEqual("aborted", checkpoint["publication"]["phase"])
+                self.assertEqual(
+                    transaction.attempt_ref,
+                    publication_claim["attempt_ref"],
+                )
+
+                if collect_export:
+                    collected = garbage_collect_expired_exports(
+                        self.root / ".codex-local" / "exports",
+                        now=dt.datetime(2100, 1, 1, tzinfo=dt.UTC),
+                    )
+                    self.assertIn(str(bundle.resolve()), collected["deleted"])
+                    self.assertFalse(bundle.exists())
+                    self.assertFalse(
+                        bundle.with_name(f".{bundle.name}.retention-v2.json").exists()
+                    )
+
+                retry = self.finalize_cli(coordinator)
+                self.assertTrue(retry.result["idempotent"])
+                self.assertEqual("aborted", retry.result["transaction_phase"])
+                self.assertEqual("aborted", retry.result["publication_phase"])
+                self.assertEqual(
+                    publication_claim,
+                    coordinator.load_state()["publication"]["publication_claim"],
+                )
+
+                expired = RetrospectiveOrchestrator(
+                    coordinator.run_dir,
+                    clock=lambda: "2026-07-23T00:00:00Z",
+                    identity_path=self.identity_path,
+                    require_existing_identity=True,
+                )
+                cleaned = expired.gc_expired_raw()
+                self.assertTrue(cleaned["cleaned"])
+                self.assertFalse(raw_marker.exists())
+                terminal = expired.load_state()
+                cleanup_claim = terminal["publication"]["expired_cleanup_claim"]
+                self.assertEqual("expired_aborted", cleanup_claim["disposition"])
+                self.assertEqual("aborted", cleanup_claim["phase_before"])
+                self.assertEqual(
+                    publication_claim["receipt_ref"],
+                    cleanup_claim["publication_claim_ref"],
+                )
+                self.assertNotIn(
+                    "publication_claim",
+                    terminal["publication"],
+                )
+                self.assertEqual(
+                    "expired_cleanup_complete",
+                    terminal["publication"]["phase"],
+                )
+                self.assertTrue(expired.gc_expired_raw()["idempotent"])
+
+    def test_legacy_aborted_checkpoint_recovers_claim_authority_after_expiry(
+        self,
+    ) -> None:
+        coordinator, bundle = self.build_exportable_run(
+            "legacy-aborted-claim-recovery",
+            persist_descriptor=True,
+        )
+        raw_marker = coordinator.run_dir / "raw-inputs" / "legacy-aborted.bin"
+        raw_marker.write_bytes(b"legacy aborted raw input")
+        os.chmod(raw_marker, 0o600)
+        transaction = self.transaction(coordinator, bundle)
+        transaction.prepare()
+        transaction.abort("test_requested_abort")
+        self.finalize_cli(coordinator)
+        publication_claim = copy.deepcopy(
+            coordinator.load_state()["publication"]["publication_claim"]
+        )
+
+        def remove_legacy_claim(current: dict[str, object]):
+            current["publication"].pop("publication_claim")
+            return current, None
+
+        coordinator.store.transaction(remove_legacy_claim)
+        replayed = self.finalize_cli(coordinator)
+        self.assertTrue(replayed.result["idempotent"])
+        self.assertEqual("aborted", replayed.result["transaction_phase"])
+        self.assertEqual("aborted", replayed.result["publication_phase"])
+        with self.assertRaisesRegex(
+            orchestrator_module.InvalidTransitionError,
+            "cannot rewrite aborted publication",
+        ):
+            coordinator.mark_finalized("prepared")
+        self.assertEqual("aborted", coordinator.load_state()["publication"]["phase"])
+
+        collected = garbage_collect_expired_exports(
+            self.root / ".codex-local" / "exports",
+            now=dt.datetime(2100, 1, 1, tzinfo=dt.UTC),
+        )
+        self.assertIn(str(bundle.resolve()), collected["deleted"])
+        expired = RetrospectiveOrchestrator(
+            coordinator.run_dir,
+            clock=lambda: "2026-07-23T00:00:00Z",
+            identity_path=self.identity_path,
+            require_existing_identity=True,
+        )
+        cleaned = expired.gc_expired_raw()
+        self.assertTrue(cleaned["cleaned"])
+        self.assertFalse(raw_marker.exists())
+        terminal = expired.load_state()
+        cleanup_claim = terminal["publication"]["expired_cleanup_claim"]
+        self.assertEqual("expired_aborted", cleanup_claim["disposition"])
+        self.assertEqual(
+            publication_claim["receipt_ref"],
+            cleanup_claim["publication_claim_ref"],
+        )
+        completed_replay = self.finalize_cli(expired)
+        self.assertTrue(completed_replay.result["idempotent"])
+        self.assertEqual("aborted", completed_replay.result["transaction_phase"])
+        self.assertEqual(
+            "expired_cleanup_complete",
+            completed_replay.result["publication_phase"],
+        )
+
+    def test_delayed_abort_ack_cannot_replace_expired_cleanup_claim(self) -> None:
+        coordinator, bundle = self.build_exportable_run(
+            "aborted-cleanup-ack-race",
+            persist_descriptor=True,
+        )
+        raw_marker = coordinator.run_dir / "raw-inputs" / "ack-race.bin"
+        raw_marker.write_bytes(b"abort acknowledgement race")
+        os.chmod(raw_marker, 0o600)
+        transaction = self.transaction(coordinator, bundle)
+        transaction.prepare()
+        transaction.abort("test_requested_abort")
+        self.finalize_cli(coordinator)
+        publication_claim = copy.deepcopy(
+            coordinator.load_state()["publication"]["publication_claim"]
+        )
+        expired = RetrospectiveOrchestrator(
+            coordinator.run_dir,
+            clock=lambda: "2026-07-23T00:00:00Z",
+            identity_path=self.identity_path,
+            require_existing_identity=True,
+        )
+        delete_claimed = expired._delete_claimed_raw_paths
+
+        def delete_then_replay(cleanup_claim):
+            delete_claimed(cleanup_claim)
+            claimed_state = expired.load_state()
+            claimed_value = copy.deepcopy(
+                claimed_state["publication"]["expired_cleanup_claim"]
+            )
+            replayed = self.finalize_cli(expired)
+            self.assertTrue(replayed.result["idempotent"])
+            self.assertEqual("aborted", replayed.result["transaction_phase"])
+            after_replay = expired.load_state()
+            self.assertEqual(
+                "expired_cleanup_claimed",
+                after_replay["publication"]["phase"],
+            )
+            self.assertEqual(
+                claimed_value,
+                after_replay["publication"]["expired_cleanup_claim"],
+            )
+
+        with mock.patch.object(
+            expired,
+            "_delete_claimed_raw_paths",
+            side_effect=delete_then_replay,
+        ):
+            cleaned = expired.gc_expired_raw()
+        self.assertTrue(cleaned["cleaned"])
+        self.assertFalse(raw_marker.exists())
+        self.assertEqual(
+            "expired_cleanup_complete",
+            expired.load_state()["publication"]["phase"],
+        )
+        completed_state = copy.deepcopy(expired.load_state()["publication"])
+        replayed = expired.mark_finalized(
+            "aborted",
+            attempt_ref=publication_claim["attempt_ref"],
+            claim_revision=publication_claim["checkpoint_revision"],
+            plan_digest=publication_claim["plan_digest"],
+        )
+        self.assertTrue(replayed["idempotent"])
+        self.assertEqual(completed_state, expired.load_state()["publication"])
+        with self.assertRaisesRegex(
+            orchestrator_module.RunConflictError,
+            "does not match recovered abort authority",
+        ):
+            expired.mark_finalized(
+                "aborted",
+                attempt_ref=publication_claim["attempt_ref"],
+                claim_revision=publication_claim["checkpoint_revision"] + 1,
+                plan_digest=publication_claim["plan_digest"],
+            )
+        self.assertEqual(completed_state, expired.load_state()["publication"])
+
+    def test_finalize_cli_reclassifies_claim_race_as_terminal_abort(self) -> None:
+        coordinator, bundle = self.build_exportable_run(
+            "aborted-claim-race-reclassification",
+            persist_descriptor=True,
+        )
+        raw_marker = coordinator.run_dir / "raw-inputs" / "claim-race.bin"
+        raw_marker.write_bytes(b"claim race raw input")
+        os.chmod(raw_marker, 0o600)
+        transaction = self.transaction(coordinator, bundle)
+        transaction.prepare()
+        transaction.abort("test_requested_abort")
+        publication_claim = copy.deepcopy(
+            coordinator.load_state()["publication"]["publication_claim"]
+        )
+        real_claim_publication = RetrospectiveOrchestrator.claim_publication
+        raced = False
+
+        def expire_before_claim(instance, *args, **kwargs):
+            nonlocal raced
+            if not raced and instance.run_dir == coordinator.run_dir:
+                raced = True
+                instance.mark_finalized(
+                    "aborted",
+                    attempt_ref=publication_claim["attempt_ref"],
+                    claim_revision=publication_claim["checkpoint_revision"],
+                    plan_digest=publication_claim["plan_digest"],
+                )
+                expired = RetrospectiveOrchestrator(
+                    coordinator.run_dir,
+                    clock=lambda: "2026-07-23T00:00:00Z",
+                    identity_path=self.identity_path,
+                    require_existing_identity=True,
+                )
+                self.assertTrue(expired.gc_expired_raw()["cleaned"])
+            return real_claim_publication(instance, *args, **kwargs)
+
+        with mock.patch.object(
+            RetrospectiveOrchestrator,
+            "claim_publication",
+            new=expire_before_claim,
+        ):
+            replayed = self.finalize_cli(coordinator)
+
+        self.assertTrue(raced)
+        self.assertTrue(replayed.result["idempotent"])
+        self.assertEqual("aborted", replayed.result["transaction_phase"])
+        self.assertEqual(
+            "expired_cleanup_complete",
+            replayed.result["publication_phase"],
+        )
+        self.assertFalse(raw_marker.exists())
+
+    def test_finalize_cli_reclassifies_inspection_race_as_terminal_abort(self) -> None:
+        coordinator, bundle = self.build_exportable_run(
+            "aborted-inspection-race-reclassification",
+            persist_descriptor=True,
+        )
+        raw_marker = coordinator.run_dir / "raw-inputs" / "inspection-race.bin"
+        raw_marker.write_bytes(b"inspection race raw input")
+        os.chmod(raw_marker, 0o600)
+        transaction = self.transaction(coordinator, bundle)
+        transaction.prepare()
+        transaction.abort("test_requested_abort")
+        publication_claim = copy.deepcopy(
+            coordinator.load_state()["publication"]["publication_claim"]
+        )
+        real_inspect = PublicationTransaction.inspect_local_for_run
+        raced = False
+        inspection_failed = False
+
+        def expire_before_inspection(*args, **kwargs):
+            nonlocal raced, inspection_failed
+            if not raced:
+                raced = True
+                coordinator.mark_finalized(
+                    "aborted",
+                    attempt_ref=publication_claim["attempt_ref"],
+                    claim_revision=publication_claim["checkpoint_revision"],
+                    plan_digest=publication_claim["plan_digest"],
+                )
+                expired = RetrospectiveOrchestrator(
+                    coordinator.run_dir,
+                    clock=lambda: "2026-07-23T00:00:00Z",
+                    identity_path=self.identity_path,
+                    require_existing_identity=True,
+                )
+                self.assertTrue(expired.gc_expired_raw()["cleaned"])
+            try:
+                return real_inspect(*args, **kwargs)
+            except (OSError, finalize_module.PublicationError):
+                inspection_failed = True
+                raise
+
+        with mock.patch.object(
+            PublicationTransaction,
+            "inspect_local_for_run",
+            side_effect=expire_before_inspection,
+        ):
+            replayed = self.finalize_cli(coordinator)
+
+        self.assertTrue(raced)
+        self.assertTrue(inspection_failed)
+        self.assertTrue(replayed.result["idempotent"])
+        self.assertEqual("aborted", replayed.result["transaction_phase"])
+        self.assertEqual(
+            "expired_cleanup_complete",
+            replayed.result["publication_phase"],
+        )
+        self.assertFalse(raw_marker.exists())
+
+    def test_finalize_cli_reclassifies_open_race_as_terminal_abort(self) -> None:
+        coordinator, bundle = self.build_exportable_run(
+            "aborted-open-race-reclassification",
+            persist_descriptor=True,
+        )
+        raw_marker = coordinator.run_dir / "raw-inputs" / "open-race.bin"
+        raw_marker.write_bytes(b"open race raw input")
+        os.chmod(raw_marker, 0o600)
+        transaction = self.transaction(coordinator, bundle)
+        transaction.prepare()
+        transaction.abort("test_requested_abort")
+        publication_claim = copy.deepcopy(
+            coordinator.load_state()["publication"]["publication_claim"]
+        )
+        real_open = PublicationTransaction.open
+        raced = False
+        open_failed = False
+
+        def expire_before_open(*args, **kwargs):
+            nonlocal raced, open_failed
+            if not raced:
+                raced = True
+                coordinator.mark_finalized(
+                    "aborted",
+                    attempt_ref=publication_claim["attempt_ref"],
+                    claim_revision=publication_claim["checkpoint_revision"],
+                    plan_digest=publication_claim["plan_digest"],
+                )
+                expired = RetrospectiveOrchestrator(
+                    coordinator.run_dir,
+                    clock=lambda: "2026-07-23T00:00:00Z",
+                    identity_path=self.identity_path,
+                    require_existing_identity=True,
+                )
+                self.assertTrue(expired.gc_expired_raw()["cleaned"])
+            try:
+                return real_open(*args, **kwargs)
+            except (OSError, finalize_module.PublicationError):
+                open_failed = True
+                raise
+
+        with mock.patch.object(
+            PublicationTransaction,
+            "open",
+            side_effect=expire_before_open,
+        ):
+            replayed = self.finalize_cli(coordinator)
+
+        self.assertTrue(raced)
+        self.assertTrue(open_failed)
+        self.assertTrue(replayed.result["idempotent"])
+        self.assertEqual("aborted", replayed.result["transaction_phase"])
+        self.assertEqual(
+            "expired_cleanup_complete",
+            replayed.result["publication_phase"],
+        )
+        self.assertFalse(raw_marker.exists())
+
+    def test_finalize_cli_reclassifies_absent_journal_race_as_terminal_abort(
+        self,
+    ) -> None:
+        coordinator, bundle = self.build_exportable_run(
+            "aborted-absent-journal-race",
+            persist_descriptor=True,
+        )
+        raw_marker = coordinator.run_dir / "raw-inputs" / "absent-journal-race.bin"
+        raw_marker.write_bytes(b"absent journal race raw input")
+        os.chmod(raw_marker, 0o600)
+        real_attempt_ref = export_cli_api.publication_attempt_ref
+        raced = False
+        attempt_ref_failed = False
+
+        def abort_before_attempt_ref(*args, **kwargs):
+            nonlocal raced, attempt_ref_failed
+            if not raced:
+                raced = True
+                transaction = self.transaction(coordinator, bundle)
+                transaction.prepare()
+                transaction.abort("test_requested_abort")
+                publication_claim = coordinator.load_state()["publication"][
+                    "publication_claim"
+                ]
+                coordinator.mark_finalized(
+                    "aborted",
+                    attempt_ref=publication_claim["attempt_ref"],
+                    claim_revision=publication_claim["checkpoint_revision"],
+                    plan_digest=publication_claim["plan_digest"],
+                )
+                expired = RetrospectiveOrchestrator(
+                    coordinator.run_dir,
+                    clock=lambda: "2026-07-23T00:00:00Z",
+                    identity_path=self.identity_path,
+                    require_existing_identity=True,
+                )
+                self.assertTrue(expired.gc_expired_raw()["cleaned"])
+            try:
+                return real_attempt_ref(*args, **kwargs)
+            except export_cli_api.ExportCliContractError:
+                attempt_ref_failed = True
+                raise
+
+        with mock.patch.object(
+            export_cli_api,
+            "publication_attempt_ref",
+            side_effect=abort_before_attempt_ref,
+        ):
+            replayed = self.finalize_cli(coordinator)
+
+        self.assertTrue(raced)
+        self.assertTrue(attempt_ref_failed)
+        self.assertTrue(replayed.result["idempotent"])
+        self.assertEqual("aborted", replayed.result["transaction_phase"])
+        self.assertEqual(
+            "expired_cleanup_complete",
+            replayed.result["publication_phase"],
+        )
+        self.assertFalse(raw_marker.exists())
+
+    def test_ordinary_export_stage_cleanup_rejects_abort_ack(self) -> None:
+        coordinator, _bundle = self.build_exportable_run(
+            "ordinary-expired-cleanup-ack",
+            bind_export=False,
+        )
+        raw_marker = coordinator.run_dir / "raw-inputs" / "ordinary-expired.bin"
+        raw_marker.write_bytes(b"ordinary expired raw input")
+        os.chmod(raw_marker, 0o600)
+        expired = RetrospectiveOrchestrator(
+            coordinator.run_dir,
+            clock=lambda: "2026-07-23T00:00:00Z",
+            identity_path=self.identity_path,
+            require_existing_identity=True,
+        )
+        delete_claimed = expired._delete_claimed_raw_paths
+
+        def reject_abort_then_delete(cleanup_claim):
+            with self.assertRaisesRegex(
+                orchestrator_module.InvalidTransitionError,
+                "cannot rewrite expired cleanup",
+            ):
+                expired.mark_finalized("aborted")
+            claimed = expired.load_state()["publication"]
+            self.assertEqual("expired_cleanup_claimed", claimed["phase"])
+            self.assertEqual(
+                "expired_unpublished",
+                claimed["expired_cleanup_claim"]["disposition"],
+            )
+            self.assertEqual(
+                cleanup_claim,
+                claimed["expired_cleanup_claim"],
+            )
+            delete_claimed(cleanup_claim)
+
+        with mock.patch.object(
+            expired,
+            "_delete_claimed_raw_paths",
+            side_effect=reject_abort_then_delete,
+        ):
+            cleaned = expired.gc_expired_raw()
+        self.assertTrue(cleaned["cleaned"])
+        self.assertFalse(raw_marker.exists())
+        self.assertEqual(
+            "expired_cleanup_complete",
+            expired.load_state()["publication"]["phase"],
+        )
+
     def test_pending_checkpoint_recovers_after_terminal_export_gc(self) -> None:
         coordinator, bundle = self.build_exportable_run(
             "pending-checkpoint-collected-export",
@@ -5721,7 +6456,18 @@ class DurablePublicationTests(unittest.TestCase):
             plan_digest=claim["plan_digest"],
         )
         self.assertEqual("aborted", completed["publication"]["phase"])
-        self.assertNotIn("publication_claim", completed["publication"])
+        self.assertEqual(
+            claim,
+            completed["publication"]["publication_claim"],
+        )
+        replayed = coordinator.mark_finalized(
+            "aborted",
+            attempt_ref=claim["attempt_ref"],
+            claim_revision=claim["checkpoint_revision"],
+            plan_digest=claim["plan_digest"],
+        )
+        self.assertTrue(replayed["idempotent"])
+        self.assertEqual(claim, replayed["publication"]["publication_claim"])
 
 
 if __name__ == "__main__":
