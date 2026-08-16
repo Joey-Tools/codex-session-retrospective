@@ -89,7 +89,15 @@ def production_prompt_is_closed(
         offset
         for offset, token in enumerate(tokens)
         if token == "--publisher-gpg-program"
+        or token.startswith("--publisher-gpg-program=")
     ]
+    publisher_value = (
+        tokens[publisher_offsets[0] + 1]
+        if len(publisher_offsets) == 1
+        and tokens[publisher_offsets[0]] == "--publisher-gpg-program"
+        and publisher_offsets[0] + 1 < len(tokens)
+        else ""
+    )
     return (
         len(launch_offsets) == 1
         and tokens.count(str(cli_path)) == 1
@@ -100,8 +108,10 @@ def production_prompt_is_closed(
         and tokens[mode_offsets[0] + 1] == expected_mode
         and len(publisher_offsets) == 1
         and publisher_offsets[0] == mode_offsets[0] + 2
-        and publisher_offsets[0] + 1 < len(tokens)
-        and not tokens[publisher_offsets[0] + 1].startswith("--")
+        and publisher_value != ""
+        and not publisher_value.startswith("--")
+        and Path(publisher_value).is_absolute()
+        and os.path.abspath(publisher_value) == publisher_value
     )
 
 

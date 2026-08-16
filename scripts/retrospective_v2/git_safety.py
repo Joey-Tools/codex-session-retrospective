@@ -245,6 +245,8 @@ def _read_git_discovery_file_at(
     name: str,
     display_path: Path,
 ) -> tuple[tuple[int, ...], bytes]:
+    primary: BaseException | None = None
+    descriptor: int | None = None
     try:
         descriptor = safe_io.open_checked_file_at(
             parent_fd,
@@ -310,15 +312,26 @@ def _read_git_discovery_file_at(
                 f"Git discovery file changed while read: {display_path}",
             )
         return expected_identity, first
-    except LocalRepositorySafetyError:
+    except LocalRepositorySafetyError as error:
+        primary = error
         raise
     except OSError as error:
-        raise LocalRepositorySafetyError(
+        mapped = LocalRepositorySafetyError(
             "discovery-file-unreadable",
             f"Git discovery file cannot be authenticated: {display_path}",
-        ) from error
+        )
+        primary = mapped
+        raise mapped from error
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        _close_descriptors((descriptor,), "Git discovery file")
+        if descriptor is not None:
+            _close_descriptors(
+                (descriptor,),
+                "Git discovery file",
+                primary=primary,
+            )
 
 
 def _bind_git_discovery_file(
@@ -375,7 +388,12 @@ def _require_discovery_file_absent(parent_fd: int, name: str, path: Path) -> Non
     )
 
 
-def _close_descriptors(descriptors: Sequence[int], label: str) -> None:
+def _close_descriptors(
+    descriptors: Sequence[int],
+    label: str,
+    *,
+    primary: BaseException | None = None,
+) -> None:
     failures: list[OSError] = []
     for descriptor in reversed(descriptors):
         try:
@@ -385,18 +403,23 @@ def _close_descriptors(descriptors: Sequence[int], label: str) -> None:
     if not failures:
         return
     message = f"{label} descriptor close failed"
-    if (active_error := sys.exception()) is not None:
-        active_error.add_note(message)
+    if primary is not None:
+        primary.add_note(message)
         return
     raise LocalRepositorySafetyError("descriptor-close-failed", message) from failures[
         0
     ]
 
 
-def close_repository_descriptors(descriptors: Sequence[int], label: str) -> None:
+def close_repository_descriptors(
+    descriptors: Sequence[int],
+    label: str,
+    *,
+    primary: BaseException | None = None,
+) -> None:
     """Close repository-owned descriptors without replacing an active failure."""
 
-    _close_descriptors(descriptors, label)
+    _close_descriptors(descriptors, label, primary=primary)
 
 
 def _config_commitment(common_dir_fd: int, display_path: Path) -> str:
@@ -406,6 +429,7 @@ def _config_commitment(common_dir_fd: int, display_path: Path) -> str:
         | getattr(os, "O_NOFOLLOW", 0)
         | getattr(os, "O_NONBLOCK", 0)
     )
+    primary: BaseException | None = None
     try:
         descriptor = os.open("config", flags, dir_fd=common_dir_fd)
     except OSError as exc:
@@ -450,14 +474,20 @@ def _config_commitment(common_dir_fd: int, display_path: Path) -> str:
                 "config-changed", "local Git configuration changed while read"
             )
         return hashlib.sha256(payload).hexdigest()
-    except LocalRepositorySafetyError:
+    except LocalRepositorySafetyError as error:
+        primary = error
         raise
     except OSError as exc:
-        raise LocalRepositorySafetyError(
+        mapped = LocalRepositorySafetyError(
             "config-unreadable", "local Git configuration cannot be authenticated"
-        ) from exc
+        )
+        primary = mapped
+        raise mapped from exc
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        _close_descriptors((descriptor,), "Git config")
+        _close_descriptors((descriptor,), "Git config", primary=primary)
 
 
 def _open_bound_directory(
@@ -473,11 +503,16 @@ def _open_bound_directory(
         if _stat_identity(metadata) != expected:
             raise safe_io.UnsafePathError("Git metadata identity changed")
     except (OSError, safe_io.UnsafePathError) as exc:
-        if descriptor is not None:
-            _close_descriptors((descriptor,), "Git metadata")
-        raise LocalRepositorySafetyError(
+        mapped = LocalRepositorySafetyError(
             "metadata-changed", "Git metadata changed after validation"
-        ) from exc
+        )
+        if descriptor is not None:
+            _close_descriptors((descriptor,), "Git metadata", primary=mapped)
+        raise mapped from exc
+    except BaseException as error:
+        if descriptor is not None:
+            _close_descriptors((descriptor,), "Git metadata", primary=error)
+        raise
     assert descriptor is not None
     return descriptor
 
@@ -658,6 +693,7 @@ def bind_local_repository_command(
     revalidate_local_repository(admission, directory_identity)
     expected = dict(admission.directory_identities)
     descriptors: list[int] = []
+    primary: BaseException | None = None
     try:
         for path in (
             admission.repository,
@@ -679,8 +715,11 @@ def bind_local_repository_command(
             raise
         _revalidate_command_binding(binding)
         revalidate_local_repository(admission, directory_identity)
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        _close_descriptors(descriptors, "Git metadata")
+        _close_descriptors(descriptors, "Git metadata", primary=primary)
 
 
 @contextmanager
@@ -897,10 +936,15 @@ def admit_local_repository(
             "incomplete", "repository must be complete and non-promisor"
         ) from exc
     expected = dict(identities)
-    repository_fd = _open_bound_directory(repository, expected[repository])
-    git_dir_fd = _open_bound_directory(git_dir, expected[git_dir])
-    common_dir_fd = _open_bound_directory(common_dir, expected[common_dir])
+    descriptors: list[int] = []
+    primary: BaseException | None = None
     try:
+        repository_fd = _open_bound_directory(repository, expected[repository])
+        descriptors.append(repository_fd)
+        git_dir_fd = _open_bound_directory(git_dir, expected[git_dir])
+        descriptors.append(git_dir_fd)
+        common_dir_fd = _open_bound_directory(common_dir, expected[common_dir])
+        descriptors.append(common_dir_fd)
         (
             git_marker_is_directory,
             discovery_files,
@@ -915,8 +959,11 @@ def admit_local_repository(
         )
         config_path = common_dir / "config"
         config_sha256 = _config_commitment(common_dir_fd, config_path)
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        _close_descriptors((repository_fd, git_dir_fd, common_dir_fd), "Git admission")
+        _close_descriptors(descriptors, "Git admission", primary=primary)
     admission = LocalRepositoryAdmission(
         repository=repository,
         git_dir=git_dir,
@@ -948,14 +995,21 @@ def revalidate_local_repository(
             )
     _reject_forbidden_metadata(admission.forbidden_metadata)
     expected = dict(admission.directory_identities)
-    repository_fd = _open_bound_directory(
-        admission.repository, expected[admission.repository]
-    )
-    git_dir_fd = _open_bound_directory(admission.git_dir, expected[admission.git_dir])
-    common_dir_fd = _open_bound_directory(
-        admission.common_dir, expected[admission.common_dir]
-    )
+    descriptors: list[int] = []
+    primary: BaseException | None = None
     try:
+        repository_fd = _open_bound_directory(
+            admission.repository, expected[admission.repository]
+        )
+        descriptors.append(repository_fd)
+        git_dir_fd = _open_bound_directory(
+            admission.git_dir, expected[admission.git_dir]
+        )
+        descriptors.append(git_dir_fd)
+        common_dir_fd = _open_bound_directory(
+            admission.common_dir, expected[admission.common_dir]
+        )
+        descriptors.append(common_dir_fd)
         _revalidate_repository_discovery(
             admission,
             {
@@ -970,10 +1024,11 @@ def revalidate_local_repository(
             raise LocalRepositorySafetyError(
                 "config-changed", "local Git configuration changed after validation"
             )
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        _close_descriptors(
-            (repository_fd, git_dir_fd, common_dir_fd), "Git revalidation"
-        )
+        _close_descriptors(descriptors, "Git revalidation", primary=primary)
 
 
 def admit_history_repository(

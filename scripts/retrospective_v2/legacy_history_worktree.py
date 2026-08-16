@@ -289,6 +289,7 @@ def _read_regular_file(
     budget: _WorktreeBudget,
 ) -> _FilesystemEntryCommitment:
     descriptor = os.open(name, _FILE_FLAGS, dir_fd=parent_fd)
+    primary: BaseException | None = None
     try:
         anchored = os.fstat(descriptor)
         named = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
@@ -341,10 +342,14 @@ def _read_regular_file(
             final.st_size,
             expected.object_id,
         )
+    except BaseException as error:
+        primary = error
+        raise
     finally:
         git_safety.close_repository_descriptors(
             (descriptor,),
             "history worktree file",
+            primary=primary,
         )
 
 
@@ -405,6 +410,7 @@ def _scan_directory(
         _require_safe_owner(observed, display_child)
         if stat.S_ISDIR(observed.st_mode):
             child_fd = os.open(name, _DIRECTORY_FLAGS, dir_fd=descriptor)
+            primary: BaseException | None = None
             try:
                 opened = os.fstat(child_fd)
                 if _identity_and_access_policy(opened) != _identity_and_access_policy(
@@ -441,10 +447,14 @@ def _scan_directory(
                     None,
                     None,
                 )
+            except BaseException as error:
+                primary = error
+                raise
             finally:
                 git_safety.close_repository_descriptors(
                     (child_fd,),
                     "history worktree directory",
+                    primary=primary,
                 )
             continue
         expected_entry = expected.get(path)

@@ -16,10 +16,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPTS = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-)
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from retrospective_v2.contracts import (  # noqa: E402
@@ -615,15 +612,19 @@ class SafeIoTests(unittest.TestCase):
                 close_failed = True
                 raise OSError("simulated post-unlink close failure")
 
-        with (
-            mock.patch.object(
-                safe_io,
-                "open_checked_file_at",
-                side_effect=capture_target_descriptor,
-            ),
-            mock.patch.object(safe_io.os, "close", side_effect=close_then_fail),
-        ):
-            remove_atomic_created_bytes(receipt)
+        try:
+            raise RuntimeError("ambient outer failure")
+        except RuntimeError:
+            with (
+                mock.patch.object(
+                    safe_io,
+                    "open_checked_file_at",
+                    side_effect=capture_target_descriptor,
+                ),
+                mock.patch.object(safe_io.os, "close", side_effect=close_then_fail),
+                self.assertRaisesRegex(OSError, "post-unlink close failure"),
+            ):
+                remove_atomic_created_bytes(receipt)
 
         self.assertTrue(close_failed)
         self.assertFalse(target.exists())
@@ -649,20 +650,23 @@ class SafeIoTests(unittest.TestCase):
                 close_failed = True
                 raise OSError("simulated atomic-create close failure")
 
-        with (
-            mock.patch.object(
-                safe_io,
-                "_hash_file_descriptor",
-                side_effect=capture_final_descriptor,
-            ),
-            mock.patch.object(safe_io.os, "close", side_effect=close_then_fail),
-            self.assertRaisesRegex(OSError, "atomic-create close failure"),
-        ):
-            atomic_create_bytes_with_receipt(
-                target,
-                b"payload\n",
-                receipt_slot=slot,
-            )
+        try:
+            raise RuntimeError("ambient outer failure")
+        except RuntimeError:
+            with (
+                mock.patch.object(
+                    safe_io,
+                    "_hash_file_descriptor",
+                    side_effect=capture_final_descriptor,
+                ),
+                mock.patch.object(safe_io.os, "close", side_effect=close_then_fail),
+                self.assertRaisesRegex(OSError, "atomic-create close failure"),
+            ):
+                atomic_create_bytes_with_receipt(
+                    target,
+                    b"payload\n",
+                    receipt_slot=slot,
+                )
 
         self.assertTrue(close_failed)
         self.assertIsNotNone(slot.receipt)
@@ -1053,6 +1057,52 @@ class SafeIoTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(UnsafePathError, "could not verify"):
                 safe_io._darwin_descriptor_has_extended_acl(1)
+
+        text = ctypes.create_string_buffer(b"acl")
+
+        class FakeAclTextApi:
+            def __init__(self, *, serialize: bool) -> None:
+                self.serialize = serialize
+
+            def acl_get_fd_np(self, _descriptor: int, _acl_type: int) -> int:
+                return 1
+
+            def acl_to_text(self, _acl: int, length_pointer) -> int | None:
+                if not self.serialize:
+                    ctypes.set_errno(errno.EIO)
+                    return None
+                length_pointer._obj.value = 3
+                return ctypes.addressof(text)
+
+            def acl_free(self, _pointer: int) -> int:
+                return -1
+
+        try:
+            raise RuntimeError("ambient outer failure")
+        except RuntimeError:
+            with (
+                mock.patch.object(
+                    safe_io,
+                    "_darwin_acl_api",
+                    return_value=FakeAclTextApi(serialize=True),
+                ),
+                self.assertRaisesRegex(UnsafePathError, "release Darwin ACL"),
+            ):
+                safe_io.descriptor_acl_policy_bytes(1)
+
+        with mock.patch.object(
+            safe_io,
+            "_darwin_acl_api",
+            return_value=FakeAclTextApi(serialize=False),
+        ):
+            with self.assertRaisesRegex(UnsafePathError, "serialize") as raised:
+                safe_io.descriptor_acl_policy_bytes(1)
+        self.assertTrue(
+            any(
+                "release Darwin ACL" in note
+                for note in getattr(raised.exception, "__notes__", ())
+            )
+        )
 
     def test_non_darwin_acl_hooks_do_not_load_libc_bindings(self) -> None:
         safe_io._darwin_acl_api.cache_clear()

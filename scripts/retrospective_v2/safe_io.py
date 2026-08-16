@@ -230,6 +230,7 @@ def descriptor_acl_policy_bytes(descriptor: int) -> bytes:
             f"could not inspect a bound object's Darwin ACL: errno={error_number}"
         )
     text_pointer: int | None = None
+    primary: BaseException | None = None
     try:
         length = ctypes.c_ssize_t()
         ctypes.set_errno(0)
@@ -240,6 +241,9 @@ def descriptor_acl_policy_bytes(descriptor: int) -> bytes:
                 f"errno={ctypes.get_errno()}"
             )
         return bytes(ctypes.string_at(text_pointer, length.value))
+    except BaseException as error:
+        primary = error
+        raise
     finally:
         cleanup_failures: list[str] = []
         if text_pointer and api.acl_free(text_pointer) != 0:
@@ -248,8 +252,8 @@ def descriptor_acl_policy_bytes(descriptor: int) -> bytes:
             cleanup_failures.append("inspection object")
         if cleanup_failures:
             message = "could not release Darwin ACL " + " and ".join(cleanup_failures)
-            if (active_error := sys.exception()) is not None:
-                active_error.add_note(message)
+            if primary is not None:
+                primary.add_note(message)
             else:
                 raise UnsafePathError(message)
 
@@ -2016,7 +2020,8 @@ def atomic_create_bytes_with_receipt(
     pending_name: str | None = None
     descriptor = -1
     prepared = False
-    deferred_close_error: OSError | None = None
+    primary: BaseException | None = None
+    cleanup_failures: list[tuple[str, OSError]] = []
     try:
         lock_fd = open_lock_file_at(
             directory_fd,
@@ -2125,34 +2130,53 @@ def atomic_create_bytes_with_receipt(
         ) != (receipt.file_identity, len(payload), payload_digest):
             raise UnsafePathError(f"atomic-create target content changed: {target}")
         return receipt
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        primary = sys.exception()
         if descriptor >= 0:
             try:
                 os.close(descriptor)
             except OSError as close_error:
-                if primary is not None and hasattr(primary, "add_note"):
-                    primary.add_note(
-                        "atomic-create content descriptor close failed: "
-                        f"{type(close_error).__name__}"
-                    )
-                else:
-                    deferred_close_error = close_error
+                cleanup_failures.append(
+                    ("atomic-create content descriptor close failed", close_error)
+                )
         if pending_name is not None and not prepared:
             try:
                 os.unlink(pending_name, dir_fd=directory_fd)
             except FileNotFoundError:
                 pass
+            except OSError as unlink_error:
+                cleanup_failures.append(
+                    ("atomic-create pending cleanup failed", unlink_error)
+                )
         if lock_fd is not None:
             try:
                 import fcntl
 
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            finally:
+            except OSError as unlock_error:
+                cleanup_failures.append(
+                    ("atomic-create lock release failed", unlock_error)
+                )
+            try:
                 os.close(lock_fd)
-        os.close(directory_fd)
-        if deferred_close_error is not None:
-            raise deferred_close_error
+            except OSError as close_error:
+                cleanup_failures.append(
+                    ("atomic-create lock descriptor close failed", close_error)
+                )
+        try:
+            os.close(directory_fd)
+        except OSError as close_error:
+            cleanup_failures.append(
+                ("atomic-create parent descriptor close failed", close_error)
+            )
+        if cleanup_failures:
+            if primary is not None:
+                for label, error in cleanup_failures:
+                    primary.add_note(f"{label}: {type(error).__name__}")
+            else:
+                raise cleanup_failures[0][1]
 
 
 def atomic_create_bytes(
@@ -2193,6 +2217,8 @@ def remove_atomic_created_bytes(receipt: AtomicCreateReceipt) -> None:
     lock_path = target.parent / lock_name
     lock_fd: int | None = None
     descriptors: list[tuple[str, Path, int]] = []
+    primary: BaseException | None = None
+    cleanup_failures: list[tuple[str, OSError]] = []
     try:
         if (
             _atomic_create_parent_identity(os.fstat(directory_fd))
@@ -2285,46 +2311,50 @@ def remove_atomic_created_bytes(receipt: AtomicCreateReceipt) -> None:
             os.unlink(name, dir_fd=directory_fd)
             remaining -= 1
         os.fsync(directory_fd)
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        primary = sys.exception()
         for _, _, descriptor in reversed(descriptors):
             try:
                 os.close(descriptor)
             except OSError as close_error:
-                if primary is not None and hasattr(primary, "add_note"):
-                    primary.add_note(
-                        "atomic-create rollback target descriptor close failed: "
-                        f"{type(close_error).__name__}"
+                cleanup_failures.append(
+                    (
+                        "atomic-create rollback target descriptor close failed",
+                        close_error,
                     )
+                )
         if lock_fd is not None:
             try:
                 import fcntl
 
-                try:
-                    fcntl.flock(lock_fd, fcntl.LOCK_UN)
-                except OSError as unlock_error:
-                    if primary is not None and hasattr(primary, "add_note"):
-                        primary.add_note(
-                            "atomic-create rollback lock release failed: "
-                            f"{type(unlock_error).__name__}"
-                        )
-            finally:
-                try:
-                    os.close(lock_fd)
-                except OSError as close_error:
-                    if primary is not None and hasattr(primary, "add_note"):
-                        primary.add_note(
-                            "atomic-create rollback lock descriptor close failed: "
-                            f"{type(close_error).__name__}"
-                        )
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            except OSError as unlock_error:
+                cleanup_failures.append(
+                    ("atomic-create rollback lock release failed", unlock_error)
+                )
+            try:
+                os.close(lock_fd)
+            except OSError as close_error:
+                cleanup_failures.append(
+                    (
+                        "atomic-create rollback lock descriptor close failed",
+                        close_error,
+                    )
+                )
         try:
             os.close(directory_fd)
         except OSError as close_error:
-            if primary is not None and hasattr(primary, "add_note"):
-                primary.add_note(
-                    "atomic-create rollback parent descriptor close failed: "
-                    f"{type(close_error).__name__}"
-                )
+            cleanup_failures.append(
+                ("atomic-create rollback parent descriptor close failed", close_error)
+            )
+        if cleanup_failures:
+            if primary is not None:
+                for label, error in cleanup_failures:
+                    primary.add_note(f"{label}: {type(error).__name__}")
+            else:
+                raise cleanup_failures[0][1]
 
 
 def atomic_write_json(

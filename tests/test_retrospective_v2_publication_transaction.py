@@ -692,6 +692,41 @@ class PublicationInvariantUnitTests(unittest.TestCase):
     def test_bound_git_descriptor_close_preserves_primary_and_fails_closed(
         self,
     ) -> None:
+        try:
+            raise RuntimeError("ambient outer failure")
+        except RuntimeError:
+            with (
+                mock.patch.object(
+                    git_safety.os,
+                    "close",
+                    side_effect=OSError("synthetic Git close failure"),
+                ),
+                self.assertRaisesRegex(
+                    git_safety.LocalRepositorySafetyError,
+                    "ambient Git descriptor close failed",
+                ),
+            ):
+                git_safety.close_repository_descriptors(
+                    (123,),
+                    "ambient Git",
+                )
+
+        try:
+            raise RuntimeError("ambient outer failure")
+        except RuntimeError:
+            with (
+                mock.patch.object(
+                    executable_authority.os,
+                    "close",
+                    side_effect=OSError("synthetic executable close failure"),
+                ),
+                self.assertRaisesRegex(
+                    executable_authority.ExecutableAuthorityError,
+                    "Fixture executable descriptor cleanup failed",
+                ),
+            ):
+                executable_authority._close_descriptors((123,), "Fixture")
+
         with tempfile.TemporaryDirectory(
             dir=_publication_test_temp_parent()
         ) as temporary_directory:

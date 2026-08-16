@@ -642,6 +642,47 @@ class CliContractTests(unittest.TestCase):
                         cli_path=authority.installed_v2_cli_path(),
                     )
 
+        for label, transform in (
+            (
+                "duplicate-equals-publisher",
+                lambda prompt: prompt.replace(
+                    f"--publisher-gpg-program {TEST_PUBLISHER_GPG} ",
+                    f"--publisher-gpg-program {TEST_PUBLISHER_GPG} "
+                    "--publisher-gpg-program=/tmp/untrusted-gpg ",
+                    1,
+                ),
+            ),
+            (
+                "relative-publisher",
+                lambda prompt: prompt.replace(
+                    TEST_PUBLISHER_GPG,
+                    "relative-gpg",
+                    1,
+                ),
+            ),
+            (
+                "equals-publisher",
+                lambda prompt: prompt.replace(
+                    f"--publisher-gpg-program {TEST_PUBLISHER_GPG}",
+                    f"--publisher-gpg-program={TEST_PUBLISHER_GPG}",
+                    1,
+                ),
+            ),
+        ):
+            with self.subTest(publisher_case=label):
+                record = self.write_automation_record(daily_id, daily_mode)
+                content = record.read_text(encoding="utf-8")
+                record.write_text(transform(content), encoding="utf-8")
+                with self.assertRaisesRegex(
+                    authority.AutomationCutoverBlocked,
+                    "not an active v2 production coordinator",
+                ):
+                    authority._validate_installed_automation(
+                        daily_id,
+                        automation_root=automation_root,
+                        cli_path=authority.installed_v2_cli_path(),
+                    )
+
         rejected_rrules = (
             "FREQ=DAILY;INTERVAL=365;BYHOUR=3",
             "FREQ=DAILY;COUNT=3;BYHOUR=3",

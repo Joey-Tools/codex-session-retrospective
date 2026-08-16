@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import hashlib
@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import shutil
 import stat
-import sys
 
 from . import safe_io
 
@@ -82,7 +81,12 @@ def require_authority_digest(
         )
 
 
-def _close_descriptors(descriptors: list[int], label: str) -> None:
+def _close_descriptors(
+    descriptors: Sequence[int],
+    label: str,
+    *,
+    primary: BaseException | None = None,
+) -> None:
     failures: list[OSError] = []
     for descriptor in reversed(descriptors):
         try:
@@ -92,8 +96,8 @@ def _close_descriptors(descriptors: list[int], label: str) -> None:
     if not failures:
         return
     message = f"{label} executable descriptor cleanup failed"
-    if (active_error := sys.exception()) is not None:
-        active_error.add_note(message)
+    if primary is not None:
+        primary.add_note(message)
         return
     raise ExecutableAuthorityError(message) from failures[0]
 
@@ -202,6 +206,7 @@ def _capture_exact_path(path: Path, *, label: str) -> ExecutableAuthority:
         raise ExecutableAuthorityError(f"{label} executable path is invalid")
     descriptors: list[int] = []
     directory_rows: list[tuple[str, int, int, PathObjectAuthority]] = []
+    primary: BaseException | None = None
     try:
         parent_descriptor = os.open(path.anchor, _DIRECTORY_FLAGS)
         descriptors.append(parent_descriptor)
@@ -284,14 +289,18 @@ def _capture_exact_path(path: Path, *, label: str) -> ExecutableAuthority:
             size=executable_size,
             sha256=first_digest,
         )
-    except ExecutableAuthorityError:
+    except ExecutableAuthorityError as error:
+        primary = error
         raise
     except (OSError, safe_io.UnsafePathError) as error:
-        raise ExecutableAuthorityError(
-            f"cannot authenticate the {label} executable"
-        ) from error
+        mapped = ExecutableAuthorityError(f"cannot authenticate the {label} executable")
+        primary = mapped
+        raise mapped from error
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        _close_descriptors(descriptors, label)
+        _close_descriptors(descriptors, label, primary=primary)
 
 
 def resolve_executable(

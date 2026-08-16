@@ -450,6 +450,27 @@ superseded_by:
   --check` pass. Current discovery is 1,648 tests, partitioned exactly once as
   390, 440, 450, and 368; complete final-head execution remains a hosted-CI
   prerequisite before merge.
+- The fresh-context review of signed head `9be24f25` found two remaining
+  production-boundary gaps. An equals-form `--publisher-gpg-program` could
+  override the authenticated standalone argument, and relative publisher paths
+  were resolved from ambient working-directory state. Three shared cleanup
+  owners also inferred their primary failure through `sys.exception()`, so an
+  unrelated outer `except` could suppress a successful-path close failure.
+- Production prompt validation now recognizes both publisher-argument forms,
+  rejects duplicates and equals-form overrides, and requires the one canonical
+  standalone value to be an absolute normalized path. Executable, repository,
+  history-worktree, ACL, atomic-create, and rollback cleanup chains capture and
+  pass only their local operation primary; all cleanup attempts still run, a
+  local primary receives bounded secondary evidence, and a close-only failure
+  remains actionable even inside an unrelated outer exception handler.
+- The current implementation passes focused regressions 5/5, the complete CLI
+  class 52/52 in 62.964 seconds, safe I/O 45/45, publication invariants 30/30,
+  durable publication 86/86 in 2,836.580 seconds, legacy history worktree 4/4,
+  module boundaries 19/19 with exact branch inventory and cap 8,861, and CI
+  contracts 6/6. Ruff 0.13.2 lint/format, both workflow files under
+  `actionlint`, the official OpenAI skill validator, project-journal
+  validation, and `git diff --check` pass. Complete final-head execution and
+  both Codex processors remain required before merge.
 
 ## Follow-up Work
 

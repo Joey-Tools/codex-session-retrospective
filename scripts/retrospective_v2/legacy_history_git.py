@@ -51,6 +51,7 @@ def _directory_identity(path: Path) -> tuple[int, int, int, int]:
         | getattr(os, "O_NONBLOCK", 0)
     )
     descriptor = os.open(path, flags)
+    primary: BaseException | None = None
     try:
         metadata = safe_io.validate_owner_only_directory_descriptor(
             descriptor,
@@ -76,10 +77,14 @@ def _directory_identity(path: Path) -> tuple[int, int, int, int]:
                 "history repository directory changed during inspection",
             )
         return identity
+    except BaseException as error:
+        primary = error
+        raise
     finally:
         git_safety.close_repository_descriptors(
             (descriptor,),
             "history repository",
+            primary=primary,
         )
 
 
