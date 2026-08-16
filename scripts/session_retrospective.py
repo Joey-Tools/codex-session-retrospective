@@ -7247,12 +7247,14 @@ def run_history_git(
     arguments: Iterable[str],
     *,
     text: bool = False,
+    max_output_bytes: int | None = None,
 ) -> subprocess.CompletedProcess[Any]:
     try:
         return legacy_history_git.run_history_git(
             repo,
             tuple(arguments),
             text=text,
+            max_output_bytes=max_output_bytes,
         )
     except HistoryValidationError as exc:
         raise SystemExit(str(exc)) from exc
@@ -7379,11 +7381,10 @@ def require_history_ref_current_head(repo: Path, ref: str) -> None:
 
 
 def require_history_worktree_clean(repo: Path) -> None:
-    status = run_history_git(repo, ("status", "--porcelain=v1", "-z", "--untracked-files=all"))
-    if status.returncode != 0:
-        raise SystemExit("failed to inspect history worktree status")
-    if status.stdout:
-        raise SystemExit("--history-repo worktree must be clean before advancing state")
+    try:
+        legacy_history_git.require_clean_worktree(repo)
+    except HistoryValidationError as exc:
+        raise SystemExit(str(exc)) from exc
 
 
 @dataclasses.dataclass(frozen=True)
@@ -7426,9 +7427,27 @@ def history_tree_files(repo: Path, ref: str) -> list[str]:
 
 
 def history_blob(repo: Path, ref: str, file_path: str) -> bytes:
-    blob = run_history_git(repo, ("cat-file", "blob", f"{ref}:{file_path}"))
+    object_spec = f"{ref}:{file_path}"
+    size_result = run_history_git(repo, ("cat-file", "-s", object_spec), text=True)
+    try:
+        size = int(size_result.stdout.strip())
+    except ValueError as exc:
+        raise SystemExit(f"failed to inspect history artifact: {file_path}") from exc
+    if (
+        size_result.returncode != 0
+        or size < 0
+        or size > legacy_history_git.HISTORY_ARTIFACT_LIMIT_BYTES
+    ):
+        raise SystemExit(f"failed to inspect history artifact: {file_path}")
+    blob = run_history_git(
+        repo,
+        ("cat-file", "blob", object_spec),
+        max_output_bytes=max(1, size + 1),
+    )
     if blob.returncode != 0:
         raise SystemExit(f"failed to inspect history artifact: {file_path}")
+    if len(blob.stdout) != size:
+        raise SystemExit(f"history artifact changed while read: {file_path}")
     return blob.stdout
 
 

@@ -347,7 +347,8 @@ TRANSPORT_AGGREGATE_LINE_LIMIT = 7_400
 
 BOUNDED_MODULE_LINES = {
     "executable_authority.py": 350,
-    "legacy_history_git.py": 250,
+    "legacy_history_git.py": 325,
+    "legacy_history_worktree.py": 600,
     "finalize.py": 120,
     "authority.py": 3_325,
     "cleanup_inventory.py": 925,
@@ -1181,8 +1182,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(8_732, branch_total)
-        self.assertLessEqual(branch_total, 8_732)
+        self.assertEqual(8_805, branch_total)
+        self.assertLessEqual(branch_total, 8_805)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

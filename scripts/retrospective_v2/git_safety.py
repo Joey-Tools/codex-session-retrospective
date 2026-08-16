@@ -393,6 +393,12 @@ def _close_descriptors(descriptors: Sequence[int], label: str) -> None:
     ]
 
 
+def close_repository_descriptors(descriptors: Sequence[int], label: str) -> None:
+    """Close repository-owned descriptors without replacing an active failure."""
+
+    _close_descriptors(descriptors, label)
+
+
 def _config_commitment(common_dir_fd: int, display_path: Path) -> str:
     flags = (
         os.O_RDONLY

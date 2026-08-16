@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import types
 import unittest
 from unittest import mock
@@ -32212,6 +32213,490 @@ class SessionRetrospectiveTests(unittest.TestCase):
             MODULE.require_history_worktree_clean(history_repo)
 
             self.assertFalse(marker.exists())
+
+    def test_history_git_reads_held_repository_during_path_aba(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            admitted = MODULE.require_history_repo(str(history_repo))
+            replacement_root = Path(raw) / "replacement"
+            replacement_repo, _replacement_commit = write_history_repo(replacement_root)
+            subprocess.run(
+                [
+                    "git",
+                    "remote",
+                    "set-url",
+                    "origin",
+                    "git@github.com:Joey-Tools/not-session-retrospective-history.git",
+                ],
+                cwd=replacement_repo,
+                check=True,
+            )
+            parked_repo = Path(raw) / "parked-history-repo"
+            bounded = MODULE.legacy_history_git.authority.run_bounded_history_command
+
+            def run_with_path_aba(*args: object, **kwargs: object) -> object:
+                history_repo.rename(parked_repo)
+                replacement_repo.rename(history_repo)
+                try:
+                    return bounded(*args, **kwargs)
+                finally:
+                    history_repo.rename(replacement_repo)
+                    parked_repo.rename(history_repo)
+
+            with mock.patch.object(
+                MODULE.legacy_history_git.authority,
+                "run_bounded_history_command",
+                side_effect=run_with_path_aba,
+            ):
+                self.assertEqual(
+                    [f"git@github.com:{MODULE.EXPECTED_HISTORY_REPO}.git"],
+                    MODULE.history_remote_urls(admitted, push=False),
+                )
+
+    def test_history_worktree_reads_held_repository_during_path_aba(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            admitted = MODULE.require_history_repo(str(history_repo))
+            replacement_root = Path(raw) / "replacement"
+            replacement_repo, _replacement_commit = write_history_repo(replacement_root)
+            (replacement_repo / "README.md").write_text(
+                "Replacement worktree.\n", encoding="utf-8"
+            )
+            parked_repo = Path(raw) / "parked-history-repo"
+            worktree = MODULE.legacy_history_git.legacy_history_worktree
+            scanner = worktree._scan_held_repository
+
+            def scan_with_path_aba(*args: object, **kwargs: object) -> object:
+                history_repo.rename(parked_repo)
+                replacement_repo.rename(history_repo)
+                try:
+                    return scanner(*args, **kwargs)
+                finally:
+                    history_repo.rename(replacement_repo)
+                    parked_repo.rename(history_repo)
+
+            with mock.patch.object(
+                worktree,
+                "_scan_held_repository",
+                side_effect=scan_with_path_aba,
+            ):
+                MODULE.require_history_worktree_clean(admitted)
+
+    def test_history_worktree_reuses_one_repository_admission(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            binding = MODULE.legacy_history_git._binding
+
+            with mock.patch.object(
+                MODULE.legacy_history_git,
+                "_binding",
+                wraps=binding,
+            ) as binding_spy:
+                MODULE.require_history_worktree_clean(history_repo)
+
+            binding_spy.assert_called_once_with(history_repo)
+
+    def test_history_git_output_is_bounded(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            (history_repo / "large.txt").write_text("x" * 4096, encoding="utf-8")
+            subprocess.run(["git", "add", "large.txt"], cwd=history_repo, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "Add large fixture",
+                ],
+                cwd=history_repo,
+                check=True,
+            )
+            admitted = MODULE.require_history_repo(str(history_repo))
+
+            with mock.patch.object(
+                MODULE.legacy_history_git,
+                "HISTORY_GIT_OUTPUT_LIMIT_BYTES",
+                128,
+            ):
+                with self.assertRaisesRegex(SystemExit, "output limit"):
+                    MODULE.run_history_git(
+                        admitted,
+                        ("cat-file", "blob", "HEAD:large.txt"),
+                    )
+
+    def test_history_blob_uses_declared_object_size_bound(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            payload = b"x" * 4096
+            (history_repo / "large.txt").write_bytes(payload)
+            subprocess.run(["git", "add", "large.txt"], cwd=history_repo, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "Add large fixture",
+                ],
+                cwd=history_repo,
+                check=True,
+            )
+            admitted = MODULE.require_history_repo(str(history_repo))
+
+            with mock.patch.object(
+                MODULE.legacy_history_git,
+                "HISTORY_GIT_OUTPUT_LIMIT_BYTES",
+                128,
+            ):
+                self.assertEqual(
+                    payload, MODULE.history_blob(admitted, "HEAD", "large.txt")
+                )
+
+    def test_history_worktree_rejects_torn_head_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, original_commit = write_history_repo(raw)
+            (history_repo / "README.md").write_text(
+                "Second committed tree.\n",
+                encoding="utf-8",
+            )
+            subprocess.run(["git", "add", "README.md"], cwd=history_repo, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "Add second tree",
+                ],
+                cwd=history_repo,
+                check=True,
+            )
+            second_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=history_repo,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            subprocess.run(
+                ["git", "reset", "--hard", original_commit],
+                cwd=history_repo,
+                check=True,
+                capture_output=True,
+            )
+            original_run = MODULE.legacy_history_git._run_with_binding
+            head_observations = 0
+
+            def change_head_after_final_snapshot_start(
+                *args: object, **kwargs: object
+            ) -> object:
+                nonlocal head_observations
+                result = original_run(*args, **kwargs)
+                arguments = args[1]
+                if arguments == ("rev-parse", "--verify", "HEAD^{commit}"):
+                    head_observations += 1
+                    if head_observations == 3:
+                        subprocess.run(
+                            ["git", "update-ref", "HEAD", second_commit],
+                            cwd=history_repo,
+                            check=True,
+                        )
+                return result
+
+            with mock.patch.object(
+                MODULE.legacy_history_git,
+                "_run_with_binding",
+                side_effect=change_head_after_final_snapshot_start,
+            ):
+                with self.assertRaisesRegex(SystemExit, "changed while inspected"):
+                    MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_rejects_persistent_postscan_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            worktree = MODULE.legacy_history_git.legacy_history_worktree
+            scan = worktree._scan_held_repository
+            scan_count = 0
+
+            def replace_after_first_scan(*args: object, **kwargs: object) -> object:
+                nonlocal scan_count
+                commitments = scan(*args, **kwargs)
+                scan_count += 1
+                if scan_count == 1:
+                    tracked = history_repo / "README.md"
+                    payload = tracked.read_bytes()
+                    tracked.rename(Path(raw) / "README.original")
+                    tracked.write_bytes(payload)
+                return commitments
+
+            with mock.patch.object(
+                worktree,
+                "_scan_held_repository",
+                side_effect=replace_after_first_scan,
+            ):
+                with self.assertRaisesRegex(SystemExit, "changed while inspected"):
+                    MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_commits_root_identity_and_access_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            worktree = MODULE.legacy_history_git.legacy_history_worktree
+            scan = worktree._scan_held_repository
+            observed_root_commitments: list[tuple[int, ...]] = []
+
+            def record_root_commitment(*args: object, **kwargs: object) -> object:
+                commitments = scan(*args, **kwargs)
+                repository_fd = args[0]
+                self.assertIsInstance(repository_fd, int)
+                expected = worktree._identity_and_access_policy(os.fstat(repository_fd))
+                self.assertEqual(expected, commitments[b""].identity_and_access_policy)
+                observed_root_commitments.append(expected)
+                return commitments
+
+            with mock.patch.object(
+                worktree,
+                "_scan_held_repository",
+                side_effect=record_root_commitment,
+            ):
+                MODULE.require_history_worktree_clean(history_repo)
+
+            self.assertEqual(2, len(observed_root_commitments))
+            self.assertEqual(
+                observed_root_commitments[0],
+                observed_root_commitments[1],
+            )
+
+    def test_history_worktree_passes_one_cumulative_git_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            worktree = MODULE.legacy_history_git.legacy_history_worktree
+            original_run = MODULE.legacy_history_git._run_with_binding
+            observed_deadlines: list[float] = []
+            MODULE.legacy_history_git._binding(history_repo)
+
+            def record_deadline(*args: object, **kwargs: object) -> object:
+                observed_deadlines.append(kwargs["deadline"])
+                return original_run(*args, **kwargs)
+
+            started = time.monotonic()
+            with (
+                mock.patch.object(worktree, "HISTORY_WORKTREE_TIMEOUT_SECONDS", 10),
+                mock.patch.object(
+                    MODULE.legacy_history_git,
+                    "_run_with_binding",
+                    side_effect=record_deadline,
+                ),
+            ):
+                MODULE.require_history_worktree_clean(history_repo)
+
+            self.assertGreaterEqual(len(observed_deadlines), 14)
+            self.assertEqual(
+                [observed_deadlines[0]] * len(observed_deadlines),
+                observed_deadlines,
+            )
+            self.assertGreater(observed_deadlines[0], started)
+            self.assertAlmostEqual(
+                10,
+                observed_deadlines[0] - started,
+                delta=0.1,
+            )
+
+    def test_history_git_recomputes_remaining_time_at_process_launch(self) -> None:
+        bounded_result = subprocess.CompletedProcess(
+            args=("git",),
+            returncode=0,
+            stdout=b"",
+            stderr=b"",
+        )
+        history_git = MODULE.legacy_history_git
+        with (
+            mock.patch.object(history_git.time, "monotonic", return_value=99.25),
+            mock.patch.object(
+                history_git.authority,
+                "run_bounded_history_command",
+                return_value=bounded_result,
+            ) as bounded,
+        ):
+            history_git._run_process(
+                ("git",),
+                environment={},
+                deadline=100.0,
+                text=False,
+            )
+
+        self.assertAlmostEqual(
+            0.75,
+            bounded.call_args.kwargs["timeout_seconds"],
+        )
+
+    def test_history_worktree_rejects_tracked_content_change(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            (history_repo / "README.md").write_text(
+                "Changed worktree.\n", encoding="utf-8"
+            )
+
+            with self.assertRaisesRegex(SystemExit, "worktree must be clean"):
+                MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_requires_owner_execute_bit(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            executable = history_repo / "tool.sh"
+            executable.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            os.chmod(executable, 0o755)
+            subprocess.run(["git", "add", "tool.sh"], cwd=history_repo, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "Add executable fixture",
+                ],
+                cwd=history_repo,
+                check=True,
+            )
+            os.chmod(executable, 0o655)
+
+            with self.assertRaisesRegex(SystemExit, "worktree must be clean"):
+                MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_accepts_benign_timestamp_change(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            os.utime(history_repo / "README.md", None)
+
+            MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_accepts_empty_untracked_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            (history_repo / "empty-local-directory").mkdir()
+
+            MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_accepts_artifact_above_legacy_file_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            worktree = MODULE.legacy_history_git.legacy_history_worktree
+            self.assertEqual(
+                MODULE.legacy_history_git.HISTORY_ARTIFACT_LIMIT_BYTES,
+                worktree.MAX_HISTORY_WORKTREE_FILE_BYTES,
+            )
+            artifact = history_repo / "large-artifact.jsonl"
+            with artifact.open("wb") as stream:
+                stream.truncate(64 * 1024 * 1024 + 1)
+            subprocess.run(
+                ["git", "add", "large-artifact.jsonl"],
+                cwd=history_repo,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "Add large retained fixture",
+                ],
+                cwd=history_repo,
+                check=True,
+            )
+
+            MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_rejects_tracked_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            os.symlink("README.md", history_repo / "README-link")
+            subprocess.run(["git", "add", "README-link"], cwd=history_repo, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "Add symlink fixture",
+                ],
+                cwd=history_repo,
+                check=True,
+            )
+
+            with self.assertRaisesRegex(SystemExit, "symlinks cannot be authenticated"):
+                MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_rejects_ignored_untracked_file(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            (history_repo / ".gitignore").write_text("local-cache/\n", encoding="utf-8")
+            subprocess.run(["git", "add", ".gitignore"], cwd=history_repo, check=True)
+            subprocess.run(
+                [
+                    "git",
+                    "-c",
+                    "commit.gpgsign=false",
+                    "commit",
+                    "-q",
+                    "-m",
+                    "Add ignore fixture",
+                ],
+                cwd=history_repo,
+                check=True,
+            )
+            cache = history_repo / "local-cache"
+            cache.mkdir()
+            (cache / "state.json").write_text("{}\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(SystemExit, "worktree must be clean"):
+                MODULE.require_history_worktree_clean(history_repo)
+
+    def test_history_worktree_limits_are_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            worktree = MODULE.legacy_history_git.legacy_history_worktree
+
+            with self.subTest("file-bytes"):
+                with mock.patch.object(
+                    worktree,
+                    "MAX_HISTORY_WORKTREE_FILE_BYTES",
+                    1,
+                ):
+                    with self.assertRaisesRegex(SystemExit, "file exceeds"):
+                        MODULE.require_history_worktree_clean(history_repo)
+
+            with self.subTest("records"):
+                with mock.patch.object(
+                    worktree,
+                    "MAX_HISTORY_WORKTREE_ENTRIES",
+                    1,
+                ):
+                    with self.assertRaisesRegex(SystemExit, "entry bound"):
+                        MODULE.require_history_worktree_clean(history_repo)
+
+            with self.subTest("physical-fanout"):
+                for ordinal in range(3):
+                    (history_repo / f"empty-{ordinal}").mkdir()
+                with mock.patch.object(
+                    worktree,
+                    "MAX_HISTORY_WORKTREE_ENTRIES",
+                    3,
+                ):
+                    with self.assertRaisesRegex(SystemExit, "entry bound"):
+                        MODULE.require_history_worktree_clean(history_repo)
 
     def test_history_git_rejects_repository_local_includes(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

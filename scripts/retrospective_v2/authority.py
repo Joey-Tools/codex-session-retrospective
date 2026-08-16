@@ -773,6 +773,27 @@ def _run_bounded(
         terminate_process_group()
 
 
+def run_bounded_history_command(
+    argv: Sequence[str],
+    *,
+    env: Mapping[str, str],
+    pass_fds: tuple[int, ...] = (),
+    input_bytes: bytes | None = None,
+    max_output_bytes: int = MAX_GIT_OUTPUT_BYTES,
+    timeout_seconds: float = 30.0,
+) -> subprocess.CompletedProcess[bytes]:
+    """Run one history command under the shared output and process bounds."""
+
+    return _run_bounded(
+        argv,
+        env=env,
+        pass_fds=pass_fds,
+        input_bytes=input_bytes,
+        max_output_bytes=max_output_bytes,
+        timeout_seconds=timeout_seconds,
+    )
+
+
 class _GitRepository:
     def __init__(
         self,

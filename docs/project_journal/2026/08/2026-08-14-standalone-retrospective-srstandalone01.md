@@ -380,6 +380,31 @@ superseded_by:
   changed-file formatting, both workflows under `actionlint`, the official
   OpenAI skill validator, CI/skill contracts 11/11, and `git diff --check` are
   clean on the same working tree.
+- The fresh-context review of signed PR head `30cd6e40` found two history-read
+  gaps: commands reopened the admitted repository by its mutable absolute path,
+  and ordinary Git stdout/stderr capture had no aggregate byte ceiling. The
+  superseding implementation runs every post-admission Git command through the
+  held repository descriptors and the shared bounded process runner. Clean-tree
+  proof now compares exact HEAD/index snapshots with two descriptor-relative
+  physical worktree commitments, including root and child identity, content,
+  ownership, group, mode, and ACL policy. It accepts benign timestamp churn but
+  rejects object replacement, content drift, unsafe policy, ignored/untracked
+  files, symlinks, unsupported objects, torn snapshots, and owner-execute drift.
+- History blob reads first bind the declared object size and then use a
+  size-derived output ceiling. The physical scanner shares one absolute
+  30-second deadline across Git and filesystem phases, bounds entries, paths,
+  depth, per-file bytes, and aggregate bytes, and derives its 256 MiB per-file
+  ceiling from the retained-artifact authority rather than the retired 64 MiB
+  implementation limit.
+- The final history-security matrix passes 21/21 in 22.909 seconds; the module
+  boundary suite passes 19/19 with exact branch inventory 8,805; CI contracts
+  pass 6/6; and Ruff 0.13.2 lint/format, `actionlint`, the installed skill
+  validator, project-journal validation, and `git diff --check` pass. Current
+  discovery is 1,639 tests. Local four-way and two-way full-suite attempts are
+  non-counting because the host volume reached `ENOSPC`; no assertion failure
+  was observed, every interrupted process group was drained, and no repository
+  worktree was deleted to manufacture capacity. The exact committed head must
+  therefore obtain its complete four-shard result from hosted CI before merge.
 
 ## Follow-up Work
 

@@ -7,13 +7,23 @@ from dataclasses import dataclass
 import os
 from pathlib import Path
 import subprocess
+import time
 from typing import Any
 
-from . import executable_authority, git_safety, safe_io
+from . import (
+    authority,
+    executable_authority,
+    git_safety,
+    legacy_history_worktree,
+    reporting,
+    safe_io,
+)
 from .authority_errors import HistoryValidationError
 
 
 HISTORY_GIT_TIMEOUT_SECONDS = 30
+HISTORY_GIT_OUTPUT_LIMIT_BYTES = authority.MAX_GIT_OUTPUT_BYTES
+HISTORY_ARTIFACT_LIMIT_BYTES = reporting.MAX_RETAINED_ARTIFACT_BYTES
 
 
 @dataclass(frozen=True)
@@ -67,7 +77,10 @@ def _directory_identity(path: Path) -> tuple[int, int, int, int]:
             )
         return identity
     finally:
-        os.close(descriptor)
+        git_safety.close_repository_descriptors(
+            (descriptor,),
+            "history repository",
+        )
 
 
 def _environment() -> dict[str, str]:
@@ -83,15 +96,8 @@ def _environment() -> dict[str, str]:
     }
 
 
-def _command(
-    executable: str,
-    repository: Path,
-    arguments: Sequence[str],
-    *,
-    admission: git_safety.LocalRepositoryAdmission | None,
-) -> tuple[str, ...]:
-    prefix = (
-        executable,
+def _safe_arguments(arguments: Sequence[str]) -> tuple[str, ...]:
+    return (
         "--no-pager",
         "-c",
         "core.hooksPath=/dev/null",
@@ -115,13 +121,20 @@ def _command(
         "diff.external=",
         "-c",
         "color.ui=false",
+        *arguments,
     )
-    if admission is None:
-        return (*prefix, "-C", str(repository), *arguments)
+
+
+def _bootstrap_command(
+    executable: str,
+    repository: Path,
+    arguments: Sequence[str],
+) -> tuple[str, ...]:
     return (
-        *prefix,
-        f"--git-dir={admission.git_dir}",
-        f"--work-tree={repository}",
+        executable,
+        *_safe_arguments(()),
+        "-C",
+        str(repository),
         *arguments,
     )
 
@@ -129,16 +142,41 @@ def _command(
 def _run_process(
     command: tuple[str, ...],
     *,
+    environment: dict[str, str],
+    pass_fds: tuple[int, ...] = (),
+    max_output_bytes: int | None = None,
+    timeout_seconds: float | None = None,
+    deadline: float | None = None,
     text: bool,
 ) -> subprocess.CompletedProcess[Any]:
-    return subprocess.run(
+    effective_timeout = (
+        HISTORY_GIT_TIMEOUT_SECONDS if timeout_seconds is None else timeout_seconds
+    )
+    if deadline is not None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise HistoryValidationError(
+                "history worktree inspection exceeded its deadline"
+            )
+        effective_timeout = min(effective_timeout, remaining)
+    result = authority.run_bounded_history_command(
         command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=text,
-        check=False,
-        env=_environment(),
-        timeout=HISTORY_GIT_TIMEOUT_SECONDS,
+        env=environment,
+        pass_fds=pass_fds,
+        timeout_seconds=effective_timeout,
+        max_output_bytes=(
+            HISTORY_GIT_OUTPUT_LIMIT_BYTES
+            if max_output_bytes is None
+            else max_output_bytes
+        ),
+    )
+    if not text:
+        return result
+    return subprocess.CompletedProcess(
+        args=result.args,
+        returncode=result.returncode,
+        stdout=result.stdout.decode("utf-8", errors="surrogateescape"),
+        stderr=result.stderr.decode("utf-8", errors="surrogateescape"),
     )
 
 
@@ -149,7 +187,7 @@ def _binding(repository: Path) -> _HistoryGitBinding:
     if cached is not None:
         return cached
     try:
-        authority = executable_authority.resolve_executable(
+        git_authority = executable_authority.resolve_executable(
             executable_authority.DEFAULT_GIT_EXECUTABLE,
             label="history Git",
         )
@@ -157,14 +195,14 @@ def _binding(repository: Path) -> _HistoryGitBinding:
         def bootstrap(
             arguments: tuple[str, ...],
         ) -> subprocess.CompletedProcess[bytes]:
-            with executable_authority.executable_invocation(authority):
+            with executable_authority.executable_invocation(git_authority):
                 return _run_process(
-                    _command(
-                        authority.path,
+                    _bootstrap_command(
+                        git_authority.path,
                         canonical,
                         arguments,
-                        admission=None,
                     ),
+                    environment=_environment(),
                     text=False,
                 )
 
@@ -181,8 +219,9 @@ def _binding(repository: Path) -> _HistoryGitBinding:
             bootstrap,
             _directory_identity,
         )
+    except HistoryValidationError:
+        raise
     except (
-        HistoryValidationError,
         OSError,
         ValueError,
         subprocess.TimeoutExpired,
@@ -191,37 +230,44 @@ def _binding(repository: Path) -> _HistoryGitBinding:
         raise HistoryValidationError(
             "history repository failed local safety admission"
         ) from error
-    binding = _HistoryGitBinding(canonical, authority, admission)
+    binding = _HistoryGitBinding(canonical, git_authority, admission)
     _BINDINGS[cache_key] = binding
     return binding
 
 
-def run_history_git(
-    repository: Path,
+def _run_with_binding(
+    binding: _HistoryGitBinding,
     arguments: Sequence[str],
     *,
     text: bool = False,
+    max_output_bytes: int | None = None,
+    timeout_seconds: float | None = None,
+    deadline: float | None = None,
 ) -> subprocess.CompletedProcess[Any]:
     """Run one isolated read while holding and revalidating repository objects."""
 
-    binding = _binding(repository)
     try:
         with executable_authority.executable_invocation(binding.executable):
-            with git_safety.bind_local_repository_command(
+            with git_safety.history_repository_git_invocation(
                 binding.admission,
+                binding.repository,
+                binding.executable.path,
+                _safe_arguments(arguments),
+                _environment(),
                 _directory_identity,
-            ):
+            ) as (command, environment, descriptors):
                 return _run_process(
-                    _command(
-                        binding.executable.path,
-                        binding.repository,
-                        arguments,
-                        admission=binding.admission,
-                    ),
+                    command,
+                    environment=environment,
+                    pass_fds=descriptors,
+                    max_output_bytes=max_output_bytes,
+                    timeout_seconds=timeout_seconds,
+                    deadline=deadline,
                     text=text,
                 )
+    except HistoryValidationError:
+        raise
     except (
-        HistoryValidationError,
         OSError,
         ValueError,
         subprocess.TimeoutExpired,
@@ -230,3 +276,35 @@ def run_history_git(
         raise HistoryValidationError(
             "history repository safety binding changed"
         ) from error
+
+
+def run_history_git(
+    repository: Path,
+    arguments: Sequence[str],
+    *,
+    text: bool = False,
+    max_output_bytes: int | None = None,
+) -> subprocess.CompletedProcess[Any]:
+    return _run_with_binding(
+        _binding(repository),
+        arguments,
+        text=text,
+        max_output_bytes=max_output_bytes,
+    )
+
+
+def require_clean_worktree(repository: Path) -> None:
+    """Prove the held worktree, index, and HEAD expose one exact file tree."""
+
+    binding = _binding(repository)
+    legacy_history_worktree.require_clean_worktree(
+        binding.repository,
+        admission=binding.admission,
+        run_git=lambda arguments, deadline: _run_with_binding(
+            binding,
+            arguments,
+            text=False,
+            deadline=deadline,
+        ),
+        directory_identity=_directory_identity,
+    )
