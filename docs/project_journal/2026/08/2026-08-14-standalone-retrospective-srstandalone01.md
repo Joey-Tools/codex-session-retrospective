@@ -424,6 +424,32 @@ superseded_by:
   implementation files. Current discovery is 1,645 tests, partitioned exactly
   once as 390, 440, 448, and 367; complete final-head execution remains a
   hosted-CI prerequisite before merge.
+- A fresh-context review of signed head `da7fc8e` found three additional
+  cutover-contract defects: mode and RRULE checks were not closed, descriptor
+  cleanup inferred a primary failure from the ambient exception context, and
+  Darwin/BSD write-delete restriction flags were absent from the automation
+  access-policy binding. Its otherwise-green admission and hosted CI are stale
+  after the required fixes and do not count toward merge readiness.
+- The review fix parses the one canonical isolated launch into exact tokens,
+  rejects duplicate, conflicting, or equals-form mode arguments, and admits
+  only a closed daily/weekly RRULE component set with unit interval, no
+  termination condition, and at most one bounded time/day selector. Descriptor
+  owners now receive the current operation's primary exception explicitly, so
+  an outer `except` block cannot suppress a successful-path close failure while
+  a local primary still retains cleanup failure as secondary evidence.
+- Automation root, stable-ID directory, and record identities now include the
+  BSD write/delete restriction mask and reject any nonzero restricted state on
+  initial validation or revalidation. Tests cover initial directory and file
+  flags, final descriptor flag drift, ambiguous modes, low-frequency or
+  terminating RRULEs, ambient-exception close failure, and local-primary close
+  precedence.
+- The review-fix implementation passes its focused regressions 3/3, the full
+  v2 CLI/cutover class 52/52 in 64.407 seconds, module boundaries 19/19 with
+  exact branch inventory 8,860, CI contracts 6/6, and production-marker
+  integration 2/2 in 42.271 seconds. Ruff 0.13.2 lint/format and `git diff
+  --check` pass. Current discovery is 1,648 tests, partitioned exactly once as
+  390, 440, 450, and 368; complete final-head execution remains a hosted-CI
+  prerequisite before merge.
 
 ## Follow-up Work
 

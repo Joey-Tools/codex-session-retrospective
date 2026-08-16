@@ -1,4 +1,4 @@
-"""Descriptor-bound automation records used by the v2 cutover authority."""
+"""Descriptor-bound automation records and their production contract."""
 
 from __future__ import annotations
 
@@ -7,12 +7,20 @@ import hashlib
 import hmac
 import os
 from pathlib import Path
+import shlex
 import stat
-import sys
 from typing import Sequence
 
 from . import safe_io
 from .authority_errors import AutomationCutoverBlocked
+
+
+_AUTOMATION_ACCESS_POLICY_FLAG_MASK = 0x001E0096  # BSD write/delete restrictions.
+_WEEKDAYS = frozenset({"MO", "TU", "WE", "TH", "FR", "SA", "SU"})
+
+
+def _access_policy_flags(metadata: os.stat_result) -> int:
+    return int(getattr(metadata, "st_flags", 0)) & _AUTOMATION_ACCESS_POLICY_FLAG_MASK
 
 
 def _directory_identity(metadata: os.stat_result) -> tuple[int, ...]:
@@ -23,6 +31,7 @@ def _directory_identity(metadata: os.stat_result) -> tuple[int, ...]:
         int(metadata.st_gid),
         int(stat.S_IFMT(metadata.st_mode)),
         int(stat.S_IMODE(metadata.st_mode)),
+        _access_policy_flags(metadata),
     )
 
 
@@ -34,7 +43,12 @@ def _file_identity(metadata: os.stat_result) -> tuple[int, ...]:
     )
 
 
-def _close_descriptors(descriptors: Sequence[int], *, label: str) -> None:
+def _close_descriptors(
+    descriptors: Sequence[int],
+    *,
+    label: str,
+    primary: BaseException | None = None,
+) -> None:
     failures: list[OSError] = []
     for descriptor in reversed(descriptors):
         try:
@@ -44,10 +58,82 @@ def _close_descriptors(descriptors: Sequence[int], *, label: str) -> None:
     if not failures:
         return
     message = f"{label} descriptor close failed"
-    if (active_error := sys.exception()) is not None:
-        active_error.add_note(message)
+    if primary is not None:
+        primary.add_note(message)
         return
     raise AutomationCutoverBlocked(message) from failures[0]
+
+
+def production_prompt_is_closed(
+    prompt: str,
+    *,
+    cli_path: Path,
+    expected_mode: str,
+) -> bool:
+    try:
+        tokens = shlex.split(prompt)
+    except ValueError:
+        return False
+    launch = ("python3", "-I", "-B", "-S", str(cli_path), "start")
+    launch_offsets = [
+        offset
+        for offset in range(len(tokens) - len(launch) + 1)
+        if tuple(tokens[offset : offset + len(launch)]) == launch
+    ]
+    mode_offsets = [
+        offset
+        for offset, token in enumerate(tokens)
+        if token == "--mode" or token.startswith("--mode=")
+    ]
+    publisher_offsets = [
+        offset
+        for offset, token in enumerate(tokens)
+        if token == "--publisher-gpg-program"
+    ]
+    return (
+        len(launch_offsets) == 1
+        and tokens.count(str(cli_path)) == 1
+        and len(mode_offsets) == 1
+        and mode_offsets[0] == launch_offsets[0] + len(launch)
+        and mode_offsets[0] + 1 < len(tokens)
+        and tokens[mode_offsets[0]] == "--mode"
+        and tokens[mode_offsets[0] + 1] == expected_mode
+        and len(publisher_offsets) == 1
+        and publisher_offsets[0] == mode_offsets[0] + 2
+        and publisher_offsets[0] + 1 < len(tokens)
+        and not tokens[publisher_offsets[0] + 1].startswith("--")
+    )
+
+
+def production_rrule_is_closed(rrule: str, *, expected_mode: str) -> bool:
+    components: dict[str, str] = {}
+    for field in rrule.split(";"):
+        if field.count("=") != 1:
+            return False
+        key, value = field.split("=", 1)
+        if not key or not value or key != key.upper() or key in components:
+            return False
+        components[key] = value
+    allowed = {"FREQ", "INTERVAL", "BYHOUR", "BYMINUTE", "BYSECOND"}
+    if expected_mode == "weekly":
+        allowed.add("BYDAY")
+    expected_frequency = "DAILY" if expected_mode == "daily" else "WEEKLY"
+    if (
+        set(components) - allowed
+        or components.get("FREQ") != expected_frequency
+        or components.get("INTERVAL", "1") != "1"
+    ):
+        return False
+    for key, upper_bound in (("BYHOUR", 23), ("BYMINUTE", 59), ("BYSECOND", 59)):
+        value = components.get(key)
+        if value is not None and (
+            not value.isascii()
+            or not value.isdecimal()
+            or str(int(value)) != value
+            or not 0 <= int(value) <= upper_bound
+        ):
+            return False
+    return "BYDAY" not in components or components["BYDAY"] in _WEEKDAYS
 
 
 def _validate_directory_descriptor(
@@ -65,11 +151,12 @@ def _validate_directory_descriptor(
         raise AutomationCutoverBlocked(
             "automation directory ownership or access policy is invalid"
         ) from exc
-    if acl_policy:
+    identity = _directory_identity(metadata)
+    if acl_policy or _access_policy_flags(metadata):
         raise AutomationCutoverBlocked(
             "automation directory ownership or access policy is invalid"
         )
-    return _directory_identity(metadata), acl_policy
+    return identity, acl_policy
 
 
 def _validate_file_descriptor(
@@ -85,6 +172,7 @@ def _validate_file_descriptor(
         raise AutomationCutoverBlocked(
             "automation record ownership or access policy is invalid"
         ) from exc
+    identity = _file_identity(metadata)
     if (
         not stat.S_ISREG(metadata.st_mode)
         or metadata.st_uid != os.getuid()
@@ -92,11 +180,12 @@ def _validate_file_descriptor(
         or metadata.st_nlink != 1
         or metadata.st_size > max_bytes
         or acl_policy
+        or _access_policy_flags(metadata)
     ):
         raise AutomationCutoverBlocked(
             "automation record ownership or access policy is invalid"
         )
-    return _file_identity(metadata), acl_policy
+    return identity, acl_policy
 
 
 def _read_record_pass(
@@ -154,10 +243,10 @@ class AutomationRootBinding:
         ):
             raise AutomationCutoverBlocked("automation root identity changed")
 
-    def close(self) -> None:
+    def close(self, *, primary: BaseException | None = None) -> None:
         descriptor, self.descriptor = self.descriptor, -1
         if descriptor != -1:
-            _close_descriptors((descriptor,), label="automation root")
+            _close_descriptors((descriptor,), label="automation root", primary=primary)
 
 
 @dataclass(slots=True)
@@ -243,13 +332,14 @@ class AutomationRecordBinding:
                 "automation record content changed while it was authenticated"
             )
 
-    def close(self) -> None:
+    def close(self, *, primary: BaseException | None = None) -> None:
         descriptors = (self.directory_descriptor, self.record_descriptor)
         self.directory_descriptor = -1
         self.record_descriptor = -1
         _close_descriptors(
             tuple(descriptor for descriptor in descriptors if descriptor != -1),
             label="automation record",
+            primary=primary,
         )
 
 
@@ -295,7 +385,7 @@ def open_automation_root(
         return binding
     except BaseException as exc:
         if descriptor is not None:
-            _close_descriptors((descriptor,), label="automation root")
+            _close_descriptors((descriptor,), label="automation root", primary=exc)
         if isinstance(exc, AutomationCutoverBlocked):
             raise
         raise AutomationCutoverBlocked(
@@ -392,7 +482,7 @@ def open_automation_record_binding(
         )
         binding.revalidate_navigation()
         return binding
-    except BaseException:
+    except BaseException as exc:
         _close_descriptors(
             tuple(
                 descriptor
@@ -400,6 +490,7 @@ def open_automation_record_binding(
                 if descriptor is not None
             ),
             label="automation record",
+            primary=exc,
         )
         raise
 
@@ -407,6 +498,8 @@ def open_automation_record_binding(
 def close_automation_bindings(
     root: AutomationRootBinding,
     bindings: Sequence[AutomationRecordBinding],
+    *,
+    primary: BaseException | None = None,
 ) -> None:
     descriptors = [root.descriptor]
     root.descriptor = -1
@@ -417,6 +510,7 @@ def close_automation_bindings(
     _close_descriptors(
         tuple(descriptor for descriptor in descriptors if descriptor != -1),
         label="automation authority",
+        primary=primary,
     )
 
 
@@ -428,6 +522,7 @@ def read_installed_automation_bytes(
 ) -> bytes:
     root: AutomationRootBinding | None = None
     binding: AutomationRecordBinding | None = None
+    primary: BaseException | None = None
     try:
         root = open_automation_root(
             automation_root,
@@ -439,12 +534,17 @@ def read_installed_automation_bytes(
         binding.revalidate()
         return binding.raw
     except (OSError, RuntimeError) as exc:
-        raise AutomationCutoverBlocked(
+        primary = AutomationCutoverBlocked(
             "required automation record is unavailable or invalid"
-        ) from exc
+        )
+        raise primary from exc
+    except BaseException as exc:
+        primary = exc
+        raise
     finally:
         if root is not None:
             close_automation_bindings(
                 root,
                 () if binding is None else (binding,),
+                primary=primary,
             )

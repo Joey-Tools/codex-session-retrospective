@@ -221,10 +221,13 @@ class CliContractTests(unittest.TestCase):
         *,
         prompt_suffix: str = "",
         reference_only: bool = False,
+        schedule_override: str | None = None,
     ) -> Path:
         record_dir = self.root / ".codex" / "automations" / automation_id
         record_dir.mkdir(parents=True, exist_ok=True)
         schedule = "FREQ=DAILY;BYHOUR=3" if mode == "daily" else "FREQ=WEEKLY;BYDAY=MO"
+        if schedule_override is not None:
+            schedule = schedule_override
         prompt = (
             "Run python3 -I -B -S "
             f"{authority.installed_v2_cli_path()} start --mode {mode} "
@@ -245,6 +248,22 @@ class CliContractTests(unittest.TestCase):
         record = record_dir / "automation.toml"
         record.write_text("\n".join(fields) + "\n", encoding="utf-8")
         return record
+
+    @staticmethod
+    def metadata_with_flags(metadata: os.stat_result, flags: int) -> object:
+        flagged = mock.Mock()
+        for field in (
+            "st_dev",
+            "st_ino",
+            "st_uid",
+            "st_gid",
+            "st_mode",
+            "st_nlink",
+            "st_size",
+        ):
+            setattr(flagged, field, getattr(metadata, field))
+        flagged.st_flags = flags
+        return flagged
 
     def automation_root(self) -> Path:
         root = self.root / ".codex" / "automations"
@@ -599,6 +618,215 @@ class CliContractTests(unittest.TestCase):
                 capability_result=self.automation_result(snapshot),
                 pre_update_snapshot=snapshot,
                 installed_commit="a" * 40,
+                automation_root=automation_root,
+            )
+
+    def test_cutover_record_rejects_ambiguous_modes_and_bounded_rrules(self) -> None:
+        automation_root = self.automation_root()
+        daily_id = "daily-session-retrospective"
+        daily_mode = authority.STABLE_AUTOMATION_MODES[daily_id]
+        for suffix in (" Use --mode weekly.", " Use --mode=daily."):
+            with self.subTest(prompt_suffix=suffix):
+                self.write_automation_record(
+                    daily_id,
+                    daily_mode,
+                    prompt_suffix=suffix,
+                )
+                with self.assertRaisesRegex(
+                    authority.AutomationCutoverBlocked,
+                    "not an active v2 production coordinator",
+                ):
+                    authority._validate_installed_automation(
+                        daily_id,
+                        automation_root=automation_root,
+                        cli_path=authority.installed_v2_cli_path(),
+                    )
+
+        rejected_rrules = (
+            "FREQ=DAILY;INTERVAL=365;BYHOUR=3",
+            "FREQ=DAILY;COUNT=3;BYHOUR=3",
+            "FREQ=DAILY;UNTIL=20260831T000000Z;BYHOUR=3",
+            "FREQ=DAILY;BYMONTH=1;BYHOUR=3",
+            "FREQ=DAILY;FREQ=DAILY;BYHOUR=3",
+            "FREQ=DAILY;BYHOUR=3,4",
+        )
+        for schedule in rejected_rrules:
+            with self.subTest(schedule=schedule):
+                self.write_automation_record(
+                    daily_id,
+                    daily_mode,
+                    schedule_override=schedule,
+                )
+                with self.assertRaisesRegex(
+                    authority.AutomationCutoverBlocked,
+                    "not an active v2 production coordinator",
+                ):
+                    authority._validate_installed_automation(
+                        daily_id,
+                        automation_root=automation_root,
+                        cli_path=authority.installed_v2_cli_path(),
+                    )
+
+        weekly_id = "weekly-session-retrospective"
+        self.write_automation_record(
+            weekly_id,
+            authority.STABLE_AUTOMATION_MODES[weekly_id],
+            schedule_override="FREQ=WEEKLY;BYDAY=MO,TU",
+        )
+        with self.assertRaisesRegex(
+            authority.AutomationCutoverBlocked,
+            "not an active v2 production coordinator",
+        ):
+            authority._validate_installed_automation(
+                weekly_id,
+                automation_root=automation_root,
+                cli_path=authority.installed_v2_cli_path(),
+            )
+
+        self.write_automation_record(
+            daily_id,
+            daily_mode,
+            schedule_override="BYHOUR=3;INTERVAL=1;FREQ=DAILY",
+        )
+        record_path, _digest = authority._validate_installed_automation(
+            daily_id,
+            automation_root=automation_root,
+            cli_path=authority.installed_v2_cli_path(),
+        )
+        self.assertEqual(
+            (automation_root / daily_id / "automation.toml").resolve(),
+            Path(record_path),
+        )
+
+    def test_cutover_descriptor_close_uses_only_explicit_primary(self) -> None:
+        close_error = OSError("synthetic close failure")
+        try:
+            raise RuntimeError("ambient outer failure")
+        except RuntimeError:
+            with (
+                mock.patch.object(os, "close", side_effect=close_error),
+                self.assertRaisesRegex(
+                    authority.AutomationCutoverBlocked,
+                    "descriptor close failed",
+                ),
+            ):
+                authority.automation_cutover_files._close_descriptors(
+                    (123,),
+                    label="test",
+                )
+
+        primary = authority.AutomationCutoverBlocked("local primary")
+        with mock.patch.object(os, "close", side_effect=close_error):
+            authority.automation_cutover_files._close_descriptors(
+                (123,),
+                label="test",
+                primary=primary,
+            )
+        self.assertIn("test descriptor close failed", primary.__notes__)
+
+    def test_cutover_rejects_initial_and_revalidated_restrictive_flags(self) -> None:
+        automation_root = self.automation_root()
+        records = self.write_all_automation_records()
+        target = records["daily-session-retrospective"]
+        restricted_flag = (
+            authority.automation_cutover_files._AUTOMATION_ACCESS_POLICY_FLAG_MASK
+            & -authority.automation_cutover_files._AUTOMATION_ACCESS_POLICY_FLAG_MASK
+        )
+        root_descriptor = os.open(automation_root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            root_metadata = os.fstat(root_descriptor)
+            with (
+                mock.patch.object(
+                    authority.automation_cutover_files.safe_io,
+                    "validate_owner_only_directory_descriptor",
+                    return_value=self.metadata_with_flags(
+                        root_metadata,
+                        restricted_flag,
+                    ),
+                ),
+                mock.patch.object(
+                    authority.automation_cutover_files.safe_io,
+                    "descriptor_acl_policy_bytes",
+                    return_value=b"",
+                ),
+                self.assertRaisesRegex(
+                    authority.AutomationCutoverBlocked,
+                    "access policy is invalid",
+                ),
+            ):
+                authority.automation_cutover_files._validate_directory_descriptor(
+                    root_descriptor,
+                    automation_root,
+                )
+        finally:
+            os.close(root_descriptor)
+
+        descriptor = os.open(target, os.O_RDONLY)
+        try:
+            metadata = os.fstat(descriptor)
+            with (
+                mock.patch.object(
+                    os,
+                    "fstat",
+                    return_value=self.metadata_with_flags(metadata, restricted_flag),
+                ),
+                mock.patch.object(
+                    authority.automation_cutover_files.safe_io,
+                    "descriptor_acl_policy_bytes",
+                    return_value=b"",
+                ),
+                self.assertRaisesRegex(
+                    authority.AutomationCutoverBlocked,
+                    "access policy is invalid",
+                ),
+            ):
+                authority.automation_cutover_files._validate_file_descriptor(
+                    descriptor,
+                    target,
+                    max_bytes=authority.MAX_AUTOMATION_RECORD_BYTES,
+                )
+        finally:
+            os.close(descriptor)
+
+        snapshot = self.capture_cutover_snapshot("record-flags-drift")
+        for automation_id, mode in authority.STABLE_AUTOMATION_MODES.items():
+            self.write_automation_record(
+                automation_id,
+                mode,
+                prompt_suffix=" Verified update.",
+            )
+        real_fstat = os.fstat
+        real_normalize = authority._normalize_automation_update_result
+        target_identity = (target.stat().st_dev, target.stat().st_ino)
+        inject_drift = False
+
+        def fstat_with_drift(descriptor):
+            metadata = real_fstat(descriptor)
+            if inject_drift and (metadata.st_dev, metadata.st_ino) == target_identity:
+                return self.metadata_with_flags(metadata, restricted_flag)
+            return metadata
+
+        def enable_drift(*args, **kwargs):
+            nonlocal inject_drift
+            result = real_normalize(*args, **kwargs)
+            inject_drift = True
+            return result
+
+        with (
+            mock.patch.object(os, "fstat", side_effect=fstat_with_drift),
+            mock.patch.object(
+                authority,
+                "_normalize_automation_update_result",
+                side_effect=enable_drift,
+            ),
+            self.assertRaisesRegex(
+                authority.AutomationCutoverBlocked,
+                "access policy is invalid",
+            ),
+        ):
+            self.issue_cutover_record(
+                "record-flags-drift",
+                snapshot=snapshot,
                 automation_root=automation_root,
             )
 

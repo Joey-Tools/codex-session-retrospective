@@ -2394,6 +2394,7 @@ def _validate_installed_automation(
         max_record_bytes=MAX_AUTOMATION_RECORD_BYTES,
     )
     binding: automation_cutover_files.AutomationRecordBinding | None = None
+    primary: BaseException | None = None
     try:
         binding = _open_validated_installed_automation(
             automation_id,
@@ -2402,10 +2403,14 @@ def _validate_installed_automation(
         )
         binding.revalidate()
         return str(binding.record_path), binding.sha256
+    except BaseException as exc:
+        primary = exc
+        raise
     finally:
         automation_cutover_files.close_automation_bindings(
             root,
             () if binding is None else (binding,),
+            primary=primary,
         )
 
 
@@ -2424,16 +2429,14 @@ def _open_validated_installed_automation(
         )
         document = tomllib.loads(binding.raw.decode("utf-8"))
     except (OSError, UnicodeError, ValueError, tomllib.TOMLDecodeError) as exc:
-        try:
-            raise AutomationCutoverBlocked(
-                "required automation record is unavailable or invalid"
-            ) from exc
-        finally:
-            if binding is not None:
-                binding.close()
+        error = AutomationCutoverBlocked(
+            "required automation record is unavailable or invalid"
+        )
+        if binding is not None:
+            binding.close(primary=error)
+        raise error from exc
     prompt = document.get("prompt")
     schedule = document.get("rrule")
-    expected_frequency = "FREQ=DAILY" if expected_mode == "daily" else "FREQ=WEEKLY"
     forbidden_prompt_tokens = (
         "--allow-partial",
         "--backfill-of",
@@ -2444,7 +2447,6 @@ def _open_validated_installed_automation(
         "reference_only",
         "session_retrospective.py",
     )
-    isolated_launch = f"python3 -I -B -S {cli_path} start"
     if (
         document.get("version") != 1
         or document.get("id") != automation_id
@@ -2452,20 +2454,23 @@ def _open_validated_installed_automation(
         or document.get("status") != "ACTIVE"
         or document.get("reference_only") is not None
         or not isinstance(prompt, str)
-        or prompt.count(str(cli_path)) != 1
-        or prompt.count(isolated_launch) != 1
-        or f"--mode {expected_mode}" not in prompt
-        or prompt.count("--publisher-gpg-program ") != 1
+        or not automation_cutover_files.production_prompt_is_closed(
+            prompt,
+            cli_path=cli_path,
+            expected_mode=expected_mode,
+        )
         or any(token in prompt for token in forbidden_prompt_tokens)
         or not isinstance(schedule, str)
-        or not schedule.startswith(expected_frequency)
+        or not automation_cutover_files.production_rrule_is_closed(
+            schedule,
+            expected_mode=expected_mode,
+        )
     ):
-        try:
-            raise AutomationCutoverBlocked(
-                "automation record is not an active v2 production coordinator"
-            )
-        finally:
-            binding.close()
+        error = AutomationCutoverBlocked(
+            "automation record is not an active v2 production coordinator"
+        )
+        binding.close(primary=error)
+        raise error
     return binding
 
 
@@ -2733,6 +2738,7 @@ def issue_automation_cutover_record(
         max_record_bytes=MAX_AUTOMATION_RECORD_BYTES,
     )
     bindings: dict[str, automation_cutover_files.AutomationRecordBinding] = {}
+    primary: BaseException | None = None
     try:
         for automation_id in sorted(STABLE_AUTOMATION_MODES):
             bindings[automation_id] = _open_validated_installed_automation(
@@ -2804,10 +2810,14 @@ def issue_automation_cutover_record(
             bindings[automation_id].revalidate_navigation()
         safe_io.atomic_write_json(path, verified)
         return verified
+    except BaseException as exc:
+        primary = exc
+        raise
     finally:
         automation_cutover_files.close_automation_bindings(
             root_binding,
             tuple(bindings[automation_id] for automation_id in sorted(bindings)),
+            primary=primary,
         )
 
 
