@@ -10,6 +10,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -19,11 +20,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPT = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-    / "session_retrospective.py"
-)
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "session_retrospective.py"
 REMOTE_PROBE_SCRIPT = SCRIPT.parent / "remote_codex_probe.py"
 SPEC = importlib.util.spec_from_file_location("session_retrospective", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
@@ -32195,6 +32192,56 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 MODULE.main(
                     ["validate-history-tree", "--history-repo", str(history_repo)]
                 )
+
+    def test_history_worktree_status_disables_local_fsmonitor(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            marker = Path(raw) / "fsmonitor-ran"
+            fsmonitor = Path(raw) / "fsmonitor-hook"
+            fsmonitor.write_text(
+                f"#!/bin/sh\n/usr/bin/touch {shlex.quote(os.fspath(marker))}\nexit 0\n",
+                encoding="utf-8",
+            )
+            os.chmod(fsmonitor, 0o700)
+            subprocess.run(
+                ["git", "config", "--local", "core.fsmonitor", str(fsmonitor)],
+                cwd=history_repo,
+                check=True,
+            )
+
+            MODULE.require_history_worktree_clean(history_repo)
+
+            self.assertFalse(marker.exists())
+
+    def test_history_git_rejects_repository_local_includes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            included = Path(raw) / "included.gitconfig"
+            included.write_text(
+                "[core]\n\tfsmonitor = /usr/bin/false\n", encoding="utf-8"
+            )
+            subprocess.run(
+                ["git", "config", "--local", "include.path", str(included)],
+                cwd=history_repo,
+                check=True,
+            )
+
+            with self.assertRaisesRegex(SystemExit, "local safety admission"):
+                MODULE.require_history_worktree_clean(history_repo)
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL policy")
+    def test_history_git_rejects_extended_acl_repository(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            history_repo, _commit = write_history_repo(raw)
+            subprocess.run(
+                ["/bin/chmod", "+a", "everyone allow write", str(history_repo)],
+                check=True,
+            )
+            try:
+                with self.assertRaisesRegex(SystemExit, "local safety admission"):
+                    MODULE.require_history_worktree_clean(history_repo)
+            finally:
+                subprocess.run(["/bin/chmod", "-N", str(history_repo)], check=True)
 
     def test_validate_history_tree_rejects_missing_origin_repo(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

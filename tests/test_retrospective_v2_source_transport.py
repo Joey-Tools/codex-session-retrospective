@@ -4722,65 +4722,66 @@ class SourceTransportProtocolTests(unittest.TestCase):
     def test_transport_program_binds_python_ancestors_and_rejects_replacement(
         self,
     ) -> None:
-        runtime_parent = self.root / "transport-python-runtime"
-        runtime_parent.mkdir(mode=0o700)
-        runtime = runtime_parent / "python3.13"
-        shutil.copyfile(os.path.realpath(sys.executable), runtime)
-        os.chmod(runtime, 0o700)
-        snapshot_cache = self.root / "python-authority-snapshots"
-        worker = Path(transport_program.__file__).with_name("transport_worker.py")
-        command = (
-            *transport_program.source_transport_python_command(
-                snapshot_cache,
-                executable=runtime,
-            ),
-            str(worker),
-            "source-transport",
-        )
-        commitment = transport_program.transport_program_commitment(
-            command,
-            snapshot_cache=snapshot_cache,
-        )
-        snapshot, _worker_index, _snapshot_commitment = (
-            transport_program._decode_program_snapshot(
+        with tempfile.TemporaryDirectory(dir=SCRIPTS.parent) as trusted_root:
+            runtime_parent = Path(trusted_root) / "transport-python-runtime"
+            runtime_parent.mkdir(mode=0o700)
+            runtime = runtime_parent / "python3.13"
+            shutil.copyfile(os.path.realpath(sys.executable), runtime)
+            os.chmod(runtime, 0o700)
+            snapshot_cache = self.root / "python-authority-snapshots"
+            worker = Path(transport_program.__file__).with_name("transport_worker.py")
+            command = (
+                *transport_program.source_transport_python_command(
+                    snapshot_cache,
+                    executable=runtime,
+                ),
+                str(worker),
+                "source-transport",
+            )
+            commitment = transport_program.transport_program_commitment(
                 command,
                 snapshot_cache=snapshot_cache,
             )
-        )
-        receipt = snapshot["python_executable_authority"]
-        canonical_runtime = os.path.realpath(runtime)
-        canonical_parent = os.path.realpath(runtime_parent)
-        self.assertEqual(canonical_runtime, receipt["path"])
-        self.assertEqual(canonical_runtime, receipt["executable"]["path"])
-        self.assertIn(
-            canonical_parent,
-            {row["path"] for row in receipt["ancestors"]},
-        )
-
-        os.utime(runtime_parent, None)
-        self.assertEqual(
-            commitment,
-            transport_program.transport_program_commitment(
-                command,
-                snapshot_cache=snapshot_cache,
-            ),
-        )
-
-        os.chmod(runtime_parent, 0o777)
-        try:
-            runtime.unlink()
-            shutil.copyfile("/usr/bin/false", runtime)
-            os.chmod(runtime, 0o755)
-            with self.assertRaisesRegex(
-                transport.TransportValidationError,
-                "Python executable path authority cannot be authenticated",
-            ):
-                transport_program.transport_program_commitment(
+            snapshot, _worker_index, _snapshot_commitment = (
+                transport_program._decode_program_snapshot(
                     command,
                     snapshot_cache=snapshot_cache,
                 )
-        finally:
-            os.chmod(runtime_parent, 0o700)
+            )
+            receipt = snapshot["python_executable_authority"]
+            canonical_runtime = os.path.realpath(runtime)
+            canonical_parent = os.path.realpath(runtime_parent)
+            self.assertEqual(canonical_runtime, receipt["path"])
+            self.assertEqual(canonical_runtime, receipt["executable"]["path"])
+            self.assertIn(
+                canonical_parent,
+                {row["path"] for row in receipt["ancestors"]},
+            )
+
+            os.utime(runtime_parent, None)
+            self.assertEqual(
+                commitment,
+                transport_program.transport_program_commitment(
+                    command,
+                    snapshot_cache=snapshot_cache,
+                ),
+            )
+
+            os.chmod(runtime_parent, 0o777)
+            try:
+                runtime.unlink()
+                shutil.copyfile("/usr/bin/false", runtime)
+                os.chmod(runtime, 0o755)
+                with self.assertRaisesRegex(
+                    transport.TransportValidationError,
+                    "Python executable path authority cannot be authenticated",
+                ):
+                    transport_program.transport_program_commitment(
+                        command,
+                        snapshot_cache=snapshot_cache,
+                    )
+            finally:
+                os.chmod(runtime_parent, 0o700)
 
     def test_status_rejects_authenticated_noncanonical_source_lease(self) -> None:
         self._write_sources("legacy-python-alias")

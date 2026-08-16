@@ -23,9 +23,12 @@ Retrospective-side transport contracts. It does not own:
 - the `remote-host-context` SSH registry or host implementation;
 - the append-only retained history repository;
 - the private overlay source lock, generated overlay, or installed release;
-- removal of legacy files from `codex-workflow-hygiene`.
+- the future replacement private sync and installed automation entry point.
 
-Those integrations are intentionally deferred until the standalone
-implementation is complete. Legacy removal will be delivered by a separate PR
-after installation has been verified, so there is no interval with no canonical
-source.
+The legacy source, private sync mapping, installed skill, and scheduled
+automations have already been retired through separate reviewed changes. This
+repository is now the only canonical source, but it is not installed or
+scheduled yet. Retrospective automation therefore remains intentionally paused
+until a later workstream adds and verifies the replacement private sync and
+installed entry point. Do not restore or invoke either legacy path during that
+interval.

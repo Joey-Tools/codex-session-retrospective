@@ -352,6 +352,34 @@ superseded_by:
 - Ruff lint, changed-file formatting, both workflows under `actionlint`, the
   installed skill validator, project-journal validation, CI/skill contracts
   11/11, and `git diff --check` are clean on the final source tree.
+- The first PR-head delivery cycle for `6814250e` exposed one CI fixture error
+  and two fresh-review gaps. The source-transport adversarial fixture placed its
+  copied Python under a sticky world-writable temporary ancestor; migration-only
+  history reads inherited repository Git controls; and migration provenance
+  still described legacy retirement as future work after retirement had already
+  completed. The CI failure and all review evidence for that head are superseded
+  by the following signed fix head.
+- The source-transport fixture now creates its copied interpreter below an
+  owner-controlled ignored repository directory. History reads now route through
+  bounded `legacy_history_git.py`, which uses the shared executable authority,
+  closed Git environment and command controls, complete local-repository
+  admission, and pre/post object and config revalidation. Regressions prove that
+  a configured `core.fsmonitor` is not executed, repository-local includes are
+  rejected, and a Darwin extended ACL fails closed. Migration provenance now
+  records the actual paused interval: the old source and installation are gone,
+  while replacement private sync remains future work.
+- A host-level source-transport run through `/opt/homebrew/bin/python3.13` is
+  non-counting because that executable's group-writable ancestor correctly
+  fails the transport authority contract. Re-running through the repository's
+  owner-controlled Python 3.13.12 copy passes the source-transport suite
+  101/101; the affected history subset passes 62/62; the exact focused security
+  regressions pass 4/4; and the module-boundary suite passes 19/19.
+- Final Python 3.13 discovery covers all 1,621 tests exactly once. Shards 0
+  through 3 pass 385/385 in 1,285.612 seconds, 432/432 in 985.168 seconds,
+  444/444 in 1,098.940 seconds, and 360/360 in 1,058.989 seconds. Ruff lint,
+  changed-file formatting, both workflows under `actionlint`, the official
+  OpenAI skill validator, CI/skill contracts 11/11, and `git diff --check` are
+  clean on the same working tree.
 
 ## Follow-up Work
 

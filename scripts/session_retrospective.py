@@ -23,6 +23,13 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Iterator
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from retrospective_v2 import legacy_history_git  # noqa: E402
+from retrospective_v2.authority_errors import HistoryValidationError  # noqa: E402
+
 
 WRAPPER_PREFIXES = (
     "# AGENTS.md instructions",
@@ -7235,13 +7242,27 @@ def history_path_kind(file_path: str) -> str:
     raise SystemExit(f"history tree contains unexpected artifact: {file_path}")
 
 
+def run_history_git(
+    repo: Path,
+    arguments: Iterable[str],
+    *,
+    text: bool = False,
+) -> subprocess.CompletedProcess[Any]:
+    try:
+        return legacy_history_git.run_history_git(
+            repo,
+            tuple(arguments),
+            text=text,
+        )
+    except HistoryValidationError as exc:
+        raise SystemExit(str(exc)) from exc
+
+
 def history_commit_parents(repo: Path, commit: str) -> list[str]:
-    parents = subprocess.run(
-        ["git", "-C", str(repo), "rev-list", "--parents", "-n", "1", commit],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    parents = run_history_git(
+        repo,
+        ("rev-list", "--parents", "-n", "1", commit),
         text=True,
-        check=False,
     )
     if parents.returncode != 0:
         raise SystemExit("failed to inspect --history-commit parents")
@@ -7254,15 +7275,10 @@ def history_commit_parents(repo: Path, commit: str) -> list[str]:
 def history_commit_changed_files(repo: Path, commit: str) -> set[str]:
     parent_commits = history_commit_parents(repo, commit)
     if parent_commits:
-        command = ["git", "-C", str(repo), "diff", "--name-only", "-z", parent_commits[0], commit]
+        command = ("diff", "--name-only", "-z", parent_commits[0], commit)
     else:
-        command = ["git", "-C", str(repo), "diff-tree", "--no-commit-id", "--root", "-r", "-z", "--name-only", commit]
-    changed = subprocess.run(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+        command = ("diff-tree", "--no-commit-id", "--root", "-r", "-z", "--name-only", commit)
+    changed = run_history_git(repo, command)
     if changed.returncode != 0:
         raise SystemExit("failed to inspect --history-commit changed files")
     return {raw_name.decode("utf-8", errors="surrogateescape") for raw_name in changed.stdout.split(b"\0") if raw_name}
@@ -7272,12 +7288,10 @@ def history_commit_non_first_parent_commits(repo: Path, commit: str) -> list[str
     parents = history_commit_parents(repo, commit)
     if len(parents) <= 1:
         return []
-    result = subprocess.run(
-        ["git", "-C", str(repo), "rev-list", "--reverse", commit, f"^{parents[0]}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    result = run_history_git(
+        repo,
+        ("rev-list", "--reverse", commit, f"^{parents[0]}"),
         text=True,
-        check=False,
     )
     if result.returncode != 0:
         raise SystemExit("failed to inspect --history-commit merge side history")
@@ -7285,13 +7299,7 @@ def history_commit_non_first_parent_commits(repo: Path, commit: str) -> list[str
 
 
 def history_commit_reachable_commits(repo: Path, commit: str) -> list[str]:
-    result = subprocess.run(
-        ["git", "-C", str(repo), "rev-list", "--reverse", commit],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
+    result = run_history_git(repo, ("rev-list", "--reverse", commit), text=True)
     if result.returncode != 0:
         raise SystemExit("failed to inspect --history-commit reachable history")
     return [oid for oid in result.stdout.splitlines() if oid]
@@ -7300,7 +7308,7 @@ def history_commit_reachable_commits(repo: Path, commit: str) -> list[str]:
 def require_history_repo(history_repo: str | None) -> Path:
     if not history_repo:
         raise SystemExit("--history-repo is required")
-    repo = Path(history_repo).expanduser()
+    repo = legacy_history_git.canonical_history_repository(Path(history_repo))
     if not repo.exists() or not repo.is_dir():
         raise SystemExit("--history-repo must be an existing git repository")
     require_history_repo_identity(repo)
@@ -7317,17 +7325,11 @@ def require_history_repo_identity(repo: Path) -> None:
 
 
 def history_remote_urls(repo: Path, *, push: bool) -> list[str]:
-    args = ["git", "-C", str(repo), "remote", "get-url"]
+    args = ["remote", "get-url"]
     if push:
         args.append("--push")
     args.extend(["--all", "origin"])
-    remote = subprocess.run(
-        args,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
+    remote = run_history_git(repo, args, text=True)
     if remote.returncode != 0:
         return []
     return [line.strip() for line in remote.stdout.splitlines() if line.strip()]
@@ -7344,12 +7346,7 @@ def history_remote_matches_expected(remote_url: str) -> bool:
 
 
 def require_history_commit(repo: Path, commit: str) -> None:
-    completed = subprocess.run(
-        ["git", "-C", str(repo), "cat-file", "-e", f"{commit}^{{commit}}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+    completed = run_history_git(repo, ("cat-file", "-e", f"{commit}^{{commit}}"))
     if completed.returncode != 0:
         raise SystemExit("history ref must exist in --history-repo")
 
@@ -7357,24 +7354,17 @@ def require_history_commit(repo: Path, commit: str) -> None:
 def require_history_ancestor(repo: Path, ancestor: str, ref: str) -> None:
     require_history_commit(repo, ancestor)
     require_history_commit(repo, ref)
-    completed = subprocess.run(
-        ["git", "-C", str(repo), "merge-base", "--is-ancestor", ancestor, ref],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+    completed = run_history_git(repo, ("merge-base", "--is-ancestor", ancestor, ref))
     if completed.returncode != 0:
         raise SystemExit("--history-ref must include --history-commit")
 
 
 def history_commit_oid(repo: Path, ref: str) -> str:
     require_history_commit(repo, ref)
-    completed = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--verify", f"{ref}^{{commit}}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    completed = run_history_git(
+        repo,
+        ("rev-parse", "--verify", f"{ref}^{{commit}}"),
         text=True,
-        check=False,
     )
     if completed.returncode != 0:
         raise SystemExit("failed to resolve history ref")
@@ -7389,12 +7379,7 @@ def require_history_ref_current_head(repo: Path, ref: str) -> None:
 
 
 def require_history_worktree_clean(repo: Path) -> None:
-    status = subprocess.run(
-        ["git", "-C", str(repo), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+    status = run_history_git(repo, ("status", "--porcelain=v1", "-z", "--untracked-files=all"))
     if status.returncode != 0:
         raise SystemExit("failed to inspect history worktree status")
     if status.stdout:
@@ -7410,12 +7395,7 @@ class HistoryTreeEntry:
 
 def history_tree_entries(repo: Path, ref: str) -> dict[str, HistoryTreeEntry]:
     require_history_commit(repo, ref)
-    tree = subprocess.run(
-        ["git", "-C", str(repo), "ls-tree", "-r", "-z", ref],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+    tree = run_history_git(repo, ("ls-tree", "-r", "-z", ref))
     if tree.returncode != 0:
         raise SystemExit("failed to inspect history tree")
     entries: dict[str, HistoryTreeEntry] = {}
@@ -7446,12 +7426,7 @@ def history_tree_files(repo: Path, ref: str) -> list[str]:
 
 
 def history_blob(repo: Path, ref: str, file_path: str) -> bytes:
-    blob = subprocess.run(
-        ["git", "-C", str(repo), "show", f"{ref}:{file_path}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-    )
+    blob = run_history_git(repo, ("cat-file", "blob", f"{ref}:{file_path}"))
     if blob.returncode != 0:
         raise SystemExit(f"failed to inspect history artifact: {file_path}")
     return blob.stdout
@@ -7611,12 +7586,10 @@ def validate_history_follow_on_history(
     retained_parent: str,
     retained_files: dict[str, bytes],
 ) -> None:
-    result = subprocess.run(
-        ["git", "-C", str(repo), "rev-list", "--reverse", f"{history_commit}..{history_ref}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+    result = run_history_git(
+        repo,
+        ("rev-list", "--reverse", f"{history_commit}..{history_ref}"),
         text=True,
-        check=False,
     )
     if result.returncode != 0:
         raise SystemExit("failed to inspect history follow-on commits")
