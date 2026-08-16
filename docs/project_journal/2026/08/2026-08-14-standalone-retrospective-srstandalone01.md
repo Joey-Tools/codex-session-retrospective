@@ -569,6 +569,33 @@ superseded_by:
   post-redaction with no retained tail and are rejected independently at
   artifact assembly, retained reread, and `report.md` validation. Complete
   affected modules remain green at 65/65, 66/66, 17/17, 19/19, 7/7, and 5/5.
+- The fresh-context review of signed head `9f5ca96e` found one further variant:
+  a safe placeholder or status followed by whitespace and credential material
+  could still exempt the prefix while leaving the trailing value unredacted.
+  That head's review and other head-bound evidence became stale when the
+  finding required a new commit.
+- Safe-value exemption now requires the complete remaining value to contain
+  only its matching envelope, reviewed punctuation, and whitespace. Atomic
+  separator and quote parsing prevents regex backtracking from moving the
+  value boundary. A separate bounded suffix branch crosses ordinary, Unicode,
+  vertical, and newline whitespace plus arbitrary punctuation to consume the
+  first trailing material token; ordinary unsafe values still consume one
+  token so later URL and path signals remain independently redacted.
+- Adversarial regressions cover concatenated, quoted, spaced, vertical-tab,
+  non-breaking-space, newline, and multi-punctuation suffixes across assignment,
+  Authorization, Bearer, CLI, and narrative forms. Safe complete values with
+  repeated or Unicode spacing and ordinary token prose remain exempt. The
+  result and export modules each pass 66/66, retained-result audit passes
+  17/17, module boundaries pass 19/19, CI contracts pass 7/7, and skill
+  contracts pass 5/5. Ruff lint and formatting, `bash -n`, ShellCheck, and
+  `git diff --check` pass.
+- The first four-shard attempt was interrupted and is explicitly non-counting
+  after static review found the Unicode-whitespace variant; all four deadline
+  supervisors and test runners were then proved absent. The final frozen tree
+  contains 1,663 unique tests partitioned exactly once. Shards 0 through 3 pass
+  395/395 in 1,378.018 seconds, 445/445 in 1,086.661 seconds, 450/450 in
+  1,200.665 seconds, and 373/373 in 1,178.999 seconds. All four runners exit
+  zero and the retained log failure scan is empty.
 
 ## Follow-up Work
 

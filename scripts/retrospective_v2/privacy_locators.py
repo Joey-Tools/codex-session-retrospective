@@ -55,10 +55,8 @@ _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT = (
     r"denied|expired|invalid|unavailable|absent|needed|necessary|revoked|"
     r"rotated|budget|count|limit)"
 )
-_SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT = (
-    r"(?=$|[\s,;&#]|\.(?:$|\s)|[)\]\}>\"']+(?=$|[\s,;&#]|\.(?:$|\s)))"
-)
-_SAFE_CREDENTIAL_VALUE_ENVELOPE_PATTERN_TEXT = (
+_SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT = r"(?=[)\]\}>\"']*\s*+(?:[.,;]\s*+)?+\Z)"
+_SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT = (
     r"(?:"
     + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
     + r"|\["
@@ -70,10 +68,25 @@ _SAFE_CREDENTIAL_VALUE_ENVELOPE_PATTERN_TEXT = (
     + r"\)|\{"
     + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
     + r"\})"
+)
+_SAFE_CREDENTIAL_VALUE_ENVELOPE_PATTERN_TEXT = (
+    _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT
     + _SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT
 )
 _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT = (
     r"(?!" + _SAFE_CREDENTIAL_VALUE_ENVELOPE_PATTERN_TEXT + r")"
+)
+_CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT = r"\s*+"
+_CREDENTIAL_SPACE_REQUIRED_ATOMIC_PATTERN_TEXT = r"\s++"
+_OPTIONAL_QUOTE_ATOMIC_PATTERN_TEXT = r"['\"]?+"
+_SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT = (
+    _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT + r"(?:(?!\w)[\s\S])*+\w[^'\"\s,;]*"
+)
+_CREDENTIAL_VALUE_MATCH_PATTERN_TEXT = (
+    r"(?:" + _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT + r"|[^'\"\s,;]+)"
+)
+_CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT = (
+    r"(?:" + _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT + r"|[^'\"\s,;]{3,})"
 )
 _COMPACT_TOKEN_KEY_PATTERN_TEXT = (
     r"(?:access|api|auth|authorization|client|refresh|id|session|csrf|xsrf)Token"
@@ -143,9 +156,12 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "credential",
         re.compile(
-            r"\b(?:Proxy-)?Authorization\s*(?:=|:)\s*"
+            r"\b(?:Proxy-)?Authorization"
+            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+            + r"(?:=|:)"
+            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
             + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
-            + r"[^\r\n]+",
+            + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT,
             re.IGNORECASE,
         ),
         "[REDACTED_CREDENTIAL]",
@@ -153,9 +169,10 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "credential",
         re.compile(
-            r"\bBearer\s+"
+            r"\bBearer"
+            + _CREDENTIAL_SPACE_REQUIRED_ATOMIC_PATTERN_TEXT
             + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
-            + r"[A-Za-z0-9._~+/=-]+",
+            + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT,
             re.IGNORECASE,
         ),
         "[REDACTED_CREDENTIAL]",
@@ -164,11 +181,14 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
         "credential",
         re.compile(
             _CREDENTIAL_FIELD_PATTERN_TEXT
-            + r"\s*(?:=|:)\s*['\"]?"
+            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+            + r"(?:=|:)"
+            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+            + _OPTIONAL_QUOTE_ATOMIC_PATTERN_TEXT
             + _AUTH_SCHEME_PATTERN_TEXT
-            + r"\s+"
+            + _CREDENTIAL_SPACE_REQUIRED_ATOMIC_PATTERN_TEXT
             + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
-            + r"[^'\"\r\n,;]+",
+            + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT,
             re.IGNORECASE,
         ),
         "[REDACTED_CREDENTIAL]",
@@ -178,20 +198,28 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
         re.compile(
             r"(?:"
             + _CREDENTIAL_FIELD_PATTERN_TEXT
-            + r"\s*(?:=|:)\s*['\"]?"
+            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+            + r"(?:=|:)"
+            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+            + _OPTIONAL_QUOTE_ATOMIC_PATTERN_TEXT
             + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
-            + r"[^'\"\s,;]+|"
+            + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT
+            + r"|"
             r"(?<![\w-])--"
             + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
-            + r"\s+"
+            + _CREDENTIAL_SPACE_REQUIRED_ATOMIC_PATTERN_TEXT
             + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
-            + r"[^'\"\s,;]+|"
+            + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT
+            + r"|"
             r"\b"
             + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
-            + r"\s*(?:\bis\b|\bwas\b|\bset\s+to\b)\s*['\"]?"
+            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+            + r"(?:\bis\b|\bwas\b|\bset\s++to\b)"
+            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+            + _OPTIONAL_QUOTE_ATOMIC_PATTERN_TEXT
             + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
-            + r"[^'\"\s,;]{3,}"
-            r")",
+            + _CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT
+            + r")",
             re.IGNORECASE,
         ),
         "[REDACTED_CREDENTIAL]",

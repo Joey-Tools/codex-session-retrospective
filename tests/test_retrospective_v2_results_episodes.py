@@ -936,7 +936,44 @@ class ResultValidationTests(unittest.TestCase):
                     "(MASKED_CREDENTIAL)",
                     "{REDACTED_CREDENTIAL}",
                     "missing]",
+                    "[REDACTED_CREDENTIAL] ",
+                    '"[REDACTED_CREDENTIAL]" ',
+                    "[REDACTED_CREDENTIAL]\v",
+                    "[REDACTED_CREDENTIAL]\u00a0",
+                    "[REDACTED_CREDENTIAL]\n",
+                    "[REDACTED_CREDENTIAL] # : ",
                 )
+            ),
+            (
+                f"Authorization: [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"run deploy --token [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"credential is missing {SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"Bearer [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "run deploy --token\u00a0[REDACTED_CREDENTIAL]\u00a0"
+                f"{SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"credential\u00a0is\u00a0missing\u00a0{SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
             ),
         )
 
@@ -958,10 +995,20 @@ class ResultValidationTests(unittest.TestCase):
 
         for safe_probe in (
             "token=[REDACTED]",
+            'token = "[REDACTED_CREDENTIAL]"',
             "refreshToken=missing",
             "credential is required",
+            "credential is  required",
             "run deploy --token [REDACTED_CREDENTIAL]",
+            "run deploy --token  [REDACTED_CREDENTIAL]",
+            "Authorization:  [REDACTED_CREDENTIAL]",
+            "Bearer  [REDACTED_CREDENTIAL]",
+            "token=\u00a0[REDACTED_CREDENTIAL]",
+            "credential\u00a0is\u00a0required",
+            "run deploy --token\u00a0[REDACTED_CREDENTIAL]",
+            "token=[REDACTED_CREDENTIAL]\n",
             "Keep token budget under control.",
+            "Token is a label.",
         ):
             with self.subTest(safe_probe=safe_probe):
                 self.assertFalse(
@@ -969,6 +1016,23 @@ class ResultValidationTests(unittest.TestCase):
                         safe_probe
                     )
                 )
+
+    def test_credential_placeholder_suffix_preserves_independent_signals(self) -> None:
+        value = extractor_result()
+        value["turns"][0]["generalized_working_text"] = (
+            "token=[REDACTED_CREDENTIAL] "
+            f"{SYNTHETIC_ACCESS_TOKEN} at https://build.corp/run from "
+            "/Users/operator/private/repo"
+        )
+
+        result = validate_extractor_result(value, ALL_REFS)
+
+        text = result["turns"][0]["generalized_working_text"]
+        self.assertNotIn(SYNTHETIC_ACCESS_TOKEN, text)
+        self.assertIn("[REDACTED_CREDENTIAL]", text)
+        self.assertIn("[REDACTED_URL]", text)
+        self.assertIn("[REDACTED_PATH]", text)
+        self.assertEqual(scan_for_leaks(result), ())
 
     def test_post_redaction_removes_non_http_uri_schemes(self) -> None:
         long_scheme_uri = f"{'a' * 33}://nas/jobs"

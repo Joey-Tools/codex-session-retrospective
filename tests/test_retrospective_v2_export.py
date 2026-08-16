@@ -1617,8 +1617,16 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                     "(MASKED_CREDENTIAL)",
                     "{REDACTED_CREDENTIAL}",
                     "missing]",
+                    "[REDACTED_CREDENTIAL] ",
+                    '"[REDACTED_CREDENTIAL]" ',
+                    "[REDACTED_CREDENTIAL]\v",
+                    "[REDACTED_CREDENTIAL] # : ",
                 )
             ),
+            f"Authorization: [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
+            f"run deploy --token [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
+            f"credential is missing {SYNTHETIC_ACCESS_TOKEN}",
+            f"Bearer [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
             *github_probes,
         )
         for probe in probes:
