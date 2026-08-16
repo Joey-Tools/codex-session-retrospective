@@ -329,7 +329,7 @@ def build_parser() -> MachineArgumentParser:
     doctor_parser.add_argument("--run-config", required=True)
     doctor_parser.add_argument("--history-repo", required=True)
     doctor_parser.add_argument("--history-target-ref", required=True)
-    doctor_parser.add_argument("--publisher-gpg-program", required=True)
+    publication_cli_adapter.add_publisher_program_argument(doctor_parser)
     doctor_parser.add_argument("--provider-state")
     doctor_parser.add_argument("--production-marker")
 
@@ -354,7 +354,7 @@ def build_parser() -> MachineArgumentParser:
     start_parser.add_argument("--session-target-selector")
     start_parser.add_argument("--history-repo", required=True)
     start_parser.add_argument("--history-target-ref", required=True)
-    start_parser.add_argument("--publisher-gpg-program", required=True)
+    publication_cli_adapter.add_publisher_program_argument(start_parser)
     start_parser.add_argument("--provider-state")
     start_parser.add_argument("--production-marker")
 

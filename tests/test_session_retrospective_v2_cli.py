@@ -1212,6 +1212,74 @@ class CliContractTests(unittest.TestCase):
                 ]
             )
 
+        doctor_arguments = [
+            "doctor",
+            "--shadow",
+            "--identity-path",
+            str(self.identity_path),
+            "--require-existing-identity",
+            "--run-config",
+            str(self.run_config),
+            "--history-repo",
+            str(self.history_repo),
+            "--history-target-ref",
+            "refs/heads/main",
+            "--publisher-gpg-program",
+            TEST_PUBLISHER_GPG,
+        ]
+        for command, base_arguments in (
+            ("start", list(self.shadow_start_arguments())),
+            ("doctor", doctor_arguments),
+        ):
+            publisher_index = base_arguments.index("--publisher-gpg-program") + 1
+            cases = (
+                (
+                    "relative",
+                    [
+                        *base_arguments[:publisher_index],
+                        "relative-gpg",
+                        *base_arguments[publisher_index + 1 :],
+                    ],
+                ),
+                (
+                    "nonnormal-absolute",
+                    [
+                        *base_arguments[:publisher_index],
+                        "/usr/bin/../bin/true",
+                        *base_arguments[publisher_index + 1 :],
+                    ],
+                ),
+                (
+                    "double-root",
+                    [
+                        *base_arguments[:publisher_index],
+                        "//usr/bin/true",
+                        *base_arguments[publisher_index + 1 :],
+                    ],
+                ),
+                (
+                    "duplicate-split",
+                    [
+                        *base_arguments,
+                        "--publisher-gpg-program",
+                        "/usr/bin/false",
+                    ],
+                ),
+                (
+                    "duplicate-equals",
+                    [
+                        *base_arguments,
+                        "--publisher-gpg-program=/usr/bin/false",
+                    ],
+                ),
+            )
+            for label, arguments in cases:
+                with (
+                    self.subTest(command=command, publisher_case=label),
+                    self.assertRaises(cli.CliContractError),
+                ):
+                    self.parser.parse_args(arguments)
+
     def test_start_cli_reaches_all_four_modes_with_exact_bindings(self) -> None:
         selector = "direct-cli-session-selector"
         session_target = str(

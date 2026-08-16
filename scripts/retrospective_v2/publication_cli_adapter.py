@@ -2,11 +2,44 @@
 
 from __future__ import annotations
 
+import argparse
 from collections.abc import Mapping
+import os
 from pathlib import Path
 from typing import Any
 
 from . import executable_authority, finalize
+
+
+class _UniqueCanonicalAbsolutePathAction(argparse.Action):
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: str,
+        option_string: str | None = None,
+    ) -> None:
+        del option_string
+        if getattr(namespace, self.dest, None) is not None:
+            parser.error("publisher executable argument is duplicated")
+        if (
+            not isinstance(values, str)
+            or not values
+            or "\x00" in values
+            or not Path(values).is_absolute()
+            or values.startswith("//")
+            or os.path.abspath(values) != values
+        ):
+            parser.error("publisher executable path is not canonical and absolute")
+        setattr(namespace, self.dest, values)
+
+
+def add_publisher_program_argument(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--publisher-gpg-program",
+        required=True,
+        action=_UniqueCanonicalAbsolutePathAction,
+    )
 
 
 def build(

@@ -471,6 +471,22 @@ superseded_by:
   `actionlint`, the official OpenAI skill validator, project-journal
   validation, and `git diff --check` pass. Complete final-head execution and
   both Codex processors remain required before merge.
+- Signed head `b97a2781` passed exact-secret admission and hosted CI, including
+  all 1,648 tests partitioned exactly once as 390, 440, 450, and 368. Its
+  fresh-context Codex review found one remaining public-CLI ambiguity:
+  `argparse` accepted repeated `--publisher-gpg-program` values with
+  last-value-wins behavior and allowed later working-directory normalization of
+  a relative raw value. Those otherwise-clean head-bound results became stale
+  when the finding required a new commit.
+- The parser boundary now owns publisher executable admission through one
+  reusable action for both `doctor` and `start`. It rejects split-form and
+  equals-form duplicates and requires the raw argument to be one canonical
+  absolute path before any normalization or filesystem lookup. Regressions
+  cover both commands and relative, non-normal, double-root, and duplicate
+  inputs. The focused regression passes 1/1, the complete CLI class passes
+  52/52 in 62.944 seconds, module boundaries pass 19/19 with exact branch
+  inventory and cap 8,864, CI contracts pass 6/6, and Ruff 0.13.2 lint and
+  formatting plus `git diff --check` pass.
 
 ## Follow-up Work
 
