@@ -21,6 +21,7 @@ import tomllib
 from typing import Any, Mapping, Sequence
 
 from . import (
+    automation_cutover_files,
     calibration,
     controlled_gaps,
     episode_review,
@@ -2128,29 +2129,20 @@ def installed_v2_cli_path() -> Path:
 
     return (
         Path.home()
-        / ".codex"
-        / "skills"
-        / "codex-session-retrospective"
-        / "scripts"
+        / ".codex/skills/codex-session-retrospective/scripts"
         / "session_retrospective_v2.py"
     ).absolute()
 
 
 def automation_cutover_record_path() -> Path:
     return (
-        Path.home()
-        / ".codex"
-        / "session-retrospective"
-        / AUTOMATION_CUTOVER_RECORD_FILE
+        Path.home() / ".codex/session-retrospective" / AUTOMATION_CUTOVER_RECORD_FILE
     ).absolute()
 
 
 def automation_cutover_snapshot_path() -> Path:
     return (
-        Path.home()
-        / ".codex"
-        / "session-retrospective"
-        / AUTOMATION_CUTOVER_SNAPSHOT_FILE
+        Path.home() / ".codex/session-retrospective" / AUTOMATION_CUTOVER_SNAPSHOT_FILE
     ).absolute()
 
 
@@ -2159,24 +2151,7 @@ def _automation_root() -> Path:
 
 
 def _validated_automation_root(automation_root: Path) -> Path:
-    try:
-        candidate = automation_root.expanduser().absolute()
-        candidate_metadata = candidate.stat(follow_symlinks=False)
-        if stat.S_ISLNK(candidate_metadata.st_mode):
-            raise AutomationCutoverBlocked("automation root uses a symlink")
-        normalized = candidate.resolve(strict=True)
-        metadata = normalized.stat(follow_symlinks=False)
-    except (OSError, RuntimeError) as exc:
-        raise AutomationCutoverBlocked(
-            "automation root is unavailable or invalid"
-        ) from exc
-    if (
-        not stat.S_ISDIR(metadata.st_mode)
-        or metadata.st_uid != os.getuid()
-        or stat.S_IMODE(metadata.st_mode) & 0o022
-    ):
-        raise AutomationCutoverBlocked("automation root ownership is invalid")
-    return normalized
+    return automation_cutover_files.validate_automation_root(automation_root)
 
 
 def _read_installed_automation_bytes(
@@ -2184,51 +2159,11 @@ def _read_installed_automation_bytes(
     *,
     automation_root: Path,
 ) -> bytes:
-    try:
-        _validated_automation_root(automation_root)
-        for directory in (record_path.parent,):
-            metadata = directory.stat(follow_symlinks=False)
-            if (
-                not stat.S_ISDIR(metadata.st_mode)
-                or metadata.st_uid != os.getuid()
-                or stat.S_IMODE(metadata.st_mode) & 0o022
-            ):
-                raise AutomationCutoverBlocked(
-                    "automation directory ownership is invalid"
-                )
-        descriptor = os.open(
-            record_path,
-            os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0),
-        )
-    except (OSError, RuntimeError) as exc:
-        raise AutomationCutoverBlocked(
-            "required automation record is unavailable or invalid"
-        ) from exc
-    try:
-        metadata = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(metadata.st_mode)
-            or metadata.st_uid != os.getuid()
-            or stat.S_IMODE(metadata.st_mode) & 0o022
-            or metadata.st_size > MAX_AUTOMATION_RECORD_BYTES
-        ):
-            raise AutomationCutoverBlocked("automation record ownership is invalid")
-        chunks: list[bytes] = []
-        total = 0
-        while True:
-            chunk = os.read(
-                descriptor,
-                min(64 * 1024, MAX_AUTOMATION_RECORD_BYTES - total + 1),
-            )
-            if not chunk:
-                break
-            chunks.append(chunk)
-            total += len(chunk)
-            if total > MAX_AUTOMATION_RECORD_BYTES:
-                raise AutomationCutoverBlocked("automation record exceeds byte limit")
-        return b"".join(chunks)
-    finally:
-        os.close(descriptor)
+    return automation_cutover_files.read_installed_automation_bytes(
+        record_path,
+        automation_root=automation_root,
+        max_record_bytes=MAX_AUTOMATION_RECORD_BYTES,
+    )
 
 
 def _automation_pre_update_row(
@@ -2454,18 +2389,48 @@ def _validate_installed_automation(
     automation_root: Path,
     cli_path: Path,
 ) -> tuple[str, str]:
-    expected_mode = STABLE_AUTOMATION_MODES[automation_id]
-    record_path = automation_root / automation_id / "automation.toml"
+    root = automation_cutover_files.open_automation_root(
+        automation_root,
+        max_record_bytes=MAX_AUTOMATION_RECORD_BYTES,
+    )
+    binding: automation_cutover_files.AutomationRecordBinding | None = None
     try:
-        raw = _read_installed_automation_bytes(
-            record_path,
-            automation_root=automation_root,
+        binding = _open_validated_installed_automation(
+            automation_id,
+            root=root,
+            cli_path=cli_path,
         )
-        document = tomllib.loads(raw.decode("utf-8"))
+        binding.revalidate()
+        return str(binding.record_path), binding.sha256
+    finally:
+        automation_cutover_files.close_automation_bindings(
+            root,
+            () if binding is None else (binding,),
+        )
+
+
+def _open_validated_installed_automation(
+    automation_id: str,
+    *,
+    root: automation_cutover_files.AutomationRootBinding,
+    cli_path: Path,
+) -> automation_cutover_files.AutomationRecordBinding:
+    expected_mode = STABLE_AUTOMATION_MODES[automation_id]
+    binding: automation_cutover_files.AutomationRecordBinding | None = None
+    try:
+        binding = automation_cutover_files.open_automation_record_binding(
+            root,
+            automation_id,
+        )
+        document = tomllib.loads(binding.raw.decode("utf-8"))
     except (OSError, UnicodeError, ValueError, tomllib.TOMLDecodeError) as exc:
-        raise AutomationCutoverBlocked(
-            "required automation record is unavailable or invalid"
-        ) from exc
+        try:
+            raise AutomationCutoverBlocked(
+                "required automation record is unavailable or invalid"
+            ) from exc
+        finally:
+            if binding is not None:
+                binding.close()
     prompt = document.get("prompt")
     schedule = document.get("rrule")
     expected_frequency = "FREQ=DAILY" if expected_mode == "daily" else "FREQ=WEEKLY"
@@ -2495,10 +2460,13 @@ def _validate_installed_automation(
         or not isinstance(schedule, str)
         or not schedule.startswith(expected_frequency)
     ):
-        raise AutomationCutoverBlocked(
-            "automation record is not an active v2 production coordinator"
-        )
-    return str(record_path), hashlib.sha256(raw).hexdigest()
+        try:
+            raise AutomationCutoverBlocked(
+                "automation record is not an active v2 production coordinator"
+            )
+        finally:
+            binding.close()
+    return binding
 
 
 def _normalize_automation_update_result(
@@ -2760,67 +2728,87 @@ def issue_automation_cutover_record(
         automation_root=root,
     )
     cli_path = installed_v2_cli_path()
-    installed_records = {
-        automation_id: _validate_installed_automation(
-            automation_id,
-            automation_root=root,
-            cli_path=cli_path,
-        )
-        for automation_id in sorted(STABLE_AUTOMATION_MODES)
-    }
-    tool_result_ref, operations = _normalize_automation_update_result(
-        capability_result,
-        identity=identity,
-        pre_update_snapshot=snapshot,
-        installed_records=installed_records,
+    root_binding = automation_cutover_files.open_automation_root(
+        root,
+        max_record_bytes=MAX_AUTOMATION_RECORD_BYTES,
     )
-    rows: list[dict[str, object]] = []
-    for operation in operations:
-        automation_id = str(operation["automation_id"])
-        record_path, record_sha256 = installed_records[automation_id]
-        previous = operation["previous_record_sha256"]
-        ref_body = {
-            "automation_id": automation_id,
-            "automation_pre_update_snapshot_ref": snapshot["snapshot_ref"],
-            "automation_update_result_ref": tool_result_ref,
-            "installed_cli_path": str(cli_path),
-            "mode": STABLE_AUTOMATION_MODES[automation_id],
-            "operation": operation["operation"],
-            "previous_record_sha256": previous,
-            "record_path": record_path,
-            "record_sha256": record_sha256,
+    bindings: dict[str, automation_cutover_files.AutomationRecordBinding] = {}
+    try:
+        for automation_id in sorted(STABLE_AUTOMATION_MODES):
+            bindings[automation_id] = _open_validated_installed_automation(
+                automation_id,
+                root=root_binding,
+                cli_path=cli_path,
+            )
+        installed_records = {
+            automation_id: (str(binding.record_path), binding.sha256)
+            for automation_id, binding in bindings.items()
         }
-        rows.append(
-            {
+        tool_result_ref, operations = _normalize_automation_update_result(
+            capability_result,
+            identity=identity,
+            pre_update_snapshot=snapshot,
+            installed_records=installed_records,
+        )
+        rows: list[dict[str, object]] = []
+        for operation in operations:
+            automation_id = str(operation["automation_id"])
+            record_path, record_sha256 = installed_records[automation_id]
+            previous = operation["previous_record_sha256"]
+            ref_body = {
                 "automation_id": automation_id,
+                "automation_pre_update_snapshot_ref": snapshot["snapshot_ref"],
+                "automation_update_result_ref": tool_result_ref,
+                "installed_cli_path": str(cli_path),
                 "mode": STABLE_AUTOMATION_MODES[automation_id],
                 "operation": operation["operation"],
                 "previous_record_sha256": previous,
                 "record_path": record_path,
-                "record_ref": "automation_record_v2:"
-                + identity.derive_digest("automation-record-v2", ref_body),
                 "record_sha256": record_sha256,
             }
+            rows.append(
+                {
+                    "automation_id": automation_id,
+                    "mode": STABLE_AUTOMATION_MODES[automation_id],
+                    "operation": operation["operation"],
+                    "previous_record_sha256": previous,
+                    "record_path": record_path,
+                    "record_ref": "automation_record_v2:"
+                    + identity.derive_digest("automation-record-v2", ref_body),
+                    "record_sha256": record_sha256,
+                }
+            )
+        body = {
+            "automation_pre_update_snapshot_ref": snapshot["snapshot_ref"],
+            "automation_records": rows,
+            "automation_update_capability": "automation_update",
+            "automation_update_result_ref": tool_result_ref,
+            "cutover_ready": True,
+            "identity_key_id": identity.key_id,
+            "installed_cli_path": str(cli_path),
+            "installed_commit": installed_commit,
+            "schema": AUTOMATION_CUTOVER_RECORD_SCHEMA,
+        }
+        record = {
+            **body,
+            "authentication_tag": "automation_cutover_auth_v2:"
+            + identity.derive_digest("automation-cutover-v2", body),
+        }
+        verified = verify_automation_cutover_record(identity, record)
+
+        # Treat both stable IDs as one final authority snapshot before publish.
+        for automation_id in sorted(bindings):
+            bindings[automation_id].revalidate()
+        root_binding.revalidate()
+        for automation_id in sorted(bindings):
+            bindings[automation_id].revalidate_navigation()
+        safe_io.atomic_write_json(path, verified)
+        return verified
+    finally:
+        automation_cutover_files.close_automation_bindings(
+            root_binding,
+            tuple(bindings[automation_id] for automation_id in sorted(bindings)),
         )
-    body = {
-        "automation_pre_update_snapshot_ref": snapshot["snapshot_ref"],
-        "automation_records": rows,
-        "automation_update_capability": "automation_update",
-        "automation_update_result_ref": tool_result_ref,
-        "cutover_ready": True,
-        "identity_key_id": identity.key_id,
-        "installed_cli_path": str(cli_path),
-        "installed_commit": installed_commit,
-        "schema": AUTOMATION_CUTOVER_RECORD_SCHEMA,
-    }
-    record = {
-        **body,
-        "authentication_tag": "automation_cutover_auth_v2:"
-        + identity.derive_digest("automation-cutover-v2", body),
-    }
-    verified = verify_automation_cutover_record(identity, record)
-    safe_io.atomic_write_json(path, verified)
-    return verified
 
 
 def load_automation_cutover_record(

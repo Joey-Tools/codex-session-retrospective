@@ -252,6 +252,42 @@ class CliContractTests(unittest.TestCase):
         os.chmod(root, 0o700)
         return root
 
+    def write_all_automation_records(self) -> dict[str, Path]:
+        return {
+            automation_id: self.write_automation_record(automation_id, mode)
+            for automation_id, mode in authority.STABLE_AUTOMATION_MODES.items()
+        }
+
+    def issue_cutover_record(
+        self,
+        name: str,
+        *,
+        snapshot: dict[str, object],
+        automation_root: Path,
+    ) -> dict[str, object]:
+        return authority.issue_automation_cutover_record(
+            self.root / f"{name}-cutover.json",
+            identity=self.identity,
+            capability_result=self.automation_result(snapshot),
+            pre_update_snapshot=snapshot,
+            installed_commit="a" * 40,
+            automation_root=automation_root,
+        )
+
+    def add_darwin_acl(self, path: Path, entry: str = "everyone allow write") -> None:
+        subprocess.run(
+            ["/bin/chmod", "+a", entry, os.fspath(path)],
+            check=True,
+            capture_output=True,
+        )
+
+    def remove_darwin_acl(self, path: Path) -> None:
+        subprocess.run(
+            ["/bin/chmod", "-N", os.fspath(path)],
+            check=True,
+            capture_output=True,
+        )
+
     def capture_cutover_snapshot(self, name: str) -> dict[str, object]:
         return authority.capture_automation_cutover_snapshot(
             self.root / f"{name}-pre-update.json",
@@ -599,6 +635,208 @@ class CliContractTests(unittest.TestCase):
                 automation_root=automation_root,
             )
         self.assertFalse(output.exists())
+
+    def test_cutover_record_rejects_same_inode_content_mutation_and_truncation(
+        self,
+    ) -> None:
+        automation_root = self.automation_root()
+        snapshot = self.capture_cutover_snapshot("record-content-race")
+        records = self.write_all_automation_records()
+        target = records["daily-session-retrospective"]
+        original = target.read_bytes()
+        real_read_pass = authority.automation_cutover_files._read_record_pass
+
+        for mutation in ("same-length", "truncate"):
+            with self.subTest(mutation=mutation):
+                target.write_bytes(original)
+                mutated = False
+
+                def mutate_after_first_read(*args, **kwargs):
+                    nonlocal mutated
+                    result = real_read_pass(*args, **kwargs)
+                    display_path = kwargs["display_path"]
+                    if (
+                        display_path.name == "automation.toml"
+                        and display_path.parent.name == "daily-session-retrospective"
+                        and not mutated
+                    ):
+                        mutated = True
+                        if mutation == "same-length":
+                            replacement = bytearray(original)
+                            replacement[-2] = ord(" ")
+                            target.write_bytes(replacement)
+                        else:
+                            target.write_bytes(original[: len(original) // 2])
+                    return result
+
+                with (
+                    mock.patch.object(
+                        authority.automation_cutover_files,
+                        "_read_record_pass",
+                        side_effect=mutate_after_first_read,
+                    ),
+                    self.assertRaisesRegex(
+                        authority.AutomationCutoverBlocked,
+                        "content changed",
+                    ),
+                ):
+                    self.issue_cutover_record(
+                        f"record-{mutation}",
+                        snapshot=snapshot,
+                        automation_root=automation_root,
+                    )
+
+    def test_cutover_record_accepts_benign_timestamp_transition(self) -> None:
+        automation_root = self.automation_root()
+        snapshot = self.capture_cutover_snapshot("record-timestamp")
+        records = self.write_all_automation_records()
+        target = records["daily-session-retrospective"]
+        real_read_pass = authority.automation_cutover_files._read_record_pass
+        touched = False
+
+        def touch_after_first_read(*args, **kwargs):
+            nonlocal touched
+            result = real_read_pass(*args, **kwargs)
+            display_path = kwargs["display_path"]
+            if (
+                display_path.name == "automation.toml"
+                and display_path.parent.name == "daily-session-retrospective"
+                and not touched
+            ):
+                touched = True
+                os.utime(target, None, follow_symlinks=False)
+            return result
+
+        with mock.patch.object(
+            authority.automation_cutover_files,
+            "_read_record_pass",
+            side_effect=touch_after_first_read,
+        ):
+            record = self.issue_cutover_record(
+                "record-timestamp",
+                snapshot=snapshot,
+                automation_root=automation_root,
+            )
+        self.assertTrue(record["cutover_ready"])
+
+    def test_cutover_record_rejects_final_file_replacement(self) -> None:
+        automation_root = self.automation_root()
+        snapshot = self.capture_cutover_snapshot("record-file-replacement")
+        records = self.write_all_automation_records()
+        target = records["daily-session-retrospective"]
+        real_normalize = authority._normalize_automation_update_result
+
+        def replace_file(*args, **kwargs):
+            result = real_normalize(*args, **kwargs)
+            replacement = target.with_name("automation.replacement")
+            replacement.write_bytes(target.read_bytes())
+            os.replace(replacement, target)
+            return result
+
+        with (
+            mock.patch.object(
+                authority,
+                "_normalize_automation_update_result",
+                side_effect=replace_file,
+            ),
+            self.assertRaisesRegex(
+                authority.AutomationCutoverBlocked,
+                "access policy|path identity",
+            ),
+        ):
+            self.issue_cutover_record(
+                "record-file-replacement",
+                snapshot=snapshot,
+                automation_root=automation_root,
+            )
+
+    def test_cutover_record_rejects_final_same_inode_content_drift(self) -> None:
+        automation_root = self.automation_root()
+        snapshot = self.capture_cutover_snapshot("record-final-content")
+        records = self.write_all_automation_records()
+        target = records["daily-session-retrospective"]
+        original = target.read_bytes()
+        real_normalize = authority._normalize_automation_update_result
+
+        def rewrite_file(*args, **kwargs):
+            result = real_normalize(*args, **kwargs)
+            replacement = bytearray(original)
+            replacement[-2] = ord(" ")
+            target.write_bytes(replacement)
+            return result
+
+        with (
+            mock.patch.object(
+                authority,
+                "_normalize_automation_update_result",
+                side_effect=rewrite_file,
+            ),
+            self.assertRaisesRegex(
+                authority.AutomationCutoverBlocked,
+                "content changed",
+            ),
+        ):
+            self.issue_cutover_record(
+                "record-final-content",
+                snapshot=snapshot,
+                automation_root=automation_root,
+            )
+
+    def test_cutover_record_rejects_final_directory_replacement(self) -> None:
+        automation_root = self.automation_root()
+        snapshot = self.capture_cutover_snapshot("record-directory-replacement")
+        records = self.write_all_automation_records()
+        target = records["daily-session-retrospective"]
+        directory = target.parent
+        retained = directory.with_name(directory.name + "-bound-original")
+        raw = target.read_bytes()
+        real_normalize = authority._normalize_automation_update_result
+
+        def replace_directory(*args, **kwargs):
+            result = real_normalize(*args, **kwargs)
+            directory.rename(retained)
+            directory.mkdir(mode=0o700)
+            (directory / "automation.toml").write_bytes(raw)
+            return result
+
+        with (
+            mock.patch.object(
+                authority,
+                "_normalize_automation_update_result",
+                side_effect=replace_directory,
+            ),
+            self.assertRaisesRegex(
+                authority.AutomationCutoverBlocked,
+                "path identity",
+            ),
+        ):
+            self.issue_cutover_record(
+                "record-directory-replacement",
+                snapshot=snapshot,
+                automation_root=automation_root,
+            )
+        self.assertTrue((retained / "automation.toml").is_file())
+        self.assertTrue((directory / "automation.toml").is_file())
+
+    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL contract")
+    def test_cutover_record_rejects_extended_acl(self) -> None:
+        automation_root = self.automation_root()
+        snapshot = self.capture_cutover_snapshot("record-acl")
+        records = self.write_all_automation_records()
+        target = records["daily-session-retrospective"]
+        self.add_darwin_acl(target)
+        try:
+            with self.assertRaisesRegex(
+                authority.AutomationCutoverBlocked,
+                "access policy",
+            ):
+                self.issue_cutover_record(
+                    "record-acl",
+                    snapshot=snapshot,
+                    automation_root=automation_root,
+                )
+        finally:
+            self.remove_darwin_acl(target)
 
     def test_start_derives_shadow_backfill_only_from_completed_partial(self) -> None:
         backfill_ref = str(

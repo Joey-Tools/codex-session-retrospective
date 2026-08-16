@@ -405,6 +405,25 @@ superseded_by:
   was observed, every interrupted process group was drained, and no repository
   worktree was deleted to manufacture capacity. The exact committed head must
   therefore obtain its complete four-shard result from hosted CI before merge.
+- Hosted CI passed all four shards for signed head `69918828`, but that evidence
+  became stale when its fresh-context Codex review found that automation
+  cutover authenticated each `automation.toml` through one unbound pathname
+  read. The old head is not mergeable evidence.
+- Automation file authentication now has one bounded descriptor owner in
+  `automation_cutover_files.py`. It retains the physical automation root, each
+  stable-ID directory, and both records through cutover publication; checks
+  owner, mode, link count, and absence of extended ACLs; performs two bounded
+  content reads; and revalidates both stable IDs immediately before writing the
+  authenticated cutover record. Same-inode same-length mutation, truncation,
+  file replacement, directory replacement, and Darwin extended ACLs fail
+  closed, while timestamp-only churn remains benign.
+- The superseding local matrix passes the complete v2 CLI/cutover class 49/49
+  in 64.308 seconds, module boundaries 19/19 with exact branch inventory 8,843,
+  CI contracts 6/6, and two production-marker integration tests 2/2 in 41.282
+  seconds. Ruff lint and formatting plus `git diff --check` are clean on the
+  implementation files. Current discovery is 1,645 tests, partitioned exactly
+  once as 390, 440, 448, and 367; complete final-head execution remains a
+  hosted-CI prerequisite before merge.
 
 ## Follow-up Work
 
