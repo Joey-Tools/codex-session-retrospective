@@ -55,12 +55,25 @@ _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT = (
     r"denied|expired|invalid|unavailable|absent|needed|necessary|revoked|"
     r"rotated|budget|count|limit)"
 )
-_SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT = r"(?=$|[\s,;&#)\]\}>\"']|\.(?:$|\s))"
-_SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT = (
-    r"(?![\[<({]?"
+_SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT = (
+    r"(?=$|[\s,;&#]|\.(?:$|\s)|[)\]\}>\"']+(?=$|[\s,;&#]|\.(?:$|\s)))"
+)
+_SAFE_CREDENTIAL_VALUE_ENVELOPE_PATTERN_TEXT = (
+    r"(?:"
     + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
+    + r"|\["
+    + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
+    + r"\]|<"
+    + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
+    + r">|\("
+    + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
+    + r"\)|\{"
+    + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
+    + r"\})"
     + _SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT
-    + r")"
+)
+_SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT = (
+    r"(?!" + _SAFE_CREDENTIAL_VALUE_ENVELOPE_PATTERN_TEXT + r")"
 )
 _COMPACT_TOKEN_KEY_PATTERN_TEXT = (
     r"(?:access|api|auth|authorization|client|refresh|id|session|csrf|xsrf)Token"

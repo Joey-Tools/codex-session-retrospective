@@ -1609,6 +1609,16 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             f"credential={SYNTHETIC_ACCESS_TOKEN}",
             f"refreshToken={SYNTHETIC_REFRESH_TOKEN}",
             f"run deploy --token {SYNTHETIC_ACCESS_TOKEN}",
+            *(
+                f"token={placeholder}{SYNTHETIC_ACCESS_TOKEN}"
+                for placeholder in (
+                    "[REDACTED_CREDENTIAL]",
+                    "<REDACTED_CREDENTIAL>",
+                    "(MASKED_CREDENTIAL)",
+                    "{REDACTED_CREDENTIAL}",
+                    "missing]",
+                )
+            ),
             *github_probes,
         )
         for probe in probes:

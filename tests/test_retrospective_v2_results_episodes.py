@@ -924,6 +924,20 @@ class ResultValidationTests(unittest.TestCase):
                 (SYNTHETIC_ACCESS_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
+            *(
+                (
+                    f"token={placeholder}{SYNTHETIC_ACCESS_TOKEN}",
+                    (SYNTHETIC_ACCESS_TOKEN,),
+                    "[REDACTED_CREDENTIAL]",
+                )
+                for placeholder in (
+                    "[REDACTED_CREDENTIAL]",
+                    "<REDACTED_CREDENTIAL>",
+                    "(MASKED_CREDENTIAL)",
+                    "{REDACTED_CREDENTIAL}",
+                    "missing]",
+                )
+            ),
         )
 
         for probe, forbidden_fragments, replacement in probes:

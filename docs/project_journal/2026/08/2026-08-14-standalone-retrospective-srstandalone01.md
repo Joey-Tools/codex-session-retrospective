@@ -556,6 +556,19 @@ superseded_by:
   passes 17/17, module boundaries pass 19/19 with unchanged branch inventory,
   CI contracts pass 7/7, and skill contracts pass 5/5. Ruff lint and formatting
   plus `git diff --check` pass on the fix tree.
+- The fresh-context review of signed head `6dc57b29` found one additional
+  credential-boundary issue. A safe placeholder's closing delimiter was
+  accepted as the terminal boundary without proving that the retained value
+  ended there, so a suffix appended to `[REDACTED_CREDENTIAL]` could bypass all
+  consumers of the shared detector. That head's review and other head-bound
+  evidence became stale when the finding required a new commit.
+- Safe credential states now parse either one bare reviewed status or one
+  complete matching `[]`, `<>`, `()`, or `{}` envelope, then require a true
+  outer value terminator. Placeholder-plus-suffix and unmatched-closer forms
+  fail closed. Five adversarial suffix forms pass through extractor
+  post-redaction with no retained tail and are rejected independently at
+  artifact assembly, retained reread, and `report.md` validation. Complete
+  affected modules remain green at 65/65, 66/66, 17/17, 19/19, 7/7, and 5/5.
 
 ## Follow-up Work
 
