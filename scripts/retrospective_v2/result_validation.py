@@ -214,55 +214,6 @@ _SCHEMA_RE = re.compile(r"^[a-z][a-z0-9_]*_v2$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _REDACTION_PLACEHOLDER_RE = re.compile(r"^\[REDACTED_[A-Z_]+\]$")
 
-_SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
-    (
-        "secret",
-        re.compile(
-            r"-----BEGIN (?P<private_key_label>(?:(?:RSA|EC|OPENSSH|ENCRYPTED) )?PRIVATE KEY)-----"
-            r"[\s\S]*?-----END (?P=private_key_label)-----"
-        ),
-        "[REDACTED_SECRET]",
-    ),
-    (
-        "credential",
-        re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
-        "[REDACTED_CREDENTIAL]",
-    ),
-    (
-        "credential",
-        re.compile(r"\b(?:ghp_[A-Za-z0-9]{24,}|github_pat_[A-Za-z0-9_]{30,})\b"),
-        "[REDACTED_CREDENTIAL]",
-    ),
-    (
-        "credential",
-        re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"),
-        "[REDACTED_CREDENTIAL]",
-    ),
-    (
-        "credential",
-        re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{16,}\b"),
-        "[REDACTED_CREDENTIAL]",
-    ),
-    (
-        "credential",
-        re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
-        "[REDACTED_CREDENTIAL]",
-    ),
-    (
-        "credential",
-        re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}"),
-        "[REDACTED_CREDENTIAL]",
-    ),
-    (
-        "credential",
-        re.compile(
-            r"(?i)\b(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|token|password|passwd|secret)"
-            r"\s*(?:=|:)\s*(?!\[?REDACTED)[\"']?[A-Za-z0-9._~+/=-]{8,}"
-        ),
-        "[REDACTED_CREDENTIAL]",
-    ),
-)
-
 _INTERNAL_HOST_RE = re.compile(
     r"(?i)(?:localhost|(?:10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
     r"192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|"
@@ -285,10 +236,6 @@ _PHONE_RE = re.compile(
 _LABELED_PERSONAL_ID_RE = re.compile(
     r"(?i)\b(?:account|customer|employee|person|user)[_ -]?(?:id|name)"
     r"\s*(?:=|:)\s*(?!\[REDACTED)[\"']?[A-Za-z0-9._@+-]{3,}"
-)
-_PRIVATE_KEY_BOUNDARY_RE = re.compile(
-    r"(?i)-----\s*(?:BEGIN|END)\s+(?:(?:RSA|EC|OPENSSH|ENCRYPTED)\s+)?"
-    r"PRIVATE KEY\s*-----"
 )
 _UNIX_PATH_RE = re.compile(
     r"(?<![A-Za-z0-9_])/(?!/)"
@@ -640,7 +587,11 @@ def scan_for_leaks(
         path = _display_path(parts)
         reference_field = _is_valid_reference_value(parts, text)
         overlap_exempt = reference_field and text in allowed_values
-        for category, pattern, _replacement in _SECRET_PATTERNS:
+        for (
+            category,
+            pattern,
+            _replacement,
+        ) in privacy_locators.CREDENTIAL_REDACTION_PATTERNS:
             for match in pattern.finditer(text):
                 findings.add(LeakFinding(category, path, match.start(), match.end()))
         for match in privacy_locators.URI_LOCATOR_RE.finditer(text):
@@ -684,7 +635,7 @@ def scan_for_leaks(
                     )
         for match in _CODE_FENCE_RE.finditer(text):
             findings.add(LeakFinding("code", path, match.start(), match.end()))
-        for match in _PRIVATE_KEY_BOUNDARY_RE.finditer(text):
+        for match in privacy_locators.PRIVATE_KEY_BOUNDARY_RE.finditer(text):
             findings.add(
                 LeakFinding("unredactable_secret", path, match.start(), match.end())
             )
@@ -720,7 +671,11 @@ def _post_redact_text(
             redacted = pattern.sub("[REDACTED_ORIGINAL_PROMPT]", redacted)
         for pattern in tool_output_patterns:
             redacted = pattern.sub("[REDACTED_TOOL_OUTPUT]", redacted)
-    for _category, pattern, replacement in _SECRET_PATTERNS:
+    for (
+        _category,
+        pattern,
+        replacement,
+    ) in privacy_locators.CREDENTIAL_REDACTION_PATTERNS:
         redacted = pattern.sub(replacement, redacted)
     redacted = privacy_locators.SCP_STYLE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     for pattern in (_EMAIL_RE, _PHONE_RE, _LABELED_PERSONAL_ID_RE):

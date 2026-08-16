@@ -1967,12 +1967,6 @@ class DurablePublicationTests(unittest.TestCase):
         run_state, review_data = cli_module._retained_inputs(coordinator, state)
         run_state["durable_state"] = coordinator.publication_durable_state()
         bundle = self.root / ".codex-local" / "exports" / name / "retained-v2"
-        if persist_descriptor:
-            cli_module._claim_export_destination(
-                coordinator.run_dir,
-                bundle,
-                publication_role="standalone",
-            )
         export_clock = export_now or dt.datetime(2026, 7, 15, tzinfo=dt.UTC)
         export_deadline = export_retention_deadline or "2026-07-15T01:00:00Z"
         receipt = export_retained_bundle(
@@ -1983,6 +1977,11 @@ class DurablePublicationTests(unittest.TestCase):
             retention_deadline=export_deadline,
         )
         if persist_descriptor:
+            cli_module._claim_export_destination(
+                coordinator.run_dir,
+                bundle,
+                publication_role="standalone",
+            )
             cli_module._persist_export_descriptor(
                 coordinator.run_dir,
                 bundle,

@@ -11,7 +11,7 @@ import shlex
 import stat
 from typing import Sequence
 
-from . import safe_io
+from . import executable_authority, safe_io
 from .authority_errors import AutomationCutoverBlocked
 
 
@@ -110,8 +110,7 @@ def production_prompt_is_closed(
         and publisher_offsets[0] == mode_offsets[0] + 2
         and publisher_value != ""
         and not publisher_value.startswith("--")
-        and Path(publisher_value).is_absolute()
-        and os.path.abspath(publisher_value) == publisher_value
+        and executable_authority.is_canonical_absolute_executable_path(publisher_value)
     )
 
 

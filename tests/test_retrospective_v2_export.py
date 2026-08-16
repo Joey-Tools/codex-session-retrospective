@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 import copy
 import datetime as dt
 import hashlib
@@ -58,6 +59,8 @@ def ref(kind: str, character: str) -> str:
 
 RUN_REF = ref("run", "a")
 CONFIGURATION_REF = ref("configuration", "b")
+SYNTHETIC_ACCESS_TOKEN = "codex_synth_v1_access_a"
+SYNTHETIC_BEARER_TOKEN = "codex_synth_v1_bearer_a"
 EPISODE_ONE = ref("episode", "c")
 EPISODE_TWO = ref("episode", "d")
 EPISODE_THREE = ref("episode", "8")
@@ -1571,6 +1574,77 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 with self.assertRaisesRegex(RetainedPrivacyError, "forbidden locator"):
                     validate_retained_artifacts(report_tampered)
 
+    def test_retained_credentials_use_the_complete_shared_detector(self) -> None:
+        slack_probe = "".join(("xoxb-", "A" * 16))
+        jwt_segment = "".join(("eyJ", "A" * 8))
+        github_probes = tuple(
+            "".join((prefix, "A" * 16)) for prefix in ("gho_", "ghr_", "ghs_", "ghu_")
+        )
+        stateless_github_probe = "".join(
+            ("ghs_", "123456_", jwt_segment, ".", "B" * 12, ".", "C" * 16)
+        )
+        long_authorization_probe = "".join(
+            ("Authorization: Basic ", "D" * 1200, "TAIL")
+        )
+        truncated_private_key = "".join(("-----BEGIN ", "PRIVATE KEY-----", "E" * 96))
+        probes = (
+            slack_probe,
+            ".".join((jwt_segment, jwt_segment, jwt_segment)),
+            f"Bearer {SYNTHETIC_BEARER_TOKEN}",
+            f"token={SYNTHETIC_ACCESS_TOKEN}",
+            "".join(("Authorization: Basic ", "A" * 16)),
+            "".join(("sk-", "A" * 12)),
+            stateless_github_probe,
+            long_authorization_probe,
+            truncated_private_key,
+            *github_probes,
+        )
+        for probe in probes:
+            with self.subTest(probe=probe, phase="assembly"):
+                unsafe = review_data()
+                unsafe["turn_findings"][1]["rewritten_prompt"] = (
+                    f"Inspect {probe} before continuing."
+                )
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError,
+                    "credential-shaped material",
+                ):
+                    assemble_retained_artifacts(run_state(), unsafe)
+
+            with self.subTest(probe=probe, phase="retained-reread"):
+                artifacts = assemble_retained_artifacts(run_state(), review_data())
+                tampered = dict(artifacts)
+                rows = [
+                    json.loads(line)
+                    for line in tampered["turn_findings.jsonl"].splitlines()
+                ]
+                high_impact = next(
+                    row for row in rows if row["disposition"] == "high_impact"
+                )
+                high_impact["rewritten_prompt"] = f"Inspect {probe} before continuing."
+                tampered["turn_findings.jsonl"] = b"".join(
+                    canonical_json_bytes(row) for row in rows
+                )
+                refresh_bundle_digest(tampered)
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError,
+                    "credential-shaped material",
+                ):
+                    validate_retained_artifacts(tampered)
+
+            with self.subTest(probe=probe, phase="report"):
+                artifacts = assemble_retained_artifacts(run_state(), review_data())
+                tampered = dict(artifacts)
+                tampered["report.md"] += (
+                    f"\nInspect {probe} before continuing.\n".encode("ascii")
+                )
+                refresh_bundle_digest(tampered)
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError,
+                    "forbidden locator or credential-shaped value",
+                ):
+                    validate_retained_artifacts(tampered)
+
     def test_non_http_uri_schemes_are_rejected_before_and_after_assembly(self) -> None:
         prefixed_mixed_scheme_uri = f"locator_a{'9' * 32}+.-x://?prod-build-queue"
         for uri in (
@@ -1970,6 +2044,104 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
                 validate_staged_export(symlink)
             with self.assertRaises(ExportLocationError):
                 export_retained_bundle(symlink, run_state(), review_data())
+
+    def test_stage_recovers_missing_sidecar_before_locked_callback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / ".codex-local" / "recover" / "retained-v2"
+            artifacts = assemble_retained_artifacts(run_state(), review_data())
+            now = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+            stage_retained_artifacts(output, artifacts, now=now)
+            sidecar = output.with_name(f".{output.name}.retention-v2.json")
+            sidecar.unlink()
+            callbacks: list[Mapping[str, object]] = []
+
+            replayed = stage_retained_artifacts(
+                output,
+                artifacts,
+                now=now + dt.timedelta(minutes=1),
+                before_unlock=callbacks.append,
+            )
+
+            self.assertTrue(replayed["idempotent"])
+            self.assertEqual([replayed], callbacks)
+            self.assertTrue(sidecar.is_file())
+
+    def test_stage_keeps_destination_lock_through_callback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / ".codex-local" / "locked" / "retained-v2"
+            artifacts = assemble_retained_artifacts(run_state(), review_data())
+            changed_reviews = review_data()
+            changed_reviews["episodes"][0]["strength_counts"] = {
+                "clear_communication": 2
+            }
+            competing = assemble_retained_artifacts(run_state(), changed_reviews)
+            callback_entered = threading.Event()
+            release_callback = threading.Event()
+            contender_started = threading.Event()
+            contender_done = threading.Event()
+            first_errors: list[BaseException] = []
+            contender_errors: list[BaseException] = []
+
+            def hold_destination_lock(_receipt: Mapping[str, object]) -> None:
+                callback_entered.set()
+                if not release_callback.wait(timeout=5):
+                    raise RuntimeError("timed out waiting to release export callback")
+
+            def stage_first() -> None:
+                try:
+                    stage_retained_artifacts(
+                        output,
+                        artifacts,
+                        before_unlock=hold_destination_lock,
+                    )
+                except BaseException as error:  # pragma: no cover - assertion payload
+                    first_errors.append(error)
+
+            def stage_contender() -> None:
+                contender_started.set()
+                try:
+                    stage_retained_artifacts(output, competing)
+                except BaseException as error:  # pragma: no cover - assertion payload
+                    contender_errors.append(error)
+                finally:
+                    contender_done.set()
+
+            first = threading.Thread(target=stage_first)
+            first.start()
+            self.assertTrue(callback_entered.wait(timeout=5))
+            contender = threading.Thread(target=stage_contender)
+            contender.start()
+            self.assertTrue(contender_started.wait(timeout=5))
+            self.assertFalse(contender_done.wait(timeout=0.1))
+            release_callback.set()
+            first.join(timeout=5)
+            contender.join(timeout=5)
+
+            self.assertFalse(first.is_alive())
+            self.assertFalse(contender.is_alive())
+            self.assertEqual([], first_errors)
+            self.assertEqual(1, len(contender_errors))
+            self.assertIsInstance(contender_errors[0], ExportConflictError)
+
+    def test_existing_target_does_not_reclassify_callback_io_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / ".codex-local" / "callback" / "retained-v2"
+            artifacts = assemble_retained_artifacts(run_state(), review_data())
+            stage_retained_artifacts(output, artifacts)
+
+            def fail_run_binding(_receipt: Mapping[str, object]) -> None:
+                raise OSError("simulated run-binding failure")
+
+            with self.assertRaises(RetainedExportError) as caught:
+                stage_retained_artifacts(
+                    output,
+                    artifacts,
+                    before_unlock=fail_run_binding,
+                )
+
+            self.assertNotIsInstance(
+                caught.exception, export_module.InvalidExistingExportError
+            )
 
     def test_export_rejects_outside_ignored_area_and_conflicting_retry(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

@@ -189,6 +189,13 @@ class CliContractTests(unittest.TestCase):
     def parse_dispatch(self, *arguments: str) -> cli.CommandResult:
         return cli.dispatch(self.parser.parse_args(arguments))
 
+    def _write_pending_export_record(self, name: str, value: dict[str, object]) -> Path:
+        payload = cli.contract_api.canonical_json(value).encode("ascii") + b"\n"
+        pending = self.run_dir / safe_io._atomic_create_pending_name(name, payload)
+        pending.write_bytes(payload)
+        os.chmod(pending, 0o600)
+        return pending
+
     def shadow_start_arguments(self) -> tuple[str, ...]:
         return (
             "start",
@@ -657,6 +664,14 @@ class CliContractTests(unittest.TestCase):
                 lambda prompt: prompt.replace(
                     TEST_PUBLISHER_GPG,
                     "relative-gpg",
+                    1,
+                ),
+            ),
+            (
+                "double-root-publisher",
+                lambda prompt: prompt.replace(
+                    TEST_PUBLISHER_GPG,
+                    "//tmp/gpg",
                     1,
                 ),
             ),
@@ -1763,7 +1778,7 @@ class CliContractTests(unittest.TestCase):
         self.assertFalse((run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME).exists())
 
     def test_cleanup_path_folding_renormalizes_casefold_output(self) -> None:
-        real_normalize = cli.export_cli_api.unicodedata.normalize
+        real_normalize = cli.export_cli_api.records.unicodedata.normalize
 
         class FoldedAlias(str):
             def casefold(self) -> str:
@@ -1775,13 +1790,364 @@ class CliContractTests(unittest.TestCase):
             return real_normalize(form, value)
 
         with mock.patch.object(
-            cli.export_cli_api.unicodedata,
+            cli.export_cli_api.records.unicodedata,
             "normalize",
             side_effect=controlled_normalize,
         ):
-            folded = cli.export_cli_api._folded_path_parts(Path("trigger"))
+            folded = cli.export_cli_api.records._folded_path_parts(Path("trigger"))
 
         self.assertEqual(("A\u030a",), folded)
+
+    def test_export_rejects_run_ancestors_before_claim_and_recovers(self) -> None:
+        run_dir = self.root / ".codex-local" / "runs" / "run-destination"
+        coordinator = self.real_coordinator(run_dir, activity=False)
+        self.assertEqual(RunStage.EXPORT.value, coordinator.status()["stage"])
+        common = (
+            "export",
+            "--identity-path",
+            str(self.identity_path),
+            "--require-existing-identity",
+            "--run-dir",
+            str(run_dir),
+        )
+
+        for output in (run_dir, run_dir.parent):
+            with self.subTest(output=output):
+                rejected = self.parse_dispatch(*common, "--output", str(output))
+                self.assertEqual(cli.ExitCode.INVALID_INPUT, rejected.exit_code)
+                self.assertEqual("export_location_invalid", rejected.error.code)
+                self.assertFalse(
+                    (
+                        run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME
+                    ).exists()
+                )
+                self.assertFalse((run_dir / cli.EXPORT_DESCRIPTOR_NAME).exists())
+                self.assertFalse((run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME).exists())
+
+        recovered = self.root / ".codex-local" / "exports" / "recovered"
+        accepted = self.parse_dispatch(*common, "--output", str(recovered))
+        self.assertTrue(accepted.ok, accepted.error)
+        self.assertTrue((recovered / "manifest.json").is_file())
+
+    def test_export_rejects_existing_invalid_target_before_claim(self) -> None:
+        run_dir = self.root / ".codex-local" / "runs" / "existing-target"
+        coordinator = self.real_coordinator(run_dir, activity=False)
+        self.assertEqual(RunStage.EXPORT.value, coordinator.status()["stage"])
+        output = self.root / ".codex-local" / "exports" / "empty-existing"
+        output.parent.mkdir(mode=0o700, parents=True)
+        output.mkdir(mode=0o700)
+
+        rejected = self.parse_dispatch(
+            "export",
+            "--identity-path",
+            str(self.identity_path),
+            "--require-existing-identity",
+            "--run-dir",
+            str(run_dir),
+            "--output",
+            str(output),
+        )
+
+        self.assertEqual(
+            cli.ExitCode.INVALID_INPUT, rejected.exit_code, rejected.to_json()
+        )
+        self.assertEqual("export_location_invalid", rejected.error.code)
+        self.assertFalse(
+            (run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME).exists()
+        )
+        self.assertFalse((run_dir / cli.EXPORT_DESCRIPTOR_NAME).exists())
+        self.assertFalse((run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME).exists())
+
+    def test_export_recovers_installed_bundle_before_claiming(self) -> None:
+        coordinator = self.real_coordinator(self.run_dir, activity=False)
+        expected_deadline = coordinator.export_retention_deadline()
+        state = coordinator.load_state()
+        run_state, review_data = cli._retained_inputs(coordinator, state)
+        run_state["durable_state"] = coordinator.publication_durable_state()
+        run_state["publication_role"] = "standalone"
+        artifacts = reporting.assemble_retained_artifacts(run_state, review_data)
+        output = self.root / ".codex-local" / "exports" / "interrupted-install"
+        cli.export_api.stage_retained_artifacts(output, artifacts)
+        sidecar = output.with_name(f".{output.name}.retention-v2.json")
+        sidecar.unlink()
+
+        with mock.patch.object(
+            cli.orchestrator_api.RetrospectiveOrchestrator,
+            "export_retention_deadline",
+            return_value=expected_deadline,
+        ):
+            result = self.parse_dispatch(
+                "export",
+                "--identity-path",
+                str(self.identity_path),
+                "--require-existing-identity",
+                "--run-dir",
+                str(self.run_dir),
+                "--output",
+                str(output),
+            )
+
+        self.assertTrue(result.ok, result.error)
+        self.assertTrue(sidecar.is_file())
+        self.assertEqual(
+            expected_deadline,
+            json.loads(sidecar.read_text(encoding="ascii"))["retention_deadline"],
+        )
+        self.assertTrue(
+            (self.run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME).is_file()
+        )
+
+    def test_export_rejects_full_descriptor_conflict_before_claim(self) -> None:
+        for descriptor_kind in ("legacy", "result"):
+            with self.subTest(descriptor_kind=descriptor_kind):
+                run_dir = self.root / f"run-{descriptor_kind}-descriptor-conflict"
+                coordinator = self.real_coordinator(run_dir, activity=False)
+                state = coordinator.load_state()
+                run_state, review_data = cli._retained_inputs(coordinator, state)
+                run_state["durable_state"] = coordinator.publication_durable_state()
+                run_state["publication_role"] = "standalone"
+                artifacts = reporting.assemble_retained_artifacts(
+                    run_state, review_data
+                )
+                output = (
+                    self.root
+                    / ".codex-local"
+                    / "exports"
+                    / f"{descriptor_kind}-descriptor-conflict"
+                )
+                deadline = coordinator.export_retention_deadline()
+                cli.export_api.stage_retained_artifacts(
+                    output,
+                    artifacts,
+                    now=dt.datetime.fromisoformat(
+                        self.created_at.replace("Z", "+00:00")
+                    ),
+                    retention_deadline=deadline,
+                )
+                reservation = {
+                    "output": str(
+                        cli.export_api.normalize_retained_export_destination(output)
+                    ),
+                    "publication_role": "standalone",
+                    "schema": cli.export_cli_api.EXPORT_RESERVATION_SCHEMA,
+                }
+                conflicting = {
+                    "bundle_digest": "f" * 64,
+                    "output": reservation["output"],
+                    "publication_role": "standalone",
+                    "retention_deadline": deadline,
+                    "schema": cli.EXPORT_DESCRIPTOR_SCHEMA,
+                }
+                if descriptor_kind == "legacy":
+                    safe_io.atomic_create_json(
+                        run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME, conflicting
+                    )
+                else:
+                    safe_io.atomic_create_json(
+                        run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME, reservation
+                    )
+                    safe_io.atomic_create_json(
+                        run_dir / cli.EXPORT_DESCRIPTOR_NAME, conflicting
+                    )
+
+                result = self.parse_dispatch(
+                    "export",
+                    "--identity-path",
+                    str(self.identity_path),
+                    "--require-existing-identity",
+                    "--run-dir",
+                    str(run_dir),
+                    "--output",
+                    str(output),
+                )
+
+                self.assertEqual(cli.ExitCode.CONFLICT, result.exit_code)
+                self.assertEqual("export_descriptor_conflict", result.error.code)
+                self.assertFalse(
+                    (
+                        run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME
+                    ).exists()
+                )
+
+    def test_explicit_deadline_conflict_precedes_missing_sidecar_recovery(self) -> None:
+        coordinator = self.real_coordinator(self.run_dir, activity=False)
+        state = coordinator.load_state()
+        run_state, review_data = cli._retained_inputs(coordinator, state)
+        run_state["durable_state"] = coordinator.publication_durable_state()
+        run_state["publication_role"] = "standalone"
+        artifacts = reporting.assemble_retained_artifacts(run_state, review_data)
+        output = self.root / ".codex-local" / "exports" / "explicit-deadline"
+        now = dt.datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
+        bound_deadline = (
+            (now + dt.timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+        )
+        requested_deadline = (
+            (now + dt.timedelta(hours=2)).isoformat().replace("+00:00", "Z")
+        )
+        safe_io.atomic_create_json(
+            self.run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME,
+            {
+                "bundle_digest": reporting.retained_bundle_digest(artifacts),
+                "output": str(
+                    cli.export_api.normalize_retained_export_destination(output)
+                ),
+                "publication_role": "standalone",
+                "retention_deadline": bound_deadline,
+                "schema": cli.EXPORT_DESCRIPTOR_SCHEMA,
+            },
+        )
+
+        result = self.parse_dispatch(
+            "export",
+            "--identity-path",
+            str(self.identity_path),
+            "--require-existing-identity",
+            "--run-dir",
+            str(self.run_dir),
+            "--output",
+            str(output),
+            "--retention-deadline",
+            requested_deadline,
+        )
+
+        self.assertEqual(cli.ExitCode.CONFLICT, result.exit_code)
+        self.assertFalse(output.exists())
+        self.assertFalse(output.with_name(f".{output.name}.retention-v2.json").exists())
+        self.assertFalse(
+            (self.run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME).exists()
+        )
+
+    def test_pending_claim_recovery_waits_for_full_descriptor_match(self) -> None:
+        coordinator = self.real_coordinator(self.run_dir, activity=False)
+        state = coordinator.load_state()
+        run_state, review_data = cli._retained_inputs(coordinator, state)
+        run_state["durable_state"] = coordinator.publication_durable_state()
+        run_state["publication_role"] = "standalone"
+        output = self.root / ".codex-local" / "exports" / "pending-claim"
+        output_text = str(cli.export_api.normalize_retained_export_destination(output))
+        deadline = coordinator.export_retention_deadline()
+        reservation = {
+            "output": output_text,
+            "publication_role": "standalone",
+            "schema": cli.export_cli_api.EXPORT_RESERVATION_SCHEMA,
+        }
+        claim = {
+            "output": output_text,
+            "publication_role": "standalone",
+            "schema": cli.export_cli_api.EXPORT_DESTINATION_CLAIM_SCHEMA,
+        }
+        conflicting_result = {
+            "bundle_digest": "f" * 64,
+            "output": output_text,
+            "publication_role": "standalone",
+            "retention_deadline": deadline,
+            "schema": cli.EXPORT_DESCRIPTOR_SCHEMA,
+        }
+        safe_io.atomic_create_json(
+            self.run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME, reservation
+        )
+        pending_claim_path = self._write_pending_export_record(
+            cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME, claim
+        )
+        self._write_pending_export_record(
+            cli.EXPORT_DESCRIPTOR_NAME, conflicting_result
+        )
+
+        result = self.parse_dispatch(
+            "export",
+            "--identity-path",
+            str(self.identity_path),
+            "--require-existing-identity",
+            "--run-dir",
+            str(self.run_dir),
+            "--output",
+            str(output),
+        )
+
+        self.assertEqual(cli.ExitCode.CONFLICT, result.exit_code)
+        self.assertFalse(
+            (self.run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME).exists()
+        )
+        self.assertTrue(pending_claim_path.is_file())
+        self.assertFalse(output.exists())
+
+    def test_export_classifies_malformed_locked_sidecar_as_invalid_target(self) -> None:
+        coordinator = self.real_coordinator(self.run_dir, activity=False)
+        state = coordinator.load_state()
+        run_state, review_data = cli._retained_inputs(coordinator, state)
+        run_state["durable_state"] = coordinator.publication_durable_state()
+        run_state["publication_role"] = "standalone"
+        artifacts = reporting.assemble_retained_artifacts(run_state, review_data)
+        output = self.root / ".codex-local" / "exports" / "malformed-sidecar"
+        cli.export_api.stage_retained_artifacts(output, artifacts)
+        sidecar = output.with_name(f".{output.name}.retention-v2.json")
+        cases = (
+            ("invalid-shape", b"{}\n"),
+            ("oversized", b"{" + b" " * (64 * 1024)),
+        )
+        for label, payload in cases:
+            with self.subTest(sidecar=label):
+                sidecar.write_bytes(payload)
+                os.chmod(sidecar, 0o600)
+
+                result = self.parse_dispatch(
+                    "export",
+                    "--identity-path",
+                    str(self.identity_path),
+                    "--require-existing-identity",
+                    "--run-dir",
+                    str(self.run_dir),
+                    "--output",
+                    str(output),
+                )
+
+                self.assertEqual(cli.ExitCode.INVALID_INPUT, result.exit_code)
+                self.assertEqual("export_location_invalid", result.error.code)
+                self.assertFalse(
+                    (
+                        self.run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME
+                    ).exists()
+                )
+
+    def test_existing_export_deadline_is_validated_before_claim(self) -> None:
+        coordinator = self.real_coordinator(
+            self.run_dir,
+            activity=False,
+            raw_retention_days=1,
+            working_retention_days=1,
+        )
+        state = coordinator.load_state()
+        run_state, review_data = cli._retained_inputs(coordinator, state)
+        run_state["durable_state"] = coordinator.publication_durable_state()
+        run_state["publication_role"] = "standalone"
+        artifacts = reporting.assemble_retained_artifacts(run_state, review_data)
+        output = self.root / ".codex-local" / "exports" / "outside-run-policy"
+        now = dt.datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
+        cli.export_api.stage_retained_artifacts(
+            output,
+            artifacts,
+            now=now,
+            retention_deadline=now + dt.timedelta(days=2),
+        )
+
+        result = self.parse_dispatch(
+            "export",
+            "--identity-path",
+            str(self.identity_path),
+            "--require-existing-identity",
+            "--run-dir",
+            str(self.run_dir),
+            "--output",
+            str(output),
+        )
+
+        self.assertEqual(cli.ExitCode.INVALID_INPUT, result.exit_code)
+        self.assertTrue((output / "manifest.json").is_file())
+        self.assertFalse(
+            (self.run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME).exists()
+        )
+        self.assertFalse((self.run_dir / cli.EXPORT_DESCRIPTOR_NAME).exists())
+        self.assertFalse((self.run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME).exists())
 
     def test_cleanup_root_name_prefix_remains_exportable(self) -> None:
         run_dir = self.root / ".codex-local" / "runs" / "cleanup-prefix"

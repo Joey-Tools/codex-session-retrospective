@@ -16,6 +16,8 @@ PACKAGE = SCRIPTS / "retrospective_v2"
 PUBLIC_CLI = SCRIPTS / "session_retrospective_v2.py"
 EXPORT_CLI_SUPPORT = SCRIPTS / "session_retrospective_v2_export.py"
 EXPORT_CLI_RECORDS = SCRIPTS / "session_retrospective_v2_export_records.py"
+EXPORT_CLI_BINDING = SCRIPTS / "session_retrospective_v2_export_binding.py"
+EXPORT_CLI_LEGACY = SCRIPTS / "session_retrospective_v2_export_legacy.py"
 TRANSCRIPT_ADAPTER = SCRIPTS / "session_retrospective_v2_transcript.py"
 TEST_SHARD_RUNNER = SCRIPTS / "run_test_shard.py"
 sys.path.insert(0, str(SCRIPTS))
@@ -1105,6 +1107,14 @@ spec.loader.exec_module(module)
             250,
         )
         self.assertLessEqual(
+            len(EXPORT_CLI_BINDING.read_text(encoding="utf-8").splitlines()),
+            250,
+        )
+        self.assertLessEqual(
+            len(EXPORT_CLI_LEGACY.read_text(encoding="utf-8").splitlines()),
+            250,
+        )
+        self.assertLessEqual(
             len(TRANSCRIPT_ADAPTER.read_text(encoding="utf-8").splitlines()),
             250,
         )
@@ -1182,8 +1192,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(8_864, branch_total)
-        self.assertLessEqual(branch_total, 8_864)
+        self.assertEqual(8_874, branch_total)
+        self.assertLessEqual(branch_total, 8_874)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

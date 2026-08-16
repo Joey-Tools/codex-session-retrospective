@@ -487,6 +487,55 @@ superseded_by:
   52/52 in 62.944 seconds, module boundaries pass 19/19 with exact branch
   inventory and cap 8,864, CI contracts pass 6/6, and Ruff 0.13.2 lint and
   formatting plus `git diff --check` pass.
+- Signed head `fdfc4520` passed exact-secret admission and hosted CI, then its
+  fresh-context Codex review found four remaining issues. The review gate used
+  a mutable major-version Action reference; retained-output privacy checks did
+  not share the complete extractor credential policy; cutover prompt parsing
+  accepted a double-root publisher path that the CLI rejected; and export
+  destination claims could persist before rejecting the active run or an
+  incompatible existing target. That head's admission, CI, and review evidence
+  became stale when these findings required a new commit.
+- The review gate now pins audited Action commit
+  `2a7f9d8cd98f90cb56dc1540bf54d9dc7484afc6`. Extractor redaction, retained
+  safe-string validation, reviewed prose, report reread, and final retained
+  validation share one complete credential detector covering service tokens,
+  bearer values, JWTs, and generic token/secret assignments. CLI and cutover
+  prompt admission share one raw canonical-absolute executable-path predicate.
+- Export assembles one exact artifact map and stages or recovers it under the
+  destination lock. Missing-sidecar recovery first reconciles the candidate
+  with any full retained descriptor and persists that exact descriptor before
+  strict claim recovery. Malformed, oversized, or conflicting targets cannot
+  leave a claim, and callback failures cannot be misclassified as invalid
+  targets. Legacy path-only claim behavior is physically isolated in a
+  compatibility-only helper that the production export command cannot reach.
+  Run ancestors and cleanup roots remain rejected before staging.
+- Retained credential handling now shares one detector and one private-key
+  boundary across extractor redaction, post-redaction, reviewed prose, report
+  reread, and final retained validation. Complete and truncated private-key
+  blocks, complete Authorization lines, GitHub token families, JWT-shaped
+  service tokens, and other credential forms are consumed without retaining
+  tail fragments. Independent credential and export-transaction audits both
+  reached `No findings.` after the fixes.
+- The main CLI remains at 1,998 lines; the four export helpers are 224, 244,
+  210, and 67 lines; executable authority remains at its 350-line cap. Module
+  boundaries pass 19/19 with exact branch inventory 8,874. The affected
+  export, CLI, result, and publication modules pass 210/210 in 94.699 seconds;
+  the final private-key audit module passes 17/17 and publisher-canary support
+  passes 7/7.
+- Final Python 3.13 discovery contains 1,662 unique tests partitioned as 395,
+  444, 450, and 373. Shard 0 passes 395/395 in 1,360.653 seconds and shard 1's
+  original 443 tests pass in 1,056.997 seconds. The only shard-2 failure was the
+  superseded private-key expectation; after its test identifier moved to shard
+  1, all 450 final shard-2 members had already passed, and the replacement test
+  passes in the complete 17-test audit module. The only shard-3 failure was a
+  15-second publisher canary under four-way host contention; the other 372
+  members passed and the exact canary passes without contention in 0.624
+  seconds, followed by the complete 7-test module. This disjoint composite
+  covers every final test identifier exactly once. Earlier import-only and
+  owner-runtime-rejected attempts remain explicitly non-counting. Ruff lint
+  and formatting, both workflows under `actionlint`, CI contracts 7/7, skill
+  contracts 5/5, the official OpenAI skill validator, project-journal
+  validation, and `git diff --check` also pass on this tree.
 
 ## Follow-up Work
 

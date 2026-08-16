@@ -9,10 +9,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPTS = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-)
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import retrospective_v2.result_validation as result_validation_module  # noqa: E402
@@ -870,6 +867,45 @@ class ResultValidationTests(unittest.TestCase):
             ),
             (),
         )
+
+    def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
+        jwt_segment = "".join(("eyJ", "A" * 8))
+        stateless_github = "".join(
+            ("ghs_", "123456_", jwt_segment, ".", "B" * 12, ".", "C" * 16)
+        )
+        long_authorization = "".join(("Authorization: Basic ", "D" * 1200, "TAIL"))
+        truncated_private_key = "".join(("-----BEGIN ", "PRIVATE KEY-----\n", "E" * 96))
+        probes = (
+            *(
+                ("".join((prefix, "A" * 16)), ("A" * 16,), "[REDACTED_CREDENTIAL]")
+                for prefix in ("gho_", "ghr_", "ghs_", "ghu_")
+            ),
+            (stateless_github, ("C" * 16,), "[REDACTED_CREDENTIAL]"),
+            (long_authorization, ("D" * 64, "TAIL"), "[REDACTED_CREDENTIAL]"),
+            (truncated_private_key, ("E" * 64,), "[REDACTED_SECRET]"),
+            (
+                "".join(("Proxy-Authorization: Basic ", "A" * 16)),
+                ("A" * 16,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            ("".join(("sk-", "A" * 12)), ("A" * 12,), "[REDACTED_CREDENTIAL]"),
+        )
+
+        for probe, forbidden_fragments, replacement in probes:
+            with self.subTest(probe=probe):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = (
+                    f"Inspect {probe} before continuing."
+                )
+
+                result = validate_extractor_result(value, ALL_REFS)
+
+                text = result["turns"][0]["generalized_working_text"]
+                self.assertNotIn(probe, text)
+                for fragment in forbidden_fragments:
+                    self.assertNotIn(fragment, text)
+                self.assertIn(replacement, text)
+                self.assertEqual(scan_for_leaks(result), ())
 
     def test_post_redaction_removes_non_http_uri_schemes(self) -> None:
         long_scheme_uri = f"{'a' * 33}://nas/jobs"

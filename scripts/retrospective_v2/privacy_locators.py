@@ -1,4 +1,4 @@
-"""Shared deterministic locator patterns for working-zone validators."""
+"""Shared deterministic locator and credential patterns for privacy validators."""
 
 from __future__ import annotations
 
@@ -44,6 +44,68 @@ IPV6_CANDIDATE_RE = re.compile(
     r"(?:[0-9A-Za-z:.%_-]*[0-9A-Za-z:_-])?"
     r")(?=$|[^0-9A-Za-z.]|\.(?=$|[^0-9A-Za-z.]))"
 )
+PRIVATE_KEY_BOUNDARY_RE = re.compile(
+    r"(?i)-----\s*(?:BEGIN|END)\s+(?:(?:RSA|EC|OPENSSH|ENCRYPTED)\s+)?"
+    r"PRIVATE\s+KEY\s*-----"
+)
+CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    (
+        "secret",
+        re.compile(
+            r"(?i)-----\s*BEGIN\s+(?:(?:RSA|EC|OPENSSH|ENCRYPTED)\s+)?"
+            r"PRIVATE\s+KEY\s*-----"
+            r"(?:[\s\S]*?-----\s*END\s+"
+            r"(?:(?:RSA|EC|OPENSSH|ENCRYPTED)\s+)?PRIVATE\s+KEY\s*-----|[\s\S]*\Z)"
+        ),
+        "[REDACTED_SECRET]",
+    ),
+    (
+        "credential",
+        re.compile(r"\b(?:AKIA|ASIA)[0-9A-Z]{16}\b"),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(
+            r"(?<![A-Za-z0-9_])(?:gh[oprsu]_|github_pat_)"
+            r"[A-Za-z0-9_.-]{12,}(?![A-Za-z0-9_.-])"
+        ),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{16,}\b"),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b"),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(r"(?i)\b(?:Proxy-)?Authorization\s*(?:=|:)[^\r\n]*"),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}"),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(
+            r"(?i)\b(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|token|password|passwd|secret)"
+            r"\s*(?:=|:)\s*(?!\[?REDACTED)[\"']?[A-Za-z0-9._~+/=-]{8,}"
+        ),
+        "[REDACTED_CREDENTIAL]",
+    ),
+)
 
 
 def _is_ip_token(value: str, *, version: int) -> bool:
@@ -73,6 +135,13 @@ def contains_ip_address(value: str) -> bool:
     return (
         next(ipv4_matches(value), None) is not None
         or next(ipv6_matches(value), None) is not None
+    )
+
+
+def contains_credential_material(value: str) -> bool:
+    return PRIVATE_KEY_BOUNDARY_RE.search(value) is not None or any(
+        pattern.search(value) is not None
+        for _category, pattern, _replacement in CREDENTIAL_REDACTION_PATTERNS
     )
 
 

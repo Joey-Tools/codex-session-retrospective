@@ -15,6 +15,18 @@ import run_test_shard  # noqa: E402
 
 
 class CiContractTests(unittest.TestCase):
+    def test_review_gate_pins_the_audited_action_commit(self) -> None:
+        workflow = (ROOT / ".github" / "workflows" / "codex-review-gate.yml").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "uses: JoeyTeng/codex-review-gate-action@"
+            "2a7f9d8cd98f90cb56dc1540bf54d9dc7484afc6",
+            workflow,
+        )
+        self.assertNotIn("codex-review-gate-action@v1", workflow)
+
     def test_ci_uses_the_authorized_python_minor(self) -> None:
         workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
             encoding="utf-8"

@@ -54,6 +54,10 @@ class ExportLocationError(RetainedExportError):
     """Raised when staging is outside the ignored owner-only run area."""
 
 
+class InvalidExistingExportError(ExportLocationError):
+    """Raised when locked pre-existing export state is not safely reusable."""
+
+
 class ExportConflictError(RetainedExportError):
     """Raised when an immutable staging path already has different content."""
 
@@ -705,6 +709,18 @@ def _receipt_at(
     return _retention_receipt_at(anchor, retention, idempotent=idempotent)
 
 
+def _complete_staged_export(
+    anchor: _AnchoredExport,
+    *,
+    idempotent: bool,
+    before_unlock: Callable[[Mapping[str, Any]], None] | None,
+) -> dict[str, Any]:
+    receipt = _receipt_at(anchor, idempotent=idempotent)
+    if before_unlock is not None:
+        before_unlock(receipt)
+    return receipt
+
+
 def _retention_receipt_at(
     anchor: _AnchoredExport,
     retention: Mapping[str, Any],
@@ -1191,6 +1207,11 @@ def stage_retained_artifacts(
     *,
     retention_deadline: dt.datetime | str | None = None,
     now: dt.datetime | None = None,
+    resolve_missing_retention_deadline: Callable[
+        [str, dt.datetime | str | None], dt.datetime | str
+    ]
+    | None = None,
+    before_unlock: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Atomically stage one immutable eight-artifact bundle.
 
@@ -1199,27 +1220,63 @@ def stage_retained_artifacts(
     """
 
     expected = _validate_in_memory_inventory(artifacts)
-    validate_retained_artifacts(artifacts)
+    validated = validate_retained_artifacts(artifacts)
+    bundle_digest = validated["manifest"]["retained_bundle_digest_v2"]["value"]
     anchor = _AnchoredExport.open(output_dir, create_parent=True)
     temporary_name: str | None = None
     try:
         with anchor.lock():
-            if anchor.exists():
-                actual = _read_exact_artifacts_at(anchor)
-                validate_retained_artifacts(actual)
+            target_exists = anchor.exists()
+            retention_exists = anchor.exists(anchor.retention_name)
+            if not target_exists and retention_exists:
+                raise InvalidExistingExportError(
+                    "retained export sidecar exists without its bundle"
+                )
+            effective_deadline = retention_deadline
+            if not retention_exists and resolve_missing_retention_deadline is not None:
+                effective_deadline = resolve_missing_retention_deadline(
+                    bundle_digest, effective_deadline
+                )
+            if target_exists:
+                try:
+                    actual = _read_exact_artifacts_at(anchor)
+                    validate_retained_artifacts(actual)
+                except (
+                    OSError,
+                    RetainedInventoryError,
+                    safe_io.UnsafePathError,
+                ) as exc:
+                    raise InvalidExistingExportError(
+                        "retained export destination is not an exact bundle"
+                    ) from exc
                 if actual != expected:
                     raise ExportConflictError(
                         "retained staging path already contains a different bundle: "
                         f"{anchor.output}"
                     )
                 validation = _validate_at(anchor)
-                _ensure_retention_state_at(
-                    anchor,
-                    bundle_digest=validation["bundle_digest"],
-                    retention_deadline=retention_deadline,
-                    now=now,
-                )
-                return _receipt_at(anchor, idempotent=True)
+                try:
+                    _ensure_retention_state_at(
+                        anchor,
+                        bundle_digest=validation["bundle_digest"],
+                        retention_deadline=effective_deadline,
+                        now=now,
+                    )
+                    receipt = _receipt_at(anchor, idempotent=True)
+                except ExportConflictError:
+                    raise
+                except (
+                    OSError,
+                    RetainedExportError,
+                    safe_io.ReadLimitExceeded,
+                    safe_io.UnsafePathError,
+                ) as exc:
+                    raise InvalidExistingExportError(
+                        "retained export destination has invalid retention state"
+                    ) from exc
+                if before_unlock is not None:
+                    before_unlock(receipt)
+                return receipt
             temporary_name = (
                 f".{anchor.name}.staging-{os.getpid()}-{secrets.token_hex(12)}"
             )
@@ -1258,10 +1315,14 @@ def stage_retained_artifacts(
             _ensure_retention_state_at(
                 anchor,
                 bundle_digest=validation["bundle_digest"],
-                retention_deadline=retention_deadline,
+                retention_deadline=effective_deadline,
                 now=now,
             )
-            return _receipt_at(anchor, idempotent=False)
+            return _complete_staged_export(
+                anchor,
+                idempotent=False,
+                before_unlock=before_unlock,
+            )
     except (OSError, safe_io.UnsafePathError) as exc:
         raise RetainedExportError(
             f"failed to stage retained bundle at {anchor.output}: {exc}"

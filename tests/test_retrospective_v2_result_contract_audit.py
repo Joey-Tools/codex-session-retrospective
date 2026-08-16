@@ -8,10 +8,7 @@ import sys
 import unittest
 
 
-SCRIPTS = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-)
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from retrospective_v2.episode_review import (  # noqa: E402
@@ -880,16 +877,20 @@ class AuditedResultContractTests(unittest.TestCase):
         self.assertEqual(source, validated["turns"][0]["generalized_working_text"])
         self.assertEqual(scan_for_leaks(validated), ())
 
-    def test_audit_redaction_fails_closed_when_secret_boundaries_are_ambiguous(
-        self,
-    ) -> None:
+    def test_audit_redaction_consumes_truncated_private_key_blocks(self) -> None:
         value = extractor_result()
         key_label = " ".join(("PRI" + "VATE", "K" + "EY"))
         value["turns"][0]["generalized_working_text"] = (
             f"-----BEGIN ENCRYPTED {key_label}-----\ntruncated-sensitive-material"
         )
-        with self.assertRaisesRegex(ResultValidationError, "unredactable_secret"):
-            validate_extractor_result(value, ALL_REFS)
+
+        validated = validate_extractor_result(value, ALL_REFS)
+
+        self.assertEqual(
+            "[REDACTED_SECRET]",
+            validated["turns"][0]["generalized_working_text"],
+        )
+        self.assertEqual(scan_for_leaks(validated), ())
 
 
 if __name__ == "__main__":

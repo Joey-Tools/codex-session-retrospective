@@ -1370,7 +1370,7 @@ def _claim_export_destination(
     publication_role: str,
 ) -> Path:
     return _export_cli_contract(
-        export_cli_api.claim_export_destination,
+        export_cli_api.claim_legacy_export_destination,
         run_dir,
         output,
         publication_role,
@@ -1411,26 +1411,26 @@ def command_export(args: argparse.Namespace) -> CommandResult:
         retention_deadline = orchestrator.validate_export_retention_deadline(
             retention_deadline
         )
-    elif not output.exists() and not output.is_symlink():
-        retention_deadline = orchestrator.validate_export_retention_deadline(
+    missing_retention_deadline = retention_deadline
+    if missing_retention_deadline is None:
+        missing_retention_deadline = orchestrator.validate_export_retention_deadline(
             orchestrator.export_retention_deadline()
         )
-    output = _claim_export_destination(
+    now = dt.datetime.now(dt.timezone.utc)
+    output, receipt_value = _export_cli_contract(
+        export_cli_api.stage_claimed_export,
         run_dir,
         output,
-        publication_role="standalone",
+        run_state,
+        review_data,
+        prior_period=prior_period,
+        retention_deadline=retention_deadline,
+        missing_retention_deadline=missing_retention_deadline,
+        now=now,
+        read_json=_read_json_object,
+        validate_retention_deadline=orchestrator.validate_export_retention_deadline,
     )
-    now = dt.datetime.now(dt.timezone.utc)
-    receipt = _mapping_result(
-        export_api.export_retained_bundle(
-            output,
-            run_state,
-            review_data,
-            prior_period=prior_period,
-            retention_deadline=retention_deadline,
-            now=now,
-        )
-    )
+    receipt = _mapping_result(receipt_value)
     bundle_digest = receipt.get("bundle_digest")
     if not isinstance(bundle_digest, str) or SHA256_RE.fullmatch(bundle_digest) is None:
         raise CliContractError(

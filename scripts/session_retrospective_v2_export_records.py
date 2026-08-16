@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+import os
 import re
 from typing import Any, NoReturn
+import unicodedata
 
-from retrospective_v2 import contracts, export as export_api
+from retrospective_v2 import contracts, export as export_api, safe_io
 
 
 EXPORT_DESTINATION_CLAIM_SCHEMA = "cli_export_destination_claim_v2"
@@ -48,6 +50,41 @@ def invalid_descriptor(message: str) -> NoReturn:
 
 def same(left: Mapping[str, Any], right: Mapping[str, Any]) -> bool:
     return contracts.canonical_json(left) == contracts.canonical_json(right)
+
+
+def _folded_path_component(component: str) -> str:
+    decomposed = unicodedata.normalize("NFD", component)
+    return unicodedata.normalize("NFD", decomposed.casefold())
+
+
+def _folded_path_parts(path: Path) -> tuple[str, ...]:
+    return tuple(_folded_path_component(part) for part in path.parts)
+
+
+def reject_destination(
+    run_dir: Path,
+    output: Path,
+    *,
+    cleanup_roots: Sequence[str],
+) -> None:
+    canonical_run = Path(os.path.realpath(run_dir))
+    run_parts = _folded_path_parts(canonical_run)
+    output_parts = _folded_path_parts(output)
+    if run_parts[: len(output_parts)] == output_parts:
+        raise_cli_error(
+            "INVALID_INPUT",
+            "export_location_invalid",
+            "the retained export destination cannot contain the active run",
+        )
+    for relative_root in cleanup_roots:
+        cleanup_root = Path(os.path.realpath(canonical_run / relative_root))
+        cleanup_parts = _folded_path_parts(cleanup_root)
+        if output_parts[: len(cleanup_parts)] == cleanup_parts:
+            raise_cli_error(
+                "INVALID_INPUT",
+                "export_location_invalid",
+                "the retained export destination is inside a run cleanup root",
+            )
 
 
 def destination_claim(output: Path, publication_role: str) -> dict[str, str]:
@@ -149,3 +186,59 @@ def load_legacy_binding(
         invalid_descriptor("the retained export reservation is invalid")
     output = export_api.normalize_retained_export_destination(record["output"])
     return destination_claim(output, "standalone"), None
+
+
+def preflight_run_claim(
+    run_dir: Path,
+    output: Path,
+    publication_role: str,
+    cleanup_roots: Sequence[str],
+    read_json: JsonReader,
+) -> None:
+    reject_destination(run_dir, output, cleanup_roots=cleanup_roots)
+    requested = destination_claim(output, publication_role)
+    legacy_path = run_dir / LEGACY_EXPORT_DESCRIPTOR_NAME
+    claim_path = run_dir / EXPORT_DESTINATION_CLAIM_NAME
+    result_path = run_dir / EXPORT_DESCRIPTOR_NAME
+    for path in (legacy_path, result_path):
+        safe_io.recover_atomic_create(path)
+    if not os.path.lexists(legacy_path):
+        if os.path.lexists(claim_path) or os.path.lexists(result_path):
+            invalid_descriptor("the retained export reservation is missing")
+        return
+    legacy_claim, legacy_descriptor = load_legacy_binding(run_dir, read_json=read_json)
+    claimed = (
+        load_destination_claim(run_dir, read_json=read_json)
+        if os.path.lexists(claim_path)
+        else legacy_claim
+    )
+    if legacy_descriptor is not None and not same(claimed, legacy_claim):
+        conflict()
+    if os.path.lexists(result_path):
+        result = load_descriptor_at(result_path, read_json=read_json)
+        if not same(normalized_descriptor_claim(result), claimed):
+            conflict()
+        if legacy_descriptor is not None and not same(result, legacy_descriptor):
+            conflict()
+    if not same(claimed, requested):
+        conflict()
+
+
+def validate_claim_receipt(
+    receipt: Mapping[str, Any],
+    expected_bundle_digest: str,
+    validate_retention_deadline: Callable[[str], str],
+) -> None:
+    bundle_digest = receipt.get("bundle_digest")
+    retention_deadline = receipt.get("retention_deadline")
+    if (
+        bundle_digest != expected_bundle_digest
+        or SHA256_RE.fullmatch(expected_bundle_digest) is None
+        or not isinstance(retention_deadline, str)
+        or validate_retention_deadline(retention_deadline) != retention_deadline
+    ):
+        raise_cli_error(
+            "INVALID_STATE",
+            "invalid_export_receipt",
+            "the retained export receipt is invalid",
+        )

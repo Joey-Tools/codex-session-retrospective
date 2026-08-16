@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+import datetime as dt
 from pathlib import Path
 import os
 from typing import Any
-import unicodedata
 
-from retrospective_v2 import export as export_api, safe_io
+from retrospective_v2 import export as export_api, reporting as reporting_api, safe_io
 from retrospective_v2.orchestrator_core import SHADOW_CLEANUP_ROOTS
+import session_retrospective_v2_export_binding as binding
+import session_retrospective_v2_export_legacy as legacy_binding
 import session_retrospective_v2_export_records as records
 
 
@@ -39,30 +41,6 @@ def publication_attempt_ref(
         "publication_not_resumable",
         "the retained export has a terminal publication disposition",
     )
-
-
-def _folded_path_component(component: str) -> str:
-    decomposed = unicodedata.normalize("NFD", component)
-    return unicodedata.normalize("NFD", decomposed.casefold())
-
-
-def _folded_path_parts(path: Path) -> tuple[str, ...]:
-    return tuple(_folded_path_component(part) for part in path.parts)
-
-
-def _reject_cleanup_destination(run_dir: Path, output: Path) -> None:
-    canonical_run = Path(os.path.realpath(run_dir))
-    output_parts = _folded_path_parts(output)
-    for relative_root in SHADOW_CLEANUP_ROOTS:
-        cleanup_root = Path(os.path.realpath(canonical_run / relative_root))
-        cleanup_parts = _folded_path_parts(cleanup_root)
-        if output_parts[: len(cleanup_parts)] != cleanup_parts:
-            continue
-        records.raise_cli_error(
-            "INVALID_INPUT",
-            "export_location_invalid",
-            "the retained export destination is inside a run cleanup root",
-        )
 
 
 def load_export_descriptor(
@@ -126,55 +104,106 @@ def claim_export_destination(
     publication_role: str,
     *,
     read_json: JsonReader,
+    expected_descriptor: Mapping[str, Any],
 ) -> Path:
+    return binding.claim_export_destination(
+        run_dir,
+        output,
+        publication_role,
+        cleanup_roots=SHADOW_CLEANUP_ROOTS,
+        read_json=read_json,
+        expected_descriptor=expected_descriptor,
+    )
+
+
+def claim_legacy_export_destination(
+    run_dir: Path,
+    output: Path,
+    publication_role: str,
+    *,
+    read_json: JsonReader,
+) -> Path:
+    return legacy_binding.claim_export_destination(
+        run_dir,
+        output,
+        publication_role,
+        cleanup_roots=SHADOW_CLEANUP_ROOTS,
+        read_json=read_json,
+    )
+
+
+def stage_claimed_export(
+    run_dir: Path,
+    output: Path,
+    run_state: Mapping[str, Any],
+    review_data: Mapping[str, Any],
+    *,
+    prior_period: Mapping[str, Any] | None,
+    retention_deadline: str | None,
+    missing_retention_deadline: str,
+    now: dt.datetime,
+    read_json: JsonReader,
+    validate_retention_deadline: Callable[[str], str],
+) -> tuple[Path, Mapping[str, Any]]:
     output = export_api.normalize_retained_export_destination(output)
-    _reject_cleanup_destination(run_dir, output)
-    requested = records.destination_claim(output, publication_role)
-    legacy_path = run_dir / LEGACY_EXPORT_DESCRIPTOR_NAME
-    claim_path = run_dir / EXPORT_DESTINATION_CLAIM_NAME
-    result_path = run_dir / EXPORT_DESCRIPTOR_NAME
-    for path in (legacy_path, claim_path, result_path):
-        safe_io.recover_atomic_create(path)
-    claimed = (
-        records.load_destination_claim(run_dir, read_json=read_json)
-        if os.path.lexists(claim_path)
-        else requested
+    records.preflight_run_claim(
+        run_dir, output, "standalone", SHADOW_CLEANUP_ROOTS, read_json
     )
-    if not os.path.lexists(legacy_path):
-        try:
-            safe_io.atomic_create_json(
-                legacy_path,
-                records.reservation(
-                    export_api.normalize_retained_export_destination(claimed["output"]),
-                    claimed["publication_role"],
-                ),
-            )
-        except FileExistsError:
-            pass
-    legacy_claim, _legacy_descriptor = records.load_legacy_binding(
-        run_dir, read_json=read_json
+    artifacts = reporting_api.assemble_retained_artifacts(
+        run_state,
+        review_data,
+        prior_period=prior_period,
     )
-    if os.path.lexists(claim_path):
-        claimed = records.load_destination_claim(run_dir, read_json=read_json)
-    else:
-        try:
-            safe_io.atomic_create_json(claim_path, legacy_claim)
-        except FileExistsError:
-            claimed = records.load_destination_claim(run_dir, read_json=read_json)
-        else:
-            claimed = legacy_claim
-    if _legacy_descriptor is not None and not records.same(claimed, legacy_claim):
-        records.conflict()
-    if not records.same(claimed, requested):
-        records.conflict()
-    if os.path.lexists(result_path) and not records.same(
-        records.normalized_descriptor_claim(
-            load_export_descriptor(run_dir, read_json=read_json)
-        ),
-        requested,
-    ):
-        records.conflict()
-    return output
+    expected_digest = reporting_api.retained_bundle_digest(artifacts)
+
+    def resolve_deadline(
+        bundle_digest: str, requested_deadline: dt.datetime | str | None
+    ) -> str:
+        return binding.resolve_missing_retention_deadline(
+            run_dir,
+            output,
+            "standalone",
+            bundle_digest,
+            missing_retention_deadline,
+            None if requested_deadline is None else str(requested_deadline),
+            cleanup_roots=SHADOW_CLEANUP_ROOTS,
+            read_json=read_json,
+            validate_retention_deadline=validate_retention_deadline,
+        )
+
+    def claim(receipt: Mapping[str, Any]) -> None:
+        records.validate_claim_receipt(
+            receipt, expected_digest, validate_retention_deadline
+        )
+        claim_export_destination(
+            run_dir,
+            output,
+            "standalone",
+            read_json=read_json,
+            expected_descriptor=binding.descriptor(
+                output,
+                "standalone",
+                expected_digest,
+                str(receipt["retention_deadline"]),
+            ),
+        )
+
+    try:
+        receipt = export_api.stage_retained_artifacts(
+            output,
+            artifacts,
+            retention_deadline=retention_deadline,
+            now=now,
+            resolve_missing_retention_deadline=resolve_deadline,
+            before_unlock=claim,
+        )
+    except export_api.InvalidExistingExportError as error:
+        raise records.ExportCliContractError(
+            "INVALID_INPUT",
+            "export_location_invalid",
+            "the retained export destination is not an exact retained bundle",
+        ) from error
+    return output, receipt
 
 
 def persist_export_descriptor(
@@ -185,41 +214,11 @@ def persist_export_descriptor(
     *,
     read_json: JsonReader,
 ) -> None:
-    output = export_api.normalize_retained_export_destination(output)
-    require_export_destination_claim(
-        run_dir, output, publication_role, read_json=read_json
+    binding.persist_export_descriptor(
+        run_dir,
+        output,
+        receipt,
+        publication_role,
+        cleanup_roots=SHADOW_CLEANUP_ROOTS,
+        read_json=read_json,
     )
-    bundle_digest = receipt.get("bundle_digest")
-    retention_deadline = receipt.get("retention_deadline")
-    if (
-        not isinstance(bundle_digest, str)
-        or records.SHA256_RE.fullmatch(bundle_digest) is None
-        or not isinstance(retention_deadline, str)
-    ):
-        records.raise_cli_error(
-            "INVALID_STATE",
-            "invalid_export_receipt",
-            "the retained export receipt is invalid",
-        )
-    descriptor = {
-        "bundle_digest": bundle_digest,
-        "output": str(output),
-        "publication_role": publication_role,
-        "retention_deadline": retention_deadline,
-        "schema": EXPORT_DESCRIPTOR_SCHEMA,
-    }
-    _legacy_claim, legacy_descriptor = records.load_legacy_binding(
-        run_dir, read_json=read_json
-    )
-    if legacy_descriptor is not None and not records.same(
-        legacy_descriptor, descriptor
-    ):
-        records.conflict()
-    try:
-        safe_io.atomic_create_json(run_dir / EXPORT_DESCRIPTOR_NAME, descriptor)
-    except FileExistsError:
-        existing = records.load_descriptor_at(
-            run_dir / EXPORT_DESCRIPTOR_NAME, read_json=read_json
-        )
-        if not records.same(existing, descriptor):
-            records.conflict()

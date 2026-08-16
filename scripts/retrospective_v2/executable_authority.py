@@ -18,19 +18,22 @@ from . import safe_io
 MAX_EXECUTABLE_BYTES = 256 * 1024 * 1024
 DEFAULT_GIT_EXECUTABLE = "/usr/bin/git"
 DEFAULT_GPG_EXECUTABLE = "gpg"
-_READ_CHUNK_BYTES = 1024 * 1024
-_DIRECTORY_FLAGS = (
-    os.O_RDONLY
-    | getattr(os, "O_DIRECTORY", 0)
-    | getattr(os, "O_NOFOLLOW", 0)
-    | getattr(os, "O_CLOEXEC", 0)
+_SHARED_OPEN_FLAGS = (
+    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
 )
-_FILE_FLAGS = (
-    os.O_RDONLY
-    | getattr(os, "O_NOFOLLOW", 0)
-    | getattr(os, "O_NONBLOCK", 0)
-    | getattr(os, "O_CLOEXEC", 0)
-)
+_DIRECTORY_FLAGS = _SHARED_OPEN_FLAGS | getattr(os, "O_DIRECTORY", 0)
+_FILE_FLAGS = _SHARED_OPEN_FLAGS | getattr(os, "O_NONBLOCK", 0)
+
+
+def is_canonical_absolute_executable_path(value: object) -> bool:
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and "\x00" not in value
+        and not value.startswith("//")
+        and Path(value).is_absolute()
+        and os.path.abspath(value) == value
+    )
 
 
 class ExecutableAuthorityError(PermissionError):
@@ -189,7 +192,7 @@ def _content_digest(descriptor: int, expected_size: int) -> str:
     while offset < expected_size:
         chunk = os.pread(
             descriptor,
-            min(_READ_CHUNK_BYTES, expected_size - offset),
+            min(1024 * 1024, expected_size - offset),
             offset,
         )
         if not chunk:

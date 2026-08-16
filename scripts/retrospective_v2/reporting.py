@@ -277,11 +277,6 @@ _LOCAL_PATH_RE = re.compile(
     r"[A-Za-z0-9_.~+@%=-]+"
     r"(?![A-Za-z0-9_.~+@%=-]))"
 )
-_SECRET_RE = re.compile(
-    r"(?i)(?:-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:AKIA|ASIA)[A-Z0-9]{12,}\b|"
-    r"\b(?:gh[opsu]_|github_pat_|sk-)[A-Za-z0-9_-]{12,}\b|"
-    r"\b(?:authorization|bearer|password|passwd|api[_-]?key)\s*[:=])"
-)
 _SOURCE_TEXT_MARKER_RE = re.compile(
     r"(?i)(?:\b(?:raw|original|verbatim)[ _-]+(?:prompt|request|message|input|text)\b|"
     r"\b(?:tool|command)[ _-]+(?:output|result)\b|\b(?:stdout|stderr|transcript)\b|"
@@ -709,6 +704,8 @@ def _validate_safe_string(value: str, *, path: str) -> None:
         raise RetainedPrivacyError(f"{path} exceeds the retained scalar length limit")
     if "\n" in value or "\r" in value or "\t" in value:
         raise RetainedPrivacyError(f"{path} contains multiline or tab-delimited text")
+    if privacy_locators.contains_credential_material(value):
+        raise RetainedPrivacyError(f"{path} contains credential-shaped material")
     bare_fqdn = privacy_locators.BARE_FQDN_RE.search(value)
     if (
         bare_fqdn is not None
@@ -730,8 +727,6 @@ def _validate_safe_string(value: str, *, path: str) -> None:
         raise RetainedPrivacyError(
             f"{path} contains a URL, email address, IP address, or local path"
         )
-    if _SECRET_RE.search(value):
-        raise RetainedPrivacyError(f"{path} contains credential-shaped material")
     if not _SAFE_TOKEN_RE.fullmatch(value):
         raise RetainedPrivacyError(
             f"{path} is arbitrary retained prose; use a reviewed template token"
@@ -747,6 +742,8 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
         raise RetainedPrivacyError(f"{path} exceeds the reviewed text limit")
     if any(character in value for character in "\r\n\t"):
         raise RetainedPrivacyError(f"{path} contains multiline reviewed text")
+    if privacy_locators.contains_credential_material(value):
+        raise RetainedPrivacyError(f"{path} contains credential-shaped material")
     if any(
         (
             privacy_locators.URI_LOCATOR_RE.search(value),
@@ -761,8 +758,6 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
         raise RetainedPrivacyError(
             f"{path} contains a URL, email address, IP address, or local path"
         )
-    if _SECRET_RE.search(value):
-        raise RetainedPrivacyError(f"{path} contains credential-shaped material")
     if (
         _SOURCE_TEXT_MARKER_RE.search(value)
         or _SOURCE_PAYLOAD_SHAPE_RE.search(value)
@@ -3767,7 +3762,7 @@ def _validate_report_bytes(
             privacy_locators.contains_ip_address(locator_scan_text),
             _EMAIL_RE.search(text),
             _LOCAL_PATH_RE.search(text),
-            _SECRET_RE.search(text),
+            privacy_locators.contains_credential_material(text),
         )
     ):
         raise RetainedPrivacyError(
