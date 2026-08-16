@@ -45,7 +45,7 @@ _SOURCE_TRANSPORT_SNAPSHOT_BOOTSTRAP_SOURCE = "\n".join(
         "identity=lambda meta:(meta.st_dev,meta.st_ino,meta.st_uid,meta.st_gid,meta.st_mode,meta.st_nlink,meta.st_size)",
         "def _read(path,limit,p,label):\n flags=os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK\n fd=os.open(path,flags)\n try:\n  before=os.fstat(fd); named_before=os.stat(path,follow_symlinks=False); mode=stat.S_IMODE(before.st_mode); acl_before=_no_extended_acl(fd)\n  policy=stat.S_ISREG(before.st_mode) and before.st_nlink==1 and before.st_uid in (0,os.geteuid()) and not mode&0o022 and acl_before\n  if p: policy=policy and before.st_uid==os.geteuid() and mode==0o600\n  if not policy or identity(named_before)!=identity(before): raise SystemExit(label+' authentication failed')\n  remaining=limit+1; chunks=[]\n  while remaining:\n   chunk=os.read(fd,min(65536,remaining))\n   if not chunk: break\n   chunks.append(chunk); remaining-=len(chunk)\n  data=b''.join(chunks); after=os.fstat(fd); named_after=os.stat(path,follow_symlinks=False); acl_after=_no_extended_acl(fd)\n  if identity(after)!=identity(before) or identity(named_after)!=identity(before) or len(data)!=after.st_size or len(data)>limit or not acl_after: raise SystemExit(label+' authentication failed')\n  return data\n finally:\n  os.close(fd)",
         "marker,digest,snapshot_path=sys.argv[1:4]\npayload=_read(snapshot_path,4194304,True,'source transport snapshot')",
-        "if marker!='source_transport_worker_snapshot_v1' or 'sha256:'+hashlib.sha256(payload).hexdigest()!=digest: raise SystemExit('source transport snapshot authentication failed')",
+        "if marker!='source_transport_worker_snapshot_v2' or 'sha256:'+hashlib.sha256(payload).hexdigest()!=digest: raise SystemExit('source transport snapshot authentication failed')",
         "snapshot=json.loads(zlib.decompress(payload))\nruntime=snapshot['python_runtime']",
         "path=os.path.realpath(sys.executable)\nexecutable=_read(path,67108864,False,'source transport Python authority')",
         "component={'content_commitment':'sha256:'+hashlib.sha256(executable).hexdigest(),'path':path,'role':'python_interpreter','state':'present'}\nactual={'component':component,'executable':path,'implementation':sys.implementation.name,'schema':'source_transport_python_runtime_v1','version':list(sys.version_info)}",
@@ -120,6 +120,7 @@ def _source_transport_snapshot_flags(
     package_dir: pathlib.Path,
     components: Sequence[Mapping[str, JsonValue]],
     module_manifest: Sequence[str],
+    python_executable_authority: Mapping[str, JsonValue],
     python_runtime: Mapping[str, JsonValue],
     base_flags: Sequence[str],
     schema: str,
@@ -138,6 +139,7 @@ def _source_transport_snapshot_flags(
             for name, component in zip(module_manifest, components, strict=True)
         },
         "package_dir": str(package_dir),
+        "python_executable_authority": dict(python_executable_authority),
         "python_runtime": dict(python_runtime),
         "schema": schema,
     }

@@ -18,7 +18,7 @@ from typing import Any, Callable, Mapping, Sequence
 try:
     from . import safe_io
     from .transport_contracts import TransportValidationError, _canonical_commitment
-    from .transport_program import _program_component
+    from .transport_program_components import _program_component
     from .transport_snapshot import (
         REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
         REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
@@ -29,7 +29,7 @@ except (ImportError, ModuleNotFoundError):
         TransportValidationError,
         _canonical_commitment,
     )
-    from transport_program import _program_component  # type: ignore[no-redef]
+    from transport_program_components import _program_component  # type: ignore[no-redef]
     from transport_snapshot import (  # type: ignore[no-redef]
         REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
         REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,

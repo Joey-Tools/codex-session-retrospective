@@ -56,7 +56,7 @@ SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST = (
     "transport_contracts.py",
     "transport_discovery.py",
     "transport_paths.py",
-    "transport_program.py",
+    "transport_program_components.py",
     "transport_remote.py",
     "transport_resume.py",
     "transport_snapshot.py",

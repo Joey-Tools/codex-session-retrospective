@@ -66,15 +66,17 @@ from .transport_paths import (  # noqa: F401
     ACTIVE_ROLLOUT_RELATIVE_RE,
     ARCHIVED_ROLLOUT_RELATIVE_RE,
     ROOT_ROLLOUT_RELATIVE_RE,
+    _program_stat_identity,
     _resolve_rollout_relative_path,
 )
-from .transport_program import (  # noqa: F401
+from .transport_program_components import (  # noqa: F401
     SOURCE_TRANSPORT_MAX_PROGRAM_COMPONENT_BYTES,
-    SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST,
     _package_program_components,
     _program_component,
     _program_component_at,
-    _program_stat_identity,
+)
+from .transport_program import (  # noqa: F401
+    SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST,
     source_transport_python_command,
     transport_program_commitment,
 )

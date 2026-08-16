@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import pwd
 import py_compile
+import shutil
 import stat
 import subprocess
 import sys
@@ -36,6 +37,7 @@ from retrospective_v2 import (  # noqa: E402
     orchestrator_transport,
     transport_contracts,
     transport_program,
+    transport_program_components,
     transport_remote,
     transport_remote_snapshot,
     transport_resume,
@@ -4717,6 +4719,69 @@ class SourceTransportProtocolTests(unittest.TestCase):
         frames = [json.loads(line) for line in completed.stdout.splitlines()]
         self.assertTrue(frames[-1]["complete"])
 
+    def test_transport_program_binds_python_ancestors_and_rejects_replacement(
+        self,
+    ) -> None:
+        runtime_parent = self.root / "transport-python-runtime"
+        runtime_parent.mkdir(mode=0o700)
+        runtime = runtime_parent / "python3.13"
+        shutil.copyfile(os.path.realpath(sys.executable), runtime)
+        os.chmod(runtime, 0o700)
+        snapshot_cache = self.root / "python-authority-snapshots"
+        worker = Path(transport_program.__file__).with_name("transport_worker.py")
+        command = (
+            *transport_program.source_transport_python_command(
+                snapshot_cache,
+                executable=runtime,
+            ),
+            str(worker),
+            "source-transport",
+        )
+        commitment = transport_program.transport_program_commitment(
+            command,
+            snapshot_cache=snapshot_cache,
+        )
+        snapshot, _worker_index, _snapshot_commitment = (
+            transport_program._decode_program_snapshot(
+                command,
+                snapshot_cache=snapshot_cache,
+            )
+        )
+        receipt = snapshot["python_executable_authority"]
+        canonical_runtime = os.path.realpath(runtime)
+        canonical_parent = os.path.realpath(runtime_parent)
+        self.assertEqual(canonical_runtime, receipt["path"])
+        self.assertEqual(canonical_runtime, receipt["executable"]["path"])
+        self.assertIn(
+            canonical_parent,
+            {row["path"] for row in receipt["ancestors"]},
+        )
+
+        os.utime(runtime_parent, None)
+        self.assertEqual(
+            commitment,
+            transport_program.transport_program_commitment(
+                command,
+                snapshot_cache=snapshot_cache,
+            ),
+        )
+
+        os.chmod(runtime_parent, 0o777)
+        try:
+            runtime.unlink()
+            shutil.copyfile("/usr/bin/false", runtime)
+            os.chmod(runtime, 0o755)
+            with self.assertRaisesRegex(
+                transport.TransportValidationError,
+                "Python executable path authority cannot be authenticated",
+            ):
+                transport_program.transport_program_commitment(
+                    command,
+                    snapshot_cache=snapshot_cache,
+                )
+        finally:
+            os.chmod(runtime_parent, 0o700)
+
     def test_status_rejects_authenticated_noncanonical_source_lease(self) -> None:
         self._write_sources("legacy-python-alias")
         coordinator = self._coordinator("legacy-python-alias")
@@ -5064,7 +5129,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         finally:
             self._remove_darwin_acl(component)
 
-        real_read = transport_program._read_program_component
+        real_read = transport_program_components._read_program_component
         read_count = 0
 
         def add_acl_after_first_read(*args, **kwargs):
@@ -5078,7 +5143,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         try:
             with (
                 mock.patch.object(
-                    transport_program,
+                    transport_program_components,
                     "_read_program_component",
                     side_effect=add_acl_after_first_read,
                 ),
@@ -5129,7 +5194,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         component = self.root / "timestamp-churn-component.py"
         component.write_bytes(b"print('bounded')\n")
         os.chmod(component, 0o600)
-        real_read = transport_program._read_program_component
+        real_read = transport_program_components._read_program_component
         read_count = 0
 
         def touch_after_first_read(*args, **kwargs):
@@ -5145,7 +5210,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             return retained
 
         with mock.patch.object(
-            transport_program,
+            transport_program_components,
             "_read_program_component",
             side_effect=touch_after_first_read,
         ):
@@ -5163,7 +5228,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         component.write_bytes(b"A" * 4096)
         os.chmod(component, 0o600)
         original_inode = component.stat().st_ino
-        real_read = transport_program._read_program_component
+        real_read = transport_program_components._read_program_component
         read_count = 0
 
         def mutate_after_first_read(*args, **kwargs):
@@ -5177,7 +5242,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         with (
             mock.patch.object(
-                transport_program,
+                transport_program_components,
                 "_read_program_component",
                 side_effect=mutate_after_first_read,
             ),
@@ -5197,7 +5262,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         package.mkdir(mode=0o700)
         package.joinpath("worker.py").write_bytes(b"VALUE = 1\n")
         os.chmod(package / "worker.py", 0o600)
-        real_component = transport_program._program_component_at
+        real_component = transport_program_components._program_component_at
         changed = False
 
         def add_unrelated_child(*args, **kwargs):
@@ -5210,12 +5275,12 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         with (
             mock.patch.object(
-                transport_program,
+                transport_program_components,
                 "SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST",
                 ("worker.py",),
             ),
             mock.patch.object(
-                transport_program,
+                transport_program_components,
                 "_program_component_at",
                 side_effect=add_unrelated_child,
             ),

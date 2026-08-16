@@ -320,6 +320,26 @@ superseded_by:
 - Persistent checkpoint-claim validation is owned by bounded
   `publication_claims.py`; the core publication aggregate and per-module line
   budgets remain below their existing ceilings.
+- The first exact-head delivery review found that source transport committed
+  only the Python interpreter leaf while leaving writable ancestor replacement
+  outside the receipt. The superseding implementation reuses the shared
+  executable authority to persist and revalidate every ancestor plus the leaf
+  identity, content, owner, mode, and ACL policy before a command can be
+  projected. Benign timestamp churn remains accepted; a writable ancestor or
+  `argv[0]` replacement fails closed.
+- Worker-only component reads now live in bounded
+  `transport_program_components.py`, keeping the remote worker manifest at 13
+  reachable modules instead of importing the parent-side executable authority.
+  The affected source-transport suite passes 101/101 and the module-boundary
+  suite passes 19/19 under Python 3.13.
+- The superseding Python 3.13 shard run discovers 1,618 tests exactly once.
+  Shards 0, 1, and 3 pass 383/383 in 1,170.614 seconds, 431/431 in 902.009
+  seconds, and 360/360 in 967.676 seconds. Shard 2 passes 443/444 in 1,011.715
+  seconds; its only failure is the unrelated 15-second publisher-canary
+  deadline while four long shards contend on one host. The exact failed test
+  then passes serially 1/1 in 0.741 seconds on the same frozen code tree, so the
+  composite evidence executes and passes all 1,618 discovered tests without
+  treating the original shard as a clean run.
 - The final implementation-focused matrix passes 1/1 for aborted journal
   reconstruction and 2/2 for the exact architecture budgets. Complete Python
   3.13 discovery covers all 1,617 tests exactly once: shards 0 through 3 pass
