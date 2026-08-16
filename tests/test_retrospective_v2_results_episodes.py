@@ -49,6 +49,11 @@ from retrospective_v2.result_validation import (  # noqa: E402
 )
 
 
+# Review helper synthetic-token catalog IDs: access-a and refresh-a.
+SYNTHETIC_ACCESS_TOKEN = "codex_synth_v1_access_a"
+SYNTHETIC_REFRESH_TOKEN = "codex_synth_v1_refresh_a"
+
+
 def ref(kind: str, marker: str) -> str:
     digest = hashlib.sha256(f"{kind}:{marker}".encode("ascii")).hexdigest()
     return f"{kind}_ref_v2:{digest}"
@@ -875,6 +880,9 @@ class ResultValidationTests(unittest.TestCase):
         )
         long_authorization = "".join(("Authorization: Basic ", "D" * 1200, "TAIL"))
         truncated_private_key = "".join(("-----BEGIN ", "PRIVATE KEY-----\n", "E" * 96))
+        truncated_dsa_private_key = "".join(
+            ("-----BEGIN DSA ", "PRIVATE KEY-----\n", "F" * 96)
+        )
         probes = (
             *(
                 ("".join((prefix, "A" * 16)), ("A" * 16,), "[REDACTED_CREDENTIAL]")
@@ -883,12 +891,39 @@ class ResultValidationTests(unittest.TestCase):
             (stateless_github, ("C" * 16,), "[REDACTED_CREDENTIAL]"),
             (long_authorization, ("D" * 64, "TAIL"), "[REDACTED_CREDENTIAL]"),
             (truncated_private_key, ("E" * 64,), "[REDACTED_SECRET]"),
+            (truncated_dsa_private_key, ("F" * 64,), "[REDACTED_SECRET]"),
             (
                 "".join(("Proxy-Authorization: Basic ", "A" * 16)),
                 ("A" * 16,),
                 "[REDACTED_CREDENTIAL]",
             ),
             ("".join(("sk-", "A" * 12)), ("A" * 12,), "[REDACTED_CREDENTIAL]"),
+            ("".join(("rk-", "B" * 12)), ("B" * 12,), "[REDACTED_CREDENTIAL]"),
+            (
+                f"client_secret={SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"pwd={SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"credential={SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"refreshToken={SYNTHETIC_REFRESH_TOKEN}",
+                (SYNTHETIC_REFRESH_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"run deploy --token {SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
         )
 
         for probe, forbidden_fragments, replacement in probes:
@@ -906,6 +941,20 @@ class ResultValidationTests(unittest.TestCase):
                     self.assertNotIn(fragment, text)
                 self.assertIn(replacement, text)
                 self.assertEqual(scan_for_leaks(result), ())
+
+        for safe_probe in (
+            "token=[REDACTED]",
+            "refreshToken=missing",
+            "credential is required",
+            "run deploy --token [REDACTED_CREDENTIAL]",
+            "Keep token budget under control.",
+        ):
+            with self.subTest(safe_probe=safe_probe):
+                self.assertFalse(
+                    result_validation_module.privacy_locators.contains_credential_material(
+                        safe_probe
+                    )
+                )
 
     def test_post_redaction_removes_non_http_uri_schemes(self) -> None:
         long_scheme_uri = f"{'a' * 33}://nas/jobs"

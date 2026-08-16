@@ -44,18 +44,58 @@ IPV6_CANDIDATE_RE = re.compile(
     r"(?:[0-9A-Za-z:.%_-]*[0-9A-Za-z:_-])?"
     r")(?=$|[^0-9A-Za-z.]|\.(?=$|[^0-9A-Za-z.]))"
 )
+_PRIVATE_KEY_LABEL_PATTERN_TEXT = (
+    r"(?:(?:[A-Z0-9][A-Z0-9 -]{0,62})\s+)?PRIVATE\s+KEY(?:\s+BLOCK)?"
+)
+_SAFE_CREDENTIAL_VALUE_PATTERN_TEXT = (
+    r"(?:bearer|basic|digest|negotiate|token|api[-_]?key|hmac|"
+    r"aws4-hmac-sha256|signature|oauth|mac|"
+    r"redacted(?:[_-][a-z0-9]+)*|masked(?:[_-][a-z0-9]+)*|"
+    r"missing|omitted|present|unknown|null|none|empty|in|not|required|"
+    r"denied|expired|invalid|unavailable|absent|needed|necessary|revoked|"
+    r"rotated|budget|count|limit)"
+)
+_SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT = r"(?=$|[\s,;&#)\]\}>\"']|\.(?:$|\s))"
+_SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT = (
+    r"(?![\[<({]?"
+    + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
+    + _SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT
+    + r")"
+)
+_COMPACT_TOKEN_KEY_PATTERN_TEXT = (
+    r"(?:access|api|auth|authorization|client|refresh|id|session|csrf|xsrf)Token"
+)
+_CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
+    r"(?:authorization|aws[\s_-]?secret[\s_-]?access[\s_-]?key|"
+    r"secret[\s_-]?access[\s_-]?key|access[\s_-]?token|"
+    r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
+    r"secret(?:[\s_-]?key)?|password|passwd|pwd|credential|token|"
+    + _COMPACT_TOKEN_KEY_PATTERN_TEXT
+    + r")"
+)
+_CREDENTIAL_FIELD_PATTERN_TEXT = (
+    r"(?:(?<![\w-])|(?<=[._-]))['\"]?(?:[A-Za-z0-9]+[._-])*"
+    + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
+    + r"['\"]?"
+)
+_AUTH_SCHEME_PATTERN_TEXT = (
+    r"(?:Bearer|Basic|Digest|Negotiate|Token|Api[-_]?Key|HMAC|"
+    r"AWS4-HMAC-SHA256|Signature|OAuth|MAC)"
+)
+
 PRIVATE_KEY_BOUNDARY_RE = re.compile(
-    r"(?i)-----\s*(?:BEGIN|END)\s+(?:(?:RSA|EC|OPENSSH|ENCRYPTED)\s+)?"
-    r"PRIVATE\s+KEY\s*-----"
+    r"-----\s*(?:BEGIN|END)\s+" + _PRIVATE_KEY_LABEL_PATTERN_TEXT + r"\s*-----",
+    re.IGNORECASE,
 )
 CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "secret",
         re.compile(
-            r"(?i)-----\s*BEGIN\s+(?:(?:RSA|EC|OPENSSH|ENCRYPTED)\s+)?"
-            r"PRIVATE\s+KEY\s*-----"
+            r"-----\s*BEGIN\s+" + _PRIVATE_KEY_LABEL_PATTERN_TEXT + r"\s*-----"
             r"(?:[\s\S]*?-----\s*END\s+"
-            r"(?:(?:RSA|EC|OPENSSH|ENCRYPTED)\s+)?PRIVATE\s+KEY\s*-----|[\s\S]*\Z)"
+            + _PRIVATE_KEY_LABEL_PATTERN_TEXT
+            + r"\s*-----|[\s\S]*\Z)",
+            re.IGNORECASE,
         ),
         "[REDACTED_SECRET]",
     ),
@@ -74,7 +114,7 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     ),
     (
         "credential",
-        re.compile(r"\bsk-[A-Za-z0-9_-]{12,}\b"),
+        re.compile(r"\b(?:sk|rk)[-_](?:proj[-_])?[A-Za-z0-9_-]{12,}\b"),
         "[REDACTED_CREDENTIAL]",
     ),
     (
@@ -89,19 +129,57 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     ),
     (
         "credential",
-        re.compile(r"(?i)\b(?:Proxy-)?Authorization\s*(?:=|:)[^\r\n]*"),
-        "[REDACTED_CREDENTIAL]",
-    ),
-    (
-        "credential",
-        re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]{12,}"),
+        re.compile(
+            r"\b(?:Proxy-)?Authorization\s*(?:=|:)\s*"
+            + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
+            + r"[^\r\n]+",
+            re.IGNORECASE,
+        ),
         "[REDACTED_CREDENTIAL]",
     ),
     (
         "credential",
         re.compile(
-            r"(?i)\b(?:api[_ -]?key|access[_ -]?token|auth[_ -]?token|token|password|passwd|secret)"
-            r"\s*(?:=|:)\s*(?!\[?REDACTED)[\"']?[A-Za-z0-9._~+/=-]{8,}"
+            r"\bBearer\s+"
+            + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
+            + r"[A-Za-z0-9._~+/=-]+",
+            re.IGNORECASE,
+        ),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(
+            _CREDENTIAL_FIELD_PATTERN_TEXT
+            + r"\s*(?:=|:)\s*['\"]?"
+            + _AUTH_SCHEME_PATTERN_TEXT
+            + r"\s+"
+            + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
+            + r"[^'\"\r\n,;]+",
+            re.IGNORECASE,
+        ),
+        "[REDACTED_CREDENTIAL]",
+    ),
+    (
+        "credential",
+        re.compile(
+            r"(?:"
+            + _CREDENTIAL_FIELD_PATTERN_TEXT
+            + r"\s*(?:=|:)\s*['\"]?"
+            + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
+            + r"[^'\"\s,;]+|"
+            r"(?<![\w-])--"
+            + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
+            + r"\s+"
+            + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
+            + r"[^'\"\s,;]+|"
+            r"\b"
+            + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
+            + r"\s*(?:\bis\b|\bwas\b|\bset\s+to\b)\s*['\"]?"
+            + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
+            + r"[^'\"\s,;]{3,}"
+            r")",
+            re.IGNORECASE,
         ),
         "[REDACTED_CREDENTIAL]",
     ),

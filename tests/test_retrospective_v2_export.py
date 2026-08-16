@@ -59,8 +59,10 @@ def ref(kind: str, character: str) -> str:
 
 RUN_REF = ref("run", "a")
 CONFIGURATION_REF = ref("configuration", "b")
+# Review helper synthetic-token catalog IDs: access-a, bearer-a, and refresh-a.
 SYNTHETIC_ACCESS_TOKEN = "codex_synth_v1_access_a"
 SYNTHETIC_BEARER_TOKEN = "codex_synth_v1_bearer_a"
+SYNTHETIC_REFRESH_TOKEN = "codex_synth_v1_refresh_a"
 EPISODE_ONE = ref("episode", "c")
 EPISODE_TWO = ref("episode", "d")
 EPISODE_THREE = ref("episode", "8")
@@ -1587,6 +1589,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             ("Authorization: Basic ", "D" * 1200, "TAIL")
         )
         truncated_private_key = "".join(("-----BEGIN ", "PRIVATE KEY-----", "E" * 96))
+        truncated_dsa_private_key = "".join(
+            ("-----BEGIN DSA ", "PRIVATE KEY-----", "F" * 96)
+        )
         probes = (
             slack_probe,
             ".".join((jwt_segment, jwt_segment, jwt_segment)),
@@ -1597,6 +1602,13 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             stateless_github_probe,
             long_authorization_probe,
             truncated_private_key,
+            truncated_dsa_private_key,
+            "".join(("rk-", "B" * 12)),
+            f"client_secret={SYNTHETIC_ACCESS_TOKEN}",
+            f"pwd={SYNTHETIC_ACCESS_TOKEN}",
+            f"credential={SYNTHETIC_ACCESS_TOKEN}",
+            f"refreshToken={SYNTHETIC_REFRESH_TOKEN}",
+            f"run deploy --token {SYNTHETIC_ACCESS_TOKEN}",
             *github_probes,
         )
         for probe in probes:

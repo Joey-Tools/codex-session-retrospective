@@ -536,6 +536,26 @@ superseded_by:
   and formatting, both workflows under `actionlint`, CI contracts 7/7, skill
   contracts 5/5, the official OpenAI skill validator, project-journal
   validation, and `git diff --check` also pass on this tree.
+- Signed head `1db57a45` passed exact-secret admission and all hosted CI shards,
+  then its fresh-context Codex processor found one remaining retained-history
+  privacy gap. The shared v2 detector did not recognize several credential
+  assignment forms already handled by source extraction, including
+  `client_secret`, `pwd`, `credential`, compact `refreshToken`, space-form
+  `--token`, `rk-*` service tokens, and private-key labels such as DSA. That
+  head's admission, CI, and review evidence became stale when the finding
+  required a new commit.
+- `privacy_locators.py` remains the sole v2 credential-policy owner, but now
+  covers delimited and compact credential fields, assignment and narrative
+  forms, space-form CLI arguments, `sk-*` and `rk-*` service tokens, and a
+  bounded generic private-key label. Safe redaction placeholders and status
+  values such as `missing`, `required`, and token-budget prose remain exempt.
+  The same patterns drive extractor post-redaction, leak scanning, retained
+  artifact assembly, artifact reread, and `report.md` validation.
+- The exact credential regressions pass 2/2. Complete affected modules pass
+  result validation 65/65 and export/reporting 66/66; the retained-result audit
+  passes 17/17, module boundaries pass 19/19 with unchanged branch inventory,
+  CI contracts pass 7/7, and skill contracts pass 5/5. Ruff lint and formatting
+  plus `git diff --check` pass on the fix tree.
 
 ## Follow-up Work
 
