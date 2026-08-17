@@ -7,6 +7,7 @@ artifacts still need the separate retained-language compiler and validator.
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 import copy
@@ -24,6 +25,7 @@ ADJUDICATION_RESULT_SCHEMA = "episode_review_adjudication_result_v2"
 TOPIC_INPUT_SCHEMA = "topic_input_v2"
 TOPIC_RESULT_SCHEMA = "topic_reduction_result_v2"
 SYNTHESIS_RESULT_SCHEMA = "global_synthesis_result_v2"
+REDUCTION_COMMITMENT_SCHEMA = "hierarchical_reduction_commitment_v2"
 
 MAX_RESULT_BYTES = 64 * 1024
 MAX_RESULT_DEPTH = 24
@@ -205,15 +207,34 @@ ADJUDICATION_ITEM_FIELDS = (
     "high_impact_turns",
     "evidence_refs",
 )
-ADJUDICATION_ITEM_DISPOSITIONS = frozenset({"merged", "rejected", "selected"})
-ADJUDICATION_ITEM_REASONS = frozenset(
-    {
-        "conflicting_evidence",
-        "duplicate_supported",
-        "insufficient_support",
-        "lower_confidence",
-        "retained_supported",
-    }
+ADJUDICATION_DECISION_CODES = {
+    "C": ("rejected", "conflicting_evidence"),
+    "I": ("rejected", "insufficient_support"),
+    "L": ("rejected", "lower_confidence"),
+    "M": ("merged", "duplicate_supported"),
+    "S": ("selected", "retained_supported"),
+}
+REVIEW_REDUCTION_FIELDS = (
+    "events",
+    "findings",
+    "strengths",
+    "risk_flags",
+    "high_impact_turns",
+    "evidence_refs",
+)
+TOPIC_REDUCTION_FIELDS = (
+    "episode_lineage",
+    "episode_revision_lineage",
+    "episode_refs",
+    "episode_revision_refs",
+    "events",
+    "evidence_refs",
+    "findings",
+    "review_result_hashes",
+    "risk_flags",
+    "session_refs",
+    "strengths",
+    *TOPIC_SEMANTIC_FIELDS,
 )
 
 
@@ -231,6 +252,7 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
             "attempt_ref equals public_metadata.attempt_ref",
             "reviewer_ref and reviewer_slot equal public_metadata assignments",
             "episode, evidence, and turn refs are members of allowed refs",
+            "hierarchical results copy payload.expected_reduction_commitment exactly",
         ),
         ADJUDICATION_RESULT_SCHEMA: (
             "candidate_result_hashes equal job_manifest candidate hashes in order",
@@ -239,6 +261,7 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
         TOPIC_RESULT_SCHEMA: (
             "topic identity equals the job metadata and topic input",
             "all semantic refs belong to the supplied topic lineage and allowed refs",
+            "hierarchical results copy payload.expected_reduction_commitment exactly",
         ),
         SYNTHESIS_RESULT_SCHEMA: (
             "topic_result_hashes exactly bind every supplied topic result",
@@ -255,18 +278,18 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
         EPISODE_REVIEW_RESULT_SCHEMA: (
             "review-gap-is-empty-low-confidence-and-has-gap-reason",
             "reviewed-is-nonempty-and-forbids-gap-reason",
-            "hierarchical-review-preserves-child-risk-rewrites-and-confidence-floor",
+            "hierarchical-review-binds-the-complete-child-tree-and-emits-only-child-data",
         ),
         ADJUDICATION_RESULT_SCHEMA: (
             "review-gap-is-empty-low-confidence-and-has-gap-reason",
-            "every-candidate-item-has-one-provenance-bound-decision",
+            "candidate-field-decision-codes-cover-every-item-in-order",
             "no-candidate-data-is-invented-and-secondary-high-risk-is-preserved",
         ),
         TOPIC_RESULT_SCHEMA: (
             "deterministic-lineage-signals-hashes-and-confidence-equal-validated-input",
-            "recurrence-kind-matches-signal-type-and-binds-two-revisions",
+            "recurrence-kind-session-and-evidence-match-each-selected-revision",
             "semantic-candidates-bind-only-topic-lineage-and-evidence",
-            "hierarchical-output-preserves-every-child-semantic-record",
+            "hierarchical-output-binds-the-complete-child-tree-and-emits-only-child-data",
         ),
         SYNTHESIS_RESULT_SCHEMA: (
             "all-ten-question-ids-occur-exactly-once",
@@ -289,9 +312,8 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
         result_schema,
         {
             "adjudication_gap_reasons": ADJUDICATION_GAP_REASONS,
-            "adjudication_item_dispositions": ADJUDICATION_ITEM_DISPOSITIONS,
+            "adjudication_decision_codes": ADJUDICATION_DECISION_CODES,
             "adjudication_item_fields": ADJUDICATION_ITEM_FIELDS,
-            "adjudication_item_reasons": ADJUDICATION_ITEM_REASONS,
             "adjudication_schema": ADJUDICATION_RESULT_SCHEMA,
             "confidence_levels": CONFIDENCE_LEVELS,
             "cross_field_rules": cross_field_rules,
@@ -310,6 +332,7 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
                 "all generalized text and rewrites pass deterministic retained redaction",
             ),
             "review_gap_reasons": REVIEW_GAP_REASONS,
+            "review_reduction_fields": REVIEW_REDUCTION_FIELDS,
             "review_schema": EPISODE_REVIEW_RESULT_SCHEMA,
             "risk_flags": RISK_FLAGS,
             "runtime_bindings": runtime_bindings,
@@ -317,6 +340,7 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
             "strength_kinds": STRENGTH_KINDS,
             "synthesis_schema": SYNTHESIS_RESULT_SCHEMA,
             "topic_schema": TOPIC_RESULT_SCHEMA,
+            "topic_reduction_fields": TOPIC_REDUCTION_FIELDS,
             "serialization": {
                 "allow_nan": False,
                 "encoding": "utf-8",
@@ -1099,6 +1123,149 @@ def canonical_result_hash(value: Mapping[str, Any]) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
+def _validate_reduction_commitment(
+    value: Any,
+    *,
+    fields: Sequence[str],
+    path: str,
+) -> dict[str, Any]:
+    commitment = _require_mapping(value, path=path)
+    _require_exact_keys(
+        commitment,
+        required={
+            "child_result_hashes",
+            "schema",
+            "source_item_counts",
+            "source_result_count",
+            "source_tree_hash",
+        },
+        path=path,
+    )
+    _require_schema(commitment, REDUCTION_COMMITMENT_SCHEMA, path=path)
+    child_hashes = _require_list(
+        commitment["child_result_hashes"],
+        path=_path(path, "child_result_hashes"),
+        maximum=MAX_REFS_PER_FIELD,
+    )
+    if not child_hashes:
+        raise _error(path, "reduction commitment must bind at least one child")
+    for index, digest in enumerate(child_hashes):
+        _require_sha256(
+            digest,
+            path=_path(_path(path, "child_result_hashes"), index),
+        )
+    counts = _require_mapping(
+        commitment["source_item_counts"], path=_path(path, "source_item_counts")
+    )
+    _require_exact_keys(
+        counts, required=set(fields), path=_path(path, "source_item_counts")
+    )
+    for field in fields:
+        count = counts[field]
+        if (
+            not isinstance(count, int)
+            or isinstance(count, bool)
+            or not 0 <= count <= 1_000_000
+        ):
+            raise _error(
+                _path(_path(path, "source_item_counts"), field),
+                "must be a bounded non-negative integer",
+            )
+    source_result_count = commitment["source_result_count"]
+    if (
+        not isinstance(source_result_count, int)
+        or isinstance(source_result_count, bool)
+        or not 1 <= source_result_count <= 1_000_000
+    ):
+        raise _error(
+            _path(path, "source_result_count"),
+            "must be a bounded positive integer",
+        )
+    _require_sha256(
+        commitment["source_tree_hash"], path=_path(path, "source_tree_hash")
+    )
+    return dict(commitment)
+
+
+def _build_reduction_commitment(
+    child_results: Sequence[Mapping[str, Any]],
+    *,
+    fields: Sequence[str],
+) -> dict[str, Any]:
+    if not child_results:
+        raise _error("child_results", "must not be empty")
+    child_hashes: list[str] = []
+    source_item_counts = {field: 0 for field in fields}
+    source_result_count = 0
+    tree_rows: list[dict[str, Any]] = []
+    for index, raw_child in enumerate(child_results):
+        child = _require_mapping(raw_child, path=_path("child_results", index))
+        child_hash = canonical_result_hash(child)
+        child_hashes.append(child_hash)
+        raw_nested = child.get("reduction_commitment")
+        if raw_nested is None:
+            nested_count = 1
+            nested_counts = {field: len(child[field]) for field in fields}
+            nested_tree_hash = child_hash
+        else:
+            nested = _validate_reduction_commitment(
+                raw_nested,
+                fields=fields,
+                path=_path(_path("child_results", index), "reduction_commitment"),
+            )
+            nested_count = nested["source_result_count"]
+            nested_counts = nested["source_item_counts"]
+            nested_tree_hash = nested["source_tree_hash"]
+        source_result_count += nested_count
+        for field in fields:
+            source_item_counts[field] += nested_counts[field]
+        tree_rows.append(
+            {
+                "child_result_hash": child_hash,
+                "source_item_counts": nested_counts,
+                "source_result_count": nested_count,
+                "source_tree_hash": nested_tree_hash,
+            }
+        )
+    encoded_tree = json.dumps(
+        {
+            "domain": REDUCTION_COMMITMENT_SCHEMA,
+            "rows": tree_rows,
+        },
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return {
+        "child_result_hashes": child_hashes,
+        "schema": REDUCTION_COMMITMENT_SCHEMA,
+        "source_item_counts": source_item_counts,
+        "source_result_count": source_result_count,
+        "source_tree_hash": hashlib.sha256(encoded_tree).hexdigest(),
+    }
+
+
+def build_hierarchical_reduction_commitment(
+    child_results: Sequence[Mapping[str, Any]],
+    *,
+    result_schema: str,
+) -> dict[str, Any]:
+    """Build the exact bounded commitment an agent must copy into a parent result."""
+
+    fields_by_schema = {
+        EPISODE_REVIEW_RESULT_SCHEMA: REVIEW_REDUCTION_FIELDS,
+        TOPIC_RESULT_SCHEMA: TOPIC_REDUCTION_FIELDS,
+    }
+    try:
+        fields = fields_by_schema[result_schema]
+    except KeyError as exc:
+        raise _error(
+            "result_schema", "does not support hierarchical reduction"
+        ) from exc
+    return _build_reduction_commitment(child_results, fields=fields)
+
+
 def _validate_signal_list(
     value: Any,
     *,
@@ -1106,6 +1273,7 @@ def _validate_signal_list(
     kinds: Collection[str],
     allowed_refs: Collection[str] | None,
     evidence_prefix: str,
+    reject_duplicates: bool = True,
 ) -> None:
     signals = _require_list(value, path=path, maximum=MAX_SIGNALS_PER_KIND)
     identities: set[tuple[str, tuple[str, ...]]] = set()
@@ -1134,7 +1302,7 @@ def _validate_signal_list(
                 signal["severity"], SEVERITY_LEVELS, path=_path(item_path, "severity")
             )
         identity = (kind, tuple(refs))
-        if identity in identities:
+        if reject_duplicates and identity in identities:
             raise _error(item_path, "duplicates a structured signal")
         identities.add(identity)
 
@@ -1463,6 +1631,23 @@ def validate_extractor_result(
     return value
 
 
+def _validate_review_reduction_commitment(
+    value: Mapping[str, Any], *, is_gap: bool
+) -> None:
+    if "reduction_commitment" not in value:
+        return
+    _validate_reduction_commitment(
+        value["reduction_commitment"],
+        fields=REVIEW_REDUCTION_FIELDS,
+        path="$.reduction_commitment",
+    )
+    if is_gap:
+        raise _error(
+            "$.reduction_commitment",
+            "review gaps cannot carry a reduction commitment",
+        )
+
+
 def _validate_review_common(
     value: Mapping[str, Any],
     *,
@@ -1473,7 +1658,7 @@ def _validate_review_common(
     expected_reviewer_slot: str | None = None,
 ) -> None:
     resolution_field = "resolution" if adjudication else "disposition"
-    optional = {"gap_reason"}
+    optional = {"gap_reason"} | (set() if adjudication else {"reduction_commitment"})
     identity_fields = (
         set() if adjudication else {"attempt_ref", "reviewer_ref", "reviewer_slot"}
     )
@@ -1615,6 +1800,7 @@ def _validate_review_common(
                 "$", f"an empty {resolution_field} requires an explicit review_gap"
             )
     if not adjudication:
+        _validate_review_reduction_commitment(value, is_gap=is_gap)
         reviewer_slot = _require_enum(
             value["reviewer_slot"], {"primary", "secondary"}, path="$.reviewer_slot"
         )
@@ -1658,7 +1844,7 @@ def _validate_review_common(
         _require_list(
             value["candidate_item_decisions"],
             path="$.candidate_item_decisions",
-            maximum=1_024,
+            maximum=len(ADJUDICATION_ITEM_FIELDS) * 2,
         )
 
 
@@ -1701,11 +1887,12 @@ def validate_hierarchical_episode_review_result(
     *,
     allowed_turn_refs: Collection[str] | None = None,
     expected_child_result_hashes: Sequence[str] = (),
+    expected_reduction_commitment: Mapping[str, Any] | None = None,
     expected_reviewer_slot: str | None = None,
     original_prompts: Sequence[str] = (),
     tool_outputs: Sequence[str] = (),
 ) -> dict[str, Any]:
-    """Validate a parent review without dropping material child risk evidence."""
+    """Validate one bounded parent review against a complete child-tree commitment."""
 
     if not child_results:
         raise _error("child_results", "must not be empty")
@@ -1739,71 +1926,35 @@ def validate_hierarchical_episode_review_result(
     for field in ("episode_ref", "episode_revision_ref"):
         if any(child[field] != output[field] for child in children):
             raise _error(f"$.{field}", "must match every child review")
-
-    required_evidence: set[str] = set()
-    for field in ("events", "findings"):
-        required = {
-            _canonical_value(item): item
-            for child in children
-            for item in child[field]
-            if item.get("severity") in {"high", "critical"}
-        }
-        retained = {_canonical_value(item) for item in output[field]}
-        if not set(required) <= retained:
-            raise _error(
-                f"$.{field}",
-                "hierarchical review dropped a high-severity child decision",
-            )
-        required_evidence.update(
-            evidence_ref
-            for item in required.values()
-            for evidence_ref in item["evidence_refs"]
-        )
-
-    required_rewrites = {
-        _canonical_value(item): item
-        for child in children
-        for item in child["high_impact_turns"]
-    }
-    retained_rewrites = {_canonical_value(item) for item in output["high_impact_turns"]}
-    if not set(required_rewrites) <= retained_rewrites:
-        raise _error(
-            "$.high_impact_turns",
-            "hierarchical review dropped a child high-impact adjudication",
-        )
-    required_evidence.update(
-        evidence_ref
-        for item in required_rewrites.values()
-        for evidence_ref in item["evidence_refs"]
+    expected_commitment = _build_reduction_commitment(
+        children, fields=REVIEW_REDUCTION_FIELDS
     )
-
+    if (
+        expected_reduction_commitment is not None
+        and dict(expected_reduction_commitment) != expected_commitment
+    ):
+        raise _error(
+            "expected_reduction_commitment",
+            "does not match the validated child review tree",
+        )
+    if output.get("reduction_commitment") != expected_commitment:
+        raise _error(
+            "$.reduction_commitment",
+            "must exactly bind the complete recursive child review tree",
+        )
+    for field in REVIEW_REDUCTION_FIELDS:
+        available = Counter(
+            _canonical_value(item) for child in children for item in child[field]
+        )
+        retained = Counter(_canonical_value(item) for item in output[field])
+        if retained - available:
+            raise _error(f"$.{field}", "invented or altered a child review item")
     required_risk_flags = {flag for child in children for flag in child["risk_flags"]}
-    if not required_risk_flags <= set(output["risk_flags"]):
-        raise _error("$.risk_flags", "hierarchical review dropped a child risk flag")
-    for child in children:
-        if child["risk_flags"]:
-            required_evidence.update(child["evidence_refs"])
-    if not required_evidence <= set(output["evidence_refs"]):
-        raise _error(
-            "$.evidence_refs",
-            "hierarchical review dropped child risk evidence",
-        )
-    if (
-        any(child["second_review_recommended"] for child in children)
-        and not output["second_review_recommended"]
-    ):
-        raise _error(
-            "$.second_review_recommended",
-            "hierarchical review dropped a child escalation decision",
-        )
-    if (
-        any(child["conflicting_signals"] for child in children)
-        and not output["conflicting_signals"]
-    ):
-        raise _error(
-            "$.conflicting_signals",
-            "hierarchical review dropped a child conflict decision",
-        )
+    if set(output["risk_flags"]) != required_risk_flags:
+        raise _error("$.risk_flags", "must exactly preserve child risk flags")
+    for field in ("second_review_recommended", "conflicting_signals"):
+        if output[field] != any(child[field] for child in children):
+            raise _error(f"$.{field}", "must equal the recursive child decision")
     confidence_rank = {"low": 0, "medium": 1, "high": 2}
     child_floor = min(
         (child["confidence"] for child in children),
@@ -1896,10 +2047,6 @@ def _validated_candidate_pair(
     return primary, secondary
 
 
-def _canonical_value_hash(value: Any) -> str:
-    return hashlib.sha256(_canonical_value(value).encode("utf-8")).hexdigest()
-
-
 def _validate_candidate_item_decisions(
     adjudication: Mapping[str, Any],
     primary: Mapping[str, Any],
@@ -1923,19 +2070,18 @@ def _validate_candidate_item_decisions(
         for candidate in candidates
         for item in candidate[field]
     }
-    expected: list[tuple[str, Mapping[str, Any], str, Any]] = []
+    expected: list[tuple[str, Mapping[str, Any], str]] = []
     for candidate_hash, candidate in zip(candidate_hashes, candidates, strict=True):
         for field in ADJUDICATION_ITEM_FIELDS:
-            for item in candidate[field]:
-                expected.append((candidate_hash, candidate, field, item))
+            expected.append((candidate_hash, candidate, field))
 
     decisions = adjudication["candidate_item_decisions"]
     if len(decisions) != len(expected):
         raise _error(
             "$.candidate_item_decisions",
-            "must account for every primary and secondary candidate item exactly once",
+            "must contain one ordered decision-code row per candidate field",
         )
-    for index, (decision, expected_item) in enumerate(
+    for index, (decision, expected_row) in enumerate(
         zip(decisions, expected, strict=True)
     ):
         item_path = _path("$.candidate_item_decisions", index)
@@ -1943,24 +2089,17 @@ def _validate_candidate_item_decisions(
         _require_exact_keys(
             row,
             required={
-                "attempt_ref",
                 "candidate_result_hash",
-                "disposition",
+                "decision_codes",
                 "field",
-                "item_hash",
-                "reason",
-                "reviewer_ref",
                 "reviewer_slot",
             },
             path=item_path,
         )
-        candidate_hash, candidate, field, item = expected_item
+        candidate_hash, candidate, field = expected_row
         expected_identity = {
-            "attempt_ref": candidate["attempt_ref"],
             "candidate_result_hash": candidate_hash,
             "field": field,
-            "item_hash": _canonical_value_hash(item),
-            "reviewer_ref": candidate["reviewer_ref"],
             "reviewer_slot": candidate["reviewer_slot"],
         }
         for key, expected_value in expected_identity.items():
@@ -1969,41 +2108,41 @@ def _validate_candidate_item_decisions(
                     _path(item_path, key),
                     "does not preserve the candidate item identity and provenance",
                 )
-        disposition = _require_enum(
-            row["disposition"],
-            ADJUDICATION_ITEM_DISPOSITIONS,
-            path=_path(item_path, "disposition"),
-        )
-        reason = _require_enum(
-            row["reason"],
-            ADJUDICATION_ITEM_REASONS,
-            path=_path(item_path, "reason"),
-        )
-        item_key = (field, _canonical_value(item))
-        is_retained = item_key[1] in retained[field]
-        if is_retained:
-            if disposition == "selected" and reason != "retained_supported":
-                raise _error(
-                    item_path,
-                    "selected candidate items require retained_supported",
-                )
-            if disposition == "merged" and (
-                reason != "duplicate_supported" or support_counts[item_key] < 2
-            ):
-                raise _error(
-                    item_path,
-                    "merged candidate items require duplicate_supported provenance",
-                )
-            if disposition == "rejected":
-                raise _error(item_path, "a retained candidate item cannot be rejected")
-        else:
-            if disposition != "rejected" or reason not in {
+        codes = row["decision_codes"]
+        if not isinstance(codes, str) or len(codes) != len(candidate[field]):
+            raise _error(
+                _path(item_path, "decision_codes"),
+                "must contain exactly one code per candidate item in source order",
+            )
+        for item_index, (code, item) in enumerate(
+            zip(codes, candidate[field], strict=True)
+        ):
+            code_path = _path(_path(item_path, "decision_codes"), item_index)
+            if code not in ADJUDICATION_DECISION_CODES:
+                raise _error(code_path, "is not a closed adjudication decision code")
+            disposition, reason = ADJUDICATION_DECISION_CODES[code]
+            item_key = (field, _canonical_value(item))
+            is_retained = item_key[1] in retained[field]
+            if is_retained:
+                if disposition == "selected" and reason != "retained_supported":
+                    raise _error(
+                        code_path, "selected items require supported retention"
+                    )
+                if disposition == "merged" and (
+                    reason != "duplicate_supported" or support_counts[item_key] < 2
+                ):
+                    raise _error(code_path, "merged items require duplicate support")
+                if disposition == "rejected":
+                    raise _error(
+                        code_path, "a retained candidate item cannot be rejected"
+                    )
+            elif disposition != "rejected" or reason not in {
                 "conflicting_evidence",
                 "insufficient_support",
                 "lower_confidence",
             }:
                 raise _error(
-                    item_path,
+                    code_path,
                     "an omitted candidate item requires an explicit rejection reason",
                 )
 
@@ -2429,6 +2568,17 @@ def build_topic_result(
             ],
             key=lambda item: (item["episode_ref"], item["session_ref"]),
         ),
+        "episode_revision_lineage": sorted(
+            [
+                {
+                    "episode_ref": context["episode_ref"],
+                    "episode_revision_ref": context["episode_revision_ref"],
+                    "session_ref": context["session_ref"],
+                }
+                for context in ordered_contexts
+            ],
+            key=lambda item: item["episode_revision_ref"],
+        ),
         "episode_revision_refs": revision_refs,
         "events": [
             copy.deepcopy(item)
@@ -2471,21 +2621,209 @@ def build_topic_result(
     return result
 
 
+def _topic_recurrence_support(
+    topic_input: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    contexts = {
+        row["episode_revision_ref"]: row for row in topic_input["episode_contexts"]
+    }
+    support: dict[str, dict[str, Any]] = {}
+    for review in topic_input["episode_reviews"]:
+        revision_ref = review["episode_revision_ref"]
+        support[revision_ref] = {
+            "event": copy.deepcopy(review["events"]),
+            "finding": copy.deepcopy(review["findings"]),
+            "session_ref": contexts[revision_ref]["session_ref"],
+            "strength": copy.deepcopy(review["strengths"]),
+        }
+    return support
+
+
+def _validate_topic_lineage(
+    value: Mapping[str, Any],
+    *,
+    allowed_refs: Collection[str] | None,
+) -> tuple[dict[str, tuple[str, str]], set[tuple[str, str]]]:
+    episode_refs = set(
+        _require_refs(
+            value["episode_refs"],
+            path="$.episode_refs",
+            allowed_refs=allowed_refs,
+            expected_prefix="episode",
+            minimum=1,
+        )
+    )
+    revision_refs = set(
+        _require_refs(
+            value["episode_revision_refs"],
+            path="$.episode_revision_refs",
+            allowed_refs=allowed_refs,
+            expected_prefix="episode_revision",
+            minimum=1,
+        )
+    )
+    session_refs = set(
+        _require_refs(
+            value["session_refs"],
+            path="$.session_refs",
+            allowed_refs=allowed_refs,
+            expected_prefix="session",
+            minimum=1,
+        )
+    )
+    lineage: set[tuple[str, str]] = set()
+    raw_episode_lineage = _require_list(
+        value["episode_lineage"],
+        path="$.episode_lineage",
+        maximum=MAX_REFS_PER_FIELD,
+    )
+    if not raw_episode_lineage:
+        raise _error("$.episode_lineage", "must contain at least one lineage")
+    for index, raw_lineage in enumerate(raw_episode_lineage):
+        path = _path("$.episode_lineage", index)
+        row = _require_mapping(raw_lineage, path=path)
+        _require_exact_keys(
+            row,
+            required={"episode_ref", "session_ref"},
+            path=path,
+        )
+        lineage_item = (
+            _require_ref(
+                row["episode_ref"],
+                path=_path(path, "episode_ref"),
+                allowed_refs=allowed_refs,
+                expected_prefix="episode",
+            ),
+            _require_ref(
+                row["session_ref"],
+                path=_path(path, "session_ref"),
+                allowed_refs=allowed_refs,
+                expected_prefix="session",
+            ),
+        )
+        if lineage_item in lineage:
+            raise _error(path, "duplicates an episode lineage")
+        lineage.add(lineage_item)
+    revision_lineage: dict[str, tuple[str, str]] = {}
+    raw_revision_lineage = _require_list(
+        value["episode_revision_lineage"],
+        path="$.episode_revision_lineage",
+        maximum=MAX_REFS_PER_FIELD,
+    )
+    if not raw_revision_lineage:
+        raise _error("$.episode_revision_lineage", "must contain at least one lineage")
+    for index, item in enumerate(raw_revision_lineage):
+        path = _path("$.episode_revision_lineage", index)
+        row = _require_mapping(item, path=path)
+        _require_exact_keys(
+            row,
+            required={"episode_ref", "episode_revision_ref", "session_ref"},
+            path=path,
+        )
+        episode_ref = _require_ref(
+            row["episode_ref"],
+            path=_path(path, "episode_ref"),
+            allowed_refs=allowed_refs,
+            expected_prefix="episode",
+        )
+        revision_ref = _require_ref(
+            row["episode_revision_ref"],
+            path=_path(path, "episode_revision_ref"),
+            allowed_refs=allowed_refs,
+            expected_prefix="episode_revision",
+        )
+        session_ref = _require_ref(
+            row["session_ref"],
+            path=_path(path, "session_ref"),
+            allowed_refs=allowed_refs,
+            expected_prefix="session",
+        )
+        if revision_ref in revision_lineage:
+            raise _error(path, "duplicates an episode revision lineage")
+        revision_lineage[revision_ref] = (episode_ref, session_ref)
+    if set(revision_lineage) != revision_refs:
+        raise _error(
+            "$.episode_revision_lineage",
+            "must exactly cover the retained episode revision refs",
+        )
+    if set(revision_lineage.values()) != lineage:
+        raise _error(
+            "$.episode_lineage",
+            "must exactly match the retained revision lineage",
+        )
+    if {episode_ref for episode_ref, _session_ref in lineage} != episode_refs:
+        raise _error("$.episode_refs", "must exactly match the retained lineage")
+    if {session_ref for _episode_ref, session_ref in lineage} != session_refs:
+        raise _error("$.session_refs", "must exactly match the retained lineage")
+    return revision_lineage, lineage
+
+
+def _validate_topic_base_fields(
+    value: Mapping[str, Any],
+    *,
+    allowed_refs: Collection[str] | None,
+) -> None:
+    review_hashes = _require_list(
+        value["review_result_hashes"],
+        path="$.review_result_hashes",
+        maximum=MAX_REFS_PER_FIELD,
+    )
+    if not review_hashes:
+        raise _error(
+            "$.review_result_hashes", "must contain at least one review result hash"
+        )
+    if len(set(review_hashes)) != len(review_hashes):
+        raise _error("$.review_result_hashes", "must not contain duplicates")
+    for index, digest in enumerate(review_hashes):
+        _require_sha256(digest, path=_path("$.review_result_hashes", index))
+    _require_refs(
+        value["evidence_refs"],
+        path="$.evidence_refs",
+        allowed_refs=allowed_refs,
+        expected_prefix="evidence",
+    )
+    for field, kinds in (
+        ("events", EVENT_KINDS),
+        ("findings", FINDING_KINDS),
+        ("strengths", STRENGTH_KINDS),
+    ):
+        _validate_signal_list(
+            value[field],
+            path=f"$.{field}",
+            kinds=kinds,
+            allowed_refs=allowed_refs,
+            evidence_prefix="evidence",
+            reject_duplicates=False,
+        )
+    _require_unique_strings(
+        value["risk_flags"],
+        path="$.risk_flags",
+        maximum=len(RISK_FLAGS),
+        allowed=RISK_FLAGS,
+    )
+
+
 def _validate_topic_semantics(
     value: Mapping[str, Any],
     *,
     deterministic: Mapping[str, Any],
     allowed_refs: Collection[str] | None,
     allowed_turn_refs: Collection[str] | None,
+    recurrence_support: Mapping[str, Mapping[str, Any]] | None = None,
 ) -> None:
     if set(value) != set(deterministic) | set(TOPIC_SEMANTIC_FIELDS):
         raise _error("$", "does not match the closed topic result shape")
-    revision_refs = set(deterministic["episode_revision_refs"])
-    session_refs = set(deterministic["session_refs"])
-    lineage = {
-        (item["episode_ref"], item["session_ref"])
-        for item in deterministic["episode_lineage"]
-    }
+    if "reduction_commitment" in value:
+        _validate_reduction_commitment(
+            value["reduction_commitment"],
+            fields=TOPIC_REDUCTION_FIELDS,
+            path="$.reduction_commitment",
+        )
+    revision_lineage, lineage = _validate_topic_lineage(
+        value,
+        allowed_refs=allowed_refs,
+    )
+    _validate_topic_base_fields(value, allowed_refs=allowed_refs)
     signal_kinds = {
         "event": EVENT_KINDS,
         "finding": FINDING_KINDS,
@@ -2530,18 +2868,48 @@ def _validate_topic_semantics(
                 minimum=1,
             )
         )
-        if (
-            not observed_revisions <= revision_refs
-            or not observed_sessions <= session_refs
-        ):
+        if not observed_revisions <= set(revision_lineage):
             raise _error(path, "recurrence refs are outside the topic lineage")
-        _require_refs(
-            row["evidence_refs"],
-            path=_path(path, "evidence_refs"),
-            allowed_refs=allowed_refs,
-            expected_prefix="evidence",
-            minimum=1,
+        expected_sessions = {
+            revision_lineage[revision_ref][1] for revision_ref in observed_revisions
+        }
+        if observed_sessions != expected_sessions:
+            raise _error(
+                _path(path, "session_refs"),
+                "must exactly match the sessions owning the selected revisions",
+            )
+        recurrence_evidence = set(
+            _require_refs(
+                row["evidence_refs"],
+                path=_path(path, "evidence_refs"),
+                allowed_refs=allowed_refs,
+                expected_prefix="evidence",
+                minimum=1,
+            )
         )
+        if recurrence_support is not None:
+            supported_evidence: set[str] = set()
+            for revision_ref in observed_revisions:
+                support = recurrence_support.get(revision_ref)
+                if support is None:
+                    raise _error(path, "selected revision has no signal support")
+                matching = {
+                    evidence_ref
+                    for signal in support[signal_type]
+                    if signal["kind"] == row["kind"]
+                    for evidence_ref in signal["evidence_refs"]
+                }
+                if not matching or not recurrence_evidence & matching:
+                    raise _error(
+                        path,
+                        "each selected revision must support the recurrence kind and evidence",
+                    )
+                supported_evidence.update(matching)
+            if not recurrence_evidence <= supported_evidence:
+                raise _error(
+                    _path(path, "evidence_refs"),
+                    "contains evidence outside matching selected-revision signals",
+                )
         _require_enum(
             row["confidence"], CONFIDENCE_LEVELS, path=_path(path, "confidence")
         )
@@ -2683,6 +3051,7 @@ def build_hierarchical_topic_result(
         )
         > 1,
         "episode_lineage": episode_lineage,
+        "episode_revision_lineage": unique_values("episode_revision_lineage"),
         "episode_refs": sorted(
             {
                 str(value)
@@ -2720,6 +3089,9 @@ def build_hierarchical_topic_result(
                 for value in child["risk_flags"]
             }
         ),
+        "reduction_commitment": _build_reduction_commitment(
+            child_topic_results, fields=TOPIC_REDUCTION_FIELDS
+        ),
         "schema": TOPIC_RESULT_SCHEMA,
         "session_refs": sorted(
             {
@@ -2745,6 +3117,7 @@ def validate_hierarchical_topic_result(
     expected_topic_ref: str,
     expected_workstream_ref: str,
     allowed_turn_refs: Collection[str] | None = None,
+    expected_reduction_commitment: Mapping[str, Any] | None = None,
     original_prompts: Sequence[str] = (),
     tool_outputs: Sequence[str] = (),
 ) -> dict[str, Any]:
@@ -2778,6 +3151,14 @@ def validate_hierarchical_topic_result(
         topic_ref=expected_topic_ref,
         workstream_ref=expected_workstream_ref,
     )
+    if (
+        expected_reduction_commitment is not None
+        and dict(expected_reduction_commitment) != expected["reduction_commitment"]
+    ):
+        raise _error(
+            "expected_reduction_commitment",
+            "does not match the validated child topic tree",
+        )
     _validate_topic_semantics(
         output,
         deterministic={
@@ -2788,13 +3169,23 @@ def validate_hierarchical_topic_result(
         allowed_refs=refs,
         allowed_turn_refs=allowed_turn_refs,
     )
-    for key, expected_value in expected.items():
-        if key not in TOPIC_SEMANTIC_FIELDS and output[key] != expected_value:
-            raise _error(f"$.{key}", "must exactly preserve validated child topics")
-    for field in TOPIC_SEMANTIC_FIELDS:
-        child_values = {_canonical_value(item) for item in expected[field]}
-        if not child_values <= {_canonical_value(item) for item in output[field]}:
-            raise _error(f"$.{field}", "dropped a child semantic record")
+    for key in (
+        "confidence",
+        "cross_session",
+        "reduction_commitment",
+        "risk_flags",
+        "schema",
+        "topic_candidate_ref",
+        "topic_ref",
+        "workstream_ref",
+    ):
+        if output[key] != expected[key]:
+            raise _error(f"$.{key}", "must exactly preserve the child-tree summary")
+    for field in TOPIC_REDUCTION_FIELDS:
+        available = Counter(_canonical_value(item) for item in expected[field])
+        retained = Counter(_canonical_value(item) for item in output[field])
+        if retained - available:
+            raise _error(f"$.{field}", "invented or altered a child topic item")
     return output
 
 
@@ -2835,6 +3226,11 @@ def validate_topic_result(
         original_prompts=original_prompts,
         tool_outputs=tool_outputs,
     )
+    if "reduction_commitment" in value:
+        raise _error(
+            "$.reduction_commitment",
+            "leaf topic results cannot claim a hierarchical commitment",
+        )
     expected = build_topic_result(validated_input, topic_ref=topic_ref)
     deterministic = {
         key: item for key, item in expected.items() if key not in TOPIC_SEMANTIC_FIELDS
@@ -2844,6 +3240,7 @@ def validate_topic_result(
         deterministic=deterministic,
         allowed_refs=refs,
         allowed_turn_refs=allowed_turn_refs,
+        recurrence_support=_topic_recurrence_support(validated_input),
     )
     for key, expected_value in deterministic.items():
         if value[key] != expected_value:

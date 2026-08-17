@@ -213,7 +213,10 @@ source acceptance.
   `agent-sinks/task-inputs`. The checkpoint keeps only their authenticated
   descriptor plus bounded scheduling summaries; hierarchy inputs, turn metadata,
   candidate results, framing, and payloads remain sidecar-only. Each sidecar is
-  capped at 640 KiB and every checkpoint task is capped at 16 KiB. Attempts retain
+  capped at 640 KiB and every checkpoint task is capped at 16 KiB. Hierarchical
+  child results occur exactly once in the immutable input payload; metadata keeps
+  only their hashes and scheduling identities instead of embedding a second copy.
+  Attempts retain
   only the deterministic job reference and manifest digest; claim and replay
   reconstruct the full manifest and require the digest to match before returning
   an execution envelope. A legacy attempt may carry the full manifest instead of
@@ -485,16 +488,21 @@ blocks before creating a partial review input. A prior turn reference without
 its validated material is never treated as coverage.
 
 Oversized episode reviews use validated hierarchical children. Every parent
-binds the exact child result hashes and conserves all high/critical events and
-findings, high-impact turn adjudications, risk flags, associated evidence,
-escalation/conflict decisions, and the minimum child confidence. Omitting any of
-those values rejects the parent result.
+copies an exact recursive commitment containing immediate child-result hashes,
+leaf-result count, per-field source-item counts, and a canonical tree hash. The
+visible parent lists are bounded verbatim multisets of child items: they may
+compact an otherwise unrepresentable union, but may not invent, alter, or copy an
+item more times than the children supplied. Risk flags remain the exact union;
+escalation/conflict decisions remain recursive ORs; confidence cannot exceed the
+lowest child confidence. Omission is therefore explicit in the commitment rather
+than silently reported as complete coverage.
 
 Episode adjudication additionally carries both validated candidate results and
-an ordered `candidate_item_decisions` trace. Every candidate event, finding,
-strength, risk flag, high-impact turn, and evidence reference must be selected,
-merged with duplicate support, or explicitly rejected with a closed reason and
-the exact candidate hash/reviewer/attempt provenance. Downstream topic input
+an ordered `candidate_item_decisions` trace. Exactly twelve compact rows cover
+the six item fields for the primary and secondary candidates. Each row binds the
+candidate hash and reviewer slot, while `decision_codes` supplies one closed code
+per source item in original order for selected, duplicate-merged, or explicitly
+rejected disposition. Downstream topic input
 embeds and revalidates that complete candidate context; an adjudicator cannot
 silently erase candidate-unique content.
 
@@ -588,8 +596,17 @@ of reducer input.
 Topic inputs are partitioned from bounded episode reviews before the 64 KiB
 result-contract validator is called. The durable partition index commits every
 expected episode revision and leaf input hash; reducers then combine only
-validated bounded children through the hierarchy. The coordinator never first
-constructs or validates one oversized topic input.
+validated bounded children through the hierarchy. Each topic parent uses the
+same recursive child-tree commitment and emits only a bounded multiset subset of
+child records, while retaining a non-empty episode/revision/session lineage and
+the exact child risk union. The coordinator never first constructs or validates
+one oversized topic input.
+
+Leaf topic recurrences bind revision-level provenance, not just topic-wide
+membership. The recurrence must name exactly the sessions owning its selected
+episode revisions; every selected revision must contain the same signal type and
+kind and must support at least one cited evidence reference. Hierarchical parents
+can retain only recurrence records already validated by a child.
 
 Global synthesis requires a bijection between durable topic-input roots and
 accepted final topic tasks: every expected root appears exactly once, with no

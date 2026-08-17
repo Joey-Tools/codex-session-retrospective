@@ -155,6 +155,10 @@ class ResultHistoryOperations(OrchestratorComponent):
                     allowed_turn_refs=allowed_turn_refs,
                     expected_reviewer_slot=slot,
                 )
+                if "reduction_commitment" in validated:
+                    raise result_validation.ResultValidationError(
+                        "leaf review result cannot claim a hierarchical commitment"
+                    )
             else:
                 validated = (
                     result_validation.validate_hierarchical_episode_review_result(
@@ -165,6 +169,9 @@ class ResultHistoryOperations(OrchestratorComponent):
                         expected_child_result_hashes=input_payload[
                             "child_result_hashes"
                         ],
+                        expected_reduction_commitment=input_payload.get(
+                            "expected_reduction_commitment"
+                        ),
                         expected_reviewer_slot=slot,
                     )
                 )
@@ -191,7 +198,13 @@ class ResultHistoryOperations(OrchestratorComponent):
                 candidate_results=self._adjudication_candidates(state, task),
             )
         if kind == JobKind.TOPIC_REDUCER.value:
-            child_results = metadata.get("validation_child_topic_results")
+            input_payload = immutable.get("input_payload")
+            child_results = (
+                input_payload.get("child_topic_results")
+                if isinstance(input_payload, Mapping)
+                and input_payload.get("schema") == "topic_hierarchical_input_v2"
+                else metadata.get("validation_child_topic_results")
+            )
             if child_results is not None:
                 return result_validation.validate_hierarchical_topic_result(
                     result,
@@ -201,6 +214,11 @@ class ResultHistoryOperations(OrchestratorComponent):
                     expected_topic_ref=metadata["topic_ref"],
                     expected_workstream_ref=metadata["workstream_ref"],
                     allowed_turn_refs=allowed_turn_refs,
+                    expected_reduction_commitment=(
+                        input_payload.get("expected_reduction_commitment")
+                        if isinstance(input_payload, Mapping)
+                        else None
+                    ),
                 )
             return result_validation.validate_topic_result(
                 result,

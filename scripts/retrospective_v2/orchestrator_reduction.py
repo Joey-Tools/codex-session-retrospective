@@ -1585,6 +1585,12 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 "episode_revision_ref": revision["episode_revision_ref"],
                 "session_ref": revision["session_ref"],
             },
+            "expected_reduction_commitment": (
+                result_validation.build_hierarchical_reduction_commitment(
+                    results,
+                    result_schema=result_validation.EPISODE_REVIEW_RESULT_SCHEMA,
+                )
+            ),
             "schema": "episode_review_hierarchical_input_v2",
         }
 
@@ -2013,9 +2019,6 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                         "topic_candidate_ref": root_ref,
                         "topic_ref": topic_ref,
                         "underlying_episode_refs": episode_refs,
-                        "validation_child_topic_results": copy.deepcopy(
-                            payload["child_topic_results"]
-                        ),
                         "workstream_ref": topic_index["workstream_ref"],
                     },
                 )
@@ -2033,6 +2036,12 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 result_validation.canonical_result_hash(result) for result in results
             ],
             "child_topic_results": results,
+            "expected_reduction_commitment": (
+                result_validation.build_hierarchical_reduction_commitment(
+                    results,
+                    result_schema=result_validation.TOPIC_RESULT_SCHEMA,
+                )
+            ),
             "schema": "topic_hierarchical_input_v2",
             "topic_candidate_ref": root_ref,
         }

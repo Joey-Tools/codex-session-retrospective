@@ -44,10 +44,11 @@ _AGENT_INSTRUCTIONS = {
         quote the turn. Bind attempt_ref and reviewer_ref and return only the declared
         episode_review_result_v2 JSON object.
 
-        For hierarchical review input, bind the supplied child hashes and preserve all
-        high- or critical-severity events and findings, every high-impact rewrite, risk
-        flag, evidence reference, escalation or conflict decision, and the lowest child
-        confidence. Never summarize away a child risk decision.
+        For hierarchical review input, copy expected_reduction_commitment exactly.
+        Emit only a bounded verbatim subset of child decisions, preserve the exact union
+        of child risk flags and the recursive escalation and conflict decisions, and do
+        not increase the lowest child confidence. The commitment accounts for every
+        source item omitted from the bounded parent result; never invent or alter one.
         """
     ),
     JobKind.INDEPENDENT_RISK_REVIEWER.value: _prompt(
@@ -59,6 +60,11 @@ _AGENT_INSTRUCTIONS = {
 
         Bind the secondary reviewer identity, attempt_ref, and reviewer_ref. Return only
         the declared episode_review_result_v2 JSON object.
+
+        For hierarchical review input, copy expected_reduction_commitment exactly and
+        emit only a bounded verbatim subset of child decisions. Preserve the exact union
+        of risk flags and recursive escalation and conflict decisions. Never invent or
+        alter a child item.
         """
     ),
     JobKind.ADJUDICATOR.value: _prompt(
@@ -66,8 +72,9 @@ _AGENT_INSTRUCTIONS = {
         Adjudicate only the two supplied validated structured reviews and bind both
         canonical hashes. Resolve only supported conflicts. Account in slot order for
         every candidate event, finding, strength, risk flag, high-impact rewrite, and
-        evidence reference as selected, merged, or explicitly rejected with a closed
-        reason and its exact candidate hash, reviewer, and attempt provenance.
+        evidence reference. Emit one row per candidate and field in the declared order;
+        decision_codes contains one closed code per source item in its original order.
+        The candidate hash and reviewer slot bind the compact trace to exact provenance.
 
         Preserve the complete decision trace and both validated candidates downstream.
         Preserve every independently reported high- or critical-severity secondary
@@ -84,10 +91,12 @@ _AGENT_INSTRUCTIONS = {
         strengths, friction, prompt improvements, guidance or skill candidates, open
         work, and confidence.
 
-        Never create new source evidence or merge incompatible model or policy eras.
-        Leaf inputs are already below the per-result limit; hierarchical inputs contain
-        only validated child results and their exact hashes. Return only the declared
-        topic_reduction_result_v2 JSON object.
+        Every leaf recurrence must name exactly the sessions owning its selected episode
+        revisions, and each selected revision must support the recurrence kind and cited
+        evidence. Never create new source evidence or merge incompatible model or policy
+        eras. For hierarchical input, copy expected_reduction_commitment exactly and
+        emit only a bounded verbatim subset of child records; never invent a new parent
+        semantic record. Return only the declared topic_reduction_result_v2 JSON object.
         """
     ),
     JobKind.GLOBAL_SYNTHESIS.value: _prompt(

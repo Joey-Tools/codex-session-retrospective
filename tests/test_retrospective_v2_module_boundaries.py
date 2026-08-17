@@ -361,7 +361,7 @@ BOUNDED_MODULE_LINES = {
     "legacy_history_worktree.py": 600,
     "finalize.py": 120,
     "authority.py": 3_330,
-    "orchestrator_execution_contract.py": 180,
+    "orchestrator_execution_contract.py": 190,
     "cleanup_inventory.py": 925,
     "cleanup_sidecars.py": 300,
     "orchestrator.py": 750,
@@ -371,7 +371,7 @@ BOUNDED_MODULE_LINES = {
     "orchestrator_jobs.py": 525,
     "orchestrator_lifecycle.py": 3_325,
     "orchestrator_projection.py": 1_000,
-    "orchestrator_reduction.py": 2_480,
+    "orchestrator_reduction.py": 2_500,
     "orchestrator_scheduler.py": 1_100,
     "orchestrator_source.py": 2_150,
     "orchestrator_source_segments.py": 150,
@@ -417,8 +417,8 @@ BOUNDED_MODULE_LINES = {
     "run_state_holdouts.py": 240,
     "run_state_lineage.py": 275,
     "reporting.py": 4_550,
-    "result_validation.py": 3_550,
-    "agent_result_contracts.py": 450,
+    "result_validation.py": 3_900,
+    "agent_result_contracts.py": 525,
     "transport.py": 250,
     "transport_auth.py": 200,
     "transport_capture.py": 1_000,
@@ -1099,7 +1099,7 @@ spec.loader.exec_module(module)
                 len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
                 for name in ORCHESTRATOR_RESULT_CONTRACT_MODULES
             ),
-            450,
+            525,
         )
         self.assertLessEqual(
             sum(
@@ -1217,8 +1217,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_017, branch_total)
-        self.assertLessEqual(branch_total, 9_020)
+        self.assertEqual(9_062, branch_total)
+        self.assertLessEqual(branch_total, 9_070)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

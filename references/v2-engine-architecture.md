@@ -267,10 +267,13 @@ module cannot create a false budget pass. The facade remains 241/250 lines and
 `remote-host-context` CLI relay; Retrospective still contains no SSH host table
 or transport implementation.
 
-The orchestrator foundation is 3,524/3,550 lines. The seven agent support
-modules are 1,089/1,100 lines; the complete result-schema owner is 450/450,
-implementation authority is 335/350, and `orchestrator_jobs.py` is 521/525.
-The global branch proxy is exactly 9,017/9,020 nodes. These gates keep complete
+The orchestrator foundation remains below its aggregate limit. The seven agent
+support modules remain below 1,100 lines; the complete result-schema owner is
+506/525, implementation authority remains below 350, and
+`orchestrator_jobs.py` remains below 525. The result validator is 3,865/3,900
+and hierarchical reduction is 2,489/2,500 after adding compact recursive
+commitments and revision-level recurrence proof. The global branch proxy is
+exactly 9,062/9,070 nodes. These gates keep complete
 agent schemas, claim-size projection, source-byte provenance, semantic topic
 validation, and delegated remote transport in explicit owners instead of
 expanding the coordinator or reviving a second remote probe.

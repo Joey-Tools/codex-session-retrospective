@@ -194,6 +194,8 @@ def schema_example(schema: dict[str, object], *, ordinal: int = 0) -> object:
             return hashlib.sha256(f"schema-example:{ordinal}".encode()).hexdigest()
         if isinstance(pattern, str) and "_ref_v2" in pattern:
             return typed_ref(RefType.EVIDENCE, f"schema-example:{ordinal}")
+        if isinstance(pattern, str) and re.fullmatch(r"\^\[[A-Z]+\]\*\$", pattern):
+            return ""
         return "x" * max(1, int(schema.get("minLength", 1)))
     raise AssertionError(f"unsupported schema node: {schema}")
 
@@ -275,6 +277,7 @@ def adjudication_item_decisions(
         candidate_hash = result_validation.canonical_result_hash(candidate)
         for field in fields:
             retained = {canonical(item) for item in adjudication_result[field]}
+            codes: list[str] = []
             for item in candidate[field]:
                 item_value = canonical(item)
                 duplicate = (
@@ -286,32 +289,17 @@ def adjudication_item_decisions(
                     > 1
                 )
                 is_retained = item_value in retained
-                rows.append(
-                    {
-                        "attempt_ref": candidate["attempt_ref"],
-                        "candidate_result_hash": candidate_hash,
-                        "disposition": (
-                            "merged"
-                            if is_retained and duplicate
-                            else "selected"
-                            if is_retained
-                            else "rejected"
-                        ),
-                        "field": field,
-                        "item_hash": hashlib.sha256(
-                            item_value.encode("utf-8")
-                        ).hexdigest(),
-                        "reason": (
-                            "duplicate_supported"
-                            if is_retained and duplicate
-                            else "retained_supported"
-                            if is_retained
-                            else "lower_confidence"
-                        ),
-                        "reviewer_ref": candidate["reviewer_ref"],
-                        "reviewer_slot": candidate["reviewer_slot"],
-                    }
+                codes.append(
+                    "M" if is_retained and duplicate else "S" if is_retained else "L"
                 )
+            rows.append(
+                {
+                    "candidate_result_hash": candidate_hash,
+                    "decision_codes": "".join(codes),
+                    "field": field,
+                    "reviewer_slot": candidate["reviewer_slot"],
+                }
+            )
     return rows
 
 
@@ -5337,6 +5325,79 @@ class OrchestratorTests(unittest.TestCase):
         with self.assertRaisesRegex(CheckpointIntegrityError, "exceeds"):
             inline_store.initialize(inline_state)
 
+    def test_topic_hierarchy_sidecar_stores_child_results_once_near_limit(
+        self,
+    ) -> None:
+        coordinator = self.start_daily("topic-result-sidecar-single-copy")
+        state = coordinator.store.read().state
+        topic_candidate_ref = typed_ref(
+            RefType.TOPIC_CANDIDATE, "topic-result-sidecar-single-copy"
+        )
+        child_results = [
+            {
+                "payload": chr(ord("a") + index) * 53_000,
+                "schema": result_validation.TOPIC_RESULT_SCHEMA,
+            }
+            for index in range(8)
+        ]
+        child_hashes = [
+            result_validation.canonical_result_hash(result) for result in child_results
+        ]
+        input_payload = {
+            "child_result_hashes": child_hashes,
+            "child_topic_results": child_results,
+            "schema": "topic_hierarchical_input_v2",
+            "topic_candidate_ref": topic_candidate_ref,
+        }
+        with self.agent_task_transaction(coordinator):
+            task_ref = coordinator._create_agent_task(
+                state,
+                stage=RunStage.TOPIC_REDUCTION.value,
+                kind=JobKind.TOPIC_REDUCER.value,
+                partition_ref=topic_candidate_ref,
+                input_refs=[topic_candidate_ref],
+                input_payload=input_payload,
+                allowed_refs=[topic_candidate_ref],
+                metadata={
+                    "child_result_hashes": child_hashes,
+                    "hierarchy_final": True,
+                    "hierarchy_level": 1,
+                    "hierarchy_root_ref": topic_candidate_ref,
+                    "topic_candidate_ref": topic_candidate_ref,
+                },
+            )
+
+        task = state["jobs"][task_ref]
+        immutable = agent_task_inputs.for_task(coordinator.run_dir, task)
+        self.assertNotIn(
+            "validation_child_topic_results",
+            immutable["metadata"],
+        )
+        self.assertEqual(
+            child_results,
+            immutable["input_payload"]["child_topic_results"],
+        )
+        self.assertLessEqual(
+            task["task_input_artifact"]["byte_count"],
+            agent_task_inputs.MAX_AGENT_TASK_INPUT_ARTIFACT_BYTES,
+        )
+
+        duplicated = copy.deepcopy(immutable)
+        duplicated["metadata"]["validation_child_topic_results"] = child_results
+        duplicated_digest = content_digest(duplicated)
+        with self.assertRaisesRegex(
+            InvalidTransitionError,
+            "agent task input sidecar exceeds its byte bound",
+        ):
+            agent_task_inputs.prepare(
+                coordinator.run_dir,
+                task_ref=typed_ref(
+                    RefType.RUN_INPUT, "topic-result-sidecar-duplicated"
+                ),
+                immutable=duplicated,
+                immutable_digest=duplicated_digest,
+            )
+
     def test_shard_stage_rolls_back_files_when_checkpoint_commit_fails(self) -> None:
         coordinator = self.start_daily("shard-stage-checkpoint-rollback")
         payload = b'{"timestamp":"2026-07-06T01:00:00Z","text":"work"}\n'
@@ -5626,6 +5687,16 @@ class OrchestratorTests(unittest.TestCase):
                     "schema": f"{task['job_kind']}_result_v2",
                     "task_ref": task["task_ref"],
                 }
+                if task["job_kind"] in review_kinds:
+                    task["result"]["schema"] = (
+                        result_validation.EPISODE_REVIEW_RESULT_SCHEMA
+                    )
+                    for field in result_validation.REVIEW_REDUCTION_FIELDS:
+                        task["result"][field] = []
+                elif task["job_kind"] == JobKind.TOPIC_REDUCER.value:
+                    task["result"]["schema"] = result_validation.TOPIC_RESULT_SCHEMA
+                    for field in result_validation.TOPIC_REDUCTION_FIELDS:
+                        task["result"][field] = []
                 task["result_hash"] = result_validation.canonical_result_hash(
                     task["result"]
                 )
@@ -5915,13 +5986,20 @@ class OrchestratorTests(unittest.TestCase):
                 task for task in topic_tasks if task["metadata"]["hierarchy_final"]
             ]
             self.assertEqual(1, len(final_topic))
+            final_topic_input = agent_task_inputs.for_task(
+                coordinator.run_dir, final_topic[0]
+            )
+            self.assertNotIn(
+                "validation_child_topic_results",
+                final_topic_input["metadata"],
+            )
+            self.assertIn(
+                "child_topic_results",
+                final_topic_input["input_payload"],
+            )
             self.assertEqual(
                 set(topic_input["expected_episode_revision_refs"]),
-                set(
-                    agent_task_inputs.for_task(coordinator.run_dir, final_topic[0])[
-                        "metadata"
-                    ]["underlying_episode_refs"]
-                ),
+                set(final_topic_input["metadata"]["underlying_episode_refs"]),
             )
 
             state["jobs"] = {

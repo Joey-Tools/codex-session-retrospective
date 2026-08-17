@@ -818,6 +818,51 @@ superseded_by:
   `OK`. Final skill, CI, and module-boundary contracts pass 31/31; Ruff lint,
   exact changed-file formatting, `git diff --check`, and the OpenAI skill
   validator also pass. Signing, admission, and review gates remain.
+- Signed and pushed head `dc89489b` closed the executable agent-result
+  contracts. Exact-secret admission and hosted CI were clean. A fresh-context
+  Codex processor in a prior-trusted, independently materialized workspace then
+  returned four actionable findings, so all head-bound readiness evidence became
+  stale: legal child unions could exceed episode/topic parent result bounds;
+  verbose per-item adjudication rows could make a legal result unrepresentable;
+  recurrence claims were not bound to selected revision-level signals; and topic
+  hierarchy task sidecars stored complete child results in both payload and
+  metadata. Postvalidation was clean and the reviewer task root was removed.
+- Hierarchical episode and topic parents now copy a compact recursive commitment
+  containing immediate child hashes, leaf-result count, per-field item counts,
+  and a canonical source-tree hash. Visible parent records are bounded verbatim
+  multisets of child data; multiplicity cannot exceed source multiplicity. Topic
+  outputs retain non-empty revision/episode/session lineage, exact risk union,
+  recursive decisions, and confidence floors while the commitment makes every
+  compacted source item explicit.
+- Adjudication now uses exactly twelve candidate/field rows. Each row binds the
+  candidate hash and reviewer slot and carries one closed decision code per item
+  in source order. The compact shape remains representable for two candidates at
+  every declared field maximum. Leaf recurrence validation now proves that every
+  selected revision carries the named signal type and kind, intersects cited
+  evidence, and maps to exactly the listed sessions. Hierarchical recurrences
+  can only reuse a validated child record.
+- Topic hierarchy task inputs now store child results only in
+  `input_payload.child_topic_results`; metadata retains hashes and scheduling
+  identities. A near-limit regression proves that the single representation
+  fits while the retired duplicate representation exceeds the authenticated
+  640 KiB sidecar bound. The result/episode, schema-audit, hierarchy-cap,
+  sidecar, and module-boundary focused set passes 113/113. The complete
+  orchestration module ran 121 tests in 555.879 seconds; 120 passed and one
+  generic schema-example fixture rejected the new closed decision-code pattern.
+  Its exact repaired test and the complete affected focused set pass. Final
+  repository partitions, signed replacement head, admission, hosted CI, and the
+  two required Codex processors remain required.
+- The final dirty-tree inventory contains 1,682 unique Python 3.13 tests,
+  partitioned exactly once as 401, 451, 449, and 381 tests. An initial
+  four-process attempt lost every supervisor with no terminal summary when its
+  tool sessions were closed; shard 3 had also reported one contended signing
+  canary failure. That entire attempt is non-counting. A replacement durable
+  four-process run wrote owner-only atomic status records and completed every
+  partition with exit zero: shard 0 passed 401/401 in 2,060.454 seconds, shard 1
+  passed 451/451 in 1,605.167 seconds, shard 2 passed 449/449 in 1,772.683
+  seconds, and shard 3 passed 381/381 in 1,672.423 seconds. Every retained log
+  contains an explicit `OK` terminal summary, including the signing canary that
+  failed only in the discarded attempt.
 
 ## Follow-up Work
 

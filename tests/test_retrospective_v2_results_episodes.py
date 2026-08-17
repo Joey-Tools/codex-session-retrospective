@@ -36,6 +36,7 @@ from retrospective_v2.result_validation import (  # noqa: E402
     ResultValidationError,
     build_synthesis_signal_exemplars,
     build_synthesis_signal_commitments,
+    build_hierarchical_reduction_commitment,
     build_hierarchical_topic_result,
     build_topic_result,
     canonical_result_hash,
@@ -188,6 +189,7 @@ def adjudication_item_decisions(
         candidate_hash = canonical_result_hash(candidate)
         for field in fields:
             retained = {canonical(item) for item in adjudication[field]}
+            codes = []
             for item in candidate[field]:
                 item_value = canonical(item)
                 duplicate = (
@@ -199,32 +201,17 @@ def adjudication_item_decisions(
                     > 1
                 )
                 is_retained = item_value in retained
-                rows.append(
-                    {
-                        "attempt_ref": candidate["attempt_ref"],
-                        "candidate_result_hash": candidate_hash,
-                        "disposition": (
-                            "merged"
-                            if is_retained and duplicate
-                            else "selected"
-                            if is_retained
-                            else "rejected"
-                        ),
-                        "field": field,
-                        "item_hash": hashlib.sha256(
-                            item_value.encode("utf-8")
-                        ).hexdigest(),
-                        "reason": (
-                            "duplicate_supported"
-                            if is_retained and duplicate
-                            else "retained_supported"
-                            if is_retained
-                            else "lower_confidence"
-                        ),
-                        "reviewer_ref": candidate["reviewer_ref"],
-                        "reviewer_slot": candidate["reviewer_slot"],
-                    }
+                codes.append(
+                    "M" if is_retained and duplicate else "S" if is_retained else "L"
                 )
+            rows.append(
+                {
+                    "candidate_result_hash": candidate_hash,
+                    "decision_codes": "".join(codes),
+                    "field": field,
+                    "reviewer_slot": candidate["reviewer_slot"],
+                }
+            )
     return rows
 
 
@@ -1492,7 +1479,9 @@ class ResultValidationTests(unittest.TestCase):
                 )
                 self.assertEqual(scan_for_leaks(result), ())
 
-    def test_hierarchical_episode_review_rejects_omitted_child_risk(self) -> None:
+    def test_hierarchical_episode_review_rejects_wrong_child_tree_commitment(
+        self,
+    ) -> None:
         child = episode_review(
             findings=[
                 {
@@ -1505,10 +1494,14 @@ class ResultValidationTests(unittest.TestCase):
         )
         child["evidence_refs"] = [EVIDENCE_A, EVIDENCE_B]
         parent = episode_review()
+        parent["reduction_commitment"] = build_hierarchical_reduction_commitment(
+            [child], result_schema=EPISODE_REVIEW_RESULT_SCHEMA
+        )
+        parent["reduction_commitment"]["source_item_counts"]["findings"] += 1
 
         with self.assertRaisesRegex(
             ResultValidationError,
-            "dropped a high-severity child decision",
+            "complete recursive child review tree",
         ):
             validate_hierarchical_episode_review_result(
                 parent,
@@ -1541,6 +1534,9 @@ class ResultValidationTests(unittest.TestCase):
         parent["evidence_refs"] = [EVIDENCE_A, EVIDENCE_B]
         parent["second_review_recommended"] = True
         parent["conflicting_signals"] = True
+        parent["reduction_commitment"] = build_hierarchical_reduction_commitment(
+            [child], result_schema=EPISODE_REVIEW_RESULT_SCHEMA
+        )
 
         result = validate_hierarchical_episode_review_result(
             parent,
@@ -1554,6 +1550,89 @@ class ResultValidationTests(unittest.TestCase):
         self.assertEqual([finding], result["findings"])
         self.assertEqual([rewrite], result["high_impact_turns"])
         self.assertEqual(["safety"], result["risk_flags"])
+
+    def test_hierarchical_episode_review_compacts_two_maximum_child_rewrite_sets(
+        self,
+    ) -> None:
+        turn_refs = [ref("turn", f"hierarchy-{index}") for index in range(40)]
+        first = episode_review(
+            high_impact_turns=[high_impact(turn_ref) for turn_ref in turn_refs[:20]]
+        )
+        second = episode_review(
+            high_impact_turns=[high_impact(turn_ref) for turn_ref in turn_refs[20:]]
+        )
+        parent = episode_review(
+            high_impact_turns=copy.deepcopy(first["high_impact_turns"])
+        )
+        parent["reduction_commitment"] = build_hierarchical_reduction_commitment(
+            [first, second], result_schema=EPISODE_REVIEW_RESULT_SCHEMA
+        )
+
+        validated = validate_hierarchical_episode_review_result(
+            parent,
+            [first, second],
+            {*ALL_REFS, *turn_refs},
+            allowed_turn_refs=turn_refs,
+            expected_child_result_hashes=[
+                canonical_result_hash(first),
+                canonical_result_hash(second),
+            ],
+            expected_reviewer_slot="primary",
+        )
+
+        self.assertEqual(20, len(validated["high_impact_turns"]))
+        self.assertEqual(
+            40,
+            validated["reduction_commitment"]["source_item_counts"][
+                "high_impact_turns"
+            ],
+        )
+
+    def test_adjudication_compact_codes_fit_two_maximum_evidence_sets(self) -> None:
+        evidence_refs = [
+            ref("evidence", f"adjudication-{index}") for index in range(256)
+        ]
+        primary = episode_review()
+        primary["evidence_refs"] = evidence_refs[:128]
+        secondary = episode_review(reviewer_slot="secondary")
+        secondary["evidence_refs"] = evidence_refs[128:]
+        adjudication = {
+            "schema": ADJUDICATION_RESULT_SCHEMA,
+            "episode_ref": EPISODE,
+            "episode_revision_ref": REVISION_A,
+            "resolution": "primary_supported",
+            **{
+                field: copy.deepcopy(primary[field])
+                for field in (
+                    "events",
+                    "findings",
+                    "strengths",
+                    "risk_flags",
+                    "high_impact_turns",
+                    "evidence_refs",
+                    "confidence",
+                )
+            },
+            "candidate_result_hashes": [
+                canonical_result_hash(primary),
+                canonical_result_hash(secondary),
+            ],
+        }
+        adjudication["candidate_item_decisions"] = adjudication_item_decisions(
+            [primary, secondary], adjudication
+        )
+
+        validated = validate_adjudication_result(
+            adjudication,
+            {*ALL_REFS, *evidence_refs},
+            candidate_results=[primary, secondary],
+        )
+
+        self.assertEqual(12, len(validated["candidate_item_decisions"]))
+        self.assertLess(
+            len(json.dumps(validated, separators=(",", ":")).encode("utf-8")),
+            result_validation_module.MAX_RESULT_BYTES,
+        )
 
     def test_adjudication_cannot_invent_structured_findings(self) -> None:
         primary = episode_review(findings=[signal("verification_gap")])
@@ -1644,7 +1723,7 @@ class ResultValidationTests(unittest.TestCase):
                 row["field"]
                 for row in validated["candidate_item_decisions"]
                 if row["candidate_result_hash"] == canonical_result_hash(secondary)
-                and row["disposition"] == "rejected"
+                and "L" in row["decision_codes"]
             },
         )
 
@@ -1659,7 +1738,9 @@ class ResultValidationTests(unittest.TestCase):
                         and row["field"] == field
                     )
                 ]
-                with self.assertRaisesRegex(ResultValidationError, "account for every"):
+                with self.assertRaisesRegex(
+                    ResultValidationError, "one ordered decision-code row"
+                ):
                     validate_adjudication_result(
                         omitted,
                         ALL_REFS,
@@ -1668,9 +1749,7 @@ class ResultValidationTests(unittest.TestCase):
                     )
 
         forged_provenance = copy.deepcopy(adjudication)
-        forged_provenance["candidate_item_decisions"][-1]["reviewer_ref"] = (
-            REVIEWER_PRIMARY
-        )
+        forged_provenance["candidate_item_decisions"][-1]["reviewer_slot"] = "primary"
         with self.assertRaisesRegex(ResultValidationError, "provenance"):
             validate_adjudication_result(
                 forged_provenance,
@@ -2035,6 +2114,39 @@ class ResultValidationTests(unittest.TestCase):
                 allowed_turn_refs={TURN_A},
             )
 
+        wrong_sessions = copy.deepcopy(result)
+        wrong_sessions["recurrences"][0]["session_refs"] = [SESSION_A]
+        with self.assertRaisesRegex(ResultValidationError, "sessions owning"):
+            validate_topic_result(
+                wrong_sessions,
+                topic_input,
+                ALL_REFS,
+                expected_topic_ref=TOPIC,
+                allowed_turn_refs={TURN_A},
+            )
+
+        unsupported_signal = copy.deepcopy(result)
+        unsupported_signal["recurrences"][0]["kind"] = "task_completion"
+        with self.assertRaisesRegex(ResultValidationError, "support the recurrence"):
+            validate_topic_result(
+                unsupported_signal,
+                topic_input,
+                ALL_REFS,
+                expected_topic_ref=TOPIC,
+                allowed_turn_refs={TURN_A},
+            )
+
+        unsupported_evidence = copy.deepcopy(result)
+        unsupported_evidence["recurrences"][0]["evidence_refs"] = [EVIDENCE_B]
+        with self.assertRaisesRegex(ResultValidationError, "support the recurrence"):
+            validate_topic_result(
+                unsupported_evidence,
+                topic_input,
+                ALL_REFS,
+                expected_topic_ref=TOPIC,
+                allowed_turn_refs={TURN_A},
+            )
+
         bad_lineage = copy.deepcopy(result)
         bad_lineage["skill_candidates"][0]["episode_lineage"] = [
             {"episode_ref": EPISODE_B, "session_ref": SESSION_A}
@@ -2059,7 +2171,7 @@ class ResultValidationTests(unittest.TestCase):
                 allowed_turn_refs={TURN_A},
             )
 
-    def test_hierarchical_topic_reducer_preserves_child_semantics(self) -> None:
+    def test_hierarchical_topic_reducer_commits_omitted_child_semantics(self) -> None:
         topic_input = validate_topic_input(
             {
                 "adjudication_candidate_results": {},
@@ -2111,15 +2223,148 @@ class ResultValidationTests(unittest.TestCase):
 
         dropped = copy.deepcopy(parent)
         dropped["open_work"] = []
-        with self.assertRaisesRegex(ResultValidationError, "dropped a child"):
+        compacted = validate_hierarchical_topic_result(
+            dropped,
+            [child],
+            ALL_REFS,
+            expected_topic_candidate_ref=TOPIC_CANDIDATE,
+            expected_topic_ref=TOPIC,
+            expected_workstream_ref=WORKSTREAM_A,
+        )
+        self.assertEqual(
+            1,
+            compacted["reduction_commitment"]["source_item_counts"]["open_work"],
+        )
+
+        empty_lineage = copy.deepcopy(dropped)
+        for field in (
+            "episode_lineage",
+            "episode_revision_lineage",
+            "episode_refs",
+            "episode_revision_refs",
+            "review_result_hashes",
+            "session_refs",
+        ):
+            empty_lineage[field] = []
+        with self.assertRaisesRegex(ResultValidationError, "at least"):
             validate_hierarchical_topic_result(
-                dropped,
+                empty_lineage,
                 [child],
                 ALL_REFS,
                 expected_topic_candidate_ref=TOPIC_CANDIDATE,
                 expected_topic_ref=TOPIC,
                 expected_workstream_ref=WORKSTREAM_A,
             )
+
+        invented = copy.deepcopy(dropped)
+        invented["open_work"] = [
+            {
+                "confidence": "high",
+                "evidence_refs": [EVIDENCE_A],
+                "kind": "update_guidance",
+            }
+        ]
+        with self.assertRaisesRegex(ResultValidationError, "invented or altered"):
+            validate_hierarchical_topic_result(
+                invented,
+                [child],
+                ALL_REFS,
+                expected_topic_candidate_ref=TOPIC_CANDIDATE,
+                expected_topic_ref=TOPIC,
+                expected_workstream_ref=WORKSTREAM_A,
+            )
+
+        duplicated_signal = copy.deepcopy(dropped)
+        duplicated_signal["events"].append(
+            copy.deepcopy(duplicated_signal["events"][0])
+        )
+        with self.assertRaisesRegex(ResultValidationError, "invented or altered"):
+            validate_hierarchical_topic_result(
+                duplicated_signal,
+                [child],
+                ALL_REFS,
+                expected_topic_candidate_ref=TOPIC_CANDIDATE,
+                expected_topic_ref=TOPIC,
+                expected_workstream_ref=WORKSTREAM_A,
+            )
+
+    def test_hierarchical_topic_reducer_compacts_two_maximum_semantic_sets(
+        self,
+    ) -> None:
+        topic_input = validate_topic_input(
+            {
+                "adjudication_candidate_results": {},
+                "adjudication_required_episode_revision_refs": [],
+                "episode_contexts": [
+                    {
+                        "episode_ref": EPISODE,
+                        "episode_revision_ref": REVISION_A,
+                        "session_ref": SESSION_A,
+                    }
+                ],
+                "episode_reviews": [episode_review()],
+                "expected_episode_revision_refs": [REVISION_A],
+                "schema": TOPIC_INPUT_SCHEMA,
+                "topic_candidate_ref": TOPIC_CANDIDATE,
+                "workstream_ref": WORKSTREAM_A,
+            },
+            ALL_REFS,
+        )
+        evidence_refs = [
+            ref("evidence", f"topic-open-work-{index}") for index in range(128)
+        ]
+        allowed_refs = ALL_REFS | set(evidence_refs)
+        children = []
+        for child_index in range(2):
+            child = build_topic_result(topic_input, topic_ref=TOPIC)
+            child["open_work"] = [
+                {
+                    "confidence": "high",
+                    "evidence_refs": [evidence_refs[index]],
+                    "kind": "repair_gap",
+                }
+                for index in range(child_index * 64, (child_index + 1) * 64)
+            ]
+            children.append(
+                validate_topic_result(
+                    child,
+                    topic_input,
+                    allowed_refs,
+                    expected_topic_ref=TOPIC,
+                )
+            )
+
+        exhaustive = build_hierarchical_topic_result(
+            children,
+            topic_candidate_ref=TOPIC_CANDIDATE,
+            topic_ref=TOPIC,
+            workstream_ref=WORKSTREAM_A,
+        )
+        with self.assertRaisesRegex(ResultValidationError, "at most 64"):
+            validate_hierarchical_topic_result(
+                exhaustive,
+                children,
+                allowed_refs,
+                expected_topic_candidate_ref=TOPIC_CANDIDATE,
+                expected_topic_ref=TOPIC,
+                expected_workstream_ref=WORKSTREAM_A,
+            )
+
+        compacted = copy.deepcopy(exhaustive)
+        compacted["open_work"] = copy.deepcopy(children[0]["open_work"])
+        validated = validate_hierarchical_topic_result(
+            compacted,
+            children,
+            allowed_refs,
+            expected_topic_candidate_ref=TOPIC_CANDIDATE,
+            expected_topic_ref=TOPIC,
+            expected_workstream_ref=WORKSTREAM_A,
+        )
+        self.assertEqual(64, len(validated["open_work"]))
+        self.assertEqual(
+            128,
+            validated["reduction_commitment"]["source_item_counts"]["open_work"],
+        )
 
     def test_synthesis_requires_all_ten_closed_questions(self) -> None:
         value = synthesis_result()

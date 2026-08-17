@@ -109,6 +109,44 @@ def _episode_lineage(limits: Mapping[str, Any], *, minimum: int = 1) -> dict[str
     )
 
 
+def _episode_revision_lineage(
+    limits: Mapping[str, Any], *, minimum: int = 1
+) -> dict[str, Any]:
+    return _array(
+        _object(
+            {
+                "episode_ref": _ref("episode"),
+                "episode_revision_ref": _ref("episode_revision"),
+                "session_ref": _ref("session"),
+            }
+        ),
+        maximum=limits["max_refs_per_field"],
+        minimum=minimum,
+        unique=True,
+    )
+
+
+def _reduction_commitment(fields: Any, limits: Mapping[str, Any]) -> dict[str, Any]:
+    count = {"maximum": 1_000_000, "minimum": 0, "type": "integer"}
+    return _object(
+        {
+            "child_result_hashes": _array(
+                {"pattern": _SHA_PATTERN, "type": "string"},
+                maximum=limits["max_refs_per_field"],
+                minimum=1,
+            ),
+            "schema": {"const": "hierarchical_reduction_commitment_v2"},
+            "source_item_counts": _object({field: count for field in fields}),
+            "source_result_count": {
+                "maximum": 1_000_000,
+                "minimum": 1,
+                "type": "integer",
+            },
+            "source_tree_hash": {"pattern": _SHA_PATTERN, "type": "string"},
+        }
+    )
+
+
 def _review_root(
     vocabulary: Mapping[str, Any], *, adjudication: bool
 ) -> dict[str, Any]:
@@ -146,19 +184,25 @@ def _review_root(
     if adjudication:
         decision = _object(
             {
-                "attempt_ref": _ref("attempt"),
                 "candidate_result_hash": {"pattern": _SHA_PATTERN, "type": "string"},
-                "disposition": _enum(vocabulary["adjudication_item_dispositions"]),
+                "decision_codes": {
+                    "maxLength": limits["max_refs_per_field"],
+                    "pattern": "^["
+                    + "".join(sorted(vocabulary["adjudication_decision_codes"]))
+                    + "]*$",
+                    "type": "string",
+                },
                 "field": _enum(vocabulary["adjudication_item_fields"]),
-                "item_hash": {"pattern": _SHA_PATTERN, "type": "string"},
-                "reason": _enum(vocabulary["adjudication_item_reasons"]),
-                "reviewer_ref": _ref("reviewer"),
                 "reviewer_slot": _enum({"primary", "secondary"}),
             }
         )
         required.update(
             {
-                "candidate_item_decisions": _array(decision, maximum=1024),
+                "candidate_item_decisions": _array(
+                    decision,
+                    maximum=len(vocabulary["adjudication_item_fields"]) * 2,
+                    minimum=len(vocabulary["adjudication_item_fields"]) * 2,
+                ),
                 "candidate_result_hashes": _array(
                     {"pattern": _SHA_PATTERN, "type": "string"},
                     maximum=2,
@@ -176,6 +220,9 @@ def _review_root(
             }
         )
     else:
+        optional["reduction_commitment"] = _reduction_commitment(
+            vocabulary["review_reduction_fields"], limits
+        )
         required.update(
             {
                 "attempt_ref": _ref("attempt"),
@@ -294,6 +341,7 @@ def _topic_root(vocabulary: Mapping[str, Any]) -> dict[str, Any]:
         "confidence": _enum(vocabulary["confidence_levels"]),
         "cross_session": {"type": "boolean"},
         "episode_lineage": _episode_lineage(limits),
+        "episode_revision_lineage": _episode_revision_lineage(limits),
         "episode_refs": _refs("episode", limits, minimum=1),
         "episode_revision_refs": _refs("episode_revision", limits, minimum=1),
         "events": _signal_array(vocabulary["event_kinds"], limits),
@@ -316,7 +364,15 @@ def _topic_root(vocabulary: Mapping[str, Any]) -> dict[str, Any]:
         "workstream_ref": _ref("workstream"),
         **_topic_semantic_properties(vocabulary),
     }
-    return _object(required, {"topic_candidate_ref": _ref("topic_candidate")})
+    return _object(
+        required,
+        {
+            "reduction_commitment": _reduction_commitment(
+                vocabulary["topic_reduction_fields"], limits
+            ),
+            "topic_candidate_ref": _ref("topic_candidate"),
+        },
+    )
 
 
 def _synthesis_root(vocabulary: Mapping[str, Any]) -> dict[str, Any]:

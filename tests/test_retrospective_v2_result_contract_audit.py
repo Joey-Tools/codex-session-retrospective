@@ -131,6 +131,7 @@ def adjudication_item_decisions(
         candidate_hash = canonical_result_hash(candidate)
         for field in fields:
             retained = {canonical(item) for item in adjudication_result[field]}
+            codes = []
             for item in candidate[field]:
                 item_value = canonical(item)
                 duplicate = (
@@ -142,32 +143,17 @@ def adjudication_item_decisions(
                     > 1
                 )
                 is_retained = item_value in retained
-                rows.append(
-                    {
-                        "attempt_ref": candidate["attempt_ref"],
-                        "candidate_result_hash": candidate_hash,
-                        "disposition": (
-                            "merged"
-                            if is_retained and duplicate
-                            else "selected"
-                            if is_retained
-                            else "rejected"
-                        ),
-                        "field": field,
-                        "item_hash": hashlib.sha256(
-                            item_value.encode("utf-8")
-                        ).hexdigest(),
-                        "reason": (
-                            "duplicate_supported"
-                            if is_retained and duplicate
-                            else "retained_supported"
-                            if is_retained
-                            else "lower_confidence"
-                        ),
-                        "reviewer_ref": candidate["reviewer_ref"],
-                        "reviewer_slot": candidate["reviewer_slot"],
-                    }
+                codes.append(
+                    "M" if is_retained and duplicate else "S" if is_retained else "L"
                 )
+            rows.append(
+                {
+                    "candidate_result_hash": candidate_hash,
+                    "decision_codes": "".join(codes),
+                    "field": field,
+                    "reviewer_slot": candidate["reviewer_slot"],
+                }
+            )
     return rows
 
 
