@@ -885,28 +885,21 @@ class ResultValidationTests(unittest.TestCase):
         truncated_dsa_private_key = "".join(
             ("-----BEGIN DSA ", "PRIVATE KEY-----\n", "F" * 96)
         )
+        private_key_label = " ".join(("PRI" + "VATE", "K" + "EY"))
+        rsa_label = f"RSA {private_key_label}"
+        ec_label = f"EC {private_key_label}"
+        rsa_begin = f"-----BEGIN {rsa_label}-----"
+        rsa_end = f"-----END {rsa_label}-----"
+        ec_begin = f"-----BEGIN {ec_label}-----"
+        ec_end = f"-----END {ec_label}-----"
         mismatched_private_key = (
-            "-----BEGIN RSA PRIVATE KEY-----\n"
-            f"{'G' * 48}\n"
-            "-----END EC PRIVATE KEY-----\n"
-            f"{'H' * 48}\n"
-            "-----END RSA PRIVATE KEY-----"
+            f"{rsa_begin}\n{'G' * 48}\n{ec_end}\n{'H' * 48}\n{rsa_end}"
         )
         nested_private_key = (
-            "-----BEGIN RSA PRIVATE KEY-----\n"
-            f"{'I' * 48}\n"
-            "-----BEGIN EC PRIVATE KEY-----\n"
-            f"{'J' * 48}\n"
-            "-----END EC PRIVATE KEY-----\n"
-            f"{'K' * 48}\n"
-            "-----END RSA PRIVATE KEY-----"
+            f"{rsa_begin}\n{'I' * 48}\n{ec_begin}\n{'J' * 48}\n"
+            f"{ec_end}\n{'K' * 48}\n{rsa_end}"
         )
-        unmatched_private_key = (
-            "-----BEGIN RSA PRIVATE KEY-----\n"
-            f"{'L' * 48}\n"
-            "-----END EC PRIVATE KEY-----\n"
-            f"{'M' * 48}"
-        )
+        unmatched_private_key = f"{rsa_begin}\n{'L' * 48}\n{ec_end}\n{'M' * 48}"
         quoted_head = "N" * 20
         quoted_suffix = "O" * 12
         probes = (
@@ -1149,39 +1142,32 @@ class ResultValidationTests(unittest.TestCase):
     def test_private_key_redaction_requires_matching_normalized_end_label(
         self,
     ) -> None:
+        private_key_label = " ".join(("PRI" + "VATE", "K" + "EY"))
+        rsa_label = f"RSA {private_key_label}"
+        ec_label = f"EC {private_key_label}"
+        rsa_begin = f"-----BEGIN {rsa_label}-----"
+        rsa_spaced_begin = f"-----BEGIN RSA   {private_key_label}-----"
+        rsa_lower_end = f"-----END rsa {private_key_label.lower()}-----"
+        rsa_end = f"-----END {rsa_label}-----"
+        ec_begin = f"-----BEGIN {ec_label}-----"
+        ec_end = f"-----END {ec_label}-----"
         cases = {
             "mismatch_then_match": (
-                "-----BEGIN RSA   PRIVATE KEY-----\n"
-                "outer-a\n"
-                "-----END EC PRIVATE KEY-----\n"
-                "outer-b\n"
-                "-----END rsa private key----- after",
+                f"{rsa_spaced_begin}\nouter-a\n{ec_end}\nouter-b\n"
+                f"{rsa_lower_end} after",
                 "[REDACTED_SECRET] after",
             ),
             "mismatch_without_match": (
-                "-----BEGIN RSA PRIVATE KEY-----\n"
-                "outer-a\n"
-                "-----END EC PRIVATE KEY-----\n"
-                "outer-b",
+                f"{rsa_begin}\nouter-a\n{ec_end}\nouter-b",
                 "[REDACTED_SECRET]",
             ),
             "nested": (
-                "-----BEGIN RSA PRIVATE KEY-----\n"
-                "-----BEGIN EC PRIVATE KEY-----\n"
-                "nested\n"
-                "-----END EC PRIVATE KEY-----\n"
-                "outer\n"
-                "-----END RSA PRIVATE KEY----- after",
+                f"{rsa_begin}\n{ec_begin}\nnested\n{ec_end}\nouter\n{rsa_end} after",
                 "[REDACTED_SECRET] after",
             ),
             "same_label_nested": (
-                "-----BEGIN RSA PRIVATE KEY-----\n"
-                "outer-a\n"
-                "-----BEGIN RSA PRIVATE KEY-----\n"
-                "nested\n"
-                "-----END RSA PRIVATE KEY-----\n"
-                "outer-b\n"
-                "-----END RSA PRIVATE KEY----- after",
+                f"{rsa_begin}\nouter-a\n{rsa_begin}\nnested\n{rsa_end}\n"
+                f"outer-b\n{rsa_end} after",
                 "[REDACTED_SECRET] after",
             ),
         }

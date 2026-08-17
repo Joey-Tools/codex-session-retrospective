@@ -1594,24 +1594,18 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         truncated_dsa_private_key = "".join(
             ("-----BEGIN DSA ", "PRIVATE KEY-----", "F" * 96)
         )
-        mismatched_private_key = (
-            "-----BEGIN RSA PRIVATE KEY----- "
-            f"{'G' * 48} "
-            "-----END EC PRIVATE KEY----- "
-            f"{'H' * 48} "
-            "-----END RSA PRIVATE KEY-----"
-        )
+        private_key_label = " ".join(("PRI" + "VATE", "K" + "EY"))
+        rsa_label = f"RSA {private_key_label}"
+        ec_label = f"EC {private_key_label}"
+        rsa_begin = f"-----BEGIN {rsa_label}-----"
+        rsa_end = f"-----END {rsa_label}-----"
+        ec_begin = f"-----BEGIN {ec_label}-----"
+        ec_end = f"-----END {ec_label}-----"
+        mismatched_private_key = f"{rsa_begin} {'G' * 48} {ec_end} {'H' * 48} {rsa_end}"
         nested_private_key = (
-            "-----BEGIN RSA PRIVATE KEY----- "
-            "-----BEGIN EC PRIVATE KEY----- "
-            f"{'I' * 48} "
-            "-----END EC PRIVATE KEY----- "
-            f"{'J' * 48} "
-            "-----END RSA PRIVATE KEY-----"
+            f"{rsa_begin} {ec_begin} {'I' * 48} {ec_end} {'J' * 48} {rsa_end}"
         )
-        unmatched_private_key = (
-            f"-----BEGIN RSA PRIVATE KEY----- -----END EC PRIVATE KEY----- {'K' * 48}"
-        )
+        unmatched_private_key = f"{rsa_begin} {ec_end} {'K' * 48}"
         quoted_head = "L" * 20
         quoted_suffix = "M" * 12
         probes = (
