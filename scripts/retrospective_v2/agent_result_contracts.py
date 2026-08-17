@@ -464,11 +464,7 @@ def _synthesis_root(vocabulary: Mapping[str, Any]) -> dict[str, Any]:
             durable(vocabulary["skill_candidate_kinds"]), maximum=64
         ),
         "strengths": _signal_array(vocabulary["strength_kinds"], limits),
-        "topic_result_hashes": _array(
-            {"pattern": _SHA_PATTERN, "type": "string"},
-            maximum=128,
-            unique=True,
-        ),
+        "topic_result_commitment": commitment,
     }
     return _object(required)
 

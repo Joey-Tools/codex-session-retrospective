@@ -36,6 +36,7 @@ from retrospective_v2.result_validation import (  # noqa: E402
     ResultValidationError,
     build_synthesis_signal_exemplars,
     build_synthesis_signal_commitments,
+    build_synthesis_topic_result_commitment,
     build_hierarchical_reduction_commitment,
     build_hierarchical_topic_result,
     build_topic_result,
@@ -339,7 +340,7 @@ def synthesis_result() -> dict:
         },
         "evidence_refs": [],
         "era_comparison": {"status": "compatible", "change": "unchanged"},
-        "topic_result_hashes": [],
+        "topic_result_commitment": build_synthesis_topic_result_commitment(()),
     }
 
 
@@ -1963,7 +1964,9 @@ class ResultValidationTests(unittest.TestCase):
             )
 
         synthesis = synthesis_result()
-        synthesis["topic_result_hashes"] = [canonical_result_hash(validated)]
+        synthesis["topic_result_commitment"] = build_synthesis_topic_result_commitment(
+            [validated]
+        )
         synthesis["signal_commitments"] = build_synthesis_signal_commitments(
             [validated]
         )
@@ -2008,7 +2011,9 @@ class ResultValidationTests(unittest.TestCase):
                 independent_review_results=[secondary],
                 topic_results=[validated],
             )
-        synthesis["topic_result_hashes"] = []
+        synthesis["topic_result_commitment"] = build_synthesis_topic_result_commitment(
+            ()
+        )
         with self.assertRaisesRegex(ResultValidationError, "every validated topic"):
             validate_synthesis_result(
                 synthesis,
@@ -2386,7 +2391,9 @@ class ResultValidationTests(unittest.TestCase):
             "strengths": [],
         }
         value = synthesis_result()
-        value["topic_result_hashes"] = [canonical_result_hash(topic_result)]
+        value["topic_result_commitment"] = build_synthesis_topic_result_commitment(
+            [topic_result]
+        )
         value["signal_commitments"] = build_synthesis_signal_commitments([topic_result])
 
         with self.assertRaises(ResultValidationError):
@@ -2400,10 +2407,10 @@ class ResultValidationTests(unittest.TestCase):
 
         self.assertEqual(value, validated)
 
-    def test_synthesis_commits_more_than_64_distinct_topic_signals(self) -> None:
+    def test_synthesis_commits_129_distinct_topic_roots_and_signals(self) -> None:
         topic_results = []
         allowed_refs = set(ALL_REFS)
-        for index in range(70):
+        for index in range(129):
             episode_ref = ref("episode", f"many-signals-episode-{index}")
             evidence_ref = ref("evidence", f"many-signals-evidence-{index}")
             session_ref = ref("session", f"many-signals-session-{index}")
@@ -2430,8 +2437,8 @@ class ResultValidationTests(unittest.TestCase):
                 }
             )
         synthesis = synthesis_result()
-        synthesis["topic_result_hashes"] = sorted(
-            canonical_result_hash(topic) for topic in topic_results
+        synthesis["topic_result_commitment"] = build_synthesis_topic_result_commitment(
+            topic_results
         )
         synthesis["signal_commitments"] = build_synthesis_signal_commitments(
             topic_results
@@ -2446,9 +2453,31 @@ class ResultValidationTests(unittest.TestCase):
 
         self.assertEqual(64, len(validated["events"]))
         self.assertEqual(
-            70,
+            129,
             validated["signal_commitments"]["events"]["canonical_count"],
         )
+        self.assertEqual(
+            129,
+            validated["topic_result_commitment"]["canonical_count"],
+        )
+        wrong_topic_count_type = copy.deepcopy(synthesis)
+        wrong_topic_count_type["topic_result_commitment"]["canonical_count"] = 129.0
+        with self.assertRaisesRegex(ResultValidationError, "every validated topic"):
+            validate_synthesis_result(
+                wrong_topic_count_type,
+                allowed_refs,
+                topic_results=topic_results,
+            )
+        wrong_signal_count_type = copy.deepcopy(synthesis)
+        wrong_signal_count_type["signal_commitments"]["events"]["canonical_count"] = (
+            129.0
+        )
+        with self.assertRaisesRegex(ResultValidationError, "canonical topic signal"):
+            validate_synthesis_result(
+                wrong_signal_count_type,
+                allowed_refs,
+                topic_results=topic_results,
+            )
         tampered = copy.deepcopy(synthesis)
         tampered["signal_commitments"]["events"]["canonical_count"] = 64
         with self.assertRaisesRegex(ResultValidationError, "every canonical topic"):
@@ -2469,7 +2498,9 @@ class ResultValidationTests(unittest.TestCase):
             "strengths": [],
         }
         value = synthesis_result()
-        value["topic_result_hashes"] = [canonical_result_hash(topic_result)]
+        value["topic_result_commitment"] = build_synthesis_topic_result_commitment(
+            [topic_result]
+        )
         value["signal_commitments"] = build_synthesis_signal_commitments([topic_result])
         value["guidance_candidates"] = [
             {
@@ -2502,7 +2533,9 @@ class ResultValidationTests(unittest.TestCase):
         }
         allowed_refs = set(ALL_REFS) | {episode_three, session_three}
         value = synthesis_result()
-        value["topic_result_hashes"] = [canonical_result_hash(topic_result)]
+        value["topic_result_commitment"] = build_synthesis_topic_result_commitment(
+            [topic_result]
+        )
         value["signal_commitments"] = build_synthesis_signal_commitments([topic_result])
         value["guidance_candidates"] = [
             {

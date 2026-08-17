@@ -45,6 +45,15 @@ MAX_REFS_PER_FIELD = 128
 CONFIDENCE_LEVELS = frozenset({"low", "medium", "high"})
 SEVERITY_LEVELS = frozenset({"low", "medium", "high", "critical"})
 OUTCOMES = frozenset({"completed", "partial", "blocked", "failed", "unknown"})
+AGENT_RESULT_REJECTION_REASONS = frozenset(
+    {
+        "duplicate_keys",
+        "invalid_root_type",
+        "malformed_json",
+        "malformed_utf8",
+        "result_too_large",
+    }
+)
 
 EVENT_KINDS = frozenset(
     {
@@ -264,7 +273,7 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
             "hierarchical results copy payload.expected_reduction_commitment exactly",
         ),
         SYNTHESIS_RESULT_SCHEMA: (
-            "topic_result_hashes exactly bind every supplied topic result",
+            "topic_result_commitment exactly binds every supplied topic result",
             "all refs are members of public_metadata.allowed_output_refs",
         ),
     }
@@ -1992,6 +2001,10 @@ def _canonical_value(value: Any) -> str:
         raise _error("candidate_results", "must contain only JSON values") from exc
 
 
+def _json_values_equal(left: Any, right: Any) -> bool:
+    return _canonical_value(left) == _canonical_value(right)
+
+
 def _validated_candidate_pair(
     candidate_results: Sequence[Mapping[str, Any]],
     *,
@@ -3530,6 +3543,7 @@ def _validate_synthesis_signal_preservation(
     topic_results: Sequence[Mapping[str, Any]],
     independent_reviews_by_hash: Mapping[str, Mapping[str, Any]],
     allowed_refs: Collection[str] | None,
+    require_global_review_union: bool,
 ) -> None:
     projected: dict[str, dict[str, Mapping[str, Any]]] = {
         "events": {},
@@ -3569,7 +3583,7 @@ def _validate_synthesis_signal_preservation(
                     topic_signal_values[field].add(_canonical_value(item))
 
     expected_commitments = build_synthesis_signal_commitments(topic_results)
-    if synthesis["signal_commitments"] != expected_commitments:
+    if not _json_values_equal(synthesis["signal_commitments"], expected_commitments):
         raise _error(
             "$.signal_commitments",
             "must exactly bind every canonical topic signal",
@@ -3584,6 +3598,8 @@ def _validate_synthesis_signal_preservation(
                 "must contain the deterministic bounded topic-signal exemplars",
             )
 
+    if not require_global_review_union:
+        return
     for review in independent_reviews_by_hash.values():
         for field in ("events", "findings"):
             for item in review[field]:
@@ -3623,6 +3639,24 @@ def build_synthesis_signal_commitments(
     return commitments
 
 
+def build_synthesis_topic_result_commitment(
+    topic_results: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Commit the complete canonical topic-result multiset without listing it."""
+
+    result_hashes = sorted(canonical_result_hash(result) for result in topic_results)
+    encoded = json.dumps(
+        result_hashes,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return {
+        "canonical_count": len(result_hashes),
+        "canonical_hash": hashlib.sha256(encoded).hexdigest(),
+    }
+
+
 def build_synthesis_signal_exemplars(
     topic_results: Sequence[Mapping[str, Any]],
 ) -> dict[str, list[dict[str, Any]]]:
@@ -3654,6 +3688,7 @@ def validate_synthesis_result(
     allowed_evidence_refs: Collection[str] | None = None,
     allowed_turn_refs: Collection[str] | None = None,
     independent_review_results: Sequence[Mapping[str, Any]] = (),
+    require_global_review_union: bool = True,
     source_allowed_refs: Collection[str] | None = None,
     topic_results: Sequence[Mapping[str, Any]] = (),
     original_prompts: Sequence[str] = (),
@@ -3688,14 +3723,10 @@ def validate_synthesis_result(
                 "independent_review_results", "contains duplicate review results"
             )
         independent_reviews_by_hash[review_hash] = validated_review
-    expected_topic_hashes = sorted(
-        canonical_result_hash(topic_result) for topic_result in topic_results
-    )
     value = _privacy_prepare(
         result,
         refs,
         allowed_turn_refs,
-        expected_topic_hashes,
         original_prompts=original_prompts,
         tool_outputs=tool_outputs,
     )
@@ -3715,21 +3746,17 @@ def validate_synthesis_result(
             "confidence",
             "evidence_refs",
             "era_comparison",
-            "topic_result_hashes",
+            "topic_result_commitment",
         },
         path="$",
     )
     _require_schema(value, SYNTHESIS_RESULT_SCHEMA, path="$")
-    topic_hashes = _require_list(
-        value["topic_result_hashes"],
-        path="$.topic_result_hashes",
-        maximum=128,
-    )
-    for index, digest in enumerate(topic_hashes):
-        _require_sha256(digest, path=_path("$.topic_result_hashes", index))
-    if topic_hashes != expected_topic_hashes:
+    expected_topic_commitment = build_synthesis_topic_result_commitment(topic_results)
+    if not _json_values_equal(
+        value["topic_result_commitment"], expected_topic_commitment
+    ):
         raise _error(
-            "$.topic_result_hashes",
+            "$.topic_result_commitment",
             "must exactly bind every validated topic result",
         )
     _validate_question_answers(value["question_answers"], allowed_refs=refs)
@@ -3839,6 +3866,7 @@ def validate_synthesis_result(
         topic_results=topic_results,
         independent_reviews_by_hash=independent_reviews_by_hash,
         allowed_refs=source_refs,
+        require_global_review_union=require_global_review_union,
     )
     return value
 

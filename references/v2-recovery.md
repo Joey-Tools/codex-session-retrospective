@@ -71,7 +71,11 @@ a new attempt or run.
 - A bound malformed agent result consumes one attempt. A second failure becomes
   an explicit content-free gap. JSON numeric overflow such as `1e999` is
   malformed at this ingestion boundary; it cannot become a non-finite stored
-  value, and each rejected attempt closes its claim and output sink.
+  value, and each rejected attempt closes its claim and output sink. The
+  rejection action commits its allowlisted reason as well as the exact payload
+  and attempt binding. An unchanged retry is idempotent; changing only the legal
+  reason for the same action key is a conflict and leaves the checkpoint
+  unchanged.
 - Raw-shard recovery follows the same checkpoint-authoritative disposition. A
   manifest-only first pass proves the complete shard count and downstream task
   reservation before file creation. The second pass stages only exact emitted

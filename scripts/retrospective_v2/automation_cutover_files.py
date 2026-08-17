@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 import shlex
 import stat
-from typing import Sequence
+from typing import Mapping, Sequence
 
 from . import executable_authority, safe_io
 from .authority_errors import AutomationCutoverBlocked
@@ -64,6 +64,37 @@ def _close_descriptors(
     raise AutomationCutoverBlocked(message) from failures[0]
 
 
+def build_production_prompt(
+    *,
+    cli_path: Path,
+    python_path: Path,
+    expected_mode: str,
+    publisher_gpg_program: str,
+) -> str:
+    if expected_mode not in {"daily", "weekly"}:
+        raise ValueError("production automation mode is invalid")
+    for value in (str(python_path), str(cli_path), publisher_gpg_program):
+        if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
+            raise ValueError("production automation path contains control characters")
+        if not executable_authority.is_canonical_absolute_executable_path(value):
+            raise ValueError("production automation executable path is invalid")
+    command = shlex.join(
+        (
+            str(python_path),
+            "-I",
+            "-B",
+            "-S",
+            str(cli_path),
+            "start",
+            "--mode",
+            expected_mode,
+            "--publisher-gpg-program",
+            publisher_gpg_program,
+        )
+    )
+    return f"Run {command} for the exact production window."
+
+
 def production_prompt_is_closed(
     prompt: str,
     *,
@@ -73,46 +104,48 @@ def production_prompt_is_closed(
 ) -> bool:
     try:
         tokens = shlex.split(prompt)
-    except ValueError:
+        if len(tokens) != 16:
+            return False
+        publisher_gpg_program = tokens[10]
+        expected = build_production_prompt(
+            cli_path=cli_path,
+            python_path=python_path,
+            expected_mode=expected_mode,
+            publisher_gpg_program=publisher_gpg_program,
+        )
+        return hmac.compare_digest(prompt.encode("utf-8"), expected.encode("utf-8"))
+    except (UnicodeEncodeError, ValueError, IndexError):
         return False
-    launch = (str(python_path), "-I", "-B", "-S", str(cli_path), "start")
-    launch_offsets = [
-        offset
-        for offset in range(len(tokens) - len(launch) + 1)
-        if tuple(tokens[offset : offset + len(launch)]) == launch
-    ]
-    mode_offsets = [
-        offset
-        for offset, token in enumerate(tokens)
-        if token == "--mode" or token.startswith("--mode=")
-    ]
-    publisher_offsets = [
-        offset
-        for offset, token in enumerate(tokens)
-        if token == "--publisher-gpg-program"
-        or token.startswith("--publisher-gpg-program=")
-    ]
-    publisher_value = (
-        tokens[publisher_offsets[0] + 1]
-        if len(publisher_offsets) == 1
-        and tokens[publisher_offsets[0]] == "--publisher-gpg-program"
-        and publisher_offsets[0] + 1 < len(tokens)
-        else ""
-    )
+
+
+def production_document_is_closed(
+    document: Mapping[str, object],
+    *,
+    automation_id: str,
+    cli_path: Path,
+    python_path: Path,
+    expected_mode: str,
+) -> bool:
+    expected_fields = {"version", "id", "kind", "name", "prompt", "status", "rrule"}
+    prompt = document.get("prompt")
+    schedule = document.get("rrule")
     return (
-        len(launch_offsets) == 1
-        and tokens.count(str(python_path)) == 1
-        and tokens.count(str(cli_path)) == 1
-        and len(mode_offsets) == 1
-        and mode_offsets[0] == launch_offsets[0] + len(launch)
-        and mode_offsets[0] + 1 < len(tokens)
-        and tokens[mode_offsets[0]] == "--mode"
-        and tokens[mode_offsets[0] + 1] == expected_mode
-        and len(publisher_offsets) == 1
-        and publisher_offsets[0] == mode_offsets[0] + 2
-        and publisher_value != ""
-        and not publisher_value.startswith("--")
-        and executable_authority.is_canonical_absolute_executable_path(publisher_value)
+        set(document) == expected_fields
+        and type(document.get("version")) is int
+        and document.get("version") == 1
+        and document.get("id") == automation_id
+        and document.get("kind") == "cron"
+        and document.get("name") == f"Session Retrospective {expected_mode.title()}"
+        and document.get("status") == "ACTIVE"
+        and isinstance(prompt, str)
+        and production_prompt_is_closed(
+            prompt,
+            cli_path=cli_path,
+            python_path=python_path,
+            expected_mode=expected_mode,
+        )
+        and isinstance(schedule, str)
+        and production_rrule_is_closed(schedule, expected_mode=expected_mode)
     )
 
 

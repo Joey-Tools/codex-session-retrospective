@@ -239,6 +239,7 @@ class ResultHistoryOperations(OrchestratorComponent):
                 allowed_refs,
                 allowed_turn_refs=allowed_turn_refs,
                 independent_review_results=independent_review_results,
+                require_global_review_union=(metadata.get("hierarchy_final") is True),
                 source_allowed_refs=self._projection._collect_refs(
                     {
                         "independent_review_results": independent_review_results,

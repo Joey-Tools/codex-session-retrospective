@@ -2441,37 +2441,12 @@ def _open_validated_installed_automation(
         if binding is not None:
             binding.close(primary=error)
         raise error from exc
-    prompt = document.get("prompt")
-    schedule = document.get("rrule")
-    forbidden_prompt_tokens = (
-        "--allow-partial",
-        "--backfill-of",
-        "--controlled-gap-receipt",
-        "--holdout-host",
-        "--host",
-        "--shadow",
-        "reference_only",
-        "session_retrospective.py",
-    )
-    if (
-        document.get("version") != 1
-        or document.get("id") != automation_id
-        or document.get("kind") != "cron"
-        or document.get("status") != "ACTIVE"
-        or document.get("reference_only") is not None
-        or not isinstance(prompt, str)
-        or not automation_cutover_files.production_prompt_is_closed(
-            prompt,
-            cli_path=cli_path,
-            python_path=installed_runtime_python_path(),
-            expected_mode=expected_mode,
-        )
-        or any(token in prompt for token in forbidden_prompt_tokens)
-        or not isinstance(schedule, str)
-        or not automation_cutover_files.production_rrule_is_closed(
-            schedule,
-            expected_mode=expected_mode,
-        )
+    if not automation_cutover_files.production_document_is_closed(
+        document,
+        automation_id=automation_id,
+        cli_path=cli_path,
+        python_path=installed_runtime_python_path(),
+        expected_mode=expected_mode,
     ):
         error = AutomationCutoverBlocked(
             "automation record is not an active v2 production coordinator"

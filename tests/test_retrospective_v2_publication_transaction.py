@@ -30,6 +30,7 @@ sys.path.insert(0, str(SCRIPTS))
 import session_retrospective_v2 as cli_module  # noqa: E402
 import session_retrospective_v2_export as export_cli_api  # noqa: E402
 from retrospective_v2 import (  # noqa: E402
+    automation_cutover_files,
     authority,
     calibration,
     controlled_gaps,
@@ -1520,11 +1521,11 @@ class DurablePublicationTests(unittest.TestCase):
             schedule = (
                 "FREQ=DAILY;BYHOUR=3" if mode == "daily" else "FREQ=WEEKLY;BYDAY=MO"
             )
-            prompt = (
-                f"Run {installed_python} -I -B -S {installed_cli} "
-                f"start --mode {mode} "
-                "--publisher-gpg-program /usr/bin/true "
-                "for the exact production window."
+            prompt = automation_cutover_files.build_production_prompt(
+                cli_path=installed_cli,
+                python_path=installed_python,
+                expected_mode=mode,
+                publisher_gpg_program="/usr/bin/true",
             )
             (record_dir / "automation.toml").write_text(
                 "\n".join(

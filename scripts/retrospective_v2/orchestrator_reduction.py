@@ -19,6 +19,7 @@ from . import (
     sharding,
     source_inputs,
     source_payloads,
+    synthesis_lineage,
 )
 from .checkpoints import canonical_json_bytes
 from .contracts import JobKind, RefType, RunStage, SourceKind
@@ -2234,8 +2235,13 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             result_validation.canonical_result_hash(review)
             for review in independent_reviews
         )
-        topic_hashes = sorted(
-            result_validation.canonical_result_hash(result) for result in topic_results
+        topic_commitment = copy.deepcopy(
+            payload.get(
+                "topic_result_commitment",
+                result_validation.build_synthesis_topic_result_commitment(
+                    topic_results
+                ),
+            )
         )
         self._jobs._create_agent_task(
             state,
@@ -2251,10 +2257,10 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 "hierarchy_level": level,
                 "hierarchy_root_ref": root_ref,
                 "safety_review_hashes": review_hashes,
-                "topic_result_hashes": topic_hashes,
+                "topic_result_commitment": topic_commitment,
                 "validation_child_task_refs": sorted(set(validation_child_task_refs)),
                 "validation_independent_review_hashes": review_hashes,
-                "validation_topic_result_hashes": topic_hashes,
+                "validation_topic_result_commitment": topic_commitment,
             },
         )
 
@@ -2275,9 +2281,11 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             "signal_commitments": result_validation.build_synthesis_signal_commitments(
                 topic_results
             ),
-            "topic_result_hashes": sorted(
-                result_validation.canonical_result_hash(result)
-                for result in topic_results
+            "signal_exemplars": result_validation.build_synthesis_signal_exemplars(
+                topic_results
+            ),
+            "topic_result_commitment": (
+                result_validation.build_synthesis_topic_result_commitment(topic_results)
             ),
             "topic_results": copy.deepcopy(list(topic_results)),
         }
@@ -2302,7 +2310,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
         groups: list[list[dict[str, Any]]] = []
         for task in sorted(current, key=lambda item: item["task_ref"]):
             candidate = [*(groups[-1] if groups else []), task]
-            payload = self._synthesis_reduce_payload(candidate)
+            payload = self._synthesis_reduce_payload(state, candidate)
             allowed = self._projection._collect_refs({"payload": payload})
             if groups and not self._jobs._agent_input_fits(
                 state,
@@ -2337,7 +2345,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                         index,
                     )
                 ),
-                payload=self._synthesis_reduce_payload(group),
+                payload=self._synthesis_reduce_payload(state, group),
                 topic_results=(),
                 independent_reviews=(),
                 allowed_turn_refs=all_turn_refs,
@@ -2351,139 +2359,29 @@ class HierarchicalReductionOperations(OrchestratorComponent):
         state: Mapping[str, Any],
         task: Mapping[str, Any],
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-        metadata = task["metadata"]
-        root_ref = metadata["hierarchy_root_ref"]
-        topics: list[tuple[str, dict[str, Any]]] = []
-        reviews: list[tuple[str, dict[str, Any]]] = []
-        topic_hashes: set[str] = set()
-        review_hashes: set[str] = set()
-        pending = [task]
-        visited: set[str] = set()
-        while pending:
-            current = pending.pop()
-            current_ref = current.get("task_ref")
-            if not isinstance(current_ref, str) or current_ref in visited:
-                continue
-            visited.add(current_ref)
-            current_metadata = current.get("metadata")
-            if (
-                not isinstance(current_metadata, Mapping)
-                or current_metadata.get("hierarchy_root_ref") != root_ref
-            ):
-                raise result_validation.ResultValidationError(
-                    "synthesis validation lineage is invalid"
-                )
-            child_refs = current_metadata.get("validation_child_task_refs", [])
-            if child_refs:
-                if current_metadata.get(
-                    "validation_topic_result_hashes"
-                ) or current_metadata.get("validation_independent_review_hashes"):
-                    raise result_validation.ResultValidationError(
-                        "synthesis parent duplicates leaf validation results"
-                    )
-            else:
-                payload = agent_task_inputs.for_task(self.run_dir, current).get(
-                    "input_payload"
-                )
-                if (
-                    not isinstance(payload, Mapping)
-                    or payload.get("schema") != "global_synthesis_input_v2"
-                ):
-                    raise result_validation.ResultValidationError(
-                        "synthesis validation leaf input is invalid"
-                    )
-                leaf_topics = payload.get("topic_results", [])
-                leaf_reviews = payload.get("independent_reviews", [])
-                if not isinstance(leaf_topics, list) or any(
-                    not isinstance(result, Mapping) for result in leaf_topics
-                ):
-                    raise result_validation.ResultValidationError(
-                        "synthesis validation leaf topic results are invalid"
-                    )
-                if not isinstance(leaf_reviews, list) or any(
-                    not isinstance(result, Mapping) for result in leaf_reviews
-                ):
-                    raise result_validation.ResultValidationError(
-                        "synthesis validation leaf reviews are invalid"
-                    )
-                leaf_topic_rows = [
-                    (
-                        result_validation.canonical_result_hash(result),
-                        copy.deepcopy(dict(result)),
-                    )
-                    for result in leaf_topics
-                ]
-                leaf_review_rows = [
-                    (
-                        result_validation.canonical_result_hash(result),
-                        copy.deepcopy(dict(result)),
-                    )
-                    for result in leaf_reviews
-                ]
-                leaf_topic_hashes = [digest for digest, _result in leaf_topic_rows]
-                leaf_review_hashes = [digest for digest, _result in leaf_review_rows]
-                if len(set(leaf_topic_hashes)) != len(leaf_topic_hashes) or len(
-                    set(leaf_review_hashes)
-                ) != len(leaf_review_hashes):
-                    raise result_validation.ResultValidationError(
-                        "synthesis validation leaf contains duplicate results"
-                    )
-                if sorted(leaf_topic_hashes) != sorted(
-                    current_metadata.get("validation_topic_result_hashes", [])
-                ) or sorted(leaf_review_hashes) != sorted(
-                    current_metadata.get("validation_independent_review_hashes", [])
-                ):
-                    raise result_validation.ResultValidationError(
-                        "synthesis validation leaf commitments changed"
-                    )
-                if topic_hashes & set(leaf_topic_hashes) or review_hashes & set(
-                    leaf_review_hashes
-                ):
-                    raise result_validation.ResultValidationError(
-                        "synthesis validation hierarchy contains duplicate results"
-                    )
-                topic_hashes.update(leaf_topic_hashes)
-                review_hashes.update(leaf_review_hashes)
-                topics.extend(leaf_topic_rows)
-                reviews.extend(leaf_review_rows)
-            for child_ref in child_refs:
-                child = state["jobs"].get(child_ref)
-                if not isinstance(child, Mapping):
-                    raise result_validation.ResultValidationError(
-                        "synthesis validation child task is missing"
-                    )
-                pending.append(child)
-
+        topics, reviews = synthesis_lineage.collect_validation_results(
+            self.run_dir, state, [task]
+        )
+        if task["metadata"].get("hierarchy_final") is not True:
+            return topics, reviews
         try:
-            source_topic_tasks = self._accepted_final_topic_tasks(state)
+            source_tasks = self._accepted_final_topic_tasks(state)
         except InvalidTransitionError as exc:
             raise result_validation.ResultValidationError(str(exc)) from exc
-        source_hashes = sorted(
-            result_validation.canonical_result_hash(
-                agent_results.for_task(self.run_dir, source_task)
-            )
-            for source_task in source_topic_tasks
+        source_results = agent_results.copies_for_tasks(
+            self.run_dir, source_tasks, label="accepted topic"
         )
-        if sorted(digest for digest, _result in topics) != source_hashes:
+        if result_validation.build_synthesis_topic_result_commitment(topics) != (
+            result_validation.build_synthesis_topic_result_commitment(source_results)
+        ):
             raise result_validation.ResultValidationError(
                 "synthesis topic results do not exactly match accepted final roots"
             )
-        return (
-            [result for _digest, result in sorted(topics)],
-            [result for _digest, result in sorted(reviews)],
-        )
+        return topics, reviews
 
     def _synthesis_reduce_payload(
         self,
+        state: Mapping[str, Any],
         tasks: Sequence[Mapping[str, Any]],
     ) -> dict[str, Any]:
-        results = agent_results.copies_for_tasks(
-            self.run_dir, tasks, label="accepted synthesis"
-        )
-        return {
-            "child_result_hashes": [
-                result_validation.canonical_result_hash(result) for result in results
-            ],
-            "child_synthesis_results": results,
-            "schema": "global_synthesis_hierarchical_input_v2",
-        }
+        return synthesis_lineage.build_reduce_payload(self.run_dir, state, tasks)

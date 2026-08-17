@@ -27,6 +27,7 @@ from retrospective_v2.result_validation import (  # noqa: E402
     ResultValidationError,
     build_synthesis_signal_exemplars,
     build_synthesis_signal_commitments,
+    build_synthesis_topic_result_commitment,
     canonical_result_hash,
     scan_for_leaks,
     validate_adjudication_result,
@@ -298,7 +299,7 @@ def synthesis_result() -> dict:
         },
         "evidence_refs": [],
         "era_comparison": {"status": "compatible", "change": "unchanged"},
-        "topic_result_hashes": [],
+        "topic_result_commitment": build_synthesis_topic_result_commitment(()),
     }
 
 
@@ -716,7 +717,9 @@ class AuditedResultContractTests(unittest.TestCase):
             "strengths": copy.deepcopy(independent["strengths"]),
         }
         value = synthesis_result()
-        value["topic_result_hashes"] = [canonical_result_hash(topic_result)]
+        value["topic_result_commitment"] = build_synthesis_topic_result_commitment(
+            [topic_result]
+        )
         value["signal_commitments"] = build_synthesis_signal_commitments([topic_result])
         value.update(build_synthesis_signal_exemplars([topic_result]))
         value["guidance_candidates"] = [

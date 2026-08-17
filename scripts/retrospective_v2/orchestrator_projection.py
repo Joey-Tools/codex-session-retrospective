@@ -95,7 +95,9 @@ class StateProjectionOperations(OrchestratorComponent):
             ),
             "skill_candidates": [],
             "strengths": [],
-            "topic_result_hashes": [],
+            "topic_result_commitment": (
+                result_validation.build_synthesis_topic_result_commitment(())
+            ),
         }
         return result_validation.validate_synthesis_result(
             result,

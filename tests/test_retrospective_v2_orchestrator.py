@@ -749,7 +749,9 @@ def synthesis_result() -> dict[str, object]:
         },
         "evidence_refs": [],
         "era_comparison": {"status": "compatible", "change": "unchanged"},
-        "topic_result_hashes": [],
+        "topic_result_commitment": (
+            result_validation.build_synthesis_topic_result_commitment(())
+        ),
     }
 
 
@@ -1130,9 +1132,10 @@ class OrchestratorTests(unittest.TestCase):
                     result["signal_commitments"] = job["input_payload"][
                         "signal_commitments"
                     ]
-                    result["topic_result_hashes"] = job["input_payload"][
-                        "topic_result_hashes"
+                    result["topic_result_commitment"] = job["input_payload"][
+                        "topic_result_commitment"
                     ]
+                    result.update(job["input_payload"]["signal_exemplars"])
                     coordinator.accept_agent_result(
                         job["job_ref"],
                         job["active_attempt_ref"],
@@ -3402,24 +3405,47 @@ class OrchestratorTests(unittest.TestCase):
 
     def test_retry_uses_fresh_job_then_persists_gap(self) -> None:
         coordinator = self.activity_run("retry")
+
+        def replay(job, payload):
+            task = coordinator.load_state()["jobs"][job["task_ref"]]
+            attempt = next(
+                item
+                for item in task["attempts"]
+                if item["attempt_ref"] == job["active_attempt_ref"]
+            )
+            return RetrospectiveOrchestrator.accept_agent_result(
+                coordinator,
+                job["job_ref"],
+                job["active_attempt_ref"],
+                payload,
+                claim_ref=attempt["claim_ref"],
+                result_ref=attempt["result_ref"],
+            )
+
         first = coordinator.status()["runnable_jobs"][0]
+        failure = AgentFailure(AgentFailureKind.TIMEOUT).to_dict()
         rejected = coordinator.accept_agent_result(
             first["job_ref"],
             first["active_attempt_ref"],
-            AgentFailure(AgentFailureKind.TIMEOUT).to_dict(),
+            failure,
         )
         self.assertEqual("retryable", rejected["outcome"])
+        failure_replay = replay(first, failure)
+        self.assertTrue(failure_replay["idempotent"])
         coordinator.advance()
         retry = coordinator.status()["runnable_jobs"][0]
         self.assertNotEqual(first["job_ref"], retry["job_ref"])
         self.assertNotEqual(first["active_attempt_ref"], retry["active_attempt_ref"])
+        invalid = {"schema": result_validation.EXTRACTOR_RESULT_SCHEMA, "turns": []}
         second = coordinator.accept_agent_result(
             retry["job_ref"],
             retry["active_attempt_ref"],
-            {"schema": result_validation.EXTRACTOR_RESULT_SCHEMA, "turns": []},
+            invalid,
         )
         self.assertEqual("gap", second["outcome"])
         self.assertEqual("schema_violation", second["reason"])
+        invalid_replay = replay(retry, invalid)
+        self.assertTrue(invalid_replay["idempotent"])
         coordinator.advance()
         status = coordinator.status()
         self.assertEqual(RunStage.BLOCKED.value, status["stage"])
@@ -4750,6 +4776,33 @@ class OrchestratorTests(unittest.TestCase):
 
         self.assertEqual("retryable", rejected["outcome"])
         self.assertTrue(replay["idempotent"])
+        state_before_conflict = coordinator.load_state()
+        action = state_before_conflict["actions"][
+            f"accept_agent_result:{job['active_attempt_ref']}"
+        ]
+        self.assertEqual(
+            {
+                "schema": "agent_result_payload_rejection_action_v2",
+                "attempt_ref": job["active_attempt_ref"],
+                "claim_ref": claimed["claim_ref"],
+                "job_ref": job["job_ref"],
+                "rejection_reason": "malformed_json",
+                "result_digest": payload_digest,
+                "result_ref": claimed["result_ref"],
+            },
+            action["binding"],
+        )
+        self.assertEqual(content_digest(action["binding"]), action["input_digest"])
+        with self.assertRaises(RunConflictError):
+            coordinator.reject_agent_result_payload(
+                job["job_ref"],
+                job["active_attempt_ref"],
+                claim_ref=claimed["claim_ref"],
+                result_ref=claimed["result_ref"],
+                payload_digest=payload_digest,
+                reason="malformed_utf8",
+            )
+        self.assertEqual(state_before_conflict, coordinator.load_state())
         with self.assertRaises(RunConflictError):
             coordinator.reject_agent_result_payload(
                 typed_ref(RefType.JOB, "wrong-rejected-result-job"),
@@ -6148,6 +6201,172 @@ class OrchestratorTests(unittest.TestCase):
         ):
             coordinator._seed_synthesis_task(state)
 
+    def test_hierarchical_synthesis_leaf_and_final_use_real_accept_path(self) -> None:
+        coordinator = self.activity_run("synthesis-real-accept")
+        extractor = coordinator.status()["runnable_jobs"][0]
+        extracted = self.extractor_result(extractor)
+        extracted["turns"][0]["risk_flags"] = []
+        coordinator.accept_agent_result(
+            extractor["job_ref"], extractor["active_attempt_ref"], extracted
+        )
+        coordinator.advance()
+        reviews = coordinator.status()["runnable_jobs"]
+        self.assertEqual(
+            {JobKind.EPISODE_REVIEWER.value, JobKind.INDEPENDENT_RISK_REVIEWER.value},
+            {review["job_kind"] for review in reviews},
+        )
+        review_results = []
+        for review in reviews:
+            review_result = self.review_result(
+                review,
+                secondary=(
+                    review["job_kind"] == JobKind.INDEPENDENT_RISK_REVIEWER.value
+                ),
+            )
+            if review_result["reviewer_slot"] == "secondary":
+                review_result["findings"] = [
+                    {
+                        "kind": "production_risk",
+                        "evidence_refs": list(review_result["evidence_refs"]),
+                        "confidence": "high",
+                        "severity": "high",
+                    }
+                ]
+            review_results.append(review_result)
+            coordinator.accept_agent_result(
+                review["job_ref"],
+                review["active_attempt_ref"],
+                review_result,
+            )
+        coordinator.advance()
+        adjudicators = coordinator.status()["runnable_jobs"]
+        self.assertTrue(adjudicators)
+        self.assertTrue(
+            all(job["job_kind"] == JobKind.ADJUDICATOR.value for job in adjudicators)
+        )
+        for next_job in adjudicators:
+            candidate_hashes = self.agent_envelope(coordinator, next_job)[
+                "job_manifest"
+            ]["candidate_result_hashes"]
+            review_results_by_hash = {
+                result_validation.canonical_result_hash(result): result
+                for result in review_results
+            }
+            candidates = [
+                review_results_by_hash[candidate_hash]
+                for candidate_hash in candidate_hashes
+            ]
+            primary = next(
+                result for result in candidates if result["reviewer_slot"] == "primary"
+            )
+            secondary = next(
+                result
+                for result in candidates
+                if result["reviewer_slot"] == "secondary"
+            )
+            adjudication = {
+                "schema": result_validation.ADJUDICATION_RESULT_SCHEMA,
+                "episode_ref": primary["episode_ref"],
+                "episode_revision_ref": primary["episode_revision_ref"],
+                "resolution": "merged_supported",
+                "events": copy.deepcopy(primary["events"]),
+                "findings": copy.deepcopy(secondary["findings"]),
+                "strengths": copy.deepcopy(primary["strengths"]),
+                "risk_flags": sorted(
+                    {flag for result in candidates for flag in result["risk_flags"]}
+                ),
+                "high_impact_turns": [
+                    copy.deepcopy(item)
+                    for result in candidates
+                    for item in result["high_impact_turns"]
+                ],
+                "evidence_refs": copy.deepcopy(primary["evidence_refs"]),
+                "confidence": primary["confidence"],
+                "candidate_result_hashes": list(candidate_hashes),
+            }
+            adjudication["candidate_item_decisions"] = adjudication_item_decisions(
+                candidates, adjudication
+            )
+            accepted_adjudication = coordinator.accept_agent_result(
+                next_job["job_ref"],
+                next_job["active_attempt_ref"],
+                adjudication,
+            )
+            self.assertEqual(
+                "accepted",
+                accepted_adjudication["outcome"],
+                accepted_adjudication,
+            )
+        coordinator.advance()
+        reducers = coordinator.status()["runnable_jobs"]
+        self.assertTrue(reducers)
+        self.assertEqual(
+            {JobKind.TOPIC_REDUCER.value},
+            {reducer["job_kind"] for reducer in reducers},
+            reducers,
+        )
+        for reducer in reducers:
+            topic_ref = next(
+                ref
+                for ref in reducer["allowed_output_refs"]
+                if ref.startswith("topic_ref_v2:")
+            )
+            coordinator.accept_agent_result(
+                reducer["job_ref"],
+                reducer["active_attempt_ref"],
+                result_validation.build_topic_result(
+                    reducer["input_payload"], topic_ref=topic_ref
+                ),
+            )
+
+        jobs = coordinator._components.jobs
+        original_fits = jobs._agent_input_fits
+
+        def force_synthesis_leaf(state, **kwargs):
+            if kwargs["kind"] == JobKind.GLOBAL_SYNTHESIS.value:
+                return False
+            return original_fits(state, **kwargs)
+
+        with mock.patch.object(
+            jobs, "_agent_input_fits", side_effect=force_synthesis_leaf
+        ):
+            coordinator.advance()
+        leaves = coordinator.status()["runnable_jobs"]
+        self.assertGreaterEqual(len(leaves), 2)
+        leaf_state = coordinator.load_state()["jobs"]
+        self.assertTrue(
+            all(
+                leaf_state[leaf["task_ref"]]["metadata"]["hierarchy_final"] is False
+                for leaf in leaves
+            )
+        )
+
+        def accepted_synthesis(job):
+            result = synthesis_result()
+            result["signal_commitments"] = job["input_payload"]["signal_commitments"]
+            result["topic_result_commitment"] = job["input_payload"][
+                "topic_result_commitment"
+            ]
+            result.update(job["input_payload"]["signal_exemplars"])
+            return coordinator.accept_agent_result(
+                job["job_ref"], job["active_attempt_ref"], result
+            )
+
+        for leaf in leaves:
+            self.assertTrue(accepted_synthesis(leaf)["accepted"])
+        coordinator.advance()
+        final = coordinator.status()["runnable_jobs"][0]
+        self.assertTrue(
+            coordinator.load_state()["jobs"][final["task_ref"]]["metadata"][
+                "hierarchy_final"
+            ]
+        )
+        self.assertEqual(
+            "global_synthesis_hierarchical_input_v2",
+            final["input_payload"]["schema"],
+        )
+        self.assertTrue(accepted_synthesis(final)["accepted"])
+
     def test_global_synthesis_rejects_duplicate_final_topic_root(self) -> None:
         coordinator = self.coordinator("synthesis-duplicate-root")
         expected = typed_ref(RefType.TOPIC_CANDIDATE, "synthesis-expected")
@@ -6992,8 +7211,8 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual(JobKind.GLOBAL_SYNTHESIS.value, synthesis_retry["job_kind"])
         self.assertNotEqual(synthesis["job_ref"], synthesis_retry["job_ref"])
         synthesis_payload = synthesis_result()
-        synthesis_payload["topic_result_hashes"] = synthesis_retry["input_payload"][
-            "topic_result_hashes"
+        synthesis_payload["topic_result_commitment"] = synthesis_retry["input_payload"][
+            "topic_result_commitment"
         ]
         synthesis_payload["signal_commitments"] = synthesis_retry["input_payload"][
             "signal_commitments"

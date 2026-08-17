@@ -1570,24 +1570,19 @@ class SourceCoordinationOperations(OrchestratorComponent):
         )
         if _SHA256_RE.fullmatch(payload_digest) is None:
             raise InvalidInputError("agent payload digest is invalid")
-        if reason not in {
-            "duplicate_keys",
-            "invalid_root_type",
-            "malformed_json",
-            "malformed_utf8",
-            "result_too_large",
-        }:
+        if reason not in result_validation.AGENT_RESULT_REJECTION_REASONS:
             raise InvalidInputError("agent payload rejection reason is invalid")
         action_key = f"accept_agent_result:{normalized_attempt_ref}"
-        action_digest = content_digest(
-            {
-                "claim_ref": normalized_claim_ref,
-                "attempt_ref": normalized_attempt_ref,
-                "job_ref": normalized_job_ref,
-                "result_digest": payload_digest,
-                "result_ref": normalized_result_ref,
-            }
-        )
+        action_binding = {
+            "schema": "agent_result_payload_rejection_action_v2",
+            "attempt_ref": normalized_attempt_ref,
+            "claim_ref": normalized_claim_ref,
+            "job_ref": normalized_job_ref,
+            "rejection_reason": reason,
+            "result_digest": payload_digest,
+            "result_ref": normalized_result_ref,
+        }
+        action_digest = content_digest(action_binding)
 
         def mutate(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             self._state._assert_state_identity(state)
@@ -1602,6 +1597,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
                     attempt_ref=normalized_attempt_ref,
                     claim_ref=normalized_claim_ref,
                     job_ref=normalized_job_ref,
+                    rejection_reason=reason,
                     result_digest=payload_digest,
                     result_ref=normalized_result_ref,
                 )
@@ -1628,13 +1624,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
                 reason=reason,
             )
             state["actions"][action_key] = {
-                "binding": {
-                    "attempt_ref": normalized_attempt_ref,
-                    "claim_ref": normalized_claim_ref,
-                    "job_ref": normalized_job_ref,
-                    "result_digest": payload_digest,
-                    "result_ref": normalized_result_ref,
-                },
+                "binding": action_binding,
                 "input_digest": action_digest,
                 "outcome": outcome,
                 "reason": reason,
@@ -1828,6 +1818,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
         job_ref: str,
         result_digest: str,
         result_ref: str,
+        rejection_reason: str | None = None,
     ) -> Mapping[str, Any]:
         action = state["actions"].get(action_key)
         expected_binding = {
@@ -1837,6 +1828,9 @@ class SourceCoordinationOperations(OrchestratorComponent):
             "result_digest": result_digest,
             "result_ref": result_ref,
         }
+        if rejection_reason is not None:
+            expected_binding["rejection_reason"] = rejection_reason
+            expected_binding["schema"] = "agent_result_payload_rejection_action_v2"
         if not isinstance(action, Mapping) or action.get("binding") != expected_binding:
             raise RunConflictError("agent result replay binding changed")
         task_key, task, attempt = self._projection._agent_attempt_binding(
@@ -1899,6 +1893,10 @@ class SourceCoordinationOperations(OrchestratorComponent):
         ):
             raise RunConflictError("agent result replay task binding changed")
         outcome = action.get("outcome")
+        rejection_reason_changed = rejection_reason is not None and (
+            action.get("reason") != rejection_reason
+            or attempt.get("reason") != rejection_reason
+        )
         if outcome == "accepted":
             accepted_binding = task.get("binding")
             if (
@@ -1918,6 +1916,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
             outcome not in {"retryable", "gap"}
             or task.get("status") != outcome
             or attempt.get("status") not in {"failed", "review_gap"}
+            or rejection_reason_changed
         ):
             raise RunConflictError("rejected agent result replay outcome changed")
         return task
@@ -1934,6 +1933,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
         result_digest: str,
         result_ref: str,
         staging: agent_results.Staging | None = None,
+        rejection_reason: str | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         task = self._validate_agent_result_replay_binding(
             state,
@@ -1943,6 +1943,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
             job_ref=job_ref,
             result_digest=result_digest,
             result_ref=result_ref,
+            rejection_reason=rejection_reason,
         )
         action = state["actions"][action_key]
         return agent_checkpoint_capacity.finalize_result(

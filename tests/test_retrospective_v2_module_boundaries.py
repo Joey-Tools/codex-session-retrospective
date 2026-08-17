@@ -388,6 +388,7 @@ BOUNDED_MODULE_LINES = {
     "source_inputs.py": 400,
     "source_payloads.py": 100,
     "source_session_policy.py": 127,
+    "synthesis_lineage.py": 225,
     "source_spool.py": 350,
     "source_staging.py": 350,
     "source_capacity.py": 150,
@@ -1217,8 +1218,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_062, branch_total)
-        self.assertLessEqual(branch_total, 9_070)
+        self.assertEqual(9_100, branch_total)
+        self.assertLessEqual(branch_total, 9_105)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

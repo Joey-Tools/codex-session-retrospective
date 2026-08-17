@@ -200,6 +200,11 @@ source acceptance.
   replay that makes no state change needs no new reserve; replay-time migration
   of a legacy inline job manifest does and is blocked before that migration can
   consume the terminal reserve.
+- A rejected-result action uses the closed
+  `agent_result_payload_rejection_action_v2` binding. Its identity commits the
+  exact job, attempt, claim, result reference, payload digest, and allowlisted
+  rejection reason. An exact replay is idempotent; reusing the same attempt and
+  payload with a different legal reason is a conflict and cannot mutate state.
 - Accepted agent results live in canonical owner-only sidecars under
   `agent-sinks/results`. The checkpoint stores only a closed descriptor that
   binds the task reference, canonical result hash, byte count, SHA-256 content
@@ -525,10 +530,16 @@ refs, stale or forged pre-state, and every extra or unrelated ID fail closed.
 commit, exact installed v2 CLI path, operation lineage, and current SHA-256 plus
 identity-derived reference for both fixed `automation.toml` paths. The engine
 reads those records with bounded no-follow I/O and requires owner ownership,
-non-group-writable paths, active cron state, mode-appropriate schedule and
-prompt, and no reference-only, v1, shadow, holdout, or partial-production
-controls. The production marker embeds the complete authenticated cutover
-record and must include its release commit.
+non-group-writable paths, and the exact closed TOML document with only
+`version`, `id`, `kind`, `name`, `prompt`, `status`, and `rrule`. The active
+mode-specific prompt must be byte-equal to the canonical
+`build_production_prompt` output: one `shlex.join` command using the exact
+authenticated Python, `-I -B -S`, installed CLI, `start --mode`, and one
+absolute canonical `--publisher-gpg-program`, wrapped by the fixed production
+sentence. Prefixes, suffixes, control characters, unknown fields or tables,
+boolean versions, reference-only text, v1 paths, shadow, holdout, and partial
+production controls all fail closed. The production marker embeds the complete
+authenticated cutover record and must include its release commit.
 
 ## Retained Bundle
 
@@ -611,15 +622,27 @@ can retain only recurrence records already validated by a child.
 Global synthesis requires a bijection between durable topic-input roots and
 accepted final topic tasks: every expected root appears exactly once, with no
 duplicate or extra root, before any dictionary reconstruction. Hash-key
-overwrite cannot collapse duplicate results.
+overwrite cannot collapse duplicate results. Each synthesis task carries one
+compact `topic_result_commitment` over the sorted canonical result-hash
+multiset; every validated result hash already commits its bound topic root. The
+commitment binds the exact item count and SHA-256 digest without imposing a
+128-root representation ceiling. A leaf commitment may cover only that leaf's
+assigned subset; recursive parent lineage authenticates each child commitment,
+and only the final commitment is compared with the complete accepted topic
+inventory.
 
 Global synthesis represents each exact canonical topic-signal union with a
 SHA-256 commitment and count plus at most 64 deterministic exemplars, selected
-high-severity-first and then by canonical order. The commitment and exact topic
-result hash inventory prevent omitted non-exemplar signals from disappearing.
-Retained compilation verifies the finding commitment against topic rows and
-writes the complete canonical finding/evidence union to `summary.json`, not just
-the bounded exemplars.
+high-severity-first and then by canonical order. Every hierarchy level derives
+the same fields from its authenticated subtree; a model cannot reconstruct or
+replace them after compaction. The signal commitments and compact topic-result
+commitment prevent omitted non-exemplar signals or topic roots from
+disappearing. Cross-source preservation of high-severity independent-review
+signals is checked only at the final root, after the complete topic and review
+subtrees have rejoined; a legal intermediate leaf is not required to contain
+its sibling leaf's support. Retained compilation verifies the finding
+commitment against topic rows and writes the complete canonical
+finding/evidence union to `summary.json`, not just the bounded exemplars.
 
 Durable episode, topic, and global records use closed per-finding objects. Every
 object preserves the exact finding kind, confidence, optional severity, and

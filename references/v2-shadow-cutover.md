@@ -95,9 +95,12 @@ or lease protocol:
 The internal cutover authority verifies the installed TOML records, exact
 installed v2 CLI path, active mode-specific production prompts, authenticated
 pre-update state, operation lineage, and complete capability-result commitment.
-Each admitted prompt must provide exactly one explicit
-`--publisher-gpg-program`; the CLI then authenticates and binds the selected
-absolute executable at run start.
+Each record must contain only the exact closed seven-field TOML document. Its
+prompt must be byte-equal to the canonical mode-specific sentence and command,
+including the authenticated Python, `-I -B -S`, installed CLI, and exactly one
+explicit absolute canonical `--publisher-gpg-program`; the CLI then
+authenticates and binds that executable at run start. Prefixes, suffixes,
+embedded control characters, unknown fields, and nested tables fail closed.
 It rejects reference-only templates, v1 paths, shadow/partial coverage controls,
 and unrelated IDs. The separate controller writes
 `~/.codex/session-retrospective/automation-cutover-v2.json`; production marker

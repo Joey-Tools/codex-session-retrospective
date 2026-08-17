@@ -863,6 +863,63 @@ superseded_by:
   seconds, and shard 3 passed 381/381 in 1,672.423 seconds. Every retained log
   contains an explicit `OK` terminal summary, including the signing canary that
   failed only in the discarded attempt.
+- Signed head `5990f182` passed the then-current local and hosted gates, but its
+  fresh-context Codex processor found five actionable contract gaps. Synthesis
+  leaf validation compared a subset against the complete topic inventory;
+  automation cutover admitted commands by substring instead of exact document
+  equality; hierarchical parents could not derive complete signal commitments
+  after compaction; the 128-item topic-hash array made larger valid runs
+  unrepresentable; and rejected-result idempotency omitted the legal rejection
+  reason. All head-bound delivery evidence is stale.
+- Synthesis now uses an authenticated recursive lineage owner. Every leaf and
+  parent carries a compact count-and-SHA-256 topic-result commitment, exact
+  per-signal commitments, and bounded deterministic exemplars derived from its
+  subtree. Only the final hierarchy root is compared with the complete accepted
+  topic inventory, so legal leaf subsets and more than 128 topic roots remain
+  representable without losing complete-union proof.
+- Automation cutover now accepts only the exact seven-field TOML document and a
+  byte-equal canonical production prompt. Prefixes, suffixes, leading
+  whitespace, control characters, unknown fields or tables, and alternate
+  command shapes fail closed. Rejected-result actions now use a versioned
+  binding that commits the allowlisted reason; changing only that reason is an
+  idempotency conflict.
+- Focused post-fix evidence passes result/schema validation 91/91, automation
+  cutover 15/15, the publication fixture 1/1, real hierarchical synthesis and
+  rejection replay 4/4, and module boundaries 19/19. The module aggregate
+  remains within its prior 3,050-line cap, and the new lineage owner has a
+  separate 225-line ceiling. Final static checks, complete repository
+  partitions, signed replacement head, admission, hosted CI, and both required
+  Codex processors remain delivery gates.
+- Two bounded read-only audits then found four additional edge cases before the
+  replacement head was frozen. Ordinary accepted-result and failure replays
+  incorrectly compared an absent rejection reason; canonical Unicode
+  executable paths reached an ASCII-only constant-time string comparison;
+  high-severity independent reviews in a sibling synthesis leaf were checked
+  against an incomplete local topic subset; and Python numeric equality allowed
+  Boolean or floating-point commitment counts to compare equal to integers.
+  Replay validation now scopes reason equality to rejected payloads, prompt
+  equality compares canonical UTF-8 bytes, review/topic union enforcement runs
+  only after sibling synthesis subtrees rejoin at the final root, and commitment
+  equality uses canonical type-preserving JSON.
+- The first 1,684-test durable partition attempt after those audits was stopped
+  deliberately and is non-counting because the additional findings changed the
+  tree. All four supervisors and their remaining test process groups were
+  terminated once, proved absent, and their owner-only logs and status files
+  remain only as discarded-run evidence. The repaired real hierarchy test also
+  exposed a test-fixture ordering bug: adjudication candidates must be rebuilt
+  in manifest hash order rather than global review completion order. The exact
+  path now passes five consecutive executions. Current-tree focused evidence
+  passes 25/25 targeted contracts, 110/110 complete result/schema/module tests,
+  and 63/63 CLI plus production-marker tests; changed-file and repository-wide
+  Ruff lint, exact changed-file formatting, and `git diff --check` are clean.
+- The final Python 3.13 tree contains 1,685 unique test identifiers partitioned
+  exactly once as 403, 451, 448, and 383 tests. A new owner-only durable run
+  completed every partition with exit zero: shard 0 passed 403/403 in 1,749.522
+  seconds, shard 1 passed 451/451 in 1,370.213 seconds, shard 2 passed 448/448
+  in 1,507.873 seconds, and shard 3 passed 383/383 in 1,443.955 seconds. Every
+  retained log contains an explicit `OK` terminal summary. Signing, exact-secret
+  admission, hosted CI, and the two required Codex processors remain delivery
+  gates.
 
 ## Follow-up Work
 

@@ -117,9 +117,14 @@ high-severity safety event qualifies for the exception. Return only the declared
 global_synthesis_result_v2 JSON object.
 ```
 
-The coordinator admits global synthesis only after exactly one accepted final
-topic result exists for every expected topic-input root. Missing, duplicate, or
-extra roots are not model-repairable and block before synthesis.
+Every synthesis leaf and parent must copy its exact
+`topic_result_commitment`, complete `signal_commitments`, and the supplied
+bounded `signal_exemplars`. A hierarchy leaf may cover only its assigned subset
+of topic roots; a parent must derive its commitment and signal union from its
+authenticated child subtree. The coordinator admits the final synthesis result
+only after exactly one accepted final topic result exists for every expected
+topic-input root. Missing, duplicate, or extra roots are not model-repairable
+and block before final synthesis acceptance.
 
 Invalid JSON, schema mismatch, reference injection, privacy rejection, crash, or
 timeout causes one retry in a fresh agent. A second failure is an explicit gap;

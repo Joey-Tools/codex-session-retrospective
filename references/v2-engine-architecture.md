@@ -20,6 +20,7 @@ operate on that single coordinator context and do not import one another:
 | `orchestrator_projection.py` | Read-only status, metrics, references, and next actions |
 | `orchestrator_jobs.py` | Agent attempt, claim, sink, and envelope lifecycle |
 | `orchestrator_reduction.py` | Catalog materialization and episode/topic/synthesis hierarchies |
+| `synthesis_lineage.py` | Authenticated synthesis-subtree commitments and compact signal projection |
 | `orchestrator_history.py` | Result validation and retained history projection |
 | `orchestrator_source.py` | Source transport admission and leased agent result handling |
 | `orchestrator_lifecycle.py` | Run creation, publication claims, retention, and raw cleanup |
@@ -269,11 +270,12 @@ or transport implementation.
 
 The orchestrator foundation remains below its aggregate limit. The seven agent
 support modules remain below 1,100 lines; the complete result-schema owner is
-506/525, implementation authority remains below 350, and
-`orchestrator_jobs.py` remains below 525. The result validator is 3,865/3,900
-and hierarchical reduction is 2,489/2,500 after adding compact recursive
-commitments and revision-level recurrence proof. The global branch proxy is
-exactly 9,062/9,070 nodes. These gates keep complete
+below 525, implementation authority remains below 350, and
+`orchestrator_jobs.py` remains below 525. The result validator is 3,893/3,900,
+hierarchical reduction is 2,387/2,500, and the dedicated synthesis-lineage
+owner is 213/225 after adding compact recursive commitments and
+revision-level recurrence proof. The global branch proxy is exactly
+9,100/9,105 nodes. These gates keep complete
 agent schemas, claim-size projection, source-byte provenance, semantic topic
 validation, and delegated remote transport in explicit owners instead of
 expanding the coordinator or reviving a second remote probe.

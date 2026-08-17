@@ -268,6 +268,14 @@ previous and installed record digests, installed v2 path, production prompts,
 and result commitment before writing
 `~/.codex/session-retrospective/automation-cutover-v2.json`.
 
+The installed record is a closed document, not a command substring check. It
+must contain exactly the seven fields `version`, `id`, `kind`, `name`, `prompt`,
+`status`, and `rrule`. The prompt must be byte-equal to the canonical
+`build_production_prompt` value for its mode and authenticated executable
+paths. Arbitrary prose before or after that sentence, leading whitespace,
+embedded newlines, extra arguments, and unknown TOML fields or tables are
+rejected.
+
 The controller uses this exact internal sequence; it is not an engine command:
 
 ```python
