@@ -1608,6 +1608,13 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         unmatched_private_key = f"{rsa_begin} {ec_end} {'K' * 48}"
         quoted_head = "L" * 20
         quoted_suffix = "M" * 12
+        punctuation_value = "!@#$%^&*()"
+        punctuation_suffix_probes = (
+            f"password=[REDACTED_CREDENTIAL] {punctuation_value}",
+            f"Authorization: [REDACTED_CREDENTIAL] {punctuation_value}",
+            f"run deploy --token [REDACTED_CREDENTIAL] {punctuation_value}",
+            f"credential is redacted {punctuation_value}",
+        )
         probes = (
             slack_probe,
             ".".join((jwt_segment, jwt_segment, jwt_segment)),
@@ -1722,6 +1729,37 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 safe_review["turn_findings"][1]["rewritten_prompt"] = safe_narrative
                 artifacts = assemble_retained_artifacts(run_state(), safe_review)
                 validate_retained_artifacts(artifacts)
+
+        for probe in punctuation_suffix_probes:
+            with self.subTest(probe=probe, phase="exact-assembly"):
+                unsafe = review_data()
+                unsafe["turn_findings"][1]["rewritten_prompt"] = probe
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError,
+                    "credential-shaped material",
+                ):
+                    assemble_retained_artifacts(run_state(), unsafe)
+
+            with self.subTest(probe=probe, phase="exact-retained-reread"):
+                artifacts = assemble_retained_artifacts(run_state(), review_data())
+                tampered = dict(artifacts)
+                rows = [
+                    json.loads(line)
+                    for line in tampered["turn_findings.jsonl"].splitlines()
+                ]
+                high_impact = next(
+                    row for row in rows if row["disposition"] == "high_impact"
+                )
+                high_impact["rewritten_prompt"] = probe
+                tampered["turn_findings.jsonl"] = b"".join(
+                    canonical_json_bytes(row) for row in rows
+                )
+                refresh_bundle_digest(tampered)
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError,
+                    "credential-shaped material",
+                ):
+                    validate_retained_artifacts(tampered)
 
     def test_non_http_uri_schemes_are_rejected_before_and_after_assembly(self) -> None:
         prefixed_mixed_scheme_uri = f"locator_a{'9' * 32}+.-x://?prod-build-queue"

@@ -92,7 +92,10 @@ _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT = (
     + r")"
 )
 _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT = (
-    _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT + r"(?:(?!\w)[\s\S])*+\w[^'\"\s,;]*"
+    _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT
+    + r"(?:"
+    + r"(?:(?!\w)[\s\S])*+\w[^'\"\s,;]*|"
+    + r"(?:(?!\w)[\s\S])++\Z)"
 )
 # Structured fields own their matching quote. A safe quoted value is exempt only
 # when no material remains outside that quote in the complete retained value.

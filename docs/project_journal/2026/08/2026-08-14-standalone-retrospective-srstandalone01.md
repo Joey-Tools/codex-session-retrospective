@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-16
+updated: 2026-08-17
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -669,6 +669,30 @@ superseded_by:
   397/397 in 1,121.424 seconds, 445/445 in 841.169 seconds, 450/450 in 940.666
   seconds, and 373/373 in 904.847 seconds. Every runner exits zero and the
   retained logs contain no failure summary.
+- Signed follow-up `a9124829` implements the three findings, and signed
+  fixture-only follow-up `da8a2346` constructs private-key-shaped adversarial
+  test values from non-secret fragments so exact-secret admission remains an
+  independent production-tree gate. Exact-secret admission for
+  `a3836660..da8a2346` is clean with complete temporary cleanup.
+- The fresh-context Codex processor for `a3836660..da8a2346` found one final
+  retained-privacy gap: an exact credential value ending in punctuation-only
+  material after a safe redaction marker could evade the trailing-material
+  detector once its field context was removed. Postvalidation reproduced the
+  exact 27-commit, 26-edge graph and local-config receipts, trusted control
+  digests remained unchanged, and the identity-bound reviewer workspace was
+  removed.
+- The detector now treats a nonempty pure non-word suffix extending to the
+  absolute end of the retained value as credential material while preserving
+  the existing complete-placeholder and reviewed punctuation terminators.
+  Exact assignment, Authorization, CLI, and narrative regressions cover both
+  extractor redaction and retained-artifact assembly/reread. The result module
+  passes 69/69, export/reporting passes 66/66, retained-result audit passes
+  17/17, and module boundaries pass 19/19 with unchanged exact branch inventory
+  8,881. Ruff lint and formatting pass for all three edited Python files.
+- Full-suite attempts started on the superseded `da8a2346` tree were
+  deliberately interrupted after this finding and are non-counting; their
+  runner processes were proved absent. The superseding signed head must rerun
+  the four exact partitions before final delivery.
 
 ## Follow-up Work
 

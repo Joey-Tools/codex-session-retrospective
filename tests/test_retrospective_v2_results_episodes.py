@@ -1139,6 +1139,35 @@ class ResultValidationTests(unittest.TestCase):
                 )
                 self.assertEqual(scan_for_leaks(result), ())
 
+    def test_safe_credential_prefix_cannot_leave_punctuation_only_value(self) -> None:
+        punctuation_value = "!@#$%^&*()"
+        cases = (
+            (f"password=[REDACTED_CREDENTIAL] {punctuation_value}", ""),
+            (f"Authorization: [REDACTED_CREDENTIAL] {punctuation_value}", ""),
+            (
+                f"run deploy --token [REDACTED_CREDENTIAL] {punctuation_value}",
+                "run deploy ",
+            ),
+            (f"credential is redacted {punctuation_value}", ""),
+        )
+        for probe, preserved_prefix in cases:
+            with self.subTest(probe=probe):
+                self.assertTrue(
+                    result_validation_module.privacy_locators.contains_credential_material(
+                        probe
+                    )
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = probe
+
+                result = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    preserved_prefix + "[REDACTED_CREDENTIAL]",
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(result), ())
+
     def test_private_key_redaction_requires_matching_normalized_end_label(
         self,
     ) -> None:
