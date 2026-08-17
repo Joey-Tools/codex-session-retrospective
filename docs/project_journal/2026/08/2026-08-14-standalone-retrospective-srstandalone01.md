@@ -638,6 +638,38 @@ superseded_by:
   disjoint composite covers all 1,663 stable test identifiers exactly once;
   hosted CI must still rerun all four partitions on the signed commit.
 
+- Signed head `4050e02c` passed exact-secret admission and all four hosted CI
+  partitions, then its fresh-context Codex processor found three remaining
+  shared-privacy-detector issues. An unsafe quoted value stopped at its first
+  closing quote and could leave a same-shell-word suffix, any supported private
+  key `END` label could close a different `BEGIN` label, and reviewed compound
+  narrative states such as `not required` were rejected as credential
+  material. The lane's postvalidation repeated the exact 25-commit graph and
+  local-config receipts, the trusted manifest, skill, and guard digests stayed
+  unchanged, and the identity-bound private review workspace was removed.
+- Quoted assignment, header, CLI, and narrative values now consume adjacent
+  quoted and unquoted shell fragments, including escaped whitespace and
+  multiline quoted content. Private-key redaction walks normalized boundary
+  labels, tracks same-label nesting, accepts only the corresponding `END`, and
+  redacts through end of input when no matching boundary exists. The narrative
+  grammar explicitly permits only the reviewed `not required`, `not present`,
+  and `not available` compounds at a true terminator or before a reviewed prose
+  connector; an unknown following value remains credential-shaped.
+- Exact adversarial coverage includes every value context, adjacent quoted and
+  bare fragments, escaped and multiline shell values, mismatched, missing,
+  different-label nested, and same-label nested private-key blocks, safe
+  compound prose, and compound-status credential suffixes. Complete affected
+  modules pass result validation 68/68, export/reporting 66/66, retained-result
+  audit 17/17, and module boundaries 19/19 with exact branch inventory 8,881.
+  Ruff lint and formatting pass on every edited Python file.
+- One four-shard run was deliberately interrupted and is non-counting because
+  the same-label nesting regression was added after those runners started; all
+  four obsolete runners were proved absent before retry. The frozen code tree
+  contains 1,665 unique tests partitioned exactly once. Shards 0 through 3 pass
+  397/397 in 1,121.424 seconds, 445/445 in 841.169 seconds, 450/450 in 940.666
+  seconds, and 373/373 in 904.847 seconds. Every runner exits zero and the
+  retained logs contain no failure summary.
+
 ## Follow-up Work
 
 1. Register `Joey-Tools/codex-session-retrospective` in `codex-workspace` after

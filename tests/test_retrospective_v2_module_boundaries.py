@@ -1192,8 +1192,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(8_874, branch_total)
-        self.assertLessEqual(branch_total, 8_874)
+        self.assertEqual(8_881, branch_total)
+        self.assertLessEqual(branch_total, 8_881)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

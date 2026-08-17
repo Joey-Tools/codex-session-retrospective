@@ -665,7 +665,7 @@ def _post_redact_text(
     reference_field: bool,
     source_overlap_exempt: bool,
 ) -> str:
-    redacted = text
+    redacted = privacy_locators.redact_private_key_blocks(text)
     if not source_overlap_exempt:
         for pattern in original_prompt_patterns:
             redacted = pattern.sub("[REDACTED_ORIGINAL_PROMPT]", redacted)

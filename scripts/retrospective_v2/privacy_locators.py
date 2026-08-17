@@ -79,6 +79,18 @@ _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT = (
 _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT = r"\s*+"
 _CREDENTIAL_SPACE_REQUIRED_ATOMIC_PATTERN_TEXT = r"\s++"
 _CREDENTIAL_INLINE_SPACE_ATOMIC_PATTERN_TEXT = r"[^\S\r\n]*+"
+_CREDENTIAL_SHELL_UNQUOTED_FRAGMENT_PATTERN_TEXT = r"(?:\\[\s\S]|[^\\'\"\s,;])++"
+_CREDENTIAL_DOUBLE_QUOTED_FRAGMENT_PATTERN_TEXT = r"\"(?:\\[\s\S]|[^\"\\])*\""
+_CREDENTIAL_SINGLE_QUOTED_FRAGMENT_PATTERN_TEXT = r"'(?:\\[\s\S]|[^'\\])*'"
+_CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT = (
+    r"(?:"
+    + _CREDENTIAL_SHELL_UNQUOTED_FRAGMENT_PATTERN_TEXT
+    + r"|"
+    + _CREDENTIAL_DOUBLE_QUOTED_FRAGMENT_PATTERN_TEXT
+    + r"|"
+    + _CREDENTIAL_SINGLE_QUOTED_FRAGMENT_PATTERN_TEXT
+    + r")"
+)
 _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT = (
     _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT + r"(?:(?!\w)[\s\S])*+\w[^'\"\s,;]*"
 )
@@ -88,7 +100,9 @@ _CREDENTIAL_UNQUOTED_VALUE_MATCH_PATTERN_TEXT = (
     _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
     + r"(?:"
     + _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT
-    + r"|[^'\"\s,;]+)"
+    + r"|"
+    + _CREDENTIAL_SHELL_UNQUOTED_FRAGMENT_PATTERN_TEXT
+    + r")"
 )
 _SAFE_QUOTED_CREDENTIAL_VALUE_CONTENT_PATTERN_TEXT = (
     _CREDENTIAL_INLINE_SPACE_ATOMIC_PATTERN_TEXT
@@ -120,14 +134,18 @@ _DOUBLE_QUOTED_CREDENTIAL_VALUE_MATCH_PATTERN_TEXT = (
     + _DOUBLE_QUOTED_SAFE_VALUE_WITH_TRAILING_MATERIAL_MATCH_PATTERN_TEXT
     + r"|\"(?!"
     + _SAFE_DOUBLE_QUOTED_CREDENTIAL_VALUE_PATTERN_TEXT
-    + r")(?:\\[^\r\n]|[^\"\\\r\n])*(?:\"|(?=\r?\n|\Z)))"
+    + r")(?:\\[\s\S]|[^\"\\])*(?:\""
+    + _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT
+    + r"*+|(?=\Z)))"
 )
 _SINGLE_QUOTED_CREDENTIAL_VALUE_MATCH_PATTERN_TEXT = (
     r"(?:"
     + _SINGLE_QUOTED_SAFE_VALUE_WITH_TRAILING_MATERIAL_MATCH_PATTERN_TEXT
     + r"|'(?!"
     + _SAFE_SINGLE_QUOTED_CREDENTIAL_VALUE_PATTERN_TEXT
-    + r")(?:\\[^\r\n]|[^'\\\r\n])*(?:'|(?=\r?\n|\Z)))"
+    + r")(?:\\[\s\S]|[^'\\])*(?:'"
+    + _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT
+    + r"*+|(?=\Z)))"
 )
 _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT = (
     r"(?:"
@@ -140,6 +158,7 @@ _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT = (
 )
 _SAFE_CREDENTIAL_NARRATIVE_STATUS_PATTERN_TEXT = (
     r"(?:redacted(?:[_-][a-z0-9]+)*|masked(?:[_-][a-z0-9]+)*|"
+    r"not\s++(?:required|present|available)|"
     r"missing|omitted|present|unknown|null|none|empty|in|not|required|"
     r"denied|expired|invalid|unavailable|absent|needed|necessary|revoked|rotated)"
 )
@@ -150,7 +169,11 @@ _SAFE_CREDENTIAL_NARRATIVE_CONTINUATION_PATTERN_TEXT = (
 )
 _SAFE_CREDENTIAL_NARRATIVE_PHRASE_PATTERN_TEXT = (
     _SAFE_CREDENTIAL_NARRATIVE_STATUS_PATTERN_TEXT
+    + r"(?:"
     + _SAFE_CREDENTIAL_NARRATIVE_CONTINUATION_PATTERN_TEXT
+    + r"|"
+    + _SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT
+    + r")"
 )
 _SAFE_CREDENTIAL_NARRATIVE_STATUS_LOOKAHEAD_PATTERN_TEXT = (
     r"(?!" + _SAFE_CREDENTIAL_NARRATIVE_PHRASE_PATTERN_TEXT + r")"
@@ -178,8 +201,9 @@ _CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT = (
     + _SAFE_CREDENTIAL_NARRATIVE_STATUS_LOOKAHEAD_PATTERN_TEXT
     + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
     + r"(?:"
-    + _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT
-    + r"|[^'\"\s,;]{3,}[^\r\n]*+)"
+    + r"[^'\"\s,;]{3,}[^\r\n]*+|"
+    + _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT
+    + r"(?=\s++\S)[^\r\n]*+)"
     + r")"
 )
 _COMPACT_TOKEN_KEY_PATTERN_TEXT = (
@@ -204,17 +228,19 @@ _AUTH_SCHEME_PATTERN_TEXT = (
 )
 
 PRIVATE_KEY_BOUNDARY_RE = re.compile(
-    r"-----\s*(?:BEGIN|END)\s+" + _PRIVATE_KEY_LABEL_PATTERN_TEXT + r"\s*-----",
+    r"-----\s*(?P<kind>BEGIN|END)\s+"
+    r"(?P<label>" + _PRIVATE_KEY_LABEL_PATTERN_TEXT + r")\s*-----",
     re.IGNORECASE,
 )
 CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "secret",
         re.compile(
-            r"-----\s*BEGIN\s+" + _PRIVATE_KEY_LABEL_PATTERN_TEXT + r"\s*-----"
-            r"(?:[\s\S]*?-----\s*END\s+"
+            r"-----\s*BEGIN\s+(?P<private_key_label>"
             + _PRIVATE_KEY_LABEL_PATTERN_TEXT
-            + r"\s*-----|[\s\S]*\Z)",
+            + r")\s*-----"
+            r"(?:[\s\S]*?-----\s*END\s+"
+            r"(?P=private_key_label)" + r"\s*-----|[\s\S]*\Z)",
             re.IGNORECASE,
         ),
         "[REDACTED_SECRET]",
@@ -316,6 +342,48 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
         "[REDACTED_CREDENTIAL]",
     ),
 )
+
+
+def _normalized_private_key_label(match: re.Match[str]) -> str:
+    return " ".join(match.group("label").upper().split())
+
+
+def private_key_block_spans(value: str) -> Iterator[tuple[int, int]]:
+    """Yield complete BEGIN blocks, ignoring mismatched END labels."""
+
+    boundaries = tuple(PRIVATE_KEY_BOUNDARY_RE.finditer(value))
+    index = 0
+    while index < len(boundaries):
+        begin = boundaries[index]
+        if begin.group("kind").upper() != "BEGIN":
+            index += 1
+            continue
+        begin_label = _normalized_private_key_label(begin)
+        nesting_depth = 1
+        for end_index in range(index + 1, len(boundaries)):
+            end = boundaries[end_index]
+            if _normalized_private_key_label(end) != begin_label:
+                continue
+            if end.group("kind").upper() == "BEGIN":
+                nesting_depth += 1
+                continue
+            nesting_depth -= 1
+            if nesting_depth == 0:
+                yield begin.start(), end.end()
+                index = end_index + 1
+                break
+        else:
+            yield begin.start(), len(value)
+            return
+
+
+def redact_private_key_blocks(value: str) -> str:
+    """Redact private-key blocks through their matching normalized END label."""
+
+    spans = tuple(private_key_block_spans(value))
+    for start, end in reversed(spans):
+        value = value[:start] + "[REDACTED_SECRET]" + value[end:]
+    return value
 
 
 def _is_ip_token(value: str, *, version: int) -> bool:

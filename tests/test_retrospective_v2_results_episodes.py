@@ -885,6 +885,30 @@ class ResultValidationTests(unittest.TestCase):
         truncated_dsa_private_key = "".join(
             ("-----BEGIN DSA ", "PRIVATE KEY-----\n", "F" * 96)
         )
+        mismatched_private_key = (
+            "-----BEGIN RSA PRIVATE KEY-----\n"
+            f"{'G' * 48}\n"
+            "-----END EC PRIVATE KEY-----\n"
+            f"{'H' * 48}\n"
+            "-----END RSA PRIVATE KEY-----"
+        )
+        nested_private_key = (
+            "-----BEGIN RSA PRIVATE KEY-----\n"
+            f"{'I' * 48}\n"
+            "-----BEGIN EC PRIVATE KEY-----\n"
+            f"{'J' * 48}\n"
+            "-----END EC PRIVATE KEY-----\n"
+            f"{'K' * 48}\n"
+            "-----END RSA PRIVATE KEY-----"
+        )
+        unmatched_private_key = (
+            "-----BEGIN RSA PRIVATE KEY-----\n"
+            f"{'L' * 48}\n"
+            "-----END EC PRIVATE KEY-----\n"
+            f"{'M' * 48}"
+        )
+        quoted_head = "N" * 20
+        quoted_suffix = "O" * 12
         probes = (
             *(
                 ("".join((prefix, "A" * 16)), ("A" * 16,), "[REDACTED_CREDENTIAL]")
@@ -894,6 +918,21 @@ class ResultValidationTests(unittest.TestCase):
             (long_authorization, ("D" * 64, "TAIL"), "[REDACTED_CREDENTIAL]"),
             (truncated_private_key, ("E" * 64,), "[REDACTED_SECRET]"),
             (truncated_dsa_private_key, ("F" * 64,), "[REDACTED_SECRET]"),
+            (
+                mismatched_private_key,
+                ("G" * 48, "H" * 48, "END EC PRIVATE KEY"),
+                "[REDACTED_SECRET]",
+            ),
+            (
+                nested_private_key,
+                ("I" * 48, "J" * 48, "K" * 48),
+                "[REDACTED_SECRET]",
+            ),
+            (
+                unmatched_private_key,
+                ("L" * 48, "M" * 48, "END EC PRIVATE KEY"),
+                "[REDACTED_SECRET]",
+            ),
             (
                 "".join(("Proxy-Authorization: Basic ", "A" * 16)),
                 ("A" * 16,),
@@ -966,6 +1005,14 @@ class ResultValidationTests(unittest.TestCase):
                 (SYNTHETIC_ACCESS_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
+            *(
+                (
+                    f"credential is {status} {SYNTHETIC_ACCESS_TOKEN}",
+                    (SYNTHETIC_ACCESS_TOKEN,),
+                    "[REDACTED_CREDENTIAL]",
+                )
+                for status in ("not required", "not present", "not available")
+            ),
             (
                 f"Bearer [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
                 (SYNTHETIC_ACCESS_TOKEN,),
@@ -1002,6 +1049,22 @@ class ResultValidationTests(unittest.TestCase):
                 (punctuation_value,),
                 "[REDACTED_CREDENTIAL]",
             ),
+            *(
+                (
+                    probe,
+                    (quoted_head, quoted_suffix),
+                    "[REDACTED_CREDENTIAL]",
+                )
+                for probe in (
+                    f'password="{quoted_head}"{quoted_suffix}',
+                    f'Authorization: "{quoted_head}"{quoted_suffix}',
+                    f'run deploy --token "{quoted_head}"{quoted_suffix}',
+                    f'credential is "{quoted_head}"{quoted_suffix}',
+                    f'password="{quoted_head}""{quoted_suffix}"',
+                    f'password="{quoted_head}"{quoted_suffix}\\ continued',
+                    f'password="{quoted_head}\n{quoted_suffix}"',
+                )
+            ),
         )
 
         for probe, forbidden_fragments, replacement in probes:
@@ -1029,7 +1092,12 @@ class ResultValidationTests(unittest.TestCase):
             "credential is required before deployment",
             "credential was missing during dry run",
             "credential is redacted in report",
+            "credential is not required",
+            "credential is not required before deployment",
+            "credential was not present during dry run",
+            "credential is not available in this environment",
             'credential is "required before deployment"',
+            'credential is "not required before deployment"',
             "run deploy --token [REDACTED_CREDENTIAL]",
             "run deploy --token  [REDACTED_CREDENTIAL]",
             "Authorization:  [REDACTED_CREDENTIAL]",
@@ -1047,6 +1115,83 @@ class ResultValidationTests(unittest.TestCase):
                     result_validation_module.privacy_locators.contains_credential_material(
                         safe_probe
                     )
+                )
+
+    def test_quoted_credential_redaction_consumes_complete_shell_value(self) -> None:
+        quoted_head = "N" * 20
+        quoted_suffix = "O" * 12
+        cases = (
+            (f'password="{quoted_head}"{quoted_suffix}', ""),
+            (f'Authorization: "{quoted_head}"{quoted_suffix}', ""),
+            (f'run deploy --token "{quoted_head}"{quoted_suffix}', "run deploy "),
+            (f'credential is "{quoted_head}"{quoted_suffix}', ""),
+            (f'password="{quoted_head}""{quoted_suffix}"', ""),
+            (f'password="{quoted_head}"{quoted_suffix}\\ continued', ""),
+            (f'password="{quoted_head}\n{quoted_suffix}"', ""),
+        )
+        for probe, preserved_prefix in cases:
+            with self.subTest(probe=probe):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = (
+                    f"Inspect {probe} before continuing."
+                )
+
+                result = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    "Inspect "
+                    + preserved_prefix
+                    + "[REDACTED_CREDENTIAL] before continuing.",
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(result), ())
+
+    def test_private_key_redaction_requires_matching_normalized_end_label(
+        self,
+    ) -> None:
+        cases = {
+            "mismatch_then_match": (
+                "-----BEGIN RSA   PRIVATE KEY-----\n"
+                "outer-a\n"
+                "-----END EC PRIVATE KEY-----\n"
+                "outer-b\n"
+                "-----END rsa private key----- after",
+                "[REDACTED_SECRET] after",
+            ),
+            "mismatch_without_match": (
+                "-----BEGIN RSA PRIVATE KEY-----\n"
+                "outer-a\n"
+                "-----END EC PRIVATE KEY-----\n"
+                "outer-b",
+                "[REDACTED_SECRET]",
+            ),
+            "nested": (
+                "-----BEGIN RSA PRIVATE KEY-----\n"
+                "-----BEGIN EC PRIVATE KEY-----\n"
+                "nested\n"
+                "-----END EC PRIVATE KEY-----\n"
+                "outer\n"
+                "-----END RSA PRIVATE KEY----- after",
+                "[REDACTED_SECRET] after",
+            ),
+            "same_label_nested": (
+                "-----BEGIN RSA PRIVATE KEY-----\n"
+                "outer-a\n"
+                "-----BEGIN RSA PRIVATE KEY-----\n"
+                "nested\n"
+                "-----END RSA PRIVATE KEY-----\n"
+                "outer-b\n"
+                "-----END RSA PRIVATE KEY----- after",
+                "[REDACTED_SECRET] after",
+            ),
+        }
+        for name, (probe, expected) in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(
+                    expected,
+                    result_validation_module.privacy_locators.redact_private_key_blocks(
+                        probe
+                    ),
                 )
 
     def test_credential_placeholder_suffix_preserves_independent_signals(self) -> None:

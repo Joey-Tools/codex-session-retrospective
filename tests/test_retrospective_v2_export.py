@@ -1594,6 +1594,26 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         truncated_dsa_private_key = "".join(
             ("-----BEGIN DSA ", "PRIVATE KEY-----", "F" * 96)
         )
+        mismatched_private_key = (
+            "-----BEGIN RSA PRIVATE KEY----- "
+            f"{'G' * 48} "
+            "-----END EC PRIVATE KEY----- "
+            f"{'H' * 48} "
+            "-----END RSA PRIVATE KEY-----"
+        )
+        nested_private_key = (
+            "-----BEGIN RSA PRIVATE KEY----- "
+            "-----BEGIN EC PRIVATE KEY----- "
+            f"{'I' * 48} "
+            "-----END EC PRIVATE KEY----- "
+            f"{'J' * 48} "
+            "-----END RSA PRIVATE KEY-----"
+        )
+        unmatched_private_key = (
+            f"-----BEGIN RSA PRIVATE KEY----- -----END EC PRIVATE KEY----- {'K' * 48}"
+        )
+        quoted_head = "L" * 20
+        quoted_suffix = "M" * 12
         probes = (
             slack_probe,
             ".".join((jwt_segment, jwt_segment, jwt_segment)),
@@ -1605,6 +1625,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             long_authorization_probe,
             truncated_private_key,
             truncated_dsa_private_key,
+            mismatched_private_key,
+            nested_private_key,
+            unmatched_private_key,
             "".join(("rk-", "B" * 12)),
             f"client_secret={SYNTHETIC_ACCESS_TOKEN}",
             f"pwd={SYNTHETIC_ACCESS_TOKEN}",
@@ -1629,11 +1652,20 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             f"run deploy --token [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
             f"credential is missing {SYNTHETIC_ACCESS_TOKEN}",
             f"credential is required {SYNTHETIC_ACCESS_TOKEN}",
+            f"credential is not required {SYNTHETIC_ACCESS_TOKEN}",
+            f"credential is not present {SYNTHETIC_ACCESS_TOKEN}",
+            f"credential is not available {SYNTHETIC_ACCESS_TOKEN}",
             f"Bearer [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
             f'password="{multiword_value}"',
             f'password="[REDACTED_CREDENTIAL] {multiword_value}"',
             f"password='{punctuation_value}'",
             f'password="[REDACTED_CREDENTIAL] {punctuation_value}"',
+            f'password="{quoted_head}"{quoted_suffix}',
+            f'Authorization: "{quoted_head}"{quoted_suffix}',
+            f'run deploy --token "{quoted_head}"{quoted_suffix}',
+            f'credential is "{quoted_head}"{quoted_suffix}',
+            f'password="{quoted_head}""{quoted_suffix}"',
+            f'password="{quoted_head}"{quoted_suffix}\\ continued',
             *github_probes,
         )
         for probe in probes:
@@ -1686,6 +1718,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "credential is required before deployment",
             "credential was missing during dry run",
             "credential is redacted in report",
+            "credential is not required",
+            "credential is not required before deployment",
+            "credential was not present during dry run",
+            "credential is not available in this environment",
         ):
             with self.subTest(safe_narrative=safe_narrative):
                 safe_review = review_data()
