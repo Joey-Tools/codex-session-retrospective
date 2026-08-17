@@ -15,11 +15,14 @@ from . import (
     episode_review,
     extracted_turns,
     raw_shard_staging,
+    reduction_task_inputs,
     result_validation,
     sharding,
     source_inputs,
     source_payloads,
     synthesis_lineage,
+    synthesis_sources,
+    synthesis_tasks,
 )
 from .checkpoints import canonical_json_bytes
 from .contracts import JobKind, RefType, RunStage, SourceKind
@@ -1401,13 +1404,22 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             if task["job_kind"] == kind
             and task["metadata"].get("hierarchy_root_ref") == revision_ref
         ]
+        direct_metadata = reduction_task_inputs.review_metadata(
+            metadata,
+            root_ref=revision_ref,
+            turn_refs=revision["turn_refs"],
+            level=0,
+            final=True,
+        )
         if not existing and self._jobs._agent_input_fits(
             state,
             kind=kind,
+            partition_ref=revision_ref,
             input_payload=full_input,
             input_refs=input_refs,
             allowed_refs=full_allowed,
-            reviewer_slot=metadata.get("reviewer_slot"),
+            allowed_turn_refs=revision["turn_refs"],
+            metadata=direct_metadata,
         ):
             self._jobs._create_agent_task(
                 state,
@@ -1418,73 +1430,18 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 input_payload=full_input,
                 allowed_refs=full_allowed,
                 allowed_turn_refs=revision["turn_refs"],
-                metadata={
-                    **dict(metadata),
-                    "hierarchy_final": True,
-                    "hierarchy_level": 0,
-                    "hierarchy_root_ref": revision_ref,
-                    "underlying_turn_refs": list(revision["turn_refs"]),
-                },
+                metadata=direct_metadata,
             )
             return
         if not existing:
-            episode_context = {
-                "episode_ref": revision["episode_ref"],
-                "episode_revision_ref": revision_ref,
-                "risk_flags": revision["risk_flags"],
-                "session_ref": revision["session_ref"],
-                "workstream_refs": revision["workstream_refs"],
-            }
-            items: list[dict[str, Any]] = [
-                {"kind": "turn", "value": turn} for turn in full_input["turns"]
-            ]
-            groups: list[list[dict[str, Any]]] = []
-            for item in items:
-                candidate = [*(groups[-1] if groups else []), item]
-                payload = self._review_partition_payload(episode_context, candidate)
-                allowed = self._projection._collect_refs(payload)
-                if groups and not self._jobs._agent_input_fits(
-                    state,
-                    kind=kind,
-                    input_payload=payload,
-                    input_refs=input_refs,
-                    allowed_refs=allowed,
-                    reviewer_slot=metadata.get("reviewer_slot"),
-                ):
-                    groups.append([item])
-                elif groups:
-                    groups[-1] = candidate
-                else:
-                    groups.append([item])
-            groups = groups or [[]]
-            for index, group in enumerate(groups):
-                payload = self._review_partition_payload(episode_context, group)
-                allowed = self._projection._collect_refs(payload)
-                partition_ref = self._ref(
-                    RefType.RUN_INPUT,
-                    revision_ref,
-                    kind,
-                    "review_leaf",
-                    index,
-                )
-                turn_refs = [item["value"]["turn_ref"] for item in group]
-                self._jobs._create_agent_task(
-                    state,
-                    stage=RunStage.EPISODE_REVIEW.value,
-                    kind=kind,
-                    partition_ref=partition_ref,
-                    input_refs=input_refs,
-                    input_payload=payload,
-                    allowed_refs=allowed,
-                    allowed_turn_refs=turn_refs,
-                    metadata={
-                        **dict(metadata),
-                        "hierarchy_final": False,
-                        "hierarchy_level": 0,
-                        "hierarchy_root_ref": revision_ref,
-                        "underlying_turn_refs": turn_refs,
-                    },
-                )
+            self._seed_review_leaf_tasks(
+                state,
+                revision=revision,
+                kind=kind,
+                metadata=metadata,
+                full_input=full_input,
+                input_refs=input_refs,
+            )
             return
         if any(task["metadata"].get("hierarchy_final") for task in existing):
             return
@@ -1501,14 +1458,38 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             candidate = [*(groups[-1] if groups else []), task]
             payload = self._review_reduce_payload(revision, candidate)
             allowed = self._projection._collect_refs(payload)
+            candidate_turn_refs = sorted(
+                {
+                    turn_ref
+                    for child in candidate
+                    for turn_ref in self._task_metadata(child)["underlying_turn_refs"]
+                }
+            )
+            candidate_index = max(len(groups) - 1, 0)
+            candidate_partition_ref = self._ref(
+                RefType.RUN_INPUT,
+                revision_ref,
+                kind,
+                "review_reduce",
+                level + 1,
+                candidate_index,
+            )
             if groups and not self._jobs._agent_input_fits(
                 state,
                 kind=kind,
+                partition_ref=candidate_partition_ref,
                 input_payload=payload,
                 input_refs=input_refs,
                 allowed_refs=allowed,
-                reviewer_slot=metadata.get("reviewer_slot"),
-                candidate_result_hashes=payload["child_result_hashes"],
+                allowed_turn_refs=candidate_turn_refs,
+                metadata=reduction_task_inputs.review_metadata(
+                    metadata,
+                    root_ref=revision_ref,
+                    turn_refs=candidate_turn_refs,
+                    level=level + 1,
+                    final=False,
+                    child_result_hashes=payload["child_result_hashes"],
+                ),
             ):
                 groups.append([task])
             elif groups:
@@ -1545,14 +1526,90 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 input_payload=payload,
                 allowed_refs=self._projection._collect_refs(payload),
                 allowed_turn_refs=turn_refs,
-                metadata={
-                    **dict(metadata),
-                    "candidate_result_hashes": payload["child_result_hashes"],
-                    "hierarchy_final": final_level,
-                    "hierarchy_level": level + 1,
-                    "hierarchy_root_ref": revision_ref,
-                    "underlying_turn_refs": turn_refs,
-                },
+                metadata=reduction_task_inputs.review_metadata(
+                    metadata,
+                    root_ref=revision_ref,
+                    turn_refs=turn_refs,
+                    level=level + 1,
+                    final=final_level,
+                    child_result_hashes=payload["child_result_hashes"],
+                ),
+            )
+
+    def _seed_review_leaf_tasks(
+        self,
+        state: dict[str, Any],
+        *,
+        revision: Mapping[str, Any],
+        kind: str,
+        metadata: Mapping[str, Any],
+        full_input: Mapping[str, Any],
+        input_refs: Sequence[str],
+    ) -> None:
+        revision_ref = revision["episode_revision_ref"]
+        episode_context = {
+            "episode_ref": revision["episode_ref"],
+            "episode_revision_ref": revision_ref,
+            "risk_flags": revision["risk_flags"],
+            "session_ref": revision["session_ref"],
+            "workstream_refs": revision["workstream_refs"],
+        }
+        groups: list[list[dict[str, Any]]] = []
+        for turn in full_input["turns"]:
+            item = {"kind": "turn", "value": turn}
+            candidate = [*(groups[-1] if groups else []), item]
+            payload = self._review_partition_payload(episode_context, candidate)
+            allowed = self._projection._collect_refs(payload)
+            candidate_turn_refs = [row["value"]["turn_ref"] for row in candidate]
+            candidate_partition_ref = self._ref(
+                RefType.RUN_INPUT,
+                revision_ref,
+                kind,
+                "review_leaf",
+                max(len(groups) - 1, 0),
+            )
+            if groups and not self._jobs._agent_input_fits(
+                state,
+                kind=kind,
+                partition_ref=candidate_partition_ref,
+                input_payload=payload,
+                input_refs=input_refs,
+                allowed_refs=allowed,
+                allowed_turn_refs=candidate_turn_refs,
+                metadata=reduction_task_inputs.review_metadata(
+                    metadata,
+                    root_ref=revision_ref,
+                    turn_refs=candidate_turn_refs,
+                    level=0,
+                    final=False,
+                ),
+            ):
+                groups.append([item])
+            elif groups:
+                groups[-1] = candidate
+            else:
+                groups.append([item])
+        for index, group in enumerate(groups or [[]]):
+            payload = self._review_partition_payload(episode_context, group)
+            turn_refs = [item["value"]["turn_ref"] for item in group]
+            self._jobs._create_agent_task(
+                state,
+                stage=RunStage.EPISODE_REVIEW.value,
+                kind=kind,
+                partition_ref=self._ref(
+                    RefType.RUN_INPUT, revision_ref, kind, "review_leaf", index
+                ),
+                input_refs=input_refs,
+                input_payload=payload,
+                allowed_refs=self._projection._collect_refs(payload),
+                allowed_turn_refs=turn_refs,
+                metadata=reduction_task_inputs.review_metadata(
+                    metadata,
+                    root_ref=revision_ref,
+                    turn_refs=turn_refs,
+                    level=0,
+                    final=False,
+                ),
             )
 
     @staticmethod
@@ -1957,12 +2014,41 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                         "workstream_ref": topic_index["workstream_ref"],
                     }
                 )
+                candidate_turn_refs = sorted(
+                    {
+                        turn_ref
+                        for child in candidate
+                        for turn_ref in agent_task_inputs.for_task(self.run_dir, child)[
+                            "allowed_turn_refs"
+                        ]
+                    }
+                )
+                candidate_index = max(len(groups) - 1, 0)
+                candidate_partition_ref = self._ref(
+                    RefType.RUN_INPUT,
+                    root_ref,
+                    "topic_reduce",
+                    level + 1,
+                    candidate_index,
+                )
                 if groups and not self._jobs._agent_input_fits(
                     state,
                     kind=JobKind.TOPIC_REDUCER.value,
+                    partition_ref=candidate_partition_ref,
                     input_payload=payload,
                     input_refs=[root_ref, *episode_refs],
                     allowed_refs=allowed,
+                    allowed_turn_refs=candidate_turn_refs,
+                    metadata={
+                        "child_result_hashes": payload["child_result_hashes"],
+                        "hierarchy_final": False,
+                        "hierarchy_level": level + 1,
+                        "hierarchy_root_ref": root_ref,
+                        "topic_candidate_ref": root_ref,
+                        "topic_ref": topic_index["topic_ref"],
+                        "underlying_episode_refs": episode_refs,
+                        "workstream_ref": topic_index["workstream_ref"],
+                    },
                 ):
                     groups.append([task])
                 elif groups:
@@ -2124,10 +2210,14 @@ class HierarchicalReductionOperations(OrchestratorComponent):
         independent_reviews: Sequence[Mapping[str, Any]],
     ) -> None:
         coverage = self._projection._safe_coverage_payload(state)
-        payload = self._synthesis_input_payload(
+        prompt_rewrites = synthesis_sources.prompt_rewrites(
+            self.run_dir, state, topic_results
+        )
+        payload = synthesis_tasks.input_payload(
             coverage,
             topic_results,
             independent_reviews,
+            prompt_rewrites,
         )
         allowed = self._projection._collect_refs(
             {
@@ -2136,21 +2226,26 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             }
         )
         input_refs = sorted(allowed)
-        all_turn_refs = {
-            turn_ref
-            for revision in state["episodes"]
-            for turn_ref in revision["turn_refs"]
-        }
+        allowed_turn_refs = synthesis_sources.turn_refs(
+            state, topic_results, independent_reviews
+        )
+        direct_metadata = synthesis_tasks.metadata(
+            root_ref=root_ref,
+            payload=payload,
+            topic_results=topic_results,
+            independent_reviews=independent_reviews,
+            level=0,
+            final=True,
+        )
         if self._jobs._agent_input_fits(
             state,
             kind=JobKind.GLOBAL_SYNTHESIS.value,
+            partition_ref=root_ref,
             input_payload=payload,
             input_refs=input_refs,
             allowed_refs=allowed,
-            safety_review_hashes=(
-                result_validation.canonical_result_hash(review)
-                for review in independent_reviews
-            ),
+            allowed_turn_refs=allowed_turn_refs,
+            metadata=direct_metadata,
         ):
             self._create_synthesis_task(
                 state,
@@ -2159,7 +2254,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 payload=payload,
                 topic_results=topic_results,
                 independent_reviews=independent_reviews,
-                allowed_turn_refs=all_turn_refs,
+                allowed_turn_refs=allowed_turn_refs,
                 level=0,
                 final=True,
             )
@@ -2177,19 +2272,35 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             candidate = [*(groups[-1] if groups else []), item]
             topics = [value for kind, _digest, value in candidate if kind == "topic"]
             reviews = [value for kind, _digest, value in candidate if kind == "review"]
-            candidate_payload = self._synthesis_input_payload(coverage, topics, reviews)
+            candidate_rewrites = synthesis_sources.prompt_rewrites(
+                self.run_dir, state, topics
+            )
+            candidate_payload = synthesis_tasks.input_payload(
+                coverage, topics, reviews, candidate_rewrites
+            )
             candidate_allowed = self._projection._collect_refs(
                 {"independent_reviews": reviews, "topic_results": topics}
             )
+            candidate_index = max(len(groups) - 1, 0)
+            candidate_partition_ref = self._ref(
+                RefType.RUN_INPUT, root_ref, "synthesis_leaf", candidate_index
+            )
+            candidate_turn_refs = synthesis_sources.turn_refs(state, topics, reviews)
             if groups and not self._jobs._agent_input_fits(
                 state,
                 kind=JobKind.GLOBAL_SYNTHESIS.value,
+                partition_ref=candidate_partition_ref,
                 input_payload=candidate_payload,
                 input_refs=sorted(candidate_allowed),
                 allowed_refs=candidate_allowed,
-                safety_review_hashes=(
-                    result_validation.canonical_result_hash(review)
-                    for review in reviews
+                allowed_turn_refs=candidate_turn_refs,
+                metadata=synthesis_tasks.metadata(
+                    root_ref=root_ref,
+                    payload=candidate_payload,
+                    topic_results=topics,
+                    independent_reviews=reviews,
+                    level=0,
+                    final=False,
                 ),
             ):
                 groups.append([item])
@@ -2202,16 +2313,21 @@ class HierarchicalReductionOperations(OrchestratorComponent):
         for index, group in enumerate(groups):
             topics = [value for kind, _digest, value in group if kind == "topic"]
             reviews = [value for kind, _digest, value in group if kind == "review"]
+            group_rewrites = synthesis_sources.prompt_rewrites(
+                self.run_dir, state, topics
+            )
             self._create_synthesis_task(
                 state,
                 root_ref=root_ref,
                 partition_ref=self._ref(
                     RefType.RUN_INPUT, root_ref, "synthesis_leaf", index
                 ),
-                payload=self._synthesis_input_payload(coverage, topics, reviews),
+                payload=synthesis_tasks.input_payload(
+                    coverage, topics, reviews, group_rewrites
+                ),
                 topic_results=topics,
                 independent_reviews=reviews,
-                allowed_turn_refs=all_turn_refs,
+                allowed_turn_refs=synthesis_sources.turn_refs(state, topics, reviews),
                 level=0,
                 final=False,
             )
@@ -2231,18 +2347,6 @@ class HierarchicalReductionOperations(OrchestratorComponent):
         validation_child_task_refs: Sequence[str] = (),
     ) -> None:
         allowed = self._projection._collect_refs({"payload": payload})
-        review_hashes = sorted(
-            result_validation.canonical_result_hash(review)
-            for review in independent_reviews
-        )
-        topic_commitment = copy.deepcopy(
-            payload.get(
-                "topic_result_commitment",
-                result_validation.build_synthesis_topic_result_commitment(
-                    topic_results
-                ),
-            )
-        )
         self._jobs._create_agent_task(
             state,
             stage=RunStage.GLOBAL_SYNTHESIS.value,
@@ -2252,43 +2356,16 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             input_payload=payload,
             allowed_refs=allowed,
             allowed_turn_refs=allowed_turn_refs,
-            metadata={
-                "hierarchy_final": final,
-                "hierarchy_level": level,
-                "hierarchy_root_ref": root_ref,
-                "safety_review_hashes": review_hashes,
-                "topic_result_commitment": topic_commitment,
-                "validation_child_task_refs": sorted(set(validation_child_task_refs)),
-                "validation_independent_review_hashes": review_hashes,
-                "validation_topic_result_commitment": topic_commitment,
-            },
+            metadata=synthesis_tasks.metadata(
+                root_ref=root_ref,
+                payload=payload,
+                topic_results=topic_results,
+                independent_reviews=independent_reviews,
+                level=level,
+                final=final,
+                validation_child_task_refs=validation_child_task_refs,
+            ),
         )
-
-    @staticmethod
-    def _synthesis_input_payload(
-        coverage: Mapping[str, Any],
-        topic_results: Sequence[Mapping[str, Any]],
-        independent_reviews: Sequence[Mapping[str, Any]],
-    ) -> dict[str, Any]:
-        return {
-            "coverage": copy.deepcopy(dict(coverage)),
-            "independent_reviews": copy.deepcopy(list(independent_reviews)),
-            "schema": "global_synthesis_input_v2",
-            "safety_review_hashes": sorted(
-                result_validation.canonical_result_hash(review)
-                for review in independent_reviews
-            ),
-            "signal_commitments": result_validation.build_synthesis_signal_commitments(
-                topic_results
-            ),
-            "signal_exemplars": result_validation.build_synthesis_signal_exemplars(
-                topic_results
-            ),
-            "topic_result_commitment": (
-                result_validation.build_synthesis_topic_result_commitment(topic_results)
-            ),
-            "topic_results": copy.deepcopy(list(topic_results)),
-        }
 
     def _refresh_synthesis_hierarchy(self, state: dict[str, Any]) -> None:
         tasks = self._projection._tasks_for_stage(
@@ -2312,12 +2389,36 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             candidate = [*(groups[-1] if groups else []), task]
             payload = self._synthesis_reduce_payload(state, candidate)
             allowed = self._projection._collect_refs({"payload": payload})
+            topics, reviews = synthesis_lineage.collect_validation_results(
+                self.run_dir, state, candidate
+            )
+            candidate_index = max(len(groups) - 1, 0)
+            candidate_partition_ref = self._ref(
+                RefType.RUN_INPUT,
+                root_ref,
+                "synthesis_reduce",
+                level + 1,
+                candidate_index,
+            )
             if groups and not self._jobs._agent_input_fits(
                 state,
                 kind=JobKind.GLOBAL_SYNTHESIS.value,
+                partition_ref=candidate_partition_ref,
                 input_payload=payload,
                 input_refs=sorted(allowed),
                 allowed_refs=allowed,
+                allowed_turn_refs=synthesis_sources.turn_refs(state, topics, reviews),
+                metadata=synthesis_tasks.metadata(
+                    root_ref=root_ref,
+                    payload=payload,
+                    topic_results=(),
+                    independent_reviews=(),
+                    level=level + 1,
+                    final=False,
+                    validation_child_task_refs=[
+                        child["task_ref"] for child in candidate
+                    ],
+                ),
             ):
                 groups.append([task])
             elif groups:
@@ -2325,12 +2426,10 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             else:
                 groups.append([task])
         final_level = len(groups) == 1
-        all_turn_refs = {
-            turn_ref
-            for revision in state["episodes"]
-            for turn_ref in revision["turn_refs"]
-        }
         for index, group in enumerate(groups):
+            topics, reviews = synthesis_lineage.collect_validation_results(
+                self.run_dir, state, group
+            )
             self._create_synthesis_task(
                 state,
                 root_ref=root_ref,
@@ -2348,7 +2447,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 payload=self._synthesis_reduce_payload(state, group),
                 topic_results=(),
                 independent_reviews=(),
-                allowed_turn_refs=all_turn_refs,
+                allowed_turn_refs=synthesis_sources.turn_refs(state, topics, reviews),
                 level=level + 1,
                 final=final_level,
                 validation_child_task_refs=[task["task_ref"] for task in group],

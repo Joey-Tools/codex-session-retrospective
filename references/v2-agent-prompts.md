@@ -109,8 +109,9 @@ ten retrospective questions, strengths, four confidence dimensions, and
 compatible-era changes. Preserve every high- or critical-severity event or
 finding from validated inputs.
 
-Bind every canonical topic signal with the provided exact count and hash
-commitment and emit only the deterministic bounded exemplars. Durable AGENTS.md
+Bind every canonical topic signal and every source-derived prompt rewrite with
+the provided exact count and hash commitments. Emit only the supplied
+deterministic bounded exemplars. Durable AGENTS.md
 or Skill candidates must cite exact episode and session pairs for at least three
 episodes across two actual sessions unless one independently reviewed
 high-severity safety event qualifies for the exception. Return only the declared
@@ -118,8 +119,9 @@ global_synthesis_result_v2 JSON object.
 ```
 
 Every synthesis leaf and parent must copy its exact
-`topic_result_commitment`, complete `signal_commitments`, and the supplied
-bounded `signal_exemplars`. A hierarchy leaf may cover only its assigned subset
+`topic_result_commitment`, complete `signal_commitments`,
+`prompt_rewrite_commitment`, and the supplied bounded signal and prompt-rewrite
+exemplars. A hierarchy leaf may cover only its assigned subset
 of topic roots; a parent must derive its commitment and signal union from its
 authenticated child subtree. The coordinator admits the final synthesis result
 only after exactly one accepted final topic result exists for every expected

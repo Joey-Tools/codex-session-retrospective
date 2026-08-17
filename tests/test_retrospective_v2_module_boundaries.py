@@ -368,7 +368,7 @@ BOUNDED_MODULE_LINES = {
     "orchestrator_components.py": 250,
     "orchestrator_context.py": 180,
     "orchestrator_history.py": 1_000,
-    "orchestrator_jobs.py": 525,
+    "orchestrator_jobs.py": 530,
     "orchestrator_lifecycle.py": 3_325,
     "orchestrator_projection.py": 1_000,
     "orchestrator_reduction.py": 2_500,
@@ -381,14 +381,18 @@ BOUNDED_MODULE_LINES = {
     "agent_claim_projection.py": 75,
     "agent_raw_artifacts.py": 120,
     "agent_results.py": 320,
-    "agent_task_inputs.py": 350,
+    "agent_task_inputs.py": 375,
     "extracted_turns.py": 200,
     "raw_shard_staging.py": 100,
+    "reduction_task_inputs.py": 50,
     "source_acceptance.py": 275,
     "source_inputs.py": 400,
     "source_payloads.py": 100,
     "source_session_policy.py": 127,
-    "synthesis_lineage.py": 225,
+    "synthesis_lineage.py": 250,
+    "synthesis_evidence.py": 200,
+    "synthesis_sources.py": 175,
+    "synthesis_tasks.py": 100,
     "source_spool.py": 350,
     "source_staging.py": 350,
     "source_capacity.py": 150,
@@ -417,7 +421,7 @@ BOUNDED_MODULE_LINES = {
     "run_state_cursors.py": 225,
     "run_state_holdouts.py": 240,
     "run_state_lineage.py": 275,
-    "reporting.py": 4_550,
+    "reporting.py": 4_560,
     "result_validation.py": 3_900,
     "agent_result_contracts.py": 525,
     "transport.py": 250,
@@ -1093,7 +1097,7 @@ spec.loader.exec_module(module)
                 len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
                 for name in ORCHESTRATOR_AGENT_SUPPORT_MODULES
             ),
-            1_100,
+            1_110,
         )
         self.assertLessEqual(
             sum(
@@ -1218,8 +1222,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_100, branch_total)
-        self.assertLessEqual(branch_total, 9_105)
+        self.assertEqual(9_142, branch_total)
+        self.assertLessEqual(branch_total, 9_145)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

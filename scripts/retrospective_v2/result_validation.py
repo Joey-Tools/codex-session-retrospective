@@ -16,7 +16,7 @@ import json
 import re
 from typing import Any
 
-from . import privacy_locators, source_overlap
+from . import privacy_locators, source_overlap, synthesis_evidence
 
 
 EXTRACTOR_RESULT_SCHEMA = "extractor_result_v2"
@@ -26,6 +26,25 @@ TOPIC_INPUT_SCHEMA = "topic_input_v2"
 TOPIC_RESULT_SCHEMA = "topic_reduction_result_v2"
 SYNTHESIS_RESULT_SCHEMA = "global_synthesis_result_v2"
 REDUCTION_COMMITMENT_SCHEMA = "hierarchical_reduction_commitment_v2"
+_SYNTHESIS_RESULT_FIELDS = frozenset(
+    {
+        "confidence",
+        "era_comparison",
+        "events",
+        "evidence_refs",
+        "findings",
+        "follow_up_actions",
+        "guidance_candidates",
+        "prompt_rewrite_commitment",
+        "prompt_rewrites",
+        "question_answers",
+        "schema",
+        "signal_commitments",
+        "skill_candidates",
+        "strengths",
+        "topic_result_commitment",
+    }
+)
 
 MAX_RESULT_BYTES = 64 * 1024
 MAX_RESULT_DEPTH = 24
@@ -274,6 +293,7 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
         ),
         SYNTHESIS_RESULT_SCHEMA: (
             "topic_result_commitment exactly binds every supplied topic result",
+            "prompt_rewrite_commitment exactly binds every source rewrite",
             "all refs are members of public_metadata.allowed_output_refs",
         ),
     }
@@ -304,6 +324,7 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
             "all-ten-question-ids-occur-exactly-once",
             "observed-answers-require-signals-and-evidence",
             "topic-signal-commitments-and-exemplars-are-exact",
+            "prompt-rewrite-commitment-and-exemplars-are-exact",
             "durable-candidates-require-three-episodes-two-sessions-or-safety-exception",
             "era-change-is-unavailable-unless-era-status-is-compatible",
         ),
@@ -497,6 +518,7 @@ def _reject_forbidden_keys(value: Any, *, path: str = "$") -> None:
             if "path" in tokens or "url" in tokens:
                 raise _error(path, "contains a forbidden path or URL field")
             if "prompt" in tokens and normalized not in {
+                "prompt_rewrite_commitment",
                 "rewritten_prompt",
                 "prompt_rewrites",
             }:
@@ -3617,26 +3639,7 @@ def build_synthesis_signal_commitments(
 ) -> dict[str, dict[str, Any]]:
     """Commit the exact canonical union while keeping synthesis output bounded."""
 
-    commitments: dict[str, dict[str, Any]] = {}
-    for field in ("events", "findings", "strengths"):
-        canonical_values = sorted(
-            {
-                _canonical_value(item)
-                for topic in topic_results
-                for item in topic.get(field, [])
-            }
-        )
-        encoded = json.dumps(
-            canonical_values,
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-        commitments[field] = {
-            "canonical_count": len(canonical_values),
-            "canonical_hash": hashlib.sha256(encoded).hexdigest(),
-        }
-    return commitments
+    return synthesis_evidence.build_synthesis_signal_commitments(topic_results)
 
 
 def build_synthesis_topic_result_commitment(
@@ -3644,17 +3647,10 @@ def build_synthesis_topic_result_commitment(
 ) -> dict[str, Any]:
     """Commit the complete canonical topic-result multiset without listing it."""
 
-    result_hashes = sorted(canonical_result_hash(result) for result in topic_results)
-    encoded = json.dumps(
-        result_hashes,
-        allow_nan=False,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    return {
-        "canonical_count": len(result_hashes),
-        "canonical_hash": hashlib.sha256(encoded).hexdigest(),
-    }
+    return synthesis_evidence.build_synthesis_topic_result_commitment(
+        topic_results,
+        result_hasher=canonical_result_hash,
+    )
 
 
 def build_synthesis_signal_exemplars(
@@ -3662,22 +3658,25 @@ def build_synthesis_signal_exemplars(
 ) -> dict[str, list[dict[str, Any]]]:
     """Select deterministic high-severity-first exemplars from exact topic signals."""
 
-    exemplars: dict[str, list[dict[str, Any]]] = {}
-    for field in ("events", "findings", "strengths"):
-        values: dict[str, dict[str, Any]] = {}
-        for topic in topic_results:
-            for item in topic.get(field, []):
-                canonical = _canonical_value(item)
-                values.setdefault(canonical, copy.deepcopy(dict(item)))
-        ordered = sorted(
-            values.items(),
-            key=lambda item: (
-                0 if item[1].get("severity") in {"high", "critical"} else 1,
-                item[0],
-            ),
-        )
-        exemplars[field] = [item for _canonical, item in ordered[:MAX_SIGNALS_PER_KIND]]
-    return exemplars
+    return synthesis_evidence.build_synthesis_signal_exemplars(
+        topic_results,
+        maximum=MAX_SIGNALS_PER_KIND,
+    )
+
+
+def build_synthesis_prompt_rewrite_commitment(
+    prompt_rewrites: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    return synthesis_evidence.build_synthesis_prompt_rewrite_commitment(prompt_rewrites)
+
+
+def build_synthesis_prompt_rewrite_exemplars(
+    prompt_rewrites: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    return synthesis_evidence.build_synthesis_prompt_rewrite_exemplars(
+        prompt_rewrites,
+        maximum=MAX_TURNS_PER_RESULT,
+    )
 
 
 def validate_synthesis_result(
@@ -3690,6 +3689,7 @@ def validate_synthesis_result(
     independent_review_results: Sequence[Mapping[str, Any]] = (),
     require_global_review_union: bool = True,
     source_allowed_refs: Collection[str] | None = None,
+    source_prompt_rewrites: Sequence[Mapping[str, Any]] = (),
     topic_results: Sequence[Mapping[str, Any]] = (),
     original_prompts: Sequence[str] = (),
     tool_outputs: Sequence[str] = (),
@@ -3732,22 +3732,7 @@ def validate_synthesis_result(
     )
     _require_exact_keys(
         value,
-        required={
-            "schema",
-            "question_answers",
-            "events",
-            "findings",
-            "strengths",
-            "prompt_rewrites",
-            "guidance_candidates",
-            "signal_commitments",
-            "skill_candidates",
-            "follow_up_actions",
-            "confidence",
-            "evidence_refs",
-            "era_comparison",
-            "topic_result_commitment",
-        },
+        required=_SYNTHESIS_RESULT_FIELDS,
         path="$",
     )
     _require_schema(value, SYNTHESIS_RESULT_SCHEMA, path="$")
@@ -3758,6 +3743,26 @@ def validate_synthesis_result(
         raise _error(
             "$.topic_result_commitment",
             "must exactly bind every validated topic result",
+        )
+    _validate_high_impact_turns(
+        value["prompt_rewrites"],
+        path="$.prompt_rewrites",
+        allowed_refs=refs,
+        allowed_turn_refs=allowed_turn_refs,
+        evidence_prefix="episode",
+    )
+    rewrite_mismatch = synthesis_evidence.result_prompt_rewrite_mismatch(
+        source_prompt_rewrites, value, maximum=MAX_TURNS_PER_RESULT
+    )
+    if rewrite_mismatch == "commitment":
+        raise _error(
+            "$.prompt_rewrite_commitment",
+            "must exactly bind every source prompt rewrite",
+        )
+    if rewrite_mismatch == "exemplars":
+        raise _error(
+            "$.prompt_rewrites",
+            "must contain the deterministic bounded source-rewrite exemplars",
         )
     _validate_question_answers(value["question_answers"], allowed_refs=refs)
     _validate_signal_list(
@@ -3780,13 +3785,6 @@ def validate_synthesis_result(
         kinds=STRENGTH_KINDS,
         allowed_refs=refs,
         evidence_prefix="evidence",
-    )
-    _validate_high_impact_turns(
-        value["prompt_rewrites"],
-        path="$.prompt_rewrites",
-        allowed_refs=refs,
-        allowed_turn_refs=allowed_turn_refs,
-        evidence_prefix="episode",
     )
     episode_sessions = _validated_topic_episode_sessions(
         topic_results,

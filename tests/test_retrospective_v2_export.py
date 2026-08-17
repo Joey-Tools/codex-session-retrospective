@@ -38,6 +38,8 @@ from retrospective_v2.export import (  # noqa: E402
 )
 from retrospective_v2.finalize import compute_retained_bundle_digest  # noqa: E402
 from retrospective_v2.result_validation import (  # noqa: E402
+    build_synthesis_prompt_rewrite_commitment,
+    build_synthesis_prompt_rewrite_exemplars,
     build_synthesis_signal_commitments,
     build_synthesis_signal_exemplars,
 )
@@ -453,7 +455,7 @@ def synthesis_data() -> dict[str, object]:
                 "strength_kinds": ["focused_execution"] if observed else [],
             }
         )
-    return {
+    result = {
         "confidence": {
             "comparability": "high",
             "coverage": "high",
@@ -505,12 +507,12 @@ def synthesis_data() -> dict[str, object]:
         ],
         "prompt_rewrites": [
             {
-                "cause": "Working-only arbitrary cause text",
+                "cause": "The requested recovery boundary was underspecified.",
                 "confidence": "high",
                 "evidence_refs": [EPISODE_ONE],
-                "expected_effect": "Working-only arbitrary expected effect",
-                "problem_statement": "Working-only arbitrary problem statement",
-                "rewritten_prompt": "Working-only arbitrary rewritten prompt",
+                "expected_effect": "The bounded operation reduces avoidable rework.",
+                "problem_statement": "The requested operation had an ambiguous scope.",
+                "rewritten_prompt": "Inspect the scope and preserve a recovery boundary.",
                 "turn_ref": TURN_ONE,
             }
         ],
@@ -539,6 +541,10 @@ def synthesis_data() -> dict[str, object]:
         ],
         "strengths": {"bounded_exploration": 2, "clear_communication": 1},
     }
+    result["prompt_rewrite_commitment"] = build_synthesis_prompt_rewrite_commitment(
+        result["prompt_rewrites"]
+    )
+    return result
 
 
 def refresh_bundle_digest(artifacts: dict[str, bytes]) -> None:
@@ -1141,6 +1147,59 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         tampered["synthesis"]["signal_commitments"]["findings"]["canonical_count"] = 69
         with self.assertRaisesRegex(RetainedInventoryError, "commitment"):
             assemble_retained_artifacts(run_state(), tampered)
+
+    def test_retained_rewrites_expand_beyond_synthesis_exemplars(self) -> None:
+        reviews = review_data()
+        template = next(
+            row
+            for row in reviews["turn_findings"]
+            if row["disposition"] == "high_impact"
+        )
+        rewrites = []
+        turn_findings = []
+        for index in range(21):
+            row = copy.deepcopy(template)
+            row["turn_ref"] = f"turn_ref_v2:{index + 16:064x}"
+            row["rewritten_prompt"] = f"Bounded rewritten prompt {index}."
+            turn_findings.append(row)
+            rewrites.append(
+                {
+                    key: copy.deepcopy(row[key])
+                    for key in (
+                        "cause",
+                        "confidence",
+                        "expected_effect",
+                        "problem_statement",
+                        "rewritten_prompt",
+                        "turn_ref",
+                    )
+                }
+            )
+            rewrites[-1]["evidence_refs"] = [row["episode_ref"]]
+        turn_findings.extend(
+            row for row in reviews["turn_findings"] if row["episode_ref"] == EPISODE_TWO
+        )
+        reviews["turn_findings"] = turn_findings
+        reviews["episodes"][1]["meaningful_turn_count"] = 21
+        synthesis = synthesis_data()
+        synthesis["prompt_rewrite_commitment"] = (
+            build_synthesis_prompt_rewrite_commitment(rewrites)
+        )
+        synthesis["prompt_rewrites"] = build_synthesis_prompt_rewrite_exemplars(
+            rewrites
+        )
+        reviews["synthesis"] = synthesis
+
+        artifacts = assemble_retained_artifacts(
+            run_state(meaningful_turn_count=23), reviews
+        )
+        parsed = validate_retained_artifacts(artifacts)
+
+        self.assertEqual(20, len(synthesis["prompt_rewrites"]))
+        self.assertEqual(
+            21,
+            sum(row["disposition"] == "high_impact" for row in parsed["turn_findings"]),
+        )
 
     def test_incompatible_era_never_emits_direct_normalized_change(self) -> None:
         previous = prior_trend()

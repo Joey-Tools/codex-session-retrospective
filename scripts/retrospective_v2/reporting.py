@@ -21,7 +21,7 @@ import struct
 from typing import Any
 
 if __package__:
-    from . import privacy_locators
+    from . import privacy_locators, synthesis_evidence
     from .result_validation import (
         EVENT_KINDS,
         FINDING_KINDS,
@@ -42,6 +42,15 @@ else:
         raise RuntimeError("retrospective privacy locator policy is unavailable")
     privacy_locators = importlib.util.module_from_spec(_locator_spec)
     _locator_spec.loader.exec_module(privacy_locators)
+
+    _synthesis_spec = importlib.util.spec_from_file_location(
+        "_retrospective_v2_synthesis_evidence",
+        pathlib.Path(__file__).with_name("synthesis_evidence.py"),
+    )
+    if _synthesis_spec is None or _synthesis_spec.loader is None:
+        raise RuntimeError("retrospective synthesis evidence policy is unavailable")
+    synthesis_evidence = importlib.util.module_from_spec(_synthesis_spec)
+    _synthesis_spec.loader.exec_module(synthesis_evidence)
 
     EVENT_KINDS = frozenset(
         {
@@ -3197,22 +3206,24 @@ def assemble_retained_artifacts(
         rewrite_declarations.append(
             ("review_data.prompt_rewrites", review_data["prompt_rewrites"])
         )
-    if (
-        synthesis is not None
-        and synthesis is not review_data
-        and "prompt_rewrites" in synthesis
-    ):
-        rewrite_declarations.append(
-            (
-                "review_data.synthesis.prompt_rewrites",
-                synthesis["prompt_rewrites"],
-            )
-        )
     for rewrite_label, rewrite_value in rewrite_declarations:
         rewrite_refs = _prompt_rewrite_refs(rewrite_value)
         if rewrite_refs != high_impact_refs:
             raise RetainedInventoryError(
                 f"{rewrite_label} and high-impact turn findings do not reconcile"
+            )
+    if synthesis is not None and synthesis is not review_data:
+        mismatch = synthesis_evidence.retained_prompt_rewrite_mismatch(
+            turn_findings, synthesis, maximum=20
+        )
+        if mismatch == "commitment":
+            raise RetainedInventoryError(
+                "synthesis prompt rewrite commitment does not reconcile with "
+                "high-impact turn findings"
+            )
+        if mismatch == "exemplars":
+            raise RetainedInventoryError(
+                "synthesis prompt rewrites are not the deterministic bounded exemplars"
             )
     prompt_improvements = row_aggregates["prompt_improvements"]
     guidance_candidates = _review_value(

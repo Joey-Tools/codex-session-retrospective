@@ -6,7 +6,7 @@ import copy
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import agent_results, agent_task_inputs, result_validation
+from . import agent_results, agent_task_inputs, result_validation, synthesis_sources
 
 
 def _mapping_list(value: Any, *, label: str) -> list[Mapping[str, Any]]:
@@ -19,8 +19,15 @@ def _mapping_list(value: Any, *, label: str) -> list[Mapping[str, Any]]:
 
 def _expected_source_fields(
     topics: Sequence[Mapping[str, Any]],
+    prompt_rewrites: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     return {
+        "prompt_rewrite_commitment": (
+            result_validation.build_synthesis_prompt_rewrite_commitment(prompt_rewrites)
+        ),
+        "prompt_rewrite_exemplars": (
+            result_validation.build_synthesis_prompt_rewrite_exemplars(prompt_rewrites)
+        ),
         "signal_commitments": result_validation.build_synthesis_signal_commitments(
             topics
         ),
@@ -34,8 +41,9 @@ def _expected_source_fields(
 def _validate_source_fields(
     payload: Mapping[str, Any],
     topics: Sequence[Mapping[str, Any]],
+    prompt_rewrites: Sequence[Mapping[str, Any]],
 ) -> None:
-    for field, expected in _expected_source_fields(topics).items():
+    for field, expected in _expected_source_fields(topics, prompt_rewrites).items():
         if payload.get(field) != expected:
             raise result_validation.ResultValidationError(
                 f"synthesis input {field} changed"
@@ -171,7 +179,11 @@ def collect_validation_results(
             )
         topics = [result for _digest, result in sorted(topic_rows)]
         reviews = [result for _digest, result in sorted(review_rows)]
-        _validate_source_fields(payload, topics)
+        _validate_source_fields(
+            payload,
+            topics,
+            synthesis_sources.prompt_rewrites(run_dir, state, topics),
+        )
         active.remove(task_ref)
         memo[task_ref] = (copy.deepcopy(topic_rows), copy.deepcopy(review_rows))
         return topic_rows, review_rows
@@ -202,6 +214,7 @@ def build_reduce_payload(
     tasks: Sequence[Mapping[str, Any]],
 ) -> dict[str, Any]:
     topics, _reviews = collect_validation_results(run_dir, state, tasks)
+    prompt_rewrites = synthesis_sources.prompt_rewrites(run_dir, state, topics)
     results = agent_results.copies_for_tasks(run_dir, tasks, label="accepted synthesis")
     return {
         "child_result_hashes": [
@@ -209,5 +222,5 @@ def build_reduce_payload(
         ],
         "child_synthesis_results": results,
         "schema": "global_synthesis_hierarchical_input_v2",
-        **_expected_source_fields(topics),
+        **_expected_source_fields(topics, prompt_rewrites),
     }

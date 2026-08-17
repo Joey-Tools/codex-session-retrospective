@@ -107,8 +107,9 @@ _AGENT_INSTRUCTIONS = {
         compatible-era changes. Preserve every high- or critical-severity event or
         finding from validated inputs.
 
-        Bind every canonical topic signal with the provided exact count and hash
-        commitment and emit only the deterministic bounded exemplars. Durable AGENTS.md
+        Bind every canonical topic signal and every source-derived prompt rewrite with
+        the provided exact count and hash commitments. Emit only the supplied
+        deterministic bounded exemplars. Durable AGENTS.md
         or Skill candidates must cite exact episode and session pairs for at least three
         episodes across two actual sessions unless one independently reviewed
         high-severity safety event qualifies for the exception. Return only the declared

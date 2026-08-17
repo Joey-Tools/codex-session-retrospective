@@ -193,6 +193,7 @@ class AgentJobOperations(OrchestratorComponent):
         state: Mapping[str, Any],
         *,
         kind: str,
+        partition_ref: str,
         input_payload: Mapping[str, Any] | None,
         input_refs: Iterable[str],
         allowed_refs: Iterable[str],
@@ -201,26 +202,19 @@ class AgentJobOperations(OrchestratorComponent):
         raw_artifact: str | None = None,
         raw_manifest: Mapping[str, Any] | None = None,
         framing: Mapping[str, Any] | None = None,
-        reviewer_slot: Any = None,
-        candidate_result_hashes: Iterable[str] = (),
-        safety_review_hashes: Iterable[str] = (),
+        metadata: Mapping[str, Any] | None = None,
     ) -> bool:
-        projected_metadata = {
-            "candidate_result_hashes": list(candidate_result_hashes),
-            "reviewer_slot": reviewer_slot,
-            "safety_review_hashes": list(safety_review_hashes),
-        }
         immutable = self._build_agent_task_immutable(
             state,
             stage=_AGENT_STAGE_BY_KIND[kind],
             kind=kind,
-            partition_ref="run_input_ref_v2:" + "0" * 64,
+            partition_ref=partition_ref,
             input_refs=input_refs,
             input_payload=input_payload,
             allowed_refs=allowed_refs,
             allowed_turn_refs=allowed_turn_refs,
             host_refs=host_refs,
-            metadata=projected_metadata,
+            metadata=metadata,
             raw_manifest=raw_manifest,
             raw_artifact=raw_artifact,
             framing=framing,
@@ -232,6 +226,17 @@ class AgentJobOperations(OrchestratorComponent):
             "agent_task",
             immutable_digest,
         )
+        if (
+            len(
+                agent_task_inputs.artifact_payload(
+                    task_ref=task_ref,
+                    immutable=immutable,
+                    immutable_digest=immutable_digest,
+                )
+            )
+            > agent_task_inputs.MAX_AGENT_TASK_INPUT_ARTIFACT_BYTES
+        ):
+            return False
         input_digest = content_digest(
             {
                 "input_payload": immutable["input_payload"],

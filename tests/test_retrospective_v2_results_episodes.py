@@ -34,6 +34,8 @@ from retrospective_v2.result_validation import (  # noqa: E402
     TOPIC_INPUT_SCHEMA,
     TOPIC_RESULT_SCHEMA,
     ResultValidationError,
+    build_synthesis_prompt_rewrite_commitment,
+    build_synthesis_prompt_rewrite_exemplars,
     build_synthesis_signal_exemplars,
     build_synthesis_signal_commitments,
     build_synthesis_topic_result_commitment,
@@ -328,6 +330,7 @@ def synthesis_result() -> dict:
         "findings": [],
         "strengths": [],
         "prompt_rewrites": [],
+        "prompt_rewrite_commitment": (build_synthesis_prompt_rewrite_commitment(())),
         "guidance_candidates": [],
         "skill_candidates": [],
         "signal_commitments": build_synthesis_signal_commitments(()),
@@ -2485,6 +2488,56 @@ class ResultValidationTests(unittest.TestCase):
                 tampered,
                 allowed_refs,
                 topic_results=topic_results,
+            )
+
+    def test_synthesis_commits_all_rewrites_beyond_the_exemplar_bound(self) -> None:
+        turn_refs = [ref("turn", f"synthesis-rewrite-{index}") for index in range(21)]
+        source_rewrites = [
+            {
+                **high_impact(turn_ref),
+                "evidence_refs": [EPISODE],
+            }
+            for turn_ref in turn_refs
+        ]
+        value = synthesis_result()
+        value["prompt_rewrite_commitment"] = build_synthesis_prompt_rewrite_commitment(
+            source_rewrites
+        )
+        value["prompt_rewrites"] = build_synthesis_prompt_rewrite_exemplars(
+            source_rewrites
+        )
+
+        validated = validate_synthesis_result(
+            value,
+            {EPISODE},
+            allowed_turn_refs=turn_refs,
+            source_prompt_rewrites=source_rewrites,
+        )
+
+        self.assertEqual(20, len(validated["prompt_rewrites"]))
+        self.assertEqual(
+            21,
+            validated["prompt_rewrite_commitment"]["canonical_count"],
+        )
+        omitted = copy.deepcopy(value)
+        omitted["prompt_rewrites"].pop()
+        with self.assertRaisesRegex(ResultValidationError, "bounded source-rewrite"):
+            validate_synthesis_result(
+                omitted,
+                {EPISODE},
+                allowed_turn_refs=turn_refs,
+                source_prompt_rewrites=source_rewrites,
+            )
+        incomplete = copy.deepcopy(value)
+        incomplete["prompt_rewrite_commitment"] = (
+            build_synthesis_prompt_rewrite_commitment(source_rewrites[:20])
+        )
+        with self.assertRaisesRegex(ResultValidationError, "every source prompt"):
+            validate_synthesis_result(
+                incomplete,
+                {EPISODE},
+                allowed_turn_refs=turn_refs,
+                source_prompt_rewrites=source_rewrites,
             )
 
     def test_synthesis_rejects_under_supported_durable_guidance(self) -> None:

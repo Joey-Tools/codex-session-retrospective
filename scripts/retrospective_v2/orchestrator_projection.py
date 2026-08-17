@@ -77,6 +77,9 @@ class StateProjectionOperations(OrchestratorComponent):
             "follow_up_actions": [],
             "guidance_candidates": [],
             "prompt_rewrites": [],
+            "prompt_rewrite_commitment": (
+                result_validation.build_synthesis_prompt_rewrite_commitment(())
+            ),
             "question_answers": [
                 {
                     "confidence": "high",

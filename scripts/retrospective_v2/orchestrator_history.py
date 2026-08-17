@@ -18,6 +18,7 @@ from . import (
     safe_io,
     sharding,
     source_overlap,
+    synthesis_sources,
 )
 from .checkpoints import canonical_json_bytes
 from .contracts import JobKind, RefType, RunStage
@@ -245,6 +246,9 @@ class ResultHistoryOperations(OrchestratorComponent):
                         "independent_review_results": independent_review_results,
                         "topic_results": topic_results,
                     }
+                ),
+                source_prompt_rewrites=synthesis_sources.prompt_rewrites(
+                    self.run_dir, state, topic_results
                 ),
                 topic_results=topic_results,
             )

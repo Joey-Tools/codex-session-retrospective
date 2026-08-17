@@ -219,6 +219,10 @@ source acceptance.
   descriptor plus bounded scheduling summaries; hierarchy inputs, turn metadata,
   candidate results, framing, and payloads remain sidecar-only. Each sidecar is
   capped at 640 KiB and every checkpoint task is capped at 16 KiB. Hierarchical
+  partitioning probes the exact immutable sidecar bytes and the complete 512 KiB
+  execution envelope before task creation; neither probe uses trimmed metadata.
+  Synthesis leaves and parents carry only turn refs reachable from their exact
+  topic/review subtree, so a large run partitions before sidecar materialization.
   child results occur exactly once in the immutable input payload; metadata keeps
   only their hashes and scheduling identities instead of embedding a second copy.
   Attempts retain
@@ -643,6 +647,14 @@ subtrees have rejoined; a legal intermediate leaf is not required to contain
 its sibling leaf's support. Retained compilation verifies the finding
 commitment against topic rows and writes the complete canonical
 finding/evidence union to `summary.json`, not just the bounded exemplars.
+
+The coordinator separately derives every high-impact prompt rewrite from the
+accepted resolved episode reviews. Each synthesis subtree receives a complete
+count/hash commitment and at most 20 deterministic exemplars; the model must
+copy both exactly. Retained compilation rebuilds the same complete source from
+`turn_findings.jsonl`, verifies the commitment, and treats synthesis rewrites as
+bounded exemplars rather than requiring a representation that cannot exceed 20
+items.
 
 Durable episode, topic, and global records use closed per-finding objects. Every
 object preserves the exact finding kind, confidence, optional severity, and

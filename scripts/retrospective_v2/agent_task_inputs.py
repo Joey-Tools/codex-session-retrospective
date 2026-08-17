@@ -136,21 +136,10 @@ def prepare(
     immutable: Mapping[str, Any],
     immutable_digest: str,
 ) -> tuple[dict[str, Any], source_inputs.PreparedFile]:
-    normalized = dict(immutable)
-    if (
-        _TASK_REF_RE.fullmatch(task_ref) is None
-        or set(normalized) != IMMUTABLE_FIELDS
-        or _HASH_RE.fullmatch(immutable_digest) is None
-        or content_digest(normalized) != immutable_digest
-    ):
-        raise InvalidTransitionError("agent task input binding is invalid")
-    payload = canonical_json_bytes(
-        {
-            "immutable": normalized,
-            "immutable_digest": immutable_digest,
-            "schema": AGENT_TASK_INPUT_ARTIFACT_SCHEMA,
-            "task_ref": task_ref,
-        }
+    payload = artifact_payload(
+        task_ref=task_ref,
+        immutable=immutable,
+        immutable_digest=immutable_digest,
     )
     if len(payload) > MAX_AGENT_TASK_INPUT_ARTIFACT_BYTES:
         raise InvalidTransitionError("agent task input sidecar exceeds its byte bound")
@@ -165,6 +154,32 @@ def prepare(
         "task_ref": task_ref,
     }
     return descriptor, source_inputs.prepare_file(run_dir / relative_path, payload)
+
+
+def artifact_payload(
+    *,
+    task_ref: str,
+    immutable: Mapping[str, Any],
+    immutable_digest: str,
+) -> bytes:
+    """Serialize the exact authenticated sidecar without materializing it."""
+
+    normalized = dict(immutable)
+    if (
+        _TASK_REF_RE.fullmatch(task_ref) is None
+        or set(normalized) != IMMUTABLE_FIELDS
+        or _HASH_RE.fullmatch(immutable_digest) is None
+        or content_digest(normalized) != immutable_digest
+    ):
+        raise InvalidTransitionError("agent task input binding is invalid")
+    return canonical_json_bytes(
+        {
+            "immutable": normalized,
+            "immutable_digest": immutable_digest,
+            "schema": AGENT_TASK_INPUT_ARTIFACT_SCHEMA,
+            "task_ref": task_ref,
+        }
+    )
 
 
 def _validated_descriptor(

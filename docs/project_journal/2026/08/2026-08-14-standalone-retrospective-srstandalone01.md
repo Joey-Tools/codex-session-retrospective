@@ -920,6 +920,45 @@ superseded_by:
   retained log contains an explicit `OK` terminal summary. Signing, exact-secret
   admission, hosted CI, and the two required Codex processors remain delivery
   gates.
+- Signed and pushed head `f015d6d4` closed the topic-lineage, cutover-document,
+  typed-commitment, and replay gaps. Its fresh-context Codex processor found two
+  further representability defects: global synthesis could emit at most twenty
+  rewrites while retained export required one synthesis row for every
+  high-impact turn, and hierarchy fit probes omitted the real synthesis turn-ref
+  sidecar while task creation authenticated it under the 640 KiB bound.
+  Postvalidation retained the exact range and trusted-control digests, and the
+  independent reviewer workspace was removed after the terminal findings were
+  accepted.
+- Synthesis now derives every rewrite from accepted resolved episode reviews,
+  commits the complete canonical rewrite set by count and SHA-256, and supplies
+  at most twenty deterministic exemplars to each leaf and parent. Result
+  validation rejects either a changed commitment or a changed exemplar set
+  before acceptance. Retained export rebuilds the complete evidence from
+  high-impact turn findings, verifies the same commitment, and treats synthesis
+  rows as bounded exemplars rather than an impossible complete enumeration.
+- Hierarchy sizing now serializes the exact immutable task sidecar, including
+  the real partition reference, metadata, and complete allowed-turn set, before
+  task creation. Synthesis leaf and parent turn refs are restricted to their
+  authenticated topic/review subtree, so oversized legal runs partition instead
+  of passing a trimmed probe and failing during materialization.
+- Current-tree focused evidence passes result/export/schema/module checks
+  179/179 in 13.775 seconds, the exact rewrite and sidecar regressions 5/5 in
+  1.218 seconds, capacity and module checks 21/21 in 4.870 seconds, the two
+  previously failing orchestration cases 2/2 in 3.028 seconds, and the complete
+  orchestration module 123/123 in 451.942 seconds. The combined contract, CLI,
+  Skill, result, and retained-history suite passes 1,164/1,164 in 405.078
+  seconds. Ruff 0.13.2 lint and formatting, Python 3.13 byte compilation, and
+  `git diff --check` are clean. Final repository partitions, signed replacement
+  head, admission, hosted CI, and both required Codex processors remain the
+  delivery gates.
+- The final Python 3.13 implementation and documentation tree contains 1,688
+  unique test identifiers partitioned exactly once as 404, 452, 449, and 383
+  tests. A new owner-only durable run completed every partition with supervisor
+  exit zero: shard 0 passed 404/404 in 1,754.507 seconds, shard 1 passed 452/452
+  in 1,344.398 seconds, shard 2 passed 449/449 in 1,508.714 seconds, and shard 3
+  passed 383/383 in 1,425.396 seconds. Every retained log contains its exact
+  `Selected`, `Ran`, and `OK` terminal lines, and the combined failure/traceback
+  scan is empty.
 
 ## Follow-up Work
 

@@ -737,6 +737,9 @@ def synthesis_result() -> dict[str, object]:
         "findings": [],
         "strengths": [],
         "prompt_rewrites": [],
+        "prompt_rewrite_commitment": (
+            result_validation.build_synthesis_prompt_rewrite_commitment(())
+        ),
         "guidance_candidates": [],
         "skill_candidates": [],
         "signal_commitments": result_validation.build_synthesis_signal_commitments(()),
@@ -1134,6 +1137,12 @@ class OrchestratorTests(unittest.TestCase):
                     ]
                     result["topic_result_commitment"] = job["input_payload"][
                         "topic_result_commitment"
+                    ]
+                    result["prompt_rewrite_commitment"] = job["input_payload"][
+                        "prompt_rewrite_commitment"
+                    ]
+                    result["prompt_rewrites"] = job["input_payload"][
+                        "prompt_rewrite_exemplars"
                     ]
                     result.update(job["input_payload"]["signal_exemplars"])
                     coordinator.accept_agent_result(
@@ -5451,6 +5460,59 @@ class OrchestratorTests(unittest.TestCase):
                 immutable_digest=duplicated_digest,
             )
 
+    def test_agent_capacity_probe_includes_exact_sidecar_turn_refs(self) -> None:
+        coordinator = self.start_daily("exact-agent-sidecar-capacity")
+        state = coordinator.load_state()
+        jobs = coordinator._components.jobs
+        root_ref = typed_ref(RefType.RUN_INPUT, "capacity-root")
+        payload = {"padding": "x" * 440_000, "schema": "capacity_probe_v2"}
+        metadata = {
+            "hierarchy_final": True,
+            "hierarchy_level": 0,
+            "hierarchy_root_ref": root_ref,
+            "safety_review_hashes": [],
+            "topic_result_commitment": {
+                "canonical_count": 0,
+                "canonical_hash": "0" * 64,
+            },
+            "validation_child_task_refs": [],
+            "validation_independent_review_hashes": [],
+            "validation_topic_result_commitment": {
+                "canonical_count": 0,
+                "canonical_hash": "0" * 64,
+            },
+        }
+        common = {
+            "kind": JobKind.GLOBAL_SYNTHESIS.value,
+            "partition_ref": root_ref,
+            "input_payload": payload,
+            "input_refs": [root_ref],
+            "allowed_refs": [root_ref],
+            "metadata": metadata,
+        }
+
+        self.assertTrue(jobs._agent_input_fits(state, **common))
+        self.assertFalse(
+            jobs._agent_input_fits(
+                state,
+                allowed_turn_refs=[
+                    typed_ref(RefType.TURN, f"capacity-turn-{index}")
+                    for index in range(2_800)
+                ],
+                **common,
+            )
+        )
+        self.assertTrue(
+            jobs._agent_input_fits(
+                state,
+                allowed_turn_refs=[
+                    typed_ref(RefType.TURN, f"capacity-subtree-{index}")
+                    for index in range(100)
+                ],
+                **common,
+            )
+        )
+
     def test_shard_stage_rolls_back_files_when_checkpoint_commit_fails(self) -> None:
         coordinator = self.start_daily("shard-stage-checkpoint-rollback")
         payload = b'{"timestamp":"2026-07-06T01:00:00Z","text":"work"}\n'
@@ -6073,6 +6135,7 @@ class OrchestratorTests(unittest.TestCase):
                         )
                         for ref_index in range(180)
                     ],
+                    "episode_revision_lineage": [],
                     "payload": "s" * 18_000,
                     "schema": result_validation.TOPIC_RESULT_SCHEMA,
                     "topic_candidate_ref": synthesis_topic_roots[index],
@@ -6102,13 +6165,21 @@ class OrchestratorTests(unittest.TestCase):
                     "episode_ref": typed_ref(
                         RefType.EPISODE, f"synthesis-episode-{index}"
                     ),
+                    "episode_revision_ref": typed_ref(
+                        RefType.EPISODE_REVISION, f"synthesis-revision-{index}"
+                    ),
                     "payload": "v" * 18_000,
                     "schema": result_validation.EPISODE_REVIEW_RESULT_SCHEMA,
                 }
                 for index in range(12)
             ]
             state["episodes"] = [
-                {"turn_refs": [typed_ref(RefType.TURN, f"synthesis-{index}")]}
+                {
+                    "episode_revision_ref": typed_ref(
+                        RefType.EPISODE_REVISION, f"synthesis-revision-{index}"
+                    ),
+                    "turn_refs": [typed_ref(RefType.TURN, f"synthesis-{index}")],
+                }
                 for index in range(12)
             ]
             synthesis_root = typed_ref(RefType.RUN_INPUT, "bounded-synthesis-root")
@@ -6128,6 +6199,22 @@ class OrchestratorTests(unittest.TestCase):
                     root_ref=synthesis_root,
                     topic_results=topic_results,
                     independent_reviews=independent_reviews,
+                )
+            turns_by_revision = {
+                revision["episode_revision_ref"]: revision["turn_refs"][0]
+                for revision in state["episodes"]
+            }
+            for task in coordinator._tasks_for_stage(
+                state, RunStage.GLOBAL_SYNTHESIS.value
+            ):
+                immutable = agent_task_inputs.for_task(coordinator.run_dir, task)
+                expected_turn_refs = sorted(
+                    turns_by_revision[review["episode_revision_ref"]]
+                    for review in immutable["input_payload"]["independent_reviews"]
+                )
+                self.assertEqual(
+                    expected_turn_refs,
+                    immutable["allowed_turn_refs"],
                 )
             for _ in range(12):
                 synthesis_tasks = coordinator._tasks_for_stage(
@@ -6347,6 +6434,10 @@ class OrchestratorTests(unittest.TestCase):
             result["topic_result_commitment"] = job["input_payload"][
                 "topic_result_commitment"
             ]
+            result["prompt_rewrite_commitment"] = job["input_payload"][
+                "prompt_rewrite_commitment"
+            ]
+            result["prompt_rewrites"] = job["input_payload"]["prompt_rewrite_exemplars"]
             result.update(job["input_payload"]["signal_exemplars"])
             return coordinator.accept_agent_result(
                 job["job_ref"], job["active_attempt_ref"], result
@@ -7217,6 +7308,9 @@ class OrchestratorTests(unittest.TestCase):
         synthesis_payload["signal_commitments"] = synthesis_retry["input_payload"][
             "signal_commitments"
         ]
+        synthesis_payload["prompt_rewrite_commitment"] = synthesis_retry[
+            "input_payload"
+        ]["prompt_rewrite_commitment"]
         synthesis_payload["events"] = [
             {
                 "confidence": item["confidence"],
@@ -7234,12 +7328,8 @@ class OrchestratorTests(unittest.TestCase):
             }
         ]
         episode_ref = primary["episode_ref"]
-        high_impact = secondary["high_impact_turns"][0]
-        synthesis_payload["prompt_rewrites"] = [
-            {
-                **copy.deepcopy(high_impact),
-                "evidence_refs": [episode_ref],
-            }
+        synthesis_payload["prompt_rewrites"] = synthesis_retry["input_payload"][
+            "prompt_rewrite_exemplars"
         ]
         synthesis_payload["strengths"] = [
             {

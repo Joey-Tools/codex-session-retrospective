@@ -451,6 +451,7 @@ def _synthesis_root(vocabulary: Mapping[str, Any]) -> dict[str, Any]:
             _rewrite(limits, evidence_prefix="episode"),
             maximum=limits["max_turns_per_result"],
         ),
+        "prompt_rewrite_commitment": commitment,
         "question_answers": _array(
             question,
             maximum=len(vocabulary["question_ids"]),
