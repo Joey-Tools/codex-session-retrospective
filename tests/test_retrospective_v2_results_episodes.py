@@ -36,6 +36,7 @@ from retrospective_v2.result_validation import (  # noqa: E402
     ResultValidationError,
     build_synthesis_signal_exemplars,
     build_synthesis_signal_commitments,
+    build_hierarchical_topic_result,
     build_topic_result,
     canonical_result_hash,
     scan_for_leaks,
@@ -43,6 +44,7 @@ from retrospective_v2.result_validation import (  # noqa: E402
     validate_episode_review_result,
     validate_extractor_result,
     validate_hierarchical_episode_review_result,
+    validate_hierarchical_topic_result,
     validate_synthesis_result,
     validate_topic_input,
     validate_topic_result,
@@ -1933,6 +1935,190 @@ class ResultValidationTests(unittest.TestCase):
                 synthesis,
                 ALL_REFS,
                 topic_results=[validated],
+            )
+
+    def test_topic_reducer_accepts_supported_semantics_and_rejects_bad_lineage(
+        self,
+    ) -> None:
+        topic_input = validate_topic_input(
+            {
+                "adjudication_candidate_results": {},
+                "adjudication_required_episode_revision_refs": [],
+                "episode_contexts": [
+                    {
+                        "episode_ref": EPISODE,
+                        "episode_revision_ref": REVISION_A,
+                        "session_ref": SESSION_A,
+                    },
+                    {
+                        "episode_ref": EPISODE_B,
+                        "episode_revision_ref": REVISION_B,
+                        "session_ref": SESSION_B,
+                    },
+                ],
+                "episode_reviews": [
+                    episode_review(),
+                    episode_review(
+                        episode_ref=EPISODE_B,
+                        revision_ref=REVISION_B,
+                    ),
+                ],
+                "expected_episode_revision_refs": [REVISION_A, REVISION_B],
+                "schema": TOPIC_INPUT_SCHEMA,
+                "topic_candidate_ref": TOPIC_CANDIDATE,
+                "workstream_ref": WORKSTREAM_A,
+            },
+            ALL_REFS,
+        )
+        result = build_topic_result(topic_input, topic_ref=TOPIC)
+        result.update(
+            {
+                "guidance_candidates": [
+                    {
+                        "confidence": "high",
+                        "episode_lineage": [
+                            {"episode_ref": EPISODE, "session_ref": SESSION_A},
+                            {"episode_ref": EPISODE_B, "session_ref": SESSION_B},
+                        ],
+                        "evidence_refs": [EVIDENCE_A],
+                        "kind": "verification",
+                    }
+                ],
+                "open_work": [
+                    {
+                        "confidence": "medium",
+                        "evidence_refs": [EVIDENCE_B],
+                        "kind": "rerun_verification",
+                    }
+                ],
+                "prompt_rewrites": [high_impact()],
+                "recurrences": [
+                    {
+                        "confidence": "high",
+                        "episode_revision_refs": [REVISION_A, REVISION_B],
+                        "evidence_refs": [EVIDENCE_A],
+                        "kind": "verification_completed",
+                        "session_refs": [SESSION_A, SESSION_B],
+                        "signal_type": "event",
+                    }
+                ],
+                "skill_candidates": [
+                    {
+                        "confidence": "medium",
+                        "episode_lineage": [
+                            {"episode_ref": EPISODE, "session_ref": SESSION_A}
+                        ],
+                        "evidence_refs": [EVIDENCE_A],
+                        "kind": "workflow_hygiene",
+                    }
+                ],
+            }
+        )
+
+        validated = validate_topic_result(
+            result,
+            topic_input,
+            ALL_REFS,
+            expected_topic_ref=TOPIC,
+            allowed_turn_refs={TURN_A},
+        )
+        self.assertEqual(result, validated)
+
+        wrong_kind = copy.deepcopy(result)
+        wrong_kind["recurrences"][0]["kind"] = "production_risk"
+        with self.assertRaisesRegex(ResultValidationError, "must be one of"):
+            validate_topic_result(
+                wrong_kind,
+                topic_input,
+                ALL_REFS,
+                expected_topic_ref=TOPIC,
+                allowed_turn_refs={TURN_A},
+            )
+
+        bad_lineage = copy.deepcopy(result)
+        bad_lineage["skill_candidates"][0]["episode_lineage"] = [
+            {"episode_ref": EPISODE_B, "session_ref": SESSION_A}
+        ]
+        with self.assertRaisesRegex(ResultValidationError, "outside the topic lineage"):
+            validate_topic_result(
+                bad_lineage,
+                topic_input,
+                ALL_REFS,
+                expected_topic_ref=TOPIC,
+                allowed_turn_refs={TURN_A},
+            )
+
+        duplicate = copy.deepcopy(result)
+        duplicate["open_work"].append(copy.deepcopy(duplicate["open_work"][0]))
+        with self.assertRaisesRegex(ResultValidationError, "duplicate semantic"):
+            validate_topic_result(
+                duplicate,
+                topic_input,
+                ALL_REFS,
+                expected_topic_ref=TOPIC,
+                allowed_turn_refs={TURN_A},
+            )
+
+    def test_hierarchical_topic_reducer_preserves_child_semantics(self) -> None:
+        topic_input = validate_topic_input(
+            {
+                "adjudication_candidate_results": {},
+                "adjudication_required_episode_revision_refs": [],
+                "episode_contexts": [
+                    {
+                        "episode_ref": EPISODE,
+                        "episode_revision_ref": REVISION_A,
+                        "session_ref": SESSION_A,
+                    }
+                ],
+                "episode_reviews": [episode_review()],
+                "expected_episode_revision_refs": [REVISION_A],
+                "schema": TOPIC_INPUT_SCHEMA,
+                "topic_candidate_ref": TOPIC_CANDIDATE,
+                "workstream_ref": WORKSTREAM_A,
+            },
+            ALL_REFS,
+        )
+        child = build_topic_result(topic_input, topic_ref=TOPIC)
+        child["open_work"] = [
+            {
+                "confidence": "high",
+                "evidence_refs": [EVIDENCE_A],
+                "kind": "repair_gap",
+            }
+        ]
+        child = validate_topic_result(
+            child,
+            topic_input,
+            ALL_REFS,
+            expected_topic_ref=TOPIC,
+        )
+        parent = build_hierarchical_topic_result(
+            [child],
+            topic_candidate_ref=TOPIC_CANDIDATE,
+            topic_ref=TOPIC,
+            workstream_ref=WORKSTREAM_A,
+        )
+        validated = validate_hierarchical_topic_result(
+            parent,
+            [child],
+            ALL_REFS,
+            expected_topic_candidate_ref=TOPIC_CANDIDATE,
+            expected_topic_ref=TOPIC,
+            expected_workstream_ref=WORKSTREAM_A,
+        )
+        self.assertEqual(parent, validated)
+
+        dropped = copy.deepcopy(parent)
+        dropped["open_work"] = []
+        with self.assertRaisesRegex(ResultValidationError, "dropped a child"):
+            validate_hierarchical_topic_result(
+                dropped,
+                [child],
+                ALL_REFS,
+                expected_topic_candidate_ref=TOPIC_CANDIDATE,
+                expected_topic_ref=TOPIC,
+                expected_workstream_ref=WORKSTREAM_A,
             )
 
     def test_synthesis_requires_all_ten_closed_questions(self) -> None:

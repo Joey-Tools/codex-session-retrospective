@@ -33,6 +33,7 @@ from retrospective_v2 import (  # noqa: E402
     extracted_turns,
     episode_review,
     executable_authority,
+    implementation_authority,
     reporting,
     retained_export_coordination,
     retained_inputs,
@@ -157,6 +158,95 @@ def execution_provenance(
 
 def typed_ref(kind: RefType, seed: str) -> str:
     return format_typed_ref(kind, hashlib.sha256(seed.encode("utf-8")).hexdigest())
+
+
+def schema_example(schema: dict[str, object], *, ordinal: int = 0) -> object:
+    if "const" in schema:
+        return copy.deepcopy(schema["const"])
+    if "enum" in schema:
+        values = list(schema["enum"])
+        return copy.deepcopy(values[ordinal % len(values)])
+    value_type = schema.get("type")
+    if value_type == "object":
+        properties = schema["properties"]
+        return {
+            key: schema_example(properties[key], ordinal=index)
+            for index, key in enumerate(schema["required"])
+        }
+    if value_type == "array":
+        return [
+            schema_example(schema["items"], ordinal=index)
+            for index in range(int(schema.get("minItems", 0)))
+        ]
+    if value_type == "boolean":
+        return False
+    if value_type == "integer":
+        return int(schema.get("minimum", 0))
+    if value_type == "string":
+        prefix = schema.get("x-ref-prefix")
+        pattern = schema.get("pattern")
+        if isinstance(prefix, str):
+            digest = hashlib.sha256(
+                f"schema-example:{prefix}:{ordinal}".encode()
+            ).hexdigest()
+            return f"{prefix}_ref_v2:{digest}"
+        if isinstance(pattern, str) and pattern == r"^[0-9a-f]{64}$":
+            return hashlib.sha256(f"schema-example:{ordinal}".encode()).hexdigest()
+        if isinstance(pattern, str) and "_ref_v2" in pattern:
+            return typed_ref(RefType.EVIDENCE, f"schema-example:{ordinal}")
+        return "x" * max(1, int(schema.get("minLength", 1)))
+    raise AssertionError(f"unsupported schema node: {schema}")
+
+
+def assert_schema_accepts(
+    test_case: unittest.TestCase,
+    schema: dict[str, object],
+    value: object,
+) -> None:
+    if "const" in schema:
+        test_case.assertEqual(schema["const"], value)
+        return
+    if "enum" in schema:
+        test_case.assertIn(value, schema["enum"])
+        return
+    value_type = schema.get("type")
+    if value_type == "object":
+        test_case.assertIsInstance(value, dict)
+        assert isinstance(value, dict)
+        properties = schema["properties"]
+        test_case.assertEqual(set(schema["required"]), set(value))
+        if schema.get("additionalProperties") is False:
+            test_case.assertLessEqual(set(value), set(properties))
+        for key, child in value.items():
+            assert_schema_accepts(test_case, properties[key], child)
+        return
+    if value_type == "array":
+        test_case.assertIsInstance(value, list)
+        assert isinstance(value, list)
+        test_case.assertGreaterEqual(len(value), int(schema.get("minItems", 0)))
+        test_case.assertLessEqual(len(value), int(schema["maxItems"]))
+        if schema.get("uniqueItems"):
+            canonical = [json.dumps(item, sort_keys=True) for item in value]
+            test_case.assertEqual(len(canonical), len(set(canonical)))
+        for child in value:
+            assert_schema_accepts(test_case, schema["items"], child)
+        return
+    if value_type == "boolean":
+        test_case.assertIs(type(value), bool)
+        return
+    if value_type == "integer":
+        test_case.assertIs(type(value), int)
+        test_case.assertGreaterEqual(value, int(schema.get("minimum", value)))
+        return
+    if value_type == "string":
+        test_case.assertIsInstance(value, str)
+        assert isinstance(value, str)
+        if "pattern" in schema:
+            test_case.assertIsNotNone(re.fullmatch(str(schema["pattern"]), value))
+        test_case.assertGreaterEqual(len(value), int(schema.get("minLength", 0)))
+        test_case.assertLessEqual(len(value), int(schema.get("maxLength", len(value))))
+        return
+    test_case.fail(f"unsupported schema node: {schema}")
 
 
 def adjudication_item_decisions(
@@ -1788,6 +1878,92 @@ class OrchestratorTests(unittest.TestCase):
                     coordinator.retained_export_inputs()
 
         self.assertEqual(state["run_ref"], coordinator.status()["run_ref"])
+
+    def test_resume_and_export_reject_coordinator_implementation_drift(self) -> None:
+        coordinator = self.start_daily("implementation-drift")
+        state = coordinator.load_state()
+        implementation = implementation_authority.coordinator_implementation_readiness()
+        self.assertEqual(implementation, state["provenance"]["implementation"])
+        changed = copy.deepcopy(implementation)
+        changed["source_sha256"] = "sha256:" + "f" * 64
+        changed["authority_sha256"] = "sha256:" + "e" * 64
+
+        with mock.patch.object(
+            implementation_authority,
+            "coordinator_implementation_readiness",
+            return_value=changed,
+        ):
+            for operation in (
+                coordinator.status,
+                coordinator.advance,
+                coordinator.retained_export_inputs,
+            ):
+                with (
+                    self.subTest(operation=operation.__name__),
+                    self.assertRaisesRegex(
+                        InvalidTransitionError,
+                        "implementation authority no longer matches",
+                    ),
+                ):
+                    operation()
+
+        self.assertEqual(state["run_ref"], coordinator.status()["run_ref"])
+
+    def test_implementation_authority_binds_source_content_and_access_policy(
+        self,
+    ) -> None:
+        scripts = self.root / "implementation-authority"
+        package = scripts / "retrospective_v2"
+        package.mkdir(parents=True, mode=0o700)
+        entrypoint = scripts / "session_retrospective_v2.py"
+        module = package / "worker.py"
+        init = package / "__init__.py"
+        entrypoint.write_text("VALUE = 'entry'\n", encoding="ascii")
+        init.write_text("VALUE = 'init'\n", encoding="ascii")
+        module.write_text("VALUE = 'first'\n", encoding="ascii")
+        for path in (entrypoint, init, module):
+            path.chmod(0o600)
+
+        scripts_fd = os.open(scripts, implementation_authority._DIRECTORY_FLAGS)
+        try:
+            policy = implementation_authority._policy(
+                scripts_fd,
+                directory=True,
+            )
+            first = implementation_authority._readiness_from_bound_scripts(
+                scripts_fd,
+                ancestor_policies=[policy],
+            )
+            module.write_text("VALUE = 'other'\n", encoding="ascii")
+            second = implementation_authority._readiness_from_bound_scripts(
+                scripts_fd,
+                ancestor_policies=[policy],
+            )
+            self.assertNotEqual(first["source_sha256"], second["source_sha256"])
+            self.assertNotEqual(first["authority_sha256"], second["authority_sha256"])
+
+            module.chmod(0o400)
+            third = implementation_authority._readiness_from_bound_scripts(
+                scripts_fd,
+                ancestor_policies=[policy],
+            )
+            self.assertEqual(second["source_sha256"], third["source_sha256"])
+            self.assertNotEqual(
+                second["access_policy_sha256"],
+                third["access_policy_sha256"],
+            )
+
+            module.chmod(0o622)
+            with self.assertRaisesRegex(
+                implementation_authority.ImplementationAuthorityError,
+                "writable by another user",
+            ):
+                implementation_authority._readiness_from_bound_scripts(
+                    scripts_fd,
+                    ancestor_policies=[policy],
+                )
+        finally:
+            os.close(scripts_fd)
 
     def test_documented_agent_prompts_match_the_executable_contract(self) -> None:
         prompt_document = (
@@ -4729,6 +4905,127 @@ class OrchestratorTests(unittest.TestCase):
             orchestrator_module.MAX_AGENT_ENVELOPE_BYTES,
         )
         self.assertIsNone(envelope_size(lower + 1))
+
+    def test_agent_envelopes_embed_complete_executable_result_contracts(self) -> None:
+        coordinator = self.coordinator("agent-result-contracts")
+        immutable = {
+            "allowed_refs": [],
+            "execution_contract": execution_provenance(),
+            "framing": {"schema": "agent_framing_v2"},
+            "input_payload": {},
+            "input_refs": [],
+        }
+        schemas = {
+            JobKind.EXTRACTOR_REDACTOR.value: result_validation.EXTRACTOR_RESULT_SCHEMA,
+            JobKind.EPISODE_REVIEWER.value: (
+                result_validation.EPISODE_REVIEW_RESULT_SCHEMA
+            ),
+            JobKind.INDEPENDENT_RISK_REVIEWER.value: (
+                result_validation.EPISODE_REVIEW_RESULT_SCHEMA
+            ),
+            JobKind.ADJUDICATOR.value: result_validation.ADJUDICATION_RESULT_SCHEMA,
+            JobKind.TOPIC_REDUCER.value: result_validation.TOPIC_RESULT_SCHEMA,
+            JobKind.GLOBAL_SYNTHESIS.value: result_validation.SYNTHESIS_RESULT_SCHEMA,
+        }
+        for index, (kind, result_schema) in enumerate(schemas.items()):
+            with self.subTest(kind=kind):
+                reviewer_slot = (
+                    "secondary"
+                    if kind == JobKind.INDEPENDENT_RISK_REVIEWER.value
+                    else "primary"
+                )
+                task = {
+                    "input_digest": "sha256:" + "a" * 64,
+                    "job_kind": kind,
+                    "metadata": {"reviewer_slot": reviewer_slot},
+                    "stage": RunStage.EXTRACTION.value,
+                    "task_ref": typed_ref(RefType.RUN_INPUT, f"contract-task:{index}"),
+                }
+                attempt = {
+                    "attempt_ref": typed_ref(
+                        RefType.ATTEMPT, f"contract-attempt:{index}"
+                    ),
+                    "job_manifest": {"result_schema": result_schema},
+                    "job_ref": typed_ref(RefType.JOB, f"contract-job:{index}"),
+                    "ordinal": 1,
+                }
+                if kind in {
+                    JobKind.EPISODE_REVIEWER.value,
+                    JobKind.INDEPENDENT_RISK_REVIEWER.value,
+                }:
+                    attempt["reviewer_ref"] = typed_ref(
+                        RefType.REVIEWER,
+                        f"contract-reviewer:{index}",
+                    )
+                envelope = coordinator._agent_envelope(
+                    task,
+                    attempt,
+                    raw_artifact_override=None,
+                    immutable_override=immutable,
+                )
+                contract = envelope["result_contract"]
+                self.assertEqual(result_schema, envelope["result_schema"])
+                self.assertEqual(result_schema, contract["result_schema"])
+                self.assertFalse(contract["json_schema"]["additionalProperties"])
+                self.assertTrue(contract["runtime_bindings"])
+                self.assertTrue(contract["cross_field_rules"])
+                self.assertTrue(contract["privacy_rules"])
+                self.assertEqual(
+                    result_validation.MAX_RESULT_BYTES,
+                    contract["serialization"]["max_bytes"],
+                )
+                example = schema_example(contract["json_schema"])
+                assert_schema_accepts(self, contract["json_schema"], example)
+                stack = [contract["json_schema"]]
+                while stack:
+                    schema_node = stack.pop()
+                    if not isinstance(schema_node, dict):
+                        continue
+                    prefix = schema_node.get("x-ref-prefix")
+                    if isinstance(prefix, str):
+                        wrong_prefix = "turn" if prefix != "turn" else "episode"
+                        self.assertEqual(
+                            rf"^{prefix}_ref_v2:[0-9a-f]{{64}}$",
+                            schema_node["pattern"],
+                        )
+                        self.assertIsNone(
+                            re.fullmatch(
+                                str(schema_node["pattern"]),
+                                f"{wrong_prefix}_ref_v2:{'0' * 64}",
+                            )
+                        )
+                    stack.extend(schema_node.values())
+
+    def test_claimed_envelope_matches_worst_case_claim_projection(self) -> None:
+        coordinator = self.activity_run("claim-envelope-projection")
+        state = coordinator.load_state()
+        job = coordinator.status()["runnable_jobs"][0]
+        task = state["jobs"][job["task_ref"]]
+        projected = coordinator._project_agent_envelope(
+            state,
+            task,
+            ordinal=1,
+        )
+        claimed = coordinator.claim_agent_job(
+            job["job_ref"],
+            job["active_attempt_ref"],
+            typed_ref(RefType.LEASE, "claim-envelope-projection"),
+        )
+        actual = json.loads(Path(claimed["envelope_path"]).read_bytes())
+
+        self.assertEqual(
+            set(projected["public_metadata"]), set(actual["public_metadata"])
+        )
+        for field in ("claim_ref", "dispatcher_ref", "result_ref"):
+            self.assertIn(field, projected["public_metadata"])
+            self.assertEqual(
+                len(projected["public_metadata"][field]),
+                len(actual["public_metadata"][field]),
+            )
+        self.assertEqual(
+            len(canonical_json_bytes(projected)),
+            len(canonical_json_bytes(actual)),
+        )
 
     def test_agent_task_cache_metrics_conserve_creation_and_reuse(self) -> None:
         coordinator = self.coordinator("agent-task-cache-metrics")

@@ -1187,6 +1187,52 @@ class SourceTransportProtocolTests(unittest.TestCase):
         ):
             transport._remote_host_context_environment()
 
+    def test_legacy_cli_relay_uses_the_canonical_snapshot_transport(self) -> None:
+        helper = self.root / "legacy-remote-helper.py"
+        helper.write_text("print('{}')\n", encoding="ascii")
+        commitment = transport.remote_host_context_helper_commitment(helper)
+        with (
+            mock.patch.object(
+                transport_remote,
+                "remote_host_context_helper_path",
+                return_value=helper,
+            ),
+            mock.patch.object(
+                transport_remote,
+                "remote_host_context_helper_commitment",
+                return_value=commitment,
+            ),
+            mock.patch.object(
+                transport_remote,
+                "_relay_remote_host_context_command",
+            ) as relay,
+        ):
+            transport.relay_remote_host_context_cli(
+                ("session-meta", "--host", "remote.example", "--limit", "10"),
+                max_output_bytes=4096,
+            )
+
+        argv = relay.call_args.args[0]
+        self.assertEqual(sys.executable, argv[0])
+        self.assertEqual(("-I", "-B", "-S"), argv[1:4])
+        self.assertEqual(
+            transport_snapshot.REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA, argv[8]
+        )
+        self.assertEqual(commitment, argv[9])
+        self.assertEqual(str(helper), argv[10])
+        self.assertEqual(
+            ("session-meta", "--host", "remote.example", "--limit", "10"),
+            argv[11:],
+        )
+        self.assertEqual(4096, relay.call_args.kwargs["max_output_bytes"])
+
+        for invalid in ((), ("source-transport",), ("preflight", "bad\nvalue")):
+            with self.subTest(arguments=invalid), self.assertRaises(ValueError):
+                transport.relay_remote_host_context_cli(
+                    invalid,
+                    max_output_bytes=4096,
+                )
+
     def test_remote_session_relay_validates_paired_target_without_exporting_it(
         self,
     ) -> None:

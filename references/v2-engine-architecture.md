@@ -27,11 +27,14 @@ operate on that single coordinator context and do not import one another:
 | `source_acceptance.py` | Input normalization and compact accepted-payload accounting |
 | `source_spool.py` | Lease-bound spool locking, exact pre-write limits, and crash recovery |
 | `agent_capacity.py` | Extractor/downstream task partitions and cache-miss reservations |
+| `agent_claim_projection.py` | Worst-case final claim metadata and exact envelope-size projection |
+| `agent_result_contracts.py` | Complete closed JSON Schemas supplied to native agent jobs |
 | `agent_checkpoint_capacity.py` | Claim/result checkpoint-reserve rollback transactions |
 | `agent_task_inputs.py` | Authenticated immutable task-input sidecars and checkpoint summaries |
 | `agent_results.py` | Authenticated accepted-result sidecars and checkpoint-coupled staging |
 | `agent_raw_artifacts.py` | Sealed raw-artifact projection and envelope loading |
 | `extracted_turns.py` | Authenticated derived-turn sidecar preparation and loading |
+| `implementation_authority.py` | Coordinator source-byte inventory and access-policy authority |
 | `raw_shard_staging.py` | Two-pass source-payload streaming and raw-shard rollback ownership |
 | `source_staging.py` | Preallocated receipt ledger and atomic final-file staging |
 | `orchestrator_scheduler.py` | Stage transitions, task creation, and bounded envelope scheduling |
@@ -256,46 +259,21 @@ stability similarly compares only BSD immutable, append, nounlink, restricted,
 and datavault flags; `UF_HIDDEN` and other presentation flags are not access
 policy.
 
-The transport slice remains independently bounded after this hardening: 7,203
-physical lines across a 7,250-line aggregate limit. One exact 14-module
+The transport slice remains independently bounded after this hardening: 7,450
+physical lines across a 7,475-line aggregate limit. One exact 15-module
 inventory and its aggregate are enforced together, so omitting a transport
-module cannot create a false budget pass. The newly affected modules are
-`transport_paths.py` at 82/100 lines, `transport_program.py` at 450/450,
-`transport_remote.py` at 316/320, `transport_snapshot.py` at 219/220, and
-`transport_remote_snapshot.py` at 86/100, while `transport_capture.py` is
-999/1,000, `transport_contracts.py` is 991/1,000, and `transport_resume.py` is 168/200,
-`transport_source.py` is
-1,646/1,700, and `transport_worker.py` is 21/25. The closed run-state
-authority inventory is exactly 1,000/1,000 lines: `run_state_authority.py` 243/250,
-`run_state_contracts.py` 37/50, `run_state_cursors.py` 219/225,
-`run_state_holdouts.py` 236/240, and `run_state_lineage.py` 265/275. Including
-this full slice, the orchestrator foundation is 3,297/3,350 lines. The global
-branch proxy is 8,568/8,575 nodes after making the receipt-bound Session selector
-commitment the canonical identity input across run modes and binding retained-history
-Git discovery controls. Post-admission Git subprocesses enter the held common-dir
-descriptor, verify the closed relative git-dir and object-store identities, and run
-with explicit bare metadata paths and a fixed discovery ceiling. The `.git`,
-`commondir`, and `gitdir` controls are bounded, no-follow, content-bound inputs;
-shallow history remains absent and is revalidated with other forbidden metadata.
-These checks extend the existing executable path, content, access-policy,
-descriptor-custody, closed-config, transport-isolation, canonical-runtime, and
-locator predicates. The closed
-nine-module publication slice is 8,689/8,700 lines; within it,
-`publication_support.py` is 1,317/1,320 and `executable_authority.py` is
-314/320. The durable `authority.py` integration is 3,270/3,275 lines. The
-source coordinator and
-its support slice are 3,049/3,050 lines; `source_session_policy.py` is tightly
-bounded at 127/127 lines, while the three source-staging modules
-are independently capped at 749/775, and the claim/result reserve owner is
-123/130. The current increase is confined to run-global source/shard/task
-capacity, authenticated task/result/derived sidecars, and checkpoint-coupled
-staging; no additional coordinator capability or transport monolith was
-introduced. The six agent support modules are independently bounded at
-1,030/1,050 aggregate lines; their individual ceilings are 100, 120, 320, 350,
-200, and 100 lines. Raw-artifact and derived-turn loading remain separate so
-`orchestrator_jobs.py` stays at 507/520 lines, while
-`orchestrator_reduction.py`, `orchestrator_scheduler.py`, and
-`orchestrator_source.py` stay at 2,465/2,480, 1,092/1,100, and 2,146/2,150 lines.
+module cannot create a false budget pass. The facade remains 241/250 lines and
+`transport_remote.py` is 374/400 lines after adding the closed
+`remote-host-context` CLI relay; Retrospective still contains no SSH host table
+or transport implementation.
+
+The orchestrator foundation is 3,524/3,550 lines. The seven agent support
+modules are 1,089/1,100 lines; the complete result-schema owner is 450/450,
+implementation authority is 335/350, and `orchestrator_jobs.py` is 521/525.
+The global branch proxy is exactly 9,017/9,020 nodes. These gates keep complete
+agent schemas, claim-size projection, source-byte provenance, semantic topic
+validation, and delegated remote transport in explicit owners instead of
+expanding the coordinator or reviving a second remote probe.
 
 ## Architecture inventory
 

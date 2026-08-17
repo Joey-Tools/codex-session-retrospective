@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 from collections.abc import Callable
 import copy
 from contextlib import nullcontext
@@ -2015,9 +2016,25 @@ class DurablePublicationTests(unittest.TestCase):
                 str(coordinator.run_dir),
             ]
         )
-        result = cli_module.command_finalize(args)
+        result = self.command_finalize_cli(args)
         self.assertTrue(result.ok, result.to_json())
         return result
+
+    @staticmethod
+    def _frozen_cli_orchestrator(*args, **kwargs):
+        kwargs.setdefault("clock", lambda: "2026-07-15T00:00:00Z")
+        return RetrospectiveOrchestrator(*args, **kwargs)
+
+    def command_finalize_cli(
+        self,
+        args: argparse.Namespace,
+    ) -> cli_module.CommandResult:
+        with mock.patch.object(
+            cli_module.orchestrator_api,
+            "RetrospectiveOrchestrator",
+            side_effect=self._frozen_cli_orchestrator,
+        ):
+            return cli_module.command_finalize(args)
 
     @staticmethod
     def destination(state: dict[str, object]) -> str:
@@ -5630,7 +5647,7 @@ class DurablePublicationTests(unittest.TestCase):
             )
 
             with self.assertRaises(cli_module.CliContractError) as raised:
-                cli_module.command_finalize(args)
+                self.command_finalize_cli(args)
             self.assertEqual("publication_authority_invalid", raised.exception.code)
             self.assertIn(
                 "persisted publisher GPG authority", raised.exception.safe_message
@@ -5747,7 +5764,7 @@ class DurablePublicationTests(unittest.TestCase):
                         "lost aborted checkpoint response",
                     ),
                 ):
-                    cli_module.command_finalize(args)
+                    self.command_finalize_cli(args)
 
                 checkpoint = coordinator.load_state()
                 publication_claim = checkpoint["publication"]["publication_claim"]

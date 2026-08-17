@@ -330,6 +330,7 @@ _REVIEWED_PROSE_FIELDS = frozenset(
 )
 _ALLOWED_STRING_FIELDS = frozenset(
     {
+        "access_policy_sha256",
         "algorithm",
         "authority_sha256",
         "backfill_of",
@@ -378,6 +379,8 @@ _ALLOWED_STRING_FIELDS = frozenset(
         "segmentation",
         "service_tier",
         "severity",
+        "signal_type",
+        "source_sha256",
         "source_transport_schema",
         "start",
         "stage",
@@ -513,10 +516,17 @@ _TOPIC_ROW_FIELDS = frozenset(
     {
         "episode_lineage",
         "episode_refs",
+        "events",
         "findings",
+        "guidance_candidates",
         "model_era",
+        "open_work",
         "policy_era",
+        "prompt_rewrites",
+        "recurrences",
         "schema_version",
+        "skill_candidates",
+        "strengths",
         "topic_ref",
     }
 )
@@ -2902,6 +2912,7 @@ def _validate_retained_provenance(value: Any) -> None:
         "agent_execution",
         "configuration_root",
         "engine_version",
+        "implementation",
         "model",
         "production_configuration_ref",
         "prompt",
@@ -2944,6 +2955,38 @@ def _validate_retained_provenance(value: Any) -> None:
         or _HEX_64_RE.fullmatch(prompt["digest"]) is None
     ):
         raise RetainedInventoryError("manifest prompt provenance is incomplete")
+    implementation = _require_mapping(
+        provenance["implementation"], label="manifest.provenance.implementation"
+    )
+    if set(implementation) != {
+        "access_policy_sha256",
+        "authority_sha256",
+        "file_count",
+        "implementation",
+        "schema",
+        "source_sha256",
+        "total_bytes",
+    }:
+        raise RetainedInventoryError("manifest implementation provenance is incomplete")
+    for field in ("access_policy_sha256", "authority_sha256", "source_sha256"):
+        digest = implementation[field]
+        if (
+            not isinstance(digest, str)
+            or not digest.startswith("sha256:")
+            or _HEX_64_RE.fullmatch(digest.removeprefix("sha256:")) is None
+        ):
+            raise RetainedInventoryError("manifest implementation authority is invalid")
+    if (
+        implementation["schema"] != "coordinator_implementation_readiness_v1"
+        or implementation["implementation"] != "session_retrospective_v2_python_source"
+        or not isinstance(implementation["file_count"], int)
+        or isinstance(implementation["file_count"], bool)
+        or implementation["file_count"] < 1
+        or not isinstance(implementation["total_bytes"], int)
+        or isinstance(implementation["total_bytes"], bool)
+        or implementation["total_bytes"] < 1
+    ):
+        raise RetainedInventoryError("manifest implementation provenance is invalid")
     runtime = _require_mapping(
         provenance["runtime"], label="manifest.provenance.runtime"
     )

@@ -222,6 +222,7 @@ MAX_BASELINE_WINDOW_DAYS = 9999
 TIMESTAMPED_ROLLOUT_PATH_HINT_GRACE = dt.timedelta(hours=2)
 
 DEFAULT_REMOTE_HOSTS = ("miku-bot-dev", "hoteng-srv-01")
+REMOTE_PROBE_TIMEOUT_SECONDS = 70
 RETAINED_SOURCE_HOST_ALIASES = {
     "miku-server-dev": "miku-bot-dev",
 }
@@ -10195,13 +10196,23 @@ def command_failure(result: subprocess.CompletedProcess[str]) -> str:
 
 
 def run_remote_probe(remote_probe: Path, args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(remote_probe), *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
+    argv = [sys.executable, "-I", "-B", "-S", str(remote_probe), *args]
+    try:
+        return subprocess.run(
+            argv,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+            timeout=REMOTE_PROBE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            argv,
+            124,
+            stdout="",
+            stderr="remote-host-context transport unavailable",
+        )
 
 
 def parse_session_meta_rows(text: str) -> list[dict[str, str]]:

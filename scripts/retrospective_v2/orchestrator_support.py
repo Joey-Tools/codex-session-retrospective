@@ -14,6 +14,7 @@ from typing import Any, Mapping, Sequence
 from . import (
     executable_authority,
     finalize,
+    implementation_authority,
     publication_support,
     result_validation,
     safe_io,
@@ -131,11 +132,21 @@ def _current_coordinator_runtime() -> dict[str, Any]:
         ) from error
 
 
+def _current_coordinator_implementation() -> dict[str, Any]:
+    try:
+        return implementation_authority.coordinator_implementation_readiness()
+    except (OSError, implementation_authority.ImplementationAuthorityError) as error:
+        raise InvalidTransitionError(
+            "coordinator implementation authority cannot be authenticated"
+        ) from error
+
+
 def _require_current_execution_contract(
     provenance: Mapping[str, Any],
 ) -> dict[str, Any]:
     return _require_bound_execution_contract(
         provenance,
+        current_implementation=_current_coordinator_implementation(),
         current_runtime=_current_coordinator_runtime(),
     )
 
@@ -222,6 +233,14 @@ def _build_provenance(
             "coordinator Python runtime authority is incompatible"
         ) from error
     try:
+        implementation_value = (
+            implementation_authority.coordinator_implementation_readiness()
+        )
+    except (OSError, implementation_authority.ImplementationAuthorityError) as error:
+        raise InvalidInputError(
+            "coordinator implementation authority is incompatible"
+        ) from error
+    try:
         helper_commitment = source_transport.remote_host_context_helper_commitment()
     except (OSError, source_transport.TransportValidationError) as error:
         raise InvalidInputError(
@@ -237,6 +256,9 @@ def _build_provenance(
             "source transport or remote-host-context helper commitment changed"
         )
     result = {
+        "implementation": _json_copy(
+            implementation_value, label="coordinator implementation provenance"
+        ),
         "model": _json_copy(dict(model_value), label="model provenance"),
         "prompt": _json_copy(dict(prompt_value), label="prompt provenance"),
         "runtime": _json_copy(runtime_value, label="coordinator runtime provenance"),

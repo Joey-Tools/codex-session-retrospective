@@ -784,6 +784,40 @@ superseded_by:
   1,344.062 seconds, 447/447 in 1,025.943 seconds, 452/452 in 1,144.609
   seconds, and 375/375 in 1,098.442 seconds. All four deadline supervisors exit
   zero and every retained log contains an explicit `OK` terminal summary.
+- The next fresh-context Codex processor found five related contract gaps: the
+  native envelope exposed only a result-schema name, topic reduction copied
+  deterministic inputs instead of validating semantic output, claim-size
+  projection omitted final claim metadata, run provenance did not bind the
+  coordinator source implementation, and the migration helper retained a
+  second SSH/host implementation.
+- Native jobs now receive complete closed JSON Schemas and exact worst-case
+  claim projections. Topic reductions preserve validated recurrence, guidance,
+  prompt-rewrite, skill-candidate, and open-work records through hierarchical
+  reduction and retained history. Every resumed command reauthenticates the
+  closed coordinator Python inventory, source bytes, and access policy.
+  Production remote verbs delegate to the canonical `remote-host-context` CLI;
+  the old probe remains only as a test fixture for migration compatibility.
+- Focused final-tree evidence passes orchestrator 120/120, export/reporting and
+  architecture contracts 93/93, and the six publication calendar-drift
+  regressions 6/6. One four-way local shard attempt covered all 1,678 tests but
+  exposed six publication test methods whose fixed July retention clock had
+  become expired relative to the real August wall clock. The tests now bind
+  CLI calls to their fixture clock while explicit expiry and GC use their
+  separate later clocks; the exact serial rerun passes 6/6. A final all-green
+  repository partition remains required before the replacement head is signed.
+- The final implementation/test tree contains 1,678 unique test identifiers,
+  partitioned exactly once as 398, 450, 448, and 382 tests. In the first
+  four-process execution, shards 0 and 2 passed 398/398 in 3,016.097 seconds and
+  448/448 in 2,418.716 seconds. Shard 3 encountered one bounded-signing canary
+  failure under contention; its complete serial rerun passed 382/382 in
+  2,372.443 seconds. Shard 1 encountered one attempt-lock scheduling timeout
+  under the same contention; its complete serial rerun passed 450/450 in
+  1,861.131 seconds and crossed the previously failing lock case. The two
+  contended shard attempts are non-counting. The unchanged-tree composite
+  evidence is therefore 1,678/1,678 with every selected partition terminating
+  `OK`. Final skill, CI, and module-boundary contracts pass 31/31; Ruff lint,
+  exact changed-file formatting, `git diff --check`, and the OpenAI skill
+  validator also pass. Signing, admission, and review gates remain.
 
 ## Follow-up Work
 

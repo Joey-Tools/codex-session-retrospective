@@ -1835,11 +1835,17 @@ class TransportArchitectureAuditTests(unittest.TestCase):
 
     def test_migration_probe_has_no_v2_engine_or_source_transport_copy(self) -> None:
         source = MIGRATION_PROBE_PATH.read_text(encoding="utf-8")
-        self.assertLessEqual(len(source.splitlines()), 6_100)
-        self.assertNotIn("retrospective_v2", source)
+        self.assertLessEqual(len(source.splitlines()), 4_000)
+        self.assertIn("from retrospective_v2 import transport", source)
         self.assertNotIn("source_transport_lease_v2", source)
         self.assertNotIn('"source-transport"', source)
         self.assertNotIn("remote_host_context_helper_path", source)
+        self.assertNotIn("def _remote_python_script", source)
+        self.assertNotIn("_run_remote_python_bounded", source)
+        self.assertNotIn("ssh_target", source)
+        self.assertNotIn("miku-bot-dev", source)
+        self.assertNotIn("hoteng-srv-01", source)
+        self.assertEqual(5, source.count("_relay_canonical_remote_helper("))
 
 
 if __name__ == "__main__":

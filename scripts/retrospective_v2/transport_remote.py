@@ -41,6 +41,9 @@ REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH = pathlib.PurePosixPath(
 REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS = 60
 REMOTE_HOST_CONTEXT_FIXED_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 REMOTE_HOST_CONTEXT_AUTH_ENVIRONMENT_KEYS = ("SSH_AUTH_SOCK",)
+REMOTE_HOST_CONTEXT_LEGACY_COMMANDS = frozenset(
+    {"fetch-rollout", "preflight", "rollout-summary", "session-meta"}
+)
 
 
 def remote_host_context_helper_path() -> pathlib.Path:
@@ -109,6 +112,49 @@ def _remote_host_context_command(
         "--host",
         str(args.host),
         *command_arguments,
+    )
+
+
+def relay_remote_host_context_cli(
+    arguments: Sequence[str],
+    *,
+    max_output_bytes: int,
+) -> None:
+    """Relay one bounded legacy CLI request through the canonical transport."""
+
+    normalized = tuple(arguments)
+    if (
+        not normalized
+        or normalized[0] not in REMOTE_HOST_CONTEXT_LEGACY_COMMANDS
+        or any(
+            not isinstance(value, str)
+            or not value
+            or "\x00" in value
+            or "\r" in value
+            or "\n" in value
+            for value in normalized
+        )
+    ):
+        raise ValueError("remote-host-context legacy request is invalid")
+    helper = remote_host_context_helper_path()
+    helper_commitment = remote_host_context_helper_commitment(helper)
+    argv = (
+        sys.executable,
+        "-I",
+        "-B",
+        "-S",
+        "-X",
+        f"pycache_prefix={os.devnull}",
+        "-c",
+        REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
+        REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
+        helper_commitment,
+        str(helper),
+        *normalized,
+    )
+    _relay_remote_host_context_command(
+        argv,
+        max_output_bytes=max_output_bytes,
     )
 
 

@@ -89,6 +89,7 @@ from .transport_remote import (  # noqa: F401
     _relay_valid_utf8,
     _remote_host_context_command,
     _remote_host_context_environment,
+    relay_remote_host_context_cli,
     remote_host_context_helper_commitment,
     remote_host_context_helper_path,
 )

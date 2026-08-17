@@ -1541,6 +1541,7 @@ def _command_finalize_once(
         identity_path=identity_path,
         require_existing_identity=True,
     )
+    orchestrator.status()
     run_state = orchestrator.load_state()
     if run_state.get("shadow") is not False:
         raise CliContractError(

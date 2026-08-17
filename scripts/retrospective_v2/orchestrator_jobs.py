@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from . import (
     agent_capacity,
+    agent_claim_projection,
     agent_raw_artifacts,
     agent_task_inputs,
     extracted_turns,
@@ -149,6 +150,9 @@ class AgentJobOperations(OrchestratorComponent):
                 "raw_artifact": raw_artifact,
             },
             "public_metadata": public_metadata,
+            "result_contract": result_validation.agent_result_contract(
+                _RESULT_SCHEMA_BY_KIND[task["job_kind"]]
+            ),
             "result_schema": _RESULT_SCHEMA_BY_KIND[task["job_kind"]],
             "schema": "coordinator_agent_envelope_v2",
         }
@@ -494,24 +498,21 @@ class AgentJobOperations(OrchestratorComponent):
             job_ref,
             ordinal,
         )
-        reviewer_ref = None
         reviewer_slot = task["metadata"].get("reviewer_slot")
-        if reviewer_slot is not None:
-            reviewer_ref = self._ref(
-                RefType.REVIEWER,
-                task["partition_ref"],
-                reviewer_slot,
-                ordinal,
-            )
+        projected_attempt = agent_claim_projection.projected_attempt(
+            run_dir=self.run_dir,
+            run_ref=state["run_ref"],
+            job_ref=job_ref,
+            attempt_ref=attempt_ref,
+            ordinal=ordinal,
+            partition_ref=task["partition_ref"],
+            reviewer_slot=reviewer_slot,
+            derive_ref=self._ref,
+        )
+        projected_attempt["job_manifest"] = job_manifest
         return self._agent_envelope(
             task,
-            {
-                "attempt_ref": attempt_ref,
-                "job_manifest": job_manifest,
-                "job_ref": job_ref,
-                "ordinal": ordinal,
-                "reviewer_ref": reviewer_ref,
-            },
+            projected_attempt,
             raw_artifact_override=agent_raw_artifacts.projected(
                 immutable,
                 restore_manifest=self._projection._restore_shard_manifest,

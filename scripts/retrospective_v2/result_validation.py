@@ -179,6 +179,13 @@ FOLLOW_UP_KINDS = frozenset(
         "update_guidance",
     }
 )
+TOPIC_SEMANTIC_FIELDS = (
+    "guidance_candidates",
+    "open_work",
+    "prompt_rewrites",
+    "recurrences",
+    "skill_candidates",
+)
 
 EXTRACTOR_GAP_REASONS = frozenset(
     {
@@ -208,6 +215,121 @@ ADJUDICATION_ITEM_REASONS = frozenset(
         "retained_supported",
     }
 )
+
+
+def agent_result_contract(result_schema: str) -> dict[str, Any]:
+    """Return the complete machine-readable contract supplied to an agent."""
+
+    from . import agent_result_contracts
+
+    runtime_bindings = {
+        EXTRACTOR_RESULT_SCHEMA: (
+            "all refs are members of public_metadata.allowed_output_refs",
+            "non-gap turns exactly cover payload control-manifest turn bindings",
+        ),
+        EPISODE_REVIEW_RESULT_SCHEMA: (
+            "attempt_ref equals public_metadata.attempt_ref",
+            "reviewer_ref and reviewer_slot equal public_metadata assignments",
+            "episode, evidence, and turn refs are members of allowed refs",
+        ),
+        ADJUDICATION_RESULT_SCHEMA: (
+            "candidate_result_hashes equal job_manifest candidate hashes in order",
+            "episode, evidence, and turn refs are members of allowed refs",
+        ),
+        TOPIC_RESULT_SCHEMA: (
+            "topic identity equals the job metadata and topic input",
+            "all semantic refs belong to the supplied topic lineage and allowed refs",
+        ),
+        SYNTHESIS_RESULT_SCHEMA: (
+            "topic_result_hashes exactly bind every supplied topic result",
+            "all refs are members of public_metadata.allowed_output_refs",
+        ),
+    }
+    cross_field_rules = {
+        EXTRACTOR_RESULT_SCHEMA: (
+            "empty-turns-require-gap-and-nonempty-turns-forbid-gap",
+            "turn-ref-is-unique-and-control-manifest-coverage-is-exact",
+            "evidence-and-span-commitments-exactly-cover-each-bound-turn",
+            "post-redaction-and-source-overlap-validation-must-pass",
+        ),
+        EPISODE_REVIEW_RESULT_SCHEMA: (
+            "review-gap-is-empty-low-confidence-and-has-gap-reason",
+            "reviewed-is-nonempty-and-forbids-gap-reason",
+            "hierarchical-review-preserves-child-risk-rewrites-and-confidence-floor",
+        ),
+        ADJUDICATION_RESULT_SCHEMA: (
+            "review-gap-is-empty-low-confidence-and-has-gap-reason",
+            "every-candidate-item-has-one-provenance-bound-decision",
+            "no-candidate-data-is-invented-and-secondary-high-risk-is-preserved",
+        ),
+        TOPIC_RESULT_SCHEMA: (
+            "deterministic-lineage-signals-hashes-and-confidence-equal-validated-input",
+            "recurrence-kind-matches-signal-type-and-binds-two-revisions",
+            "semantic-candidates-bind-only-topic-lineage-and-evidence",
+            "hierarchical-output-preserves-every-child-semantic-record",
+        ),
+        SYNTHESIS_RESULT_SCHEMA: (
+            "all-ten-question-ids-occur-exactly-once",
+            "observed-answers-require-signals-and-evidence",
+            "topic-signal-commitments-and-exemplars-are-exact",
+            "durable-candidates-require-three-episodes-two-sessions-or-safety-exception",
+            "era-change-is-unavailable-unless-era-status-is-compatible",
+        ),
+    }
+    limits = {
+        "confidence_levels": CONFIDENCE_LEVELS,
+        "max_generalized_text_chars": MAX_GENERALIZED_TEXT_CHARS,
+        "max_refs_per_field": MAX_REFS_PER_FIELD,
+        "max_rewrite_text_chars": MAX_REWRITE_TEXT_CHARS,
+        "max_signals_per_kind": MAX_SIGNALS_PER_KIND,
+        "max_turns_per_result": MAX_TURNS_PER_RESULT,
+        "severity_levels": SEVERITY_LEVELS,
+    }
+    return agent_result_contracts.contract_for_schema(
+        result_schema,
+        {
+            "adjudication_gap_reasons": ADJUDICATION_GAP_REASONS,
+            "adjudication_item_dispositions": ADJUDICATION_ITEM_DISPOSITIONS,
+            "adjudication_item_fields": ADJUDICATION_ITEM_FIELDS,
+            "adjudication_item_reasons": ADJUDICATION_ITEM_REASONS,
+            "adjudication_schema": ADJUDICATION_RESULT_SCHEMA,
+            "confidence_levels": CONFIDENCE_LEVELS,
+            "cross_field_rules": cross_field_rules,
+            "event_kinds": EVENT_KINDS,
+            "extractor_gap_reasons": EXTRACTOR_GAP_REASONS,
+            "extractor_schema": EXTRACTOR_RESULT_SCHEMA,
+            "finding_kinds": FINDING_KINDS,
+            "follow_up_kinds": FOLLOW_UP_KINDS,
+            "guidance_kinds": GUIDANCE_KINDS,
+            "limits": limits,
+            "outcomes": OUTCOMES,
+            "question_ids": QUESTION_IDS,
+            "privacy_rules": (
+                "output must contain summaries and opaque refs only",
+                "raw prompts, excerpts, tool output, paths, URLs, and raw IDs are forbidden",
+                "all generalized text and rewrites pass deterministic retained redaction",
+            ),
+            "review_gap_reasons": REVIEW_GAP_REASONS,
+            "review_schema": EPISODE_REVIEW_RESULT_SCHEMA,
+            "risk_flags": RISK_FLAGS,
+            "runtime_bindings": runtime_bindings,
+            "skill_candidate_kinds": SKILL_CANDIDATE_KINDS,
+            "strength_kinds": STRENGTH_KINDS,
+            "synthesis_schema": SYNTHESIS_RESULT_SCHEMA,
+            "topic_schema": TOPIC_RESULT_SCHEMA,
+            "serialization": {
+                "allow_nan": False,
+                "encoding": "utf-8",
+                "max_bytes": MAX_RESULT_BYTES,
+                "max_container_items": MAX_RESULT_CONTAINER_ITEMS,
+                "max_depth": MAX_RESULT_DEPTH,
+                "max_nodes": MAX_RESULT_NODES,
+                "max_string_chars": MAX_RESULT_STRING_CHARS,
+                "max_total_string_chars": MAX_RESULT_TOTAL_STRING_CHARS,
+            },
+        },
+    )
+
 
 _OPAQUE_REF_RE = re.compile(r"^[a-z][a-z0-9_]*_ref_v2:[0-9a-f]{64}$")
 _SCHEMA_RE = re.compile(r"^[a-z][a-z0-9_]*_v2$")
@@ -2340,12 +2462,179 @@ def build_topic_result(
             for review in ordered_reviews
             for item in review["strengths"]
         ],
+        **{field: [] for field in TOPIC_SEMANTIC_FIELDS},
         "topic_ref": topic_ref,
         "workstream_ref": topic_input["workstream_ref"],
     }
     if "topic_candidate_ref" in topic_input:
         result["topic_candidate_ref"] = topic_input["topic_candidate_ref"]
     return result
+
+
+def _validate_topic_semantics(
+    value: Mapping[str, Any],
+    *,
+    deterministic: Mapping[str, Any],
+    allowed_refs: Collection[str] | None,
+    allowed_turn_refs: Collection[str] | None,
+) -> None:
+    if set(value) != set(deterministic) | set(TOPIC_SEMANTIC_FIELDS):
+        raise _error("$", "does not match the closed topic result shape")
+    revision_refs = set(deterministic["episode_revision_refs"])
+    session_refs = set(deterministic["session_refs"])
+    lineage = {
+        (item["episode_ref"], item["session_ref"])
+        for item in deterministic["episode_lineage"]
+    }
+    signal_kinds = {
+        "event": EVENT_KINDS,
+        "finding": FINDING_KINDS,
+        "strength": STRENGTH_KINDS,
+    }
+    for index, item in enumerate(
+        _require_list(value["recurrences"], path="$.recurrences", maximum=64)
+    ):
+        path = _path("$.recurrences", index)
+        row = _require_mapping(item, path=path)
+        _require_exact_keys(
+            row,
+            required={
+                "confidence",
+                "episode_revision_refs",
+                "evidence_refs",
+                "kind",
+                "session_refs",
+                "signal_type",
+            },
+            path=path,
+        )
+        signal_type = _require_enum(
+            row["signal_type"], signal_kinds, path=_path(path, "signal_type")
+        )
+        _require_enum(row["kind"], signal_kinds[signal_type], path=_path(path, "kind"))
+        observed_revisions = set(
+            _require_refs(
+                row["episode_revision_refs"],
+                path=_path(path, "episode_revision_refs"),
+                allowed_refs=allowed_refs,
+                expected_prefix="episode_revision",
+                minimum=2,
+            )
+        )
+        observed_sessions = set(
+            _require_refs(
+                row["session_refs"],
+                path=_path(path, "session_refs"),
+                allowed_refs=allowed_refs,
+                expected_prefix="session",
+                minimum=1,
+            )
+        )
+        if (
+            not observed_revisions <= revision_refs
+            or not observed_sessions <= session_refs
+        ):
+            raise _error(path, "recurrence refs are outside the topic lineage")
+        _require_refs(
+            row["evidence_refs"],
+            path=_path(path, "evidence_refs"),
+            allowed_refs=allowed_refs,
+            expected_prefix="evidence",
+            minimum=1,
+        )
+        _require_enum(
+            row["confidence"], CONFIDENCE_LEVELS, path=_path(path, "confidence")
+        )
+    _validate_high_impact_turns(
+        value["prompt_rewrites"],
+        path="$.prompt_rewrites",
+        allowed_refs=allowed_refs,
+        allowed_turn_refs=allowed_turn_refs,
+        evidence_prefix="evidence",
+    )
+    for field, kinds in (
+        ("guidance_candidates", GUIDANCE_KINDS),
+        ("skill_candidates", SKILL_CANDIDATE_KINDS),
+    ):
+        for index, item in enumerate(
+            _require_list(value[field], path=f"$.{field}", maximum=64)
+        ):
+            path = _path(f"$.{field}", index)
+            row = _require_mapping(item, path=path)
+            _require_exact_keys(
+                row,
+                required={"confidence", "episode_lineage", "evidence_refs", "kind"},
+                path=path,
+            )
+            _require_enum(row["kind"], kinds, path=_path(path, "kind"))
+            candidate_lineage: set[tuple[str, str]] = set()
+            raw_candidate_lineage = _require_list(
+                row["episode_lineage"],
+                path=_path(path, "episode_lineage"),
+                maximum=MAX_REFS_PER_FIELD,
+            )
+            if not raw_candidate_lineage:
+                raise _error(path, "candidate lineage must not be empty")
+            for lineage_index, raw_lineage in enumerate(raw_candidate_lineage):
+                lineage_path = _path(_path(path, "episode_lineage"), lineage_index)
+                lineage_row = _require_mapping(raw_lineage, path=lineage_path)
+                _require_exact_keys(
+                    lineage_row,
+                    required={"episode_ref", "session_ref"},
+                    path=lineage_path,
+                )
+                lineage_item = (
+                    _require_ref(
+                        lineage_row["episode_ref"],
+                        path=_path(lineage_path, "episode_ref"),
+                        allowed_refs=allowed_refs,
+                        expected_prefix="episode",
+                    ),
+                    _require_ref(
+                        lineage_row["session_ref"],
+                        path=_path(lineage_path, "session_ref"),
+                        allowed_refs=allowed_refs,
+                        expected_prefix="session",
+                    ),
+                )
+                if lineage_item in candidate_lineage:
+                    raise _error(lineage_path, "duplicates an episode lineage")
+                candidate_lineage.add(lineage_item)
+            if not candidate_lineage or not candidate_lineage <= lineage:
+                raise _error(path, "candidate lineage is outside the topic lineage")
+            _require_refs(
+                row["evidence_refs"],
+                path=_path(path, "evidence_refs"),
+                allowed_refs=allowed_refs,
+                expected_prefix="evidence",
+                minimum=1,
+            )
+            _require_enum(
+                row["confidence"], CONFIDENCE_LEVELS, path=_path(path, "confidence")
+            )
+    for index, item in enumerate(
+        _require_list(value["open_work"], path="$.open_work", maximum=64)
+    ):
+        path = _path("$.open_work", index)
+        row = _require_mapping(item, path=path)
+        _require_exact_keys(
+            row, required={"confidence", "evidence_refs", "kind"}, path=path
+        )
+        _require_enum(row["kind"], FOLLOW_UP_KINDS, path=_path(path, "kind"))
+        _require_refs(
+            row["evidence_refs"],
+            path=_path(path, "evidence_refs"),
+            allowed_refs=allowed_refs,
+            expected_prefix="evidence",
+            minimum=1,
+        )
+        _require_enum(
+            row["confidence"], CONFIDENCE_LEVELS, path=_path(path, "confidence")
+        )
+    for field in TOPIC_SEMANTIC_FIELDS:
+        canonical = [_canonical_value(item) for item in value[field]]
+        if len(canonical) != len(set(canonical)):
+            raise _error(f"$.{field}", "contains duplicate semantic records")
 
 
 def build_hierarchical_topic_result(
@@ -2440,6 +2729,7 @@ def build_hierarchical_topic_result(
             }
         ),
         "strengths": unique_values("strengths"),
+        **{field: unique_values(field) for field in TOPIC_SEMANTIC_FIELDS},
         "topic_candidate_ref": topic_candidate_ref,
         "topic_ref": topic_ref,
         "workstream_ref": workstream_ref,
@@ -2454,6 +2744,7 @@ def validate_hierarchical_topic_result(
     expected_topic_candidate_ref: str,
     expected_topic_ref: str,
     expected_workstream_ref: str,
+    allowed_turn_refs: Collection[str] | None = None,
     original_prompts: Sequence[str] = (),
     tool_outputs: Sequence[str] = (),
 ) -> dict[str, Any]:
@@ -2487,8 +2778,23 @@ def validate_hierarchical_topic_result(
         topic_ref=expected_topic_ref,
         workstream_ref=expected_workstream_ref,
     )
-    if _canonical_value(output) != _canonical_value(expected):
-        raise _error("$", "must exactly preserve the validated child topic results")
+    _validate_topic_semantics(
+        output,
+        deterministic={
+            key: value
+            for key, value in expected.items()
+            if key not in TOPIC_SEMANTIC_FIELDS
+        },
+        allowed_refs=refs,
+        allowed_turn_refs=allowed_turn_refs,
+    )
+    for key, expected_value in expected.items():
+        if key not in TOPIC_SEMANTIC_FIELDS and output[key] != expected_value:
+            raise _error(f"$.{key}", "must exactly preserve validated child topics")
+    for field in TOPIC_SEMANTIC_FIELDS:
+        child_values = {_canonical_value(item) for item in expected[field]}
+        if not child_values <= {_canonical_value(item) for item in output[field]}:
+            raise _error(f"$.{field}", "dropped a child semantic record")
     return output
 
 
@@ -2530,8 +2836,18 @@ def validate_topic_result(
         tool_outputs=tool_outputs,
     )
     expected = build_topic_result(validated_input, topic_ref=topic_ref)
-    if _canonical_value(value) != _canonical_value(expected):
-        raise _error("$", "must exactly preserve the validated topic aggregation")
+    deterministic = {
+        key: item for key, item in expected.items() if key not in TOPIC_SEMANTIC_FIELDS
+    }
+    _validate_topic_semantics(
+        value,
+        deterministic=deterministic,
+        allowed_refs=refs,
+        allowed_turn_refs=allowed_turn_refs,
+    )
+    for key, expected_value in deterministic.items():
+        if value[key] != expected_value:
+            raise _error(f"$.{key}", "must exactly preserve the topic aggregation")
     return value
 
 

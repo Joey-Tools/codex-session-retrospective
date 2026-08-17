@@ -123,6 +123,7 @@ EXECUTION_VERSION_CONTRACT = {
 def _require_current_execution_contract(
     provenance: Mapping[str, Any],
     *,
+    current_implementation: Mapping[str, Any],
     current_runtime: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Reject resumed model work whose executable prompt contract drifted."""
@@ -159,5 +160,14 @@ def _require_current_execution_contract(
     ):
         raise InvalidTransitionError(
             "run coordinator Python runtime authority no longer matches"
+        )
+    implementation = contract.get("implementation")
+    if (
+        not isinstance(implementation, Mapping)
+        or not isinstance(current_implementation, Mapping)
+        or dict(implementation) != dict(current_implementation)
+    ):
+        raise InvalidTransitionError(
+            "run coordinator implementation authority no longer matches"
         )
     return contract

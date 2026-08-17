@@ -5,6 +5,13 @@ available concurrency. SSH and source transport remain serial per host. Agents
 receive one bounded job manifest and must return one JSON document matching the
 job's declared schema.
 
+Every claimed envelope contains the complete closed JSON Schema for its job
+kind, not only a schema-name token. The deterministic coordinator projects the
+final claim metadata before enforcing the envelope byte limit, then validates
+the returned document against that schema plus job-specific reference,
+lineage, privacy, and serialization rules. A coordinator never fills in a
+semantic reducer field that an agent omitted.
+
 ## Extractor And Redactor
 
 ```text

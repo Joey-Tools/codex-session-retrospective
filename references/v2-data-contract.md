@@ -559,13 +559,17 @@ does not reproduce those source forms.
 `manifest.json` retains the complete non-sensitive execution contract: actual
 model/provider/closed parameters, prompt digest/version, schema and transport
 bindings, component versions, coordinator-runtime authority, configuration
-root, and every agent job's result, retry, reviewer, and
+root, coordinator-implementation source authority, and every agent job's
+declared result contract, result, retry, reviewer, and
 issued/claimed/completed timing provenance. Runtime authority contains only a
 digest of the canonical executable binding plus a digest over executable
 identity, bytes, and ancestor access policy; it never retains the local path.
 Both digests are included in the configuration root and are recomputed before
 any resumed command may consume or advance a checkpoint. An opaque
-configuration commitment cannot replace these fields.
+configuration commitment cannot replace these fields. Implementation authority
+binds the closed coordinator Python inventory, exact source bytes, and file and
+ancestor access policy. It is also recomputed before status, transition, or
+retained export consumes the run; local source paths are not retained.
 Agent execution provenance includes the exact deterministic task-cache
 hit/miss/reuse conservation alongside every job, result, retry, reviewer, and
 issued/claimed/completed timestamp.
@@ -574,10 +578,12 @@ Trend rates use all meaningful turns or episodes as denominators and are reporte
 per 100. Incompatible model/policy/configuration eras are rendered separately and
 never compared as direct improvement or regression.
 
-Topic-reducer output uses a closed result schema. Validated topic aggregation
-contains evidence-bound episode/session membership and cross-session measures;
-global synthesis consumes those aggregations rather than byte-equal reducer
-input.
+Topic-reducer output uses a closed result schema. Its semantic recurrence,
+guidance, prompt-rewrite, skill-candidate, and open-work records are
+agent-produced, evidence-bound outputs; the deterministic fields prove exact
+episode/session membership, child lineage, and cross-session measures. Global
+synthesis consumes those validated aggregations rather than a byte-equal copy
+of reducer input.
 
 Topic inputs are partitioned from bounded episode reviews before the 64 KiB
 result-contract validator is called. The durable partition index commits every

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import datetime as dt
 import errno
 import importlib.util
@@ -23,6 +22,9 @@ from unittest import mock
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "session_retrospective.py"
 REMOTE_PROBE_SCRIPT = SCRIPT.parent / "remote_codex_probe.py"
+LEGACY_REMOTE_PROBE_SCRIPT = (
+    Path(__file__).resolve().parent / "fixtures" / "legacy_remote_codex_probe.py"
+)
 SPEC = importlib.util.spec_from_file_location("session_retrospective", SCRIPT)
 MODULE = importlib.util.module_from_spec(SPEC)
 assert SPEC is not None
@@ -37,6 +39,14 @@ assert REMOTE_PROBE_SPEC is not None
 assert REMOTE_PROBE_SPEC.loader is not None
 sys.modules[REMOTE_PROBE_SPEC.name] = REMOTE_PROBE
 REMOTE_PROBE_SPEC.loader.exec_module(REMOTE_PROBE)
+LEGACY_REMOTE_PROBE_SPEC = importlib.util.spec_from_file_location(
+    "legacy_remote_codex_probe_fixture", LEGACY_REMOTE_PROBE_SCRIPT
+)
+LEGACY_REMOTE_PROBE = importlib.util.module_from_spec(LEGACY_REMOTE_PROBE_SPEC)
+assert LEGACY_REMOTE_PROBE_SPEC is not None
+assert LEGACY_REMOTE_PROBE_SPEC.loader is not None
+sys.modules[LEGACY_REMOTE_PROBE_SPEC.name] = LEGACY_REMOTE_PROBE
+LEGACY_REMOTE_PROBE_SPEC.loader.exec_module(LEGACY_REMOTE_PROBE)
 
 VALID_TURN_ID = f"{MODULE.TURN_REF_PREFIX}:{'a' * 20}"
 VALID_EPISODE_ID = f"{MODULE.EPISODE_REF_PREFIX}:{'b' * 20}"
@@ -346,7 +356,7 @@ def event_user_message(text: str, timestamp: str) -> dict:
 
 
 def embedded_probe_namespace(payload: dict[str, object]) -> dict[str, object]:
-    script = REMOTE_PROBE._remote_python_script(payload)
+    script = LEGACY_REMOTE_PROBE._remote_python_script(payload)
     definitions = script.split('\nif CONFIG["mode"] ==', 1)[0]
     namespace: dict[str, object] = {"__name__": "embedded_remote_codex_probe"}
     exec(compile(definitions, "<embedded-remote-codex-probe>", "exec"), namespace)
@@ -734,7 +744,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 + "\n{bad json\n",
                 encoding="utf-8",
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "rollout": rollout_ref,
@@ -864,7 +874,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     )
                 )
 
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "rollout": rollout_ref,
@@ -1022,7 +1032,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     message("assistant", "Ordinary update 2.", "2026-05-01T10:01:00Z"),
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "rollout": rollout_ref,
@@ -1422,89 +1432,54 @@ class SessionRetrospectiveTests(unittest.TestCase):
         self.assertNotIn("disappeared", output)
         self.assertNotIn("disappeared", output)
 
-    def test_remote_probe_session_meta_reports_unreadable_remote_rollout_without_remote_path(
-        self,
-    ) -> None:
-        marker = json.dumps(
-            {
-                "kind": "error",
-                "error": "rollout unreadable",
-                "rollout": "sessions/2026/05/01/rollout-2026-05-01T10-00-00.jsonl",
-            }
+    def test_remote_probe_session_meta_delegates_to_remote_host_context(self) -> None:
+        args = types.SimpleNamespace(
+            host=["remote-a"],
+            date=["2026/05/01"],
+            from_date=None,
+            to_date=None,
+            rollout_start=None,
+            rollout_end=None,
+            auto_split=True,
+            limit=10,
         )
-        remote_output = f"{REMOTE_PROBE.REMOTE_SESSION_META_BEGIN}\n{marker}\n{REMOTE_PROBE.REMOTE_SESSION_META_END}\n"
-        stderr = io.StringIO()
-        stdout = io.StringIO()
+        with mock.patch.object(
+            REMOTE_PROBE,
+            "_relay_canonical_remote_helper",
+            return_value=0,
+        ) as relay:
+            result = REMOTE_PROBE.cmd_session_meta(args)
 
+        self.assertEqual(0, result)
+        relay.assert_called_once_with(
+            [
+                "session-meta",
+                "--host",
+                "remote-a",
+                "--date",
+                "2026/05/01",
+                "--limit",
+                "10",
+                "--auto-split",
+            ],
+            max_stdout_bytes=REMOTE_PROBE.MAX_REMOTE_SESSION_META_STDOUT_BYTES,
+        )
+
+    def test_remote_probe_rejects_invalid_host_before_delegation(self) -> None:
+        stderr = io.StringIO()
         with (
-            mock.patch.object(
-                REMOTE_PROBE,
-                "_run_remote_python_bounded",
-                return_value=subprocess.CompletedProcess(
-                    args=["ssh"],
-                    returncode=0,
-                    stdout=remote_output,
-                    stderr="Traceback: /home/hoteng/.codex/private-rollout.jsonl",
-                ),
-            ),
+            mock.patch.object(REMOTE_PROBE, "_relay_canonical_remote_helper") as relay,
             mock.patch.object(sys, "stderr", stderr),
-            mock.patch.object(sys, "stdout", stdout),
         ):
-            result = REMOTE_PROBE.cmd_session_meta(
-                types.SimpleNamespace(
-                    host=["miku-bot-dev"],
-                    date=["2026/05/01"],
-                    from_date=None,
-                    to_date=None,
-                    limit=10,
-                )
+            result = REMOTE_PROBE.cmd_preflight(
+                types.SimpleNamespace(host=["invalid host"])
             )
 
-        self.assertEqual(result, 1)
-        self.assertEqual(stdout.getvalue(), "")
-        self.assertIn("host=miku-bot-dev", stderr.getvalue())
-        self.assertIn(
-            "rollout=sessions/2026/05/01/rollout-2026-05-01T10-00-00.jsonl",
-            stderr.getvalue(),
+        self.assertEqual(2, result)
+        self.assertEqual(
+            "error=invalid host selector: invalid host\n", stderr.getvalue()
         )
-        self.assertIn("error=rollout unreadable", stderr.getvalue())
-        self.assertNotIn("/home/hoteng/.codex", stderr.getvalue())
-
-    def test_remote_probe_session_meta_hides_unframed_remote_failure_stderr(
-        self,
-    ) -> None:
-        stderr = io.StringIO()
-        stdout = io.StringIO()
-
-        with (
-            mock.patch.object(
-                REMOTE_PROBE,
-                "_run_remote_python_bounded",
-                return_value=subprocess.CompletedProcess(
-                    args=["ssh"],
-                    returncode=1,
-                    stdout="",
-                    stderr="Traceback: /home/hoteng/.codex/sessions/2026/05/01",
-                ),
-            ),
-            mock.patch.object(sys, "stderr", stderr),
-            mock.patch.object(sys, "stdout", stdout),
-        ):
-            result = REMOTE_PROBE.cmd_session_meta(
-                types.SimpleNamespace(
-                    host=["miku-bot-dev"],
-                    date=["2026/05/01"],
-                    from_date=None,
-                    to_date=None,
-                    limit=10,
-                )
-            )
-
-        self.assertEqual(result, 1)
-        self.assertEqual(stdout.getvalue(), "")
-        self.assertIn("host=miku-bot-dev", stderr.getvalue())
-        self.assertIn("error=remote session-meta failed", stderr.getvalue())
-        self.assertNotIn("/home/hoteng/.codex", stderr.getvalue())
+        relay.assert_not_called()
 
     def test_remote_probe_session_meta_rejects_symlink_date_dir(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
@@ -1701,7 +1676,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 limit=10,
                 host="local",
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -1983,7 +1958,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     limit=1,
                     host="local",
                 )
-                script = REMOTE_PROBE._remote_python_script(
+                script = LEGACY_REMOTE_PROBE._remote_python_script(
                     {
                         "mode": "session-meta",
                         "codex_root": str(root),
@@ -2760,152 +2735,48 @@ class SessionRetrospectiveTests(unittest.TestCase):
             {relative_path.as_posix() for relative_path in lifecycle_paths},
         )
 
-    def test_remote_probe_session_meta_rejects_remote_limit_marker(self) -> None:
-        row = json.dumps(
-            {
-                "date": "2026/05/01",
-                "session_id": "session-1",
-                "cwd": "/redacted/repo",
-                "rollout": "sessions/2026/05/01/rollout-1.jsonl",
-            }
+    def test_remote_probe_mixed_hosts_delegate_as_one_canonical_request(self) -> None:
+        args = types.SimpleNamespace(
+            host=["local", "remote-a"],
+            date=["2026/05/01"],
+            from_date=None,
+            to_date=None,
+            rollout_start=None,
+            rollout_end=None,
+            auto_split=False,
+            limit=1,
         )
-        marker = json.dumps(
-            {
-                "kind": "truncation",
-                "reason": REMOTE_PROBE.SESSION_META_LIMIT_TRUNCATED_REASON,
-                "date": "2026/05/01",
-                "limit": 1,
-            }
+        with mock.patch.object(
+            REMOTE_PROBE,
+            "_relay_canonical_remote_helper",
+            return_value=0,
+        ) as relay:
+            result = REMOTE_PROBE.cmd_session_meta(args)
+
+        self.assertEqual(0, result)
+        self.assertEqual(
+            ["session-meta", "--host", "local", "--host", "remote-a"],
+            relay.call_args.args[0][:5],
         )
-        truncation_markers = (
-            {
-                "kind": "truncation",
-                "reason": REMOTE_PROBE.SESSION_META_LIMIT_TRUNCATED_REASON,
-                "date": "2026/05/01",
-                "limit": 1,
-            },
-            {
-                "kind": "truncation",
-                "reason": REMOTE_PROBE.SESSION_META_CANDIDATE_LIMIT_TRUNCATED_REASON,
-                "date": "2026/05/01",
-                "candidate_limit": REMOTE_PROBE.MAX_SESSION_META_CANDIDATE_LIMIT,
-            },
-        )
-        for marker_item in truncation_markers:
-            with self.subTest(reason=marker_item["reason"]):
-                marker = json.dumps(marker_item)
-                remote_output = f"{REMOTE_PROBE.REMOTE_SESSION_META_BEGIN}\n{row}\n{marker}\n{REMOTE_PROBE.REMOTE_SESSION_META_END}\n"
-                stderr = io.StringIO()
-                stdout = io.StringIO()
-
-                with (
-                    mock.patch.object(
-                        REMOTE_PROBE,
-                        "_run_remote_python_bounded",
-                        return_value=subprocess.CompletedProcess(
-                            args=["ssh"], returncode=0, stdout=remote_output, stderr=""
-                        ),
-                    ),
-                    mock.patch.object(sys, "stderr", stderr),
-                    mock.patch.object(sys, "stdout", stdout),
-                ):
-                    result = REMOTE_PROBE.cmd_session_meta(
-                        types.SimpleNamespace(
-                            host=["miku-bot-dev"],
-                            date=["2026/05/01"],
-                            from_date=None,
-                            to_date=None,
-                            limit=1,
-                        )
-                    )
-
-                self.assertEqual(result, 1)
-                self.assertIn("host=miku-bot-dev", stderr.getvalue())
-                self.assertIn(
-                    "session-meta result exceeded --limit=1", stderr.getvalue()
-                )
-                self.assertEqual(stdout.getvalue(), "")
-
-    def test_remote_probe_session_meta_rejects_global_limit_truncation(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
-            root = Path(raw) / ".codex"
-            rollout = (
-                root
-                / "sessions"
-                / "2026"
-                / "05"
-                / "01"
-                / "rollout-2026-05-01T10-00-00-local.jsonl"
-            )
-            write_jsonl(
-                rollout,
-                [
-                    {
-                        "type": "session_meta",
-                        "timestamp": "2026-05-01T10:00:00Z",
-                        "payload": {"id": "local-session", "cwd": "/redacted/local"},
-                    }
-                ],
-            )
-            remote_row = json.dumps(
-                {
-                    "date": "2026/05/01",
-                    "session_id": "remote-session",
-                    "cwd": "/redacted/remote",
-                    "rollout": "sessions/2026/05/01/rollout-remote.jsonl",
-                }
-            )
-            remote_output = f"{REMOTE_PROBE.REMOTE_SESSION_META_BEGIN}\n{remote_row}\n{REMOTE_PROBE.REMOTE_SESSION_META_END}\n"
-            stderr = io.StringIO()
-            stdout = io.StringIO()
-
-            with (
-                mock.patch.object(REMOTE_PROBE, "_local_codex_root", return_value=root),
-                mock.patch.object(
-                    REMOTE_PROBE,
-                    "_run_remote_python_bounded",
-                    return_value=subprocess.CompletedProcess(
-                        args=["ssh"], returncode=0, stdout=remote_output, stderr=""
-                    ),
-                ),
-                mock.patch.object(sys, "stderr", stderr),
-                mock.patch.object(sys, "stdout", stdout),
-            ):
-                result = REMOTE_PROBE.cmd_session_meta(
-                    types.SimpleNamespace(
-                        host=["local", "miku-bot-dev"],
-                        date=["2026/05/01"],
-                        from_date=None,
-                        to_date=None,
-                        limit=1,
-                    )
-                )
-
-        self.assertEqual(result, 1)
-        self.assertIn("host=all", stderr.getvalue())
-        self.assertIn("session-meta result exceeded --limit=1", stderr.getvalue())
-        self.assertEqual(stdout.getvalue(), "")
 
     def test_remote_probe_script_is_executable(self) -> None:
         self.assertTrue(os.access(REMOTE_PROBE_SCRIPT, os.X_OK))
 
-    def test_remote_probe_preflight_uses_configured_remote_codex_root(self) -> None:
-        completed = subprocess.CompletedProcess(
-            args=["ssh"],
-            returncode=0,
-            stdout="hostname=remote\nuser=hoteng\nhome=/home/other\ncodex_root=/home/hoteng/.codex\ncodex=present\nrg=present\npython3=present\n",
-            stderr="",
-        )
+    def test_remote_probe_preflight_delegates_without_a_host_registry(self) -> None:
         with mock.patch.object(
-            REMOTE_PROBE, "_run_subprocess_text", return_value=completed
-        ) as run:
-            row = REMOTE_PROBE._remote_preflight_row("miku-bot-dev")
+            REMOTE_PROBE,
+            "_relay_canonical_remote_helper",
+            return_value=0,
+        ) as relay:
+            result = REMOTE_PROBE.cmd_preflight(
+                types.SimpleNamespace(host=["remote-a", "remote-b"])
+            )
 
-        command = run.call_args.args[0]
-        self.assertIn("CODEX_REMOTE_ROOT=/home/hoteng/.codex", command[-1])
-        self.assertIn('[ -d "$codex_root" ]', command[-1])
-        self.assertEqual(row["codex_root"], "/home/hoteng/.codex")
-        self.assertEqual(row["codex"], "present")
+        self.assertEqual(0, result)
+        relay.assert_called_once_with(
+            ["preflight", "--host", "remote-a", "--host", "remote-b"],
+            max_stdout_bytes=REMOTE_PROBE.MAX_REMOTE_STDOUT_BYTES,
+        )
 
     def test_remote_probe_private_output_rejects_parent_symlink_swap_after_resolution(
         self,
@@ -3473,160 +3344,79 @@ class SessionRetrospectiveTests(unittest.TestCase):
 
         self.assertEqual(read_sizes, [initial_size + 1])
 
-    def test_remote_probe_remote_full_fetch_uses_bounded_parent_capture(self) -> None:
-        source = b"{}\n"
-        payload = base64.b64encode(source).decode("ascii")
-        remote_result = subprocess.CompletedProcess(
-            [],
-            0,
-            stdout="\n".join(
-                [
-                    REMOTE_PROBE.REMOTE_FETCH_ROLLOUT_BEGIN,
-                    json.dumps({"ok": True, "bytes": len(source)}),
-                    payload,
-                    REMOTE_PROBE.REMOTE_FETCH_ROLLOUT_END,
-                    "",
-                ]
-            ),
-            stderr="",
-        )
-        with tempfile.TemporaryDirectory() as raw:
-            task_output_root = Path(raw).resolve() / "task-output"
-            task_output_root.mkdir(parents=True)
-
-            with (
-                mock.patch.object(
-                    REMOTE_PROBE,
-                    "_task_output_root",
-                    return_value=task_output_root,
-                ),
-                mock.patch.object(
-                    REMOTE_PROBE,
-                    "_run_remote_python_bounded",
-                    return_value=remote_result,
-                ) as run_remote,
-            ):
-                result = REMOTE_PROBE.cmd_fetch_rollout(
-                    types.SimpleNamespace(
-                        host="miku-bot-dev",
-                        rollout="sessions/2026/05/01/rollout-2026-05-01T10-00-00.jsonl",
-                        output="rollout.jsonl",
-                    )
+    def test_remote_probe_remote_full_fetch_delegates_bounded_request(self) -> None:
+        with mock.patch.object(
+            REMOTE_PROBE,
+            "_relay_canonical_remote_helper",
+            return_value=0,
+        ) as relay:
+            result = REMOTE_PROBE.cmd_fetch_rollout(
+                types.SimpleNamespace(
+                    host="remote-a",
+                    rollout="sessions/2026/05/01/rollout-2026-05-01T10-00-00.jsonl",
+                    output="/tmp/rollout.jsonl",
                 )
+            )
 
-        self.assertEqual(result, 0)
-        self.assertEqual(
-            run_remote.call_args.kwargs["max_stdout_bytes"],
-            4 * ((REMOTE_PROBE.MAX_FETCH_ROLLOUT_BYTES + 2) // 3)
-            + REMOTE_PROBE.REMOTE_FETCH_FRAME_OVERHEAD_BYTES,
+        self.assertEqual(0, result)
+        relay.assert_called_once_with(
+            [
+                "fetch-rollout",
+                "--host",
+                "remote-a",
+                "--rollout",
+                "sessions/2026/05/01/rollout-2026-05-01T10-00-00.jsonl",
+                "--output",
+                "/tmp/rollout.jsonl",
+            ],
+            max_stdout_bytes=REMOTE_PROBE.MAX_REMOTE_STDOUT_BYTES,
         )
 
-    def test_remote_probe_remote_session_meta_uses_exact_bounded_parent_capture(
-        self,
-    ) -> None:
-        remote_result = subprocess.CompletedProcess(
-            args=["ssh"],
-            returncode=0,
-            stdout=f"{REMOTE_PROBE.REMOTE_SESSION_META_BEGIN}\n{REMOTE_PROBE.REMOTE_SESSION_META_END}\n",
-            stderr="",
-        )
+    def test_remote_probe_remote_session_meta_uses_exact_output_bound(self) -> None:
         args = types.SimpleNamespace(
-            host=["miku-bot-dev"],
+            host=["remote-a"],
             date=["2026/05/01"],
             from_date=None,
             to_date=None,
+            rollout_start=None,
+            rollout_end=None,
+            auto_split=False,
             limit=10,
         )
-        stdout = io.StringIO()
-        with (
-            mock.patch.object(
-                REMOTE_PROBE, "_run_remote_python_bounded", return_value=remote_result
-            ) as bounded_run,
-            mock.patch.object(sys, "stdout", stdout),
-        ):
+        with mock.patch.object(
+            REMOTE_PROBE,
+            "_relay_canonical_remote_helper",
+            return_value=0,
+        ) as relay:
             result = REMOTE_PROBE.cmd_session_meta(args)
 
         self.assertEqual(result, 0)
         self.assertEqual(REMOTE_PROBE.MAX_REMOTE_SESSION_META_STDOUT_BYTES, 32_899_072)
-        self.assertEqual(bounded_run.call_args.kwargs["max_stdout_bytes"], 32_899_072)
+        self.assertEqual(relay.call_args.kwargs["max_stdout_bytes"], 32_899_072)
         self.assertFalse(hasattr(REMOTE_PROBE, "_run_remote_python"))
 
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with (
-            mock.patch.object(
-                REMOTE_PROBE,
-                "_run_remote_python_bounded",
-                side_effect=RuntimeError("command stdout exceeded capture limit"),
-            ),
-            mock.patch.object(REMOTE_PROBE, "_extract_framed_lines") as parser,
-            mock.patch.object(sys, "stdout", stdout),
-            mock.patch.object(sys, "stderr", stderr),
-        ):
-            result = REMOTE_PROBE.cmd_session_meta(args)
-
-        self.assertEqual(result, 1)
-        self.assertEqual(stdout.getvalue(), "")
-        self.assertIn("stdout exceeded capture limit", stderr.getvalue())
-        parser.assert_not_called()
-
-    def test_remote_probe_remote_rollout_summary_uses_exact_bounded_parent_capture(
-        self,
-    ) -> None:
-        remote_result = subprocess.CompletedProcess(
-            args=["ssh"], returncode=0, stdout="unused", stderr=""
-        )
+    def test_remote_probe_remote_rollout_summary_uses_exact_output_bound(self) -> None:
         args = types.SimpleNamespace(
-            host="miku-bot-dev",
+            host="remote-a",
             rollout="sessions/2026/05/01/rollout-2026-05-01T10-00-00.jsonl",
             keyword=[],
             limit=20,
             tail_records=4,
             max_text_chars=200,
         )
-        stdout = io.StringIO()
-        with (
-            mock.patch.object(
-                REMOTE_PROBE, "_run_remote_python_bounded", return_value=remote_result
-            ) as bounded_run,
-            mock.patch.object(
-                REMOTE_PROBE, "_extract_framed_rollout_summary_records", return_value=[]
-            ),
-            mock.patch.object(sys, "stdout", stdout),
-        ):
+        with mock.patch.object(
+            REMOTE_PROBE,
+            "_relay_canonical_remote_helper",
+            return_value=0,
+        ) as relay:
             result = REMOTE_PROBE.cmd_rollout_summary(args)
 
         self.assertEqual(result, 0)
         self.assertEqual(REMOTE_PROBE.MAX_ROLLOUT_SUMMARY_SCAN_BYTES, 16 * 1024 * 1024)
         self.assertEqual(
-            bounded_run.call_args.args[1]["summary_scan_bytes"],
-            REMOTE_PROBE.MAX_ROLLOUT_SUMMARY_SCAN_BYTES,
-        )
-        self.assertEqual(
             REMOTE_PROBE.MAX_REMOTE_ROLLOUT_SUMMARY_STDOUT_BYTES, 26_542_080
         )
-        self.assertEqual(bounded_run.call_args.kwargs["max_stdout_bytes"], 26_542_080)
-
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with (
-            mock.patch.object(
-                REMOTE_PROBE,
-                "_run_remote_python_bounded",
-                side_effect=RuntimeError("command stdout exceeded capture limit"),
-            ),
-            mock.patch.object(
-                REMOTE_PROBE, "_extract_framed_rollout_summary_records"
-            ) as parser,
-            mock.patch.object(sys, "stdout", stdout),
-            mock.patch.object(sys, "stderr", stderr),
-        ):
-            result = REMOTE_PROBE.cmd_rollout_summary(args)
-
-        self.assertEqual(result, 1)
-        self.assertEqual(stdout.getvalue(), "")
-        self.assertIn("stdout exceeded capture limit", stderr.getvalue())
-        parser.assert_not_called()
+        self.assertEqual(relay.call_args.kwargs["max_stdout_bytes"], 26_542_080)
 
     def test_remote_probe_bounded_subprocess_enforces_exact_stdout_boundary(
         self,
@@ -3731,7 +3521,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                                 limit=10,
                             )
                         )
-                script = REMOTE_PROBE._remote_python_script(
+                script = LEGACY_REMOTE_PROBE._remote_python_script(
                     {
                         "mode": "session-meta",
                         "codex_root": str(root),
@@ -3832,7 +3622,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 limit=1,
                 host="local",
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -3918,7 +3708,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                         }
                     ],
                 )
-                script = REMOTE_PROBE._remote_python_script(
+                script = LEGACY_REMOTE_PROBE._remote_python_script(
                     {
                         "mode": "rollout-summary",
                         "rollout": rollout_ref,
@@ -3983,7 +3773,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "rollout": rollout_ref,
@@ -4195,7 +3985,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     message("assistant", "Final update.", "2026-05-01T10:01:00Z"),
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "rollout": rollout_ref,
@@ -4305,7 +4095,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     ),
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -4362,7 +4152,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                         root / rollout_ref,
                         [message("user", sample, "2026-05-01T10:00:00Z")],
                     )
-                    script = REMOTE_PROBE._remote_python_script(
+                    script = LEGACY_REMOTE_PROBE._remote_python_script(
                         {
                             "mode": "rollout-summary",
                             "codex_root": str(root),
@@ -4406,7 +4196,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 root / rollout_ref,
                 [message("user", "Review the deployment.", "2026-05-01T10:00:00Z")],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -4585,7 +4375,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
             )
             rollout.parent.mkdir(parents=True, exist_ok=True)
             rollout.write_bytes(payload)
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -5141,7 +4931,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     )
                 )
 
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -5266,7 +5056,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     )
                 )
 
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -5333,7 +5123,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     )
                 )
 
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -5609,7 +5399,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     )
                 )
 
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -5795,7 +5585,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     )
                 )
 
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -5929,7 +5719,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     message("user", "You missed tests.", "2026-05-01T10:01:00Z"),
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -5988,7 +5778,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     for index in range(9)
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -6042,7 +5832,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "rollout-summary",
                     "codex_root": str(root),
@@ -6588,7 +6378,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
             self.assertTrue(
                 all(size == returned for size, _offset, returned in pread_calls)
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -6842,7 +6632,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                         host="local",
                     )
 
-                script = REMOTE_PROBE._remote_python_script(
+                script = LEGACY_REMOTE_PROBE._remote_python_script(
                     {
                         "mode": "session-meta",
                         "codex_root": str(root),
@@ -6925,7 +6715,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                         host="local",
                     )
                 self.assertIn("session metadata scan truncated", raised.exception.error)
-                script = REMOTE_PROBE._remote_python_script(
+                script = LEGACY_REMOTE_PROBE._remote_python_script(
                     {
                         "mode": "session-meta",
                         "codex_root": str(root),
@@ -7061,7 +6851,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47077,7 +46867,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 self.assertNotIn("secret", signal)
 
     def test_remote_probe_generated_script_preserves_regex_quantifiers(self) -> None:
-        script = REMOTE_PROBE._remote_python_script(
+        script = LEGACY_REMOTE_PROBE._remote_python_script(
             {
                 "codex_root": "/tmp/codex",
                 "dates": [],
@@ -47138,7 +46928,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
             )
             link_root = Path(raw) / ".codex"
             link_root.symlink_to(real_root, target_is_directory=True)
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(link_root),
@@ -47197,7 +46987,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                         }
                     ],
                 )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47246,7 +47036,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                         }
                     ],
                 )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47286,7 +47076,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47327,7 +47117,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47370,7 +47160,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47424,7 +47214,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47487,7 +47277,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47536,7 +47326,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47640,10 +47430,10 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 "limit": 10,
                 "session_meta_scan_bytes": 1024,
             }
-            unknown_script = REMOTE_PROBE._remote_python_script(
+            unknown_script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {**base_payload, "rollout_filename_mode": "unknown"}
             )
-            known_script = REMOTE_PROBE._remote_python_script(
+            known_script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {**base_payload, "rollout_filename_mode": "known"}
             )
 
@@ -47847,7 +47637,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47905,7 +47695,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     }
                 ],
             )
-            script = REMOTE_PROBE._remote_python_script(
+            script = LEGACY_REMOTE_PROBE._remote_python_script(
                 {
                     "mode": "session-meta",
                     "codex_root": str(root),
@@ -47950,7 +47740,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
             )
             os.chmod(rollout, 0)
             try:
-                script = REMOTE_PROBE._remote_python_script(
+                script = LEGACY_REMOTE_PROBE._remote_python_script(
                     {
                         "mode": "session-meta",
                         "codex_root": str(root),
@@ -47993,7 +47783,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
             date_dir.mkdir(parents=True)
             os.chmod(date_dir, 0)
             try:
-                script = REMOTE_PROBE._remote_python_script(
+                script = LEGACY_REMOTE_PROBE._remote_python_script(
                     {
                         "mode": "session-meta",
                         "codex_root": str(root),

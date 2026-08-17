@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 from . import safe_io
 from .checkpoints import canonical_json_bytes
-from .orchestrator_support import InvalidTransitionError
+from .orchestrator_core import InvalidTransitionError
 
 
 def artifact_name(

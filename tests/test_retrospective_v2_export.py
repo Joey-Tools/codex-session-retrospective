@@ -148,6 +148,15 @@ def run_state(*, meaningful_turn_count: int = 4) -> dict[str, object]:
             },
             "configuration_root": "c" * 64,
             "engine_version": "2.0.0",
+            "implementation": {
+                "access_policy_sha256": "sha256:" + "1" * 64,
+                "authority_sha256": "sha256:" + "2" * 64,
+                "file_count": 100,
+                "implementation": "session_retrospective_v2_python_source",
+                "schema": "coordinator_implementation_readiness_v1",
+                "source_sha256": "sha256:" + "3" * 64,
+                "total_bytes": 2_000_000,
+            },
             "model": {
                 "model": "gpt-5.6-sol",
                 "parameters": {
@@ -383,6 +392,7 @@ def review_data() -> dict[str, object]:
                     },
                 ],
                 "episode_refs": [EPISODE_TWO, EPISODE_ONE],
+                "events": [],
                 "findings": [
                     {
                         "confidence": "high",
@@ -395,8 +405,14 @@ def review_data() -> dict[str, object]:
                         "kind": "over_exploration",
                     },
                 ],
+                "guidance_candidates": [],
                 "model_era": MODEL_ERA,
+                "open_work": [],
                 "policy_era": POLICY_ERA,
+                "prompt_rewrites": [],
+                "recurrences": [],
+                "skill_candidates": [],
+                "strengths": [],
                 "topic_ref": TOPIC_ONE,
             }
         ],
@@ -975,6 +991,109 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         refresh_bundle_digest(tampered)
         with self.assertRaisesRegex(RetainedInventoryError, "exact topic evidence"):
             validate_retained_artifacts(tampered)
+
+    def test_retained_topics_preserve_validated_semantic_records(self) -> None:
+        reviews = review_data()
+        topic = reviews["topics"][0]
+        topic.update(
+            {
+                "events": [
+                    {
+                        "confidence": "high",
+                        "evidence_refs": [EVIDENCE_ONE],
+                        "kind": "verification_completed",
+                    }
+                ],
+                "guidance_candidates": [
+                    {
+                        "confidence": "high",
+                        "episode_lineage": [
+                            {
+                                "episode_ref": EPISODE_ONE,
+                                "session_ref": SESSION_ONE,
+                            }
+                        ],
+                        "evidence_refs": [EVIDENCE_ONE],
+                        "kind": "verification",
+                    }
+                ],
+                "open_work": [
+                    {
+                        "confidence": "medium",
+                        "evidence_refs": [EVIDENCE_TWO],
+                        "kind": "rerun_verification",
+                    }
+                ],
+                "prompt_rewrites": [
+                    {
+                        "cause": "The requested recovery boundary was underspecified.",
+                        "confidence": "high",
+                        "evidence_refs": [EVIDENCE_ONE],
+                        "expected_effect": "The bounded operation reduces avoidable rework.",
+                        "problem_statement": "The requested operation had an ambiguous scope.",
+                        "rewritten_prompt": "Inspect the scope and preserve a recovery boundary.",
+                        "turn_ref": TURN_ONE,
+                    }
+                ],
+                "recurrences": [
+                    {
+                        "confidence": "high",
+                        "episode_revision_refs": [REVISION_ONE, REVISION_TWO],
+                        "evidence_refs": [EVIDENCE_ONE],
+                        "kind": "verification_completed",
+                        "session_refs": [SESSION_ONE, SESSION_TWO],
+                        "signal_type": "event",
+                    }
+                ],
+                "skill_candidates": [
+                    {
+                        "confidence": "medium",
+                        "episode_lineage": [
+                            {
+                                "episode_ref": EPISODE_TWO,
+                                "session_ref": SESSION_TWO,
+                            }
+                        ],
+                        "evidence_refs": [EVIDENCE_TWO],
+                        "kind": "workflow_hygiene",
+                    }
+                ],
+                "strengths": [
+                    {
+                        "confidence": "high",
+                        "evidence_refs": [EVIDENCE_TWO],
+                        "kind": "focused_execution",
+                    }
+                ],
+            }
+        )
+        expected = {
+            field: reporting_module._sort_unordered_fields(
+                copy.deepcopy(topic[field]), key=field
+            )
+            for field in (
+                "events",
+                "guidance_candidates",
+                "open_work",
+                "prompt_rewrites",
+                "recurrences",
+                "skill_candidates",
+                "strengths",
+            )
+        }
+
+        retained = validate_retained_artifacts(
+            assemble_retained_artifacts(run_state(), reviews)
+        )["topics"][0]
+        self.assertEqual(expected, {field: retained[field] for field in expected})
+
+        unsafe = review_data()
+        unsafe["topics"][0]["prompt_rewrites"] = copy.deepcopy(topic["prompt_rewrites"])
+        unsafe["topics"][0]["prompt_rewrites"][0]["rewritten_prompt"] = (
+            "Inspect https://internal.example.invalid before continuing."
+        )
+        with self.assertRaisesRegex(RetainedPrivacyError, "URL"):
+            assemble_retained_artifacts(run_state(), unsafe)
 
     def test_retained_global_findings_expand_exact_bounded_commitment(self) -> None:
         reviews = review_data()

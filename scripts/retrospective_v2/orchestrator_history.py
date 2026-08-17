@@ -200,6 +200,7 @@ class ResultHistoryOperations(OrchestratorComponent):
                     expected_topic_candidate_ref=metadata["topic_candidate_ref"],
                     expected_topic_ref=metadata["topic_ref"],
                     expected_workstream_ref=metadata["workstream_ref"],
+                    allowed_turn_refs=allowed_turn_refs,
                 )
             return result_validation.validate_topic_result(
                 result,
@@ -727,9 +728,18 @@ class ResultHistoryOperations(OrchestratorComponent):
                 {
                     "episode_lineage": copy.deepcopy(topic_result["episode_lineage"]),
                     "episode_refs": copy.deepcopy(topic_result["episode_refs"]),
+                    "events": copy.deepcopy(topic_result["events"]),
                     "findings": copy.deepcopy(topic_result["findings"]),
+                    "guidance_candidates": copy.deepcopy(
+                        topic_result["guidance_candidates"]
+                    ),
                     "model_era": topic_model_era,
+                    "open_work": copy.deepcopy(topic_result["open_work"]),
                     "policy_era": policy_era,
+                    "prompt_rewrites": copy.deepcopy(topic_result["prompt_rewrites"]),
+                    "recurrences": copy.deepcopy(topic_result["recurrences"]),
+                    "skill_candidates": copy.deepcopy(topic_result["skill_candidates"]),
+                    "strengths": copy.deepcopy(topic_result["strengths"]),
                     "topic_ref": topic_result["topic_ref"],
                 }
             )

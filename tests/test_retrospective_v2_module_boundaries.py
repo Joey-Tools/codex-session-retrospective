@@ -279,12 +279,16 @@ ORCHESTRATOR_SOURCE_STAGING_MODULES = {
 
 ORCHESTRATOR_AGENT_SUPPORT_MODULES = {
     "agent_capacity.py",
+    "agent_claim_projection.py",
     "agent_raw_artifacts.py",
     "agent_results.py",
     "agent_task_inputs.py",
     "extracted_turns.py",
     "raw_shard_staging.py",
 }
+
+ORCHESTRATOR_RESULT_CONTRACT_MODULES = {"agent_result_contracts.py"}
+ORCHESTRATOR_IMPLEMENTATION_AUTHORITY_MODULES = {"implementation_authority.py"}
 
 ORCHESTRATOR_AGENT_TRANSACTION_MODULES = {
     "agent_checkpoint_capacity.py",
@@ -296,6 +300,8 @@ ORCHESTRATOR_MODULES = (
     | ORCHESTRATOR_SOURCE_SUPPORT_MODULES
     | ORCHESTRATOR_SOURCE_STAGING_MODULES
     | ORCHESTRATOR_AGENT_SUPPORT_MODULES
+    | ORCHESTRATOR_IMPLEMENTATION_AUTHORITY_MODULES
+    | ORCHESTRATOR_RESULT_CONTRACT_MODULES
     | ORCHESTRATOR_AGENT_TRANSACTION_MODULES
 )
 
@@ -330,7 +336,7 @@ TRANSPORT_MODULES = {
 }
 
 TRANSPORT_LINE_INVENTORY = {
-    "transport.py": 240,
+    "transport.py": 241,
     "transport_auth.py": 143,
     "transport_capture.py": 999,
     "transport_contracts.py": 991,
@@ -338,7 +344,7 @@ TRANSPORT_LINE_INVENTORY = {
     "transport_paths.py": 100,
     "transport_program.py": 389,
     "transport_program_components.py": 207,
-    "transport_remote.py": 328,
+    "transport_remote.py": 374,
     "transport_remote_snapshot.py": 86,
     "transport_resume.py": 168,
     "transport_session_shards.py": 1_605,
@@ -346,10 +352,11 @@ TRANSPORT_LINE_INVENTORY = {
     "transport_source.py": 1_649,
     "transport_worker.py": 21,
 }
-TRANSPORT_AGGREGATE_LINE_LIMIT = 7_420
+TRANSPORT_AGGREGATE_LINE_LIMIT = 7_475
 
 BOUNDED_MODULE_LINES = {
     "executable_authority.py": 350,
+    "implementation_authority.py": 350,
     "legacy_history_git.py": 325,
     "legacy_history_worktree.py": 600,
     "finalize.py": 120,
@@ -361,7 +368,7 @@ BOUNDED_MODULE_LINES = {
     "orchestrator_components.py": 250,
     "orchestrator_context.py": 180,
     "orchestrator_history.py": 1_000,
-    "orchestrator_jobs.py": 520,
+    "orchestrator_jobs.py": 525,
     "orchestrator_lifecycle.py": 3_325,
     "orchestrator_projection.py": 1_000,
     "orchestrator_reduction.py": 2_480,
@@ -371,6 +378,7 @@ BOUNDED_MODULE_LINES = {
     "agent_capacity.py": 100,
     "agent_checkpoint_capacity.py": 130,
     "agent_claim_artifacts.py": 100,
+    "agent_claim_projection.py": 75,
     "agent_raw_artifacts.py": 120,
     "agent_results.py": 320,
     "agent_task_inputs.py": 350,
@@ -408,8 +416,9 @@ BOUNDED_MODULE_LINES = {
     "run_state_cursors.py": 225,
     "run_state_holdouts.py": 240,
     "run_state_lineage.py": 275,
-    "reporting.py": 4_520,
-    "result_validation.py": 3_250,
+    "reporting.py": 4_550,
+    "result_validation.py": 3_550,
+    "agent_result_contracts.py": 450,
     "transport.py": 250,
     "transport_auth.py": 200,
     "transport_capture.py": 1_000,
@@ -418,7 +427,7 @@ BOUNDED_MODULE_LINES = {
     "transport_paths.py": 100,
     "transport_program.py": 450,
     "transport_program_components.py": 225,
-    "transport_remote.py": 350,
+    "transport_remote.py": 400,
     "transport_remote_snapshot.py": 100,
     "transport_resume.py": 200,
     "transport_session_shards.py": 1_650,
@@ -1040,7 +1049,7 @@ spec.loader.exec_module(module)
                 len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
                 for name in ORCHESTRATOR_FOUNDATION_MODULES
             ),
-            3_500,
+            3_550,
         )
         run_state_authority_inventory = {
             name: len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
@@ -1083,7 +1092,21 @@ spec.loader.exec_module(module)
                 len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
                 for name in ORCHESTRATOR_AGENT_SUPPORT_MODULES
             ),
-            1_050,
+            1_100,
+        )
+        self.assertLessEqual(
+            sum(
+                len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
+                for name in ORCHESTRATOR_RESULT_CONTRACT_MODULES
+            ),
+            450,
+        )
+        self.assertLessEqual(
+            sum(
+                len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
+                for name in ORCHESTRATOR_IMPLEMENTATION_AUTHORITY_MODULES
+            ),
+            350,
         )
         self.assertLessEqual(
             sum(
@@ -1147,7 +1170,7 @@ spec.loader.exec_module(module)
         }
         self.assertEqual(TRANSPORT_MODULES, set(TRANSPORT_LINE_INVENTORY))
         self.assertEqual(TRANSPORT_LINE_INVENTORY, observed)
-        self.assertEqual(7_403, sum(observed.values()))
+        self.assertEqual(7_450, sum(observed.values()))
         self.assertLessEqual(
             sum(observed.values()),
             TRANSPORT_AGGREGATE_LINE_LIMIT,
@@ -1194,8 +1217,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(8_904, branch_total)
-        self.assertLessEqual(branch_total, 8_906)
+        self.assertEqual(9_017, branch_total)
+        self.assertLessEqual(branch_total, 9_020)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

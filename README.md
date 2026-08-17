@@ -47,9 +47,12 @@ Run the repository contract first, then the complete Python 3.13 suite:
 ```bash
 python3.13 -I -B -S -m venv --copies .codex-tmp/python
 chmod 0755 .codex-tmp/python/bin/python3
-.codex-tmp/python/bin/python3 -B -S -m unittest discover \
+.codex-tmp/python/bin/python3 -I -B -S -m unittest discover \
   -s tests -p test_ci_contract.py
-.codex-tmp/python/bin/python3 -B -S -m unittest discover -s tests
+for shard in 0 1 2 3; do
+  .codex-tmp/python/bin/python3 -I -B -S scripts/run_test_shard.py \
+    --shard-index "$shard" --shard-count 4
+done
 ```
 
 The tests are intentionally standard-library-only. CI creates owner-controlled
