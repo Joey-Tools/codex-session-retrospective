@@ -384,7 +384,7 @@ BOUNDED_MODULE_LINES = {
     "agent_task_inputs.py": 375,
     "extracted_turns.py": 200,
     "raw_shard_staging.py": 100,
-    "reduction_task_inputs.py": 50,
+    "reduction_task_inputs.py": 110,
     "source_acceptance.py": 275,
     "source_inputs.py": 400,
     "source_payloads.py": 100,
@@ -1222,8 +1222,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_142, branch_total)
-        self.assertLessEqual(branch_total, 9_145)
+        self.assertEqual(9_146, branch_total)
+        self.assertLessEqual(branch_total, 9_150)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

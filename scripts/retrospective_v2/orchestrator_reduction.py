@@ -1457,7 +1457,6 @@ class HierarchicalReductionOperations(OrchestratorComponent):
         for task in sorted(current, key=lambda item: item["task_ref"]):
             candidate = [*(groups[-1] if groups else []), task]
             payload = self._review_reduce_payload(revision, candidate)
-            allowed = self._projection._collect_refs(payload)
             candidate_turn_refs = sorted(
                 {
                     turn_ref
@@ -1466,7 +1465,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 }
             )
             candidate_index = max(len(groups) - 1, 0)
-            candidate_partition_ref = self._ref(
+            intermediate_partition_ref = self._ref(
                 RefType.RUN_INPUT,
                 revision_ref,
                 kind,
@@ -1474,23 +1473,25 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 level + 1,
                 candidate_index,
             )
-            if groups and not self._jobs._agent_input_fits(
-                state,
-                kind=kind,
-                partition_ref=candidate_partition_ref,
-                input_payload=payload,
-                input_refs=input_refs,
-                allowed_refs=allowed,
-                allowed_turn_refs=candidate_turn_refs,
-                metadata=reduction_task_inputs.review_metadata(
-                    metadata,
-                    root_ref=revision_ref,
-                    turn_refs=candidate_turn_refs,
-                    level=level + 1,
-                    final=False,
-                    child_result_hashes=payload["child_result_hashes"],
-                ),
-            ):
+            candidate_fits = all(
+                self._jobs._agent_input_fits(
+                    state,
+                    **reduction_task_inputs.review_reduction_task_input(
+                        metadata,
+                        kind=kind,
+                        final_partition_ref=revision_ref,
+                        intermediate_partition_ref=intermediate_partition_ref,
+                        payload=payload,
+                        input_refs=input_refs,
+                        allowed_refs=self._projection._collect_refs(payload),
+                        turn_refs=candidate_turn_refs,
+                        level=level + 1,
+                        final=final,
+                    ),
+                )
+                for final in (False, True)
+            )
+            if groups and not candidate_fits:
                 groups.append([task])
             elif groups:
                 groups[-1] = candidate
@@ -1506,34 +1507,33 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                     for turn_ref in self._task_metadata(task)["underlying_turn_refs"]
                 }
             )
+            task_input = reduction_task_inputs.review_reduction_task_input(
+                metadata,
+                kind=kind,
+                final_partition_ref=revision_ref,
+                intermediate_partition_ref=self._ref(
+                    RefType.RUN_INPUT,
+                    revision_ref,
+                    kind,
+                    "review_reduce",
+                    level + 1,
+                    index,
+                ),
+                payload=payload,
+                input_refs=input_refs,
+                allowed_refs=self._projection._collect_refs(payload),
+                turn_refs=turn_refs,
+                level=level + 1,
+                final=final_level,
+            )
+            if not self._jobs._agent_input_fits(state, **task_input):
+                raise InvalidTransitionError(
+                    "episode review reduction task exceeds its exact input bound"
+                )
             self._jobs._create_agent_task(
                 state,
                 stage=RunStage.EPISODE_REVIEW.value,
-                kind=kind,
-                partition_ref=(
-                    revision_ref
-                    if final_level
-                    else self._ref(
-                        RefType.RUN_INPUT,
-                        revision_ref,
-                        kind,
-                        "review_reduce",
-                        level + 1,
-                        index,
-                    )
-                ),
-                input_refs=input_refs,
-                input_payload=payload,
-                allowed_refs=self._projection._collect_refs(payload),
-                allowed_turn_refs=turn_refs,
-                metadata=reduction_task_inputs.review_metadata(
-                    metadata,
-                    root_ref=revision_ref,
-                    turn_refs=turn_refs,
-                    level=level + 1,
-                    final=final_level,
-                    child_result_hashes=payload["child_result_hashes"],
-                ),
+                **task_input,
             )
 
     def _seed_review_leaf_tasks(
@@ -2006,14 +2006,6 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                         for ref in self._task_metadata(child)["underlying_episode_refs"]
                     }
                 )
-                allowed = self._projection._collect_refs(
-                    {
-                        "payload": payload,
-                        "topic_candidate_ref": root_ref,
-                        "topic_ref": topic_index["topic_ref"],
-                        "workstream_ref": topic_index["workstream_ref"],
-                    }
-                )
                 candidate_turn_refs = sorted(
                     {
                         turn_ref
@@ -2024,32 +2016,40 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                     }
                 )
                 candidate_index = max(len(groups) - 1, 0)
-                candidate_partition_ref = self._ref(
+                intermediate_partition_ref = self._ref(
                     RefType.RUN_INPUT,
                     root_ref,
                     "topic_reduce",
                     level + 1,
                     candidate_index,
                 )
-                if groups and not self._jobs._agent_input_fits(
-                    state,
-                    kind=JobKind.TOPIC_REDUCER.value,
-                    partition_ref=candidate_partition_ref,
-                    input_payload=payload,
-                    input_refs=[root_ref, *episode_refs],
-                    allowed_refs=allowed,
-                    allowed_turn_refs=candidate_turn_refs,
-                    metadata={
-                        "child_result_hashes": payload["child_result_hashes"],
-                        "hierarchy_final": False,
-                        "hierarchy_level": level + 1,
-                        "hierarchy_root_ref": root_ref,
-                        "topic_candidate_ref": root_ref,
-                        "topic_ref": topic_index["topic_ref"],
-                        "underlying_episode_refs": episode_refs,
-                        "workstream_ref": topic_index["workstream_ref"],
-                    },
-                ):
+                candidate_fits = all(
+                    self._jobs._agent_input_fits(
+                        state,
+                        **reduction_task_inputs.topic_reduction_task_input(
+                            kind=JobKind.TOPIC_REDUCER.value,
+                            final_partition_ref=root_ref,
+                            intermediate_partition_ref=intermediate_partition_ref,
+                            topic_ref=topic_index["topic_ref"],
+                            workstream_ref=topic_index["workstream_ref"],
+                            payload=payload,
+                            episode_refs=episode_refs,
+                            allowed_refs=self._projection._collect_refs(
+                                {
+                                    "payload": payload,
+                                    "topic_candidate_ref": root_ref,
+                                    "topic_ref": topic_index["topic_ref"],
+                                    "workstream_ref": topic_index["workstream_ref"],
+                                }
+                            ),
+                            turn_refs=candidate_turn_refs,
+                            level=level + 1,
+                            final=final,
+                        ),
+                    )
+                    for final in (False, True)
+                )
+                if groups and not candidate_fits:
                     groups.append([task])
                 elif groups:
                     groups[-1] = candidate
@@ -2065,49 +2065,49 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                     }
                 )
                 payload = self._topic_reduce_payload(root_ref, group)
-                topic_ref = topic_index["topic_ref"]
-                self._jobs._create_agent_task(
-                    state,
-                    stage=RunStage.TOPIC_REDUCTION.value,
-                    kind=JobKind.TOPIC_REDUCER.value,
-                    partition_ref=(
-                        root_ref
-                        if final_level
-                        else self._ref(
-                            RefType.RUN_INPUT,
-                            root_ref,
-                            "topic_reduce",
-                            level + 1,
-                            index,
-                        )
-                    ),
-                    input_refs=[root_ref, *episode_refs],
-                    input_payload=payload,
-                    allowed_refs=self._projection._collect_refs(
-                        {
-                            "payload": payload,
-                            "topic_candidate_ref": root_ref,
-                            "topic_ref": topic_ref,
-                            "workstream_ref": topic_index["workstream_ref"],
-                        }
-                    ),
-                    allowed_turn_refs={
+                allowed_turn_refs = sorted(
+                    {
                         turn_ref
                         for task in group
                         for turn_ref in agent_task_inputs.for_task(self.run_dir, task)[
                             "allowed_turn_refs"
                         ]
-                    },
-                    metadata={
-                        "child_result_hashes": payload["child_result_hashes"],
-                        "hierarchy_final": final_level,
-                        "hierarchy_level": level + 1,
-                        "hierarchy_root_ref": root_ref,
-                        "topic_candidate_ref": root_ref,
-                        "topic_ref": topic_ref,
-                        "underlying_episode_refs": episode_refs,
-                        "workstream_ref": topic_index["workstream_ref"],
-                    },
+                    }
+                )
+                task_input = reduction_task_inputs.topic_reduction_task_input(
+                    kind=JobKind.TOPIC_REDUCER.value,
+                    final_partition_ref=root_ref,
+                    intermediate_partition_ref=self._ref(
+                        RefType.RUN_INPUT,
+                        root_ref,
+                        "topic_reduce",
+                        level + 1,
+                        index,
+                    ),
+                    topic_ref=topic_index["topic_ref"],
+                    workstream_ref=topic_index["workstream_ref"],
+                    payload=payload,
+                    episode_refs=episode_refs,
+                    allowed_refs=self._projection._collect_refs(
+                        {
+                            "payload": payload,
+                            "topic_candidate_ref": root_ref,
+                            "topic_ref": topic_index["topic_ref"],
+                            "workstream_ref": topic_index["workstream_ref"],
+                        }
+                    ),
+                    turn_refs=allowed_turn_refs,
+                    level=level + 1,
+                    final=final_level,
+                )
+                if not self._jobs._agent_input_fits(state, **task_input):
+                    raise InvalidTransitionError(
+                        "topic reduction task exceeds its exact input bound"
+                    )
+                self._jobs._create_agent_task(
+                    state,
+                    stage=RunStage.TOPIC_REDUCTION.value,
+                    **task_input,
                 )
 
     def _topic_reduce_payload(

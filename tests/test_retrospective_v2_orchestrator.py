@@ -5513,6 +5513,171 @@ class OrchestratorTests(unittest.TestCase):
             )
         )
 
+    def test_review_reduction_splits_when_only_nonfinal_shape_fits(self) -> None:
+        coordinator = self.coordinator("review-final-shape-capacity")
+        reduction = coordinator._components.reduction
+        jobs = coordinator._components.jobs
+        revision_ref = typed_ref(
+            RefType.EPISODE_REVISION, "review-final-shape-capacity"
+        )
+        revision = {
+            "episode_ref": typed_ref(RefType.EPISODE, "review-final-shape"),
+            "episode_revision_ref": revision_ref,
+            "session_ref": typed_ref(RefType.SESSION, "review-final-shape"),
+            "turn_refs": [
+                typed_ref(RefType.TURN, f"review-final-shape-{index}")
+                for index in range(2)
+            ],
+        }
+        kind = JobKind.EPISODE_REVIEWER.value
+        tasks = [
+            {
+                "category": "agent",
+                "job_kind": kind,
+                "metadata": {
+                    "hierarchy_final": False,
+                    "hierarchy_level": 0,
+                    "hierarchy_root_ref": revision_ref,
+                    "underlying_turn_refs": [turn_ref],
+                },
+                "stage": RunStage.EPISODE_REVIEW.value,
+                "status": "accepted",
+                "task_ref": typed_ref(RefType.RUN_INPUT, f"review-final-child-{index}"),
+            }
+            for index, turn_ref in enumerate(revision["turn_refs"])
+        ]
+        state = {"jobs": {task["task_ref"]: task for task in tasks}}
+
+        def reduce_payload(_revision, children):
+            return {
+                "child_result_hashes": [
+                    hashlib.sha256(child["task_ref"].encode()).hexdigest()
+                    for child in children
+                ],
+                "schema": "episode_review_hierarchical_input_v2",
+            }
+
+        def fits(_state, **task_input):
+            child_count = len(task_input["input_payload"]["child_result_hashes"])
+            return (
+                child_count == 1 or task_input["metadata"]["hierarchy_final"] is False
+            )
+
+        with (
+            mock.patch.object(
+                reduction,
+                "_review_reduce_payload",
+                side_effect=reduce_payload,
+            ),
+            mock.patch.object(
+                reduction,
+                "_task_metadata",
+                side_effect=lambda task: task["metadata"],
+            ),
+            mock.patch.object(jobs, "_agent_input_fits", side_effect=fits),
+            mock.patch.object(jobs, "_create_agent_task") as create_task,
+        ):
+            reduction._ensure_review_hierarchy(
+                state,
+                revision=revision,
+                kind=kind,
+                metadata={"episode_revision_ref": revision_ref},
+                full_input={"schema": "episode_review_input_v2"},
+            )
+
+        self.assertEqual(2, create_task.call_count)
+        for call in create_task.call_args_list:
+            self.assertFalse(call.kwargs["metadata"]["hierarchy_final"])
+            self.assertTrue(
+                call.kwargs["partition_ref"].startswith(f"{RefType.RUN_INPUT.value}:")
+            )
+
+    def test_topic_reduction_splits_when_only_nonfinal_shape_fits(self) -> None:
+        coordinator = self.coordinator("topic-final-shape-capacity")
+        reduction = coordinator._components.reduction
+        jobs = coordinator._components.jobs
+        root_ref = typed_ref(RefType.TOPIC_CANDIDATE, "topic-final-shape")
+        topic_ref = typed_ref(RefType.TOPIC, "topic-final-shape")
+        workstream_ref = typed_ref(RefType.WORKSTREAM, "topic-final-shape-workstream")
+        episode_refs = [
+            typed_ref(RefType.EPISODE_REVISION, f"topic-final-child-{index}")
+            for index in range(2)
+        ]
+        tasks = [
+            {
+                "allowed_turn_refs": [
+                    typed_ref(RefType.TURN, f"topic-final-turn-{index}")
+                ],
+                "category": "agent",
+                "job_kind": JobKind.TOPIC_REDUCER.value,
+                "metadata": {
+                    "hierarchy_final": False,
+                    "hierarchy_level": 0,
+                    "hierarchy_root_ref": root_ref,
+                    "underlying_episode_refs": [episode_ref],
+                },
+                "stage": RunStage.TOPIC_REDUCTION.value,
+                "status": "accepted",
+                "task_ref": typed_ref(RefType.RUN_INPUT, f"topic-final-task-{index}"),
+            }
+            for index, episode_ref in enumerate(episode_refs)
+        ]
+        state = {
+            "jobs": {task["task_ref"]: task for task in tasks},
+            "topic_inputs": {
+                root_ref: {
+                    "schema": "topic_partition_index_v2",
+                    "topic_ref": topic_ref,
+                    "workstream_ref": workstream_ref,
+                }
+            },
+        }
+
+        def reduce_payload(_root_ref, children):
+            return {
+                "child_result_hashes": [
+                    hashlib.sha256(child["task_ref"].encode()).hexdigest()
+                    for child in children
+                ],
+                "schema": "topic_hierarchical_input_v2",
+                "topic_candidate_ref": root_ref,
+            }
+
+        def fits(_state, **task_input):
+            child_count = len(task_input["input_payload"]["child_result_hashes"])
+            return (
+                child_count == 1 or task_input["metadata"]["hierarchy_final"] is False
+            )
+
+        def task_input(_run_dir, task):
+            return {
+                "allowed_turn_refs": task["allowed_turn_refs"],
+                "metadata": task["metadata"],
+            }
+
+        with (
+            mock.patch.object(
+                reduction,
+                "_topic_reduce_payload",
+                side_effect=reduce_payload,
+            ),
+            mock.patch.object(
+                agent_task_inputs,
+                "for_task",
+                side_effect=task_input,
+            ),
+            mock.patch.object(jobs, "_agent_input_fits", side_effect=fits),
+            mock.patch.object(jobs, "_create_agent_task") as create_task,
+        ):
+            reduction._refresh_topic_hierarchies(state)
+
+        self.assertEqual(2, create_task.call_count)
+        for call in create_task.call_args_list:
+            self.assertFalse(call.kwargs["metadata"]["hierarchy_final"])
+            self.assertTrue(
+                call.kwargs["partition_ref"].startswith(f"{RefType.RUN_INPUT.value}:")
+            )
+
     def test_shard_stage_rolls_back_files_when_checkpoint_commit_fails(self) -> None:
         coordinator = self.start_daily("shard-stage-checkpoint-rollback")
         payload = b'{"timestamp":"2026-07-06T01:00:00Z","text":"work"}\n'
@@ -6116,7 +6281,6 @@ class OrchestratorTests(unittest.TestCase):
                 set(topic_input["expected_episode_revision_refs"]),
                 set(final_topic_input["metadata"]["underlying_episode_refs"]),
             )
-
             state["jobs"] = {
                 task_ref: task
                 for task_ref, task in state["jobs"].items()

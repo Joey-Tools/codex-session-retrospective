@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-17
+updated: 2026-08-18
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -959,6 +959,31 @@ superseded_by:
   passed 383/383 in 1,425.396 seconds. Every retained log contains its exact
   `Selected`, `Ran`, and `OK` terminal lines, and the combined failure/traceback
   scan is empty.
+- Signed and pushed head `c5e9a472` passed exact-secret admission and all six
+  hosted CI jobs. Its metadata-correct fresh Codex processor found one remaining
+  capacity mismatch: review/topic merge grouping measured only the non-final
+  run-input reference and metadata, while a one-group result is created with
+  the longer root reference and final metadata. A boundary input could therefore
+  pass grouping and fail only during authenticated task creation. The reviewer
+  workspace passed postvalidation, the trusted control manifest remained
+  unchanged, and the task root was removed.
+- Review and topic reduction now build every candidate task from one exact
+  domain-specific input builder. Greedy grouping requires both the intermediate
+  and final serialized forms to fit, and creation repeats the exact selected-form
+  check before staging. Separate episode and topic regressions simulate the
+  boundary where only the non-final form fits; both split into non-final groups,
+  and the existing complete hierarchy-cap test still converges. The two boundary
+  regressions pass 2/2 and the combined focused set passes 3/3. Final full-tree
+  tests, signing, admission, fresh review, hosted CI, and GitHub Codex evidence
+  remain required for the replacement head.
+- The replacement Python 3.13 tree contains 1,690 unique test identifiers
+  partitioned exactly once as 404, 452, 450, and 384 tests. The final bounded
+  run completed every partition with supervisor exit zero: shard 0 passed
+  404/404 in 1,721.829 seconds, shard 1 passed 452/452 in 1,348.571 seconds,
+  shard 2 passed 450/450 in 1,499.767 seconds, and shard 3 passed 384/384 in
+  1,420.932 seconds. Every log contains exact `Selected`, `Ran`, and `OK`
+  terminal lines, and the combined traceback/failure scan is empty. Signing,
+  admission, fresh review, hosted CI, and GitHub Codex evidence remain.
 
 ## Follow-up Work
 
