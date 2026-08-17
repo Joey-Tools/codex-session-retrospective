@@ -161,6 +161,13 @@ def run_state(*, meaningful_turn_count: int = 4) -> dict[str, object]:
                 "digest": "d" * 64,
                 "version": "session_retrospective_agent_prompts_v2",
             },
+            "runtime": {
+                "authority_sha256": "sha256:" + "a" * 64,
+                "executable_binding_sha256": "sha256:" + "b" * 64,
+                "implementation": "cpython",
+                "schema": "source_transport_coordinator_python_readiness_v1",
+                "version": [3, 13, 12],
+            },
             "schema": "retrospective_execution_contract_v2",
             "transport": {
                 "remote_host_context_helper_commitment": "e" * 64,

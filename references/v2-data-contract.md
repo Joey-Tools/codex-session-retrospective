@@ -558,8 +558,13 @@ does not reproduce those source forms.
 
 `manifest.json` retains the complete non-sensitive execution contract: actual
 model/provider/closed parameters, prompt digest/version, schema and transport
-bindings, component versions, configuration root, and every agent job's result,
-retry, reviewer, and issued/claimed/completed timing provenance. An opaque
+bindings, component versions, coordinator-runtime authority, configuration
+root, and every agent job's result, retry, reviewer, and
+issued/claimed/completed timing provenance. Runtime authority contains only a
+digest of the canonical executable binding plus a digest over executable
+identity, bytes, and ancestor access policy; it never retains the local path.
+Both digests are included in the configuration root and are recomputed before
+any resumed command may consume or advance a checkpoint. An opaque
 configuration commitment cannot replace these fields.
 Agent execution provenance includes the exact deterministic task-cache
 hit/miss/reuse conservation alongside every job, result, retry, reviewer, and

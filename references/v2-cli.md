@@ -34,6 +34,11 @@ by the replacement sync beneath owner-only ancestors. The coordinator fails
 closed before importing its engine when any required isolation flag is absent,
 and `doctor` rejects a runtime whose executable identity, content, or ancestor
 access policy cannot be authenticated.
+`start` commits the canonical-path binding digest and executable-authority
+digest into the run configuration root. Every later command (`status`,
+`accept-source`, `accept-agent-result`, `advance`, `export`, and `finalize`)
+recomputes both values and rejects runtime substitution before consuming or
+advancing the checkpoint.
 `doctor` and `start` also require the same absolute `--publisher-gpg-program`.
 The coordinator authenticates that executable's path identity, content, and
 ancestor access policy, persists the authority digest in the run specification,

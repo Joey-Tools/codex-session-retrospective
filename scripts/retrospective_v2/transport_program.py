@@ -152,9 +152,12 @@ def source_transport_python_runtime_readiness(
             )
         selected = expected
     authority = _python_executable_authority(selected)
+    canonical_path = authority.path
     return {
         "authority_sha256": "sha256:"
         + executable_authority.authority_digest(authority),
+        "executable_binding_sha256": "sha256:"
+        + hashlib.sha256(os.fsencode(canonical_path)).hexdigest(),
         "implementation": sys.implementation.name,
         "schema": "source_transport_coordinator_python_readiness_v1",
         "version": [

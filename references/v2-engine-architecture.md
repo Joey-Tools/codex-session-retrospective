@@ -237,6 +237,15 @@ authenticating or compiling retained source. Global or user site initialization
 therefore cannot run before the authenticated source-only loader; an ambient
 Homebrew Cellar interpreter is not a production entry point.
 
+Start persists a non-sensitive digest of the canonical runtime path and a
+separate authority digest over executable identity, content, and ancestor
+access policy. Both values participate in the run's `configuration_root`.
+`status`, `accept-source`, `accept-agent-result`, `advance`, `export`, and
+`finalize` reauthenticate the current executable and require exact equality
+with that persisted runtime contract before reading model work or changing run
+state. Runtime substitution therefore fails closed even when the replacement
+still reports a compatible Python version and isolation flags.
+
 Program-component stability protects object identity and access policy without
 treating size or timestamps as identity. Every regular component is read twice
 through the held descriptor and the exact bytes and final size must agree.

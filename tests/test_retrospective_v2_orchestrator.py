@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import sys
 import tempfile
@@ -1750,6 +1751,71 @@ class OrchestratorTests(unittest.TestCase):
                 coordinator.retained_export_inputs()
 
         self.assertEqual(state["run_ref"], coordinator.status()["run_ref"])
+
+    def test_resume_rejects_coordinator_runtime_authority_drift(self) -> None:
+        coordinator = self.start_daily("runtime-drift")
+        state = coordinator.load_state()
+        runtime = transport.source_transport_python_runtime_readiness()
+        self.assertEqual(runtime, state["provenance"]["runtime"])
+
+        for field in ("executable_binding_sha256", "authority_sha256"):
+            with self.subTest(field=field):
+                changed = copy.deepcopy(runtime)
+                changed[field] = "sha256:" + "f" * 64
+                with (
+                    mock.patch.object(
+                        transport,
+                        "source_transport_python_runtime_readiness",
+                        return_value=changed,
+                    ),
+                    self.assertRaisesRegex(
+                        InvalidTransitionError,
+                        "runtime authority no longer matches",
+                    ),
+                ):
+                    coordinator.status()
+                with (
+                    mock.patch.object(
+                        transport,
+                        "source_transport_python_runtime_readiness",
+                        return_value=changed,
+                    ),
+                    self.assertRaisesRegex(
+                        InvalidTransitionError,
+                        "runtime authority no longer matches",
+                    ),
+                ):
+                    coordinator.retained_export_inputs()
+
+        self.assertEqual(state["run_ref"], coordinator.status()["run_ref"])
+
+    def test_documented_agent_prompts_match_the_executable_contract(self) -> None:
+        prompt_document = (
+            Path(__file__).resolve().parents[1] / "references" / "v2-agent-prompts.md"
+        ).read_text(encoding="utf-8")
+        heading_by_kind = {
+            JobKind.EXTRACTOR_REDACTOR.value: "Extractor And Redactor",
+            JobKind.EPISODE_REVIEWER.value: "Episode Reviewer",
+            JobKind.INDEPENDENT_RISK_REVIEWER.value: "Independent Risk Reviewer",
+            JobKind.ADJUDICATOR.value: "Adjudicator",
+            JobKind.TOPIC_REDUCER.value: "Topic Reducer",
+            JobKind.GLOBAL_SYNTHESIS.value: "Global Synthesis",
+        }
+        self.assertEqual(
+            set(heading_by_kind), set(execution_contract_module._AGENT_INSTRUCTIONS)
+        )
+        for kind, heading in heading_by_kind.items():
+            with self.subTest(kind=kind):
+                match = re.search(
+                    rf"^## {re.escape(heading)}\n\n```text\n(.*?)\n```$",
+                    prompt_document,
+                    re.MULTILINE | re.DOTALL,
+                )
+                self.assertIsNotNone(match)
+                self.assertEqual(
+                    execution_contract_module._AGENT_INSTRUCTIONS[kind],
+                    match.group(1),
+                )
 
     def test_run_ref_is_bound_to_the_specification_digest(self) -> None:
         first = self.coordinator("run-ref-first")
@@ -5244,7 +5310,7 @@ class OrchestratorTests(unittest.TestCase):
             "run_ref": typed_ref(RefType.RUN, "bounded-agent-hierarchies"),
             "topic_inputs": {},
         }
-        envelope_cap = 96 * 1024
+        envelope_cap = 128 * 1024
 
         def issue_and_accept(stage: str, payload_size: int = 18_000) -> None:
             with self.agent_task_transaction(coordinator):

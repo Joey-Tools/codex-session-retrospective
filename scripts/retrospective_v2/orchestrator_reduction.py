@@ -1401,6 +1401,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             and task["metadata"].get("hierarchy_root_ref") == revision_ref
         ]
         if not existing and self._jobs._agent_input_fits(
+            state,
             kind=kind,
             input_payload=full_input,
             input_refs=input_refs,
@@ -1442,6 +1443,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 payload = self._review_partition_payload(episode_context, candidate)
                 allowed = self._projection._collect_refs(payload)
                 if groups and not self._jobs._agent_input_fits(
+                    state,
                     kind=kind,
                     input_payload=payload,
                     input_refs=input_refs,
@@ -1453,8 +1455,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                     groups[-1] = candidate
                 else:
                     groups.append([item])
-            if not groups:
-                groups = [[]]
+            groups = groups or [[]]
             for index, group in enumerate(groups):
                 payload = self._review_partition_payload(episode_context, group)
                 allowed = self._projection._collect_refs(payload)
@@ -1500,11 +1501,13 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             payload = self._review_reduce_payload(revision, candidate)
             allowed = self._projection._collect_refs(payload)
             if groups and not self._jobs._agent_input_fits(
+                state,
                 kind=kind,
                 input_payload=payload,
                 input_refs=input_refs,
                 allowed_refs=allowed,
                 reviewer_slot=metadata.get("reviewer_slot"),
+                candidate_result_hashes=payload["child_result_hashes"],
             ):
                 groups.append([task])
             elif groups:
@@ -1948,6 +1951,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                     }
                 )
                 if groups and not self._jobs._agent_input_fits(
+                    state,
                     kind=JobKind.TOPIC_REDUCER.value,
                     input_payload=payload,
                     input_refs=[root_ref, *episode_refs],
@@ -2128,10 +2132,15 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             for turn_ref in revision["turn_refs"]
         }
         if self._jobs._agent_input_fits(
+            state,
             kind=JobKind.GLOBAL_SYNTHESIS.value,
             input_payload=payload,
             input_refs=input_refs,
             allowed_refs=allowed,
+            safety_review_hashes=(
+                result_validation.canonical_result_hash(review)
+                for review in independent_reviews
+            ),
         ):
             self._create_synthesis_task(
                 state,
@@ -2163,10 +2172,15 @@ class HierarchicalReductionOperations(OrchestratorComponent):
                 {"independent_reviews": reviews, "topic_results": topics}
             )
             if groups and not self._jobs._agent_input_fits(
+                state,
                 kind=JobKind.GLOBAL_SYNTHESIS.value,
                 input_payload=candidate_payload,
                 input_refs=sorted(candidate_allowed),
                 allowed_refs=candidate_allowed,
+                safety_review_hashes=(
+                    result_validation.canonical_result_hash(review)
+                    for review in reviews
+                ),
             ):
                 groups.append([item])
             elif groups:
@@ -2282,6 +2296,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             payload = self._synthesis_reduce_payload(candidate)
             allowed = self._projection._collect_refs({"payload": payload})
             if groups and not self._jobs._agent_input_fits(
+                state,
                 kind=JobKind.GLOBAL_SYNTHESIS.value,
                 input_payload=payload,
                 input_refs=sorted(allowed),

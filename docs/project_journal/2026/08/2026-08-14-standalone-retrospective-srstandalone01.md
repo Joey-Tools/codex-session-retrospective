@@ -738,6 +738,52 @@ superseded_by:
   in 1,041.627 seconds, 446/446 in 787.938 seconds, 451/451 in 881.784 seconds,
   and 375/375 in 850.763 seconds. Every bounded runner exits zero, every shard
   reports `OK`, and the retained-log failure scans are empty.
+- Signed head `4562670f` persisted the executable prompt digest and fixed
+  copied-runtime launch contract. Its exact-secret admission was clean and its
+  hosted/local test evidence began green, but the next fresh-context Codex
+  processor found two remaining control-plane gaps; all head-bound evidence is
+  stale. Resume validation did not bind every command to the same persisted
+  coordinator-runtime authority, and the six executable prompts still omitted
+  normative behavior that existed only in the operator reference. The topic
+  reference also named the obsolete `topic_review_result_v2` schema.
+- The follow-up stores a non-sensitive canonical-path binding digest and a
+  separate executable identity/content/access-policy authority digest in the
+  execution provenance and `configuration_root`. Every checkpoint read or
+  transition reauthenticates the current runtime before consuming model work.
+  Retained-history validation admits only the closed runtime receipt and never
+  retains its local path.
+- All six executable agent instructions now contain the normative redaction,
+  review, adjudication, topic, and synthesis behavior and are byte-equal to six
+  independently delimited reference blocks. Topic reduction names the actual
+  `topic_reduction_result_v2` schema. Complete-envelope fit checks share the
+  exact immutable-task builder with task creation and include the final job
+  metadata; the hierarchy regression retains a 128 KiB artificial cap, well
+  below the 512 KiB production cap while remaining above one indivisible topic
+  result.
+- Focused prompt/runtime regressions pass 4/4, source transport passes 102/102,
+  export/reporting passes 66/66, and the exact hierarchy-cap regression passes
+  after the shared envelope builder fix. The final affected modules, static
+  gates, repository partitions, signed replacement head, admission, hosted CI,
+  and both Codex processors remain required.
+- The first final four-shard attempt after those fixes was deliberately
+  interrupted and is non-counting when protected-property review found that the
+  runtime path digest performed a second `realpath` observation after the
+  executable authority receipt. The digest now consumes the already
+  authenticated `authority.path`, preventing an authority/path receipt from
+  combining two different filesystem observations. All four obsolete runners
+  exited 130 and were proved absent before the final-tree rerun.
+- A subsequent pre-final shard attempt was also interrupted and is non-counting
+  after a test-only assertion was added to prove the same runtime mismatch
+  blocks the direct retained-export path as well as ordinary checkpoint reads.
+  Its four runners also exited 130 with no residual test process. Two optional
+  dirty-tree read-only audits did not return a terminal artifact after bounded
+  waiting and one conclude request; they were closed as transport-inconclusive
+  and do not count toward the required signed-head Codex gate.
+- The final Python 3.13 implementation/test tree contains 1,671 unique test
+  identifiers partitioned exactly once. Shards 0 through 3 pass 397/397 in
+  1,344.062 seconds, 447/447 in 1,025.943 seconds, 452/452 in 1,144.609
+  seconds, and 375/375 in 1,098.442 seconds. All four deadline supervisors exit
+  zero and every retained log contains an explicit `OK` terminal summary.
 
 ## Follow-up Work
 

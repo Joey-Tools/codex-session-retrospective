@@ -72,7 +72,7 @@ from .orchestrator_execution_contract import (  # noqa: F401
     PROMPT_DIGEST,
     PROMPT_VERSION,
     _AGENT_INSTRUCTIONS,
-    _require_current_execution_contract,
+    _require_current_execution_contract as _require_bound_execution_contract,
 )
 from .orchestrator_transport import (  # noqa: F401
     MAX_SESSION_SHARDS_RECORD_DATA_FRAMES,
@@ -120,6 +120,24 @@ _MODEL_PARAMETER_KEYS = frozenset(
 )
 _REASONING_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max", "ultra"})
 _SERVICE_TIERS = frozenset({"default", "flex", "priority"})
+
+
+def _current_coordinator_runtime() -> dict[str, Any]:
+    try:
+        return source_transport.source_transport_python_runtime_readiness()
+    except (OSError, source_transport.TransportValidationError) as error:
+        raise InvalidTransitionError(
+            "coordinator Python runtime authority cannot be authenticated"
+        ) from error
+
+
+def _require_current_execution_contract(
+    provenance: Mapping[str, Any],
+) -> dict[str, Any]:
+    return _require_bound_execution_contract(
+        provenance,
+        current_runtime=_current_coordinator_runtime(),
+    )
 
 
 def _build_provenance(
@@ -198,7 +216,7 @@ def _build_provenance(
     }:
         raise InvalidInputError("source transport provenance has an unexpected shape")
     try:
-        source_transport.source_transport_python_runtime_readiness()
+        runtime_value = source_transport.source_transport_python_runtime_readiness()
     except (OSError, source_transport.TransportValidationError) as error:
         raise InvalidInputError(
             "coordinator Python runtime authority is incompatible"
@@ -221,6 +239,7 @@ def _build_provenance(
     result = {
         "model": _json_copy(dict(model_value), label="model provenance"),
         "prompt": _json_copy(dict(prompt_value), label="prompt provenance"),
+        "runtime": _json_copy(runtime_value, label="coordinator runtime provenance"),
         "schema": EXECUTION_CONTRACT_SCHEMA,
         "transport": _json_copy(
             dict(transport_value), label="source transport provenance"

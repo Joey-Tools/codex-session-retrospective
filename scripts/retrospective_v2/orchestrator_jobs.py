@@ -13,7 +13,6 @@ from . import (
     result_validation,
     safe_io,
     sharding,
-    transport as source_transport,
 )
 from .checkpoints import canonical_json_bytes, content_digest
 from .contracts import JobKind, RefType, RunStage
@@ -21,12 +20,8 @@ from .orchestrator_context import OrchestratorComponent, RuntimeContext
 from .orchestrator_protocols import JobsProjectionPort
 
 from .orchestrator_support import (
-    EXECUTION_CONTRACT_SCHEMA,
-    EXECUTION_VERSION_CONTRACT,
     InvalidInputError,
     InvalidTransitionError,
-    PROMPT_DIGEST,
-    PROMPT_VERSION,
     RunConflictError,
     _AGENT_INSTRUCTIONS,
     _RESULT_SCHEMA_BY_KIND,
@@ -35,6 +30,13 @@ from .orchestrator_support import (
 
 
 _READ_SEALED_RAW_ARTIFACT = object()
+_AGENT_STAGE_BY_KIND = {
+    JobKind.ADJUDICATOR.value: RunStage.EPISODE_REVIEW.value,
+    JobKind.EPISODE_REVIEWER.value: RunStage.EPISODE_REVIEW.value,
+    JobKind.GLOBAL_SYNTHESIS.value: RunStage.GLOBAL_SYNTHESIS.value,
+    JobKind.INDEPENDENT_RISK_REVIEWER.value: RunStage.EPISODE_REVIEW.value,
+    JobKind.TOPIC_REDUCER.value: RunStage.TOPIC_REDUCTION.value,
+}
 
 
 class AgentJobOperations(OrchestratorComponent):
@@ -184,95 +186,117 @@ class AgentJobOperations(OrchestratorComponent):
 
     def _agent_input_fits(
         self,
+        state: Mapping[str, Any],
         *,
         kind: str,
         input_payload: Mapping[str, Any] | None,
         input_refs: Iterable[str],
         allowed_refs: Iterable[str],
+        allowed_turn_refs: Iterable[str] = (),
+        host_refs: Iterable[str] = (),
         raw_artifact: str | None = None,
+        raw_manifest: Mapping[str, Any] | None = None,
+        framing: Mapping[str, Any] | None = None,
         reviewer_slot: Any = None,
+        candidate_result_hashes: Iterable[str] = (),
+        safety_review_hashes: Iterable[str] = (),
     ) -> bool:
-        if raw_artifact is not None:
-            raise InvalidInputError(
-                "raw artifact fit checks require a fully constructed agent task"
-            )
-        normalized_refs = sorted(set(input_refs))
-        normalized_allowed = sorted(set(allowed_refs))
-        task_ref = "run_input_ref_v2:" + "0" * 64
-        job_ref = "job_ref_v2:" + "0" * 64
-        attempt_ref = "attempt_ref_v2:" + "0" * 64
+        projected_metadata = {
+            "candidate_result_hashes": list(candidate_result_hashes),
+            "reviewer_slot": reviewer_slot,
+            "safety_review_hashes": list(safety_review_hashes),
+        }
+        immutable = self._build_agent_task_immutable(
+            state,
+            stage=_AGENT_STAGE_BY_KIND[kind],
+            kind=kind,
+            partition_ref="run_input_ref_v2:" + "0" * 64,
+            input_refs=input_refs,
+            input_payload=input_payload,
+            allowed_refs=allowed_refs,
+            allowed_turn_refs=allowed_turn_refs,
+            host_refs=host_refs,
+            metadata=projected_metadata,
+            raw_manifest=raw_manifest,
+            raw_artifact=raw_artifact,
+            framing=framing,
+        )
+        immutable_digest = content_digest(immutable)
+        task_ref = self._ref(
+            RefType.RUN_INPUT,
+            state["run_ref"],
+            "agent_task",
+            immutable_digest,
+        )
         input_digest = content_digest(
             {
-                "input_payload": input_payload,
-                "input_refs": normalized_refs,
-                "raw_manifest": None,
+                "input_payload": immutable["input_payload"],
+                "input_refs": immutable["input_refs"],
+                "raw_manifest": immutable["raw_manifest"],
             }
         )
-        metadata = {"reviewer_slot": reviewer_slot} if reviewer_slot else {}
         task = {
-            "allowed_refs": normalized_allowed,
-            "allowed_turn_refs": [],
-            "execution_contract": {
-                "model": {
-                    "model": "size-probe",
-                    "parameters": {
-                        "reasoning_effort": "xhigh",
-                        "service_tier": "priority",
-                    },
-                    "provider": "size-probe",
-                },
-                "prompt": {"digest": PROMPT_DIGEST, "version": PROMPT_VERSION},
-                "schema": EXECUTION_CONTRACT_SCHEMA,
-                "transport": {
-                    "remote_host_context_helper_commitment": "sha256:" + "0" * 64,
-                    "source_transport_schema": (
-                        source_transport.SOURCE_TRANSPORT_STREAM_SCHEMA
-                    ),
-                },
-                "versions": dict(EXECUTION_VERSION_CONTRACT),
-            },
-            "framing": {},
-            "host_refs": [],
             "input_digest": input_digest,
-            "input_payload": (
-                None if input_payload is None else copy.deepcopy(dict(input_payload))
-            ),
-            "input_refs": normalized_refs,
             "job_kind": kind,
-            "metadata": metadata,
-            "partition_ref": "run_input_ref_v2:" + "0" * 64,
-            "raw_artifact": None,
-            "raw_manifest": None,
-            "stage": RunStage.GLOBAL_SYNTHESIS.value,
+            "metadata": agent_task_inputs.checkpoint_metadata(immutable["metadata"]),
+            "partition_ref": immutable["partition_ref"],
+            "stage": immutable["stage"],
             "task_ref": task_ref,
-        }
-        job_manifest = {
-            "allowed_output_refs": normalized_allowed,
-            "candidate_result_hashes": [],
-            "execution_contract": copy.deepcopy(task["execution_contract"]),
-            "input_digest": input_digest,
-            "input_refs": normalized_refs,
-            "job_kind": kind,
-            "job_ref": job_ref,
-            "result_schema": _RESULT_SCHEMA_BY_KIND[kind],
-            "retry_ordinal": 1,
-            "safety_review_hashes": [],
-            "schema": "coordinator_agent_job_v2",
-            "task_ref": task_ref,
-        }
-        attempt = {
-            "attempt_ref": attempt_ref,
-            "job_manifest": job_manifest,
-            "job_ref": job_ref,
-            "ordinal": 1,
-            "reviewer_ref": (
-                "reviewer_ref_v2:" + "0" * 64 if reviewer_slot is not None else None
-            ),
         }
         return (
-            len(canonical_json_bytes(self._agent_envelope(task, attempt)))
+            len(
+                canonical_json_bytes(
+                    self._project_agent_envelope(
+                        state,
+                        task,
+                        ordinal=1,
+                        immutable_override=immutable,
+                    )
+                )
+            )
             <= self._agent_envelope_limit()
         )
+
+    def _build_agent_task_immutable(
+        self,
+        state: Mapping[str, Any],
+        *,
+        stage: str,
+        kind: str,
+        partition_ref: str,
+        input_refs: Iterable[str],
+        input_payload: Mapping[str, Any] | None,
+        allowed_refs: Iterable[str],
+        allowed_turn_refs: Iterable[str] = (),
+        host_refs: Iterable[str] = (),
+        metadata: Mapping[str, Any] | None = None,
+        raw_manifest: Mapping[str, Any] | None = None,
+        raw_artifact: str | None = None,
+        framing: Mapping[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "allowed_refs": sorted(set(allowed_refs)),
+            "allowed_turn_refs": sorted(set(allowed_turn_refs)),
+            "execution_contract": self._projection._execution_contract(state),
+            "framing": _json_copy(dict(framing or {}), label="task framing"),
+            "host_refs": sorted(set(host_refs)),
+            "input_payload": (
+                None
+                if input_payload is None
+                else _json_copy(dict(input_payload), label="task input payload")
+            ),
+            "input_refs": sorted(set(input_refs)),
+            "job_kind": kind,
+            "metadata": _json_copy(dict(metadata or {}), label="task metadata"),
+            "partition_ref": partition_ref,
+            "raw_artifact": raw_artifact,
+            "raw_manifest": (
+                None
+                if raw_manifest is None
+                else _json_copy(dict(raw_manifest), label="raw shard manifest")
+            ),
+            "stage": stage,
+        }
 
     def _create_agent_task(
         self,
@@ -291,32 +315,21 @@ class AgentJobOperations(OrchestratorComponent):
         raw_artifact: str | None = None,
         framing: Mapping[str, Any] | None = None,
     ) -> str:
-        normalized_allowed_refs = sorted(set(allowed_refs))
-        normalized_allowed_turn_refs = sorted(set(allowed_turn_refs))
-        normalized_host_refs = sorted(set(host_refs))
-        immutable = {
-            "allowed_refs": normalized_allowed_refs,
-            "allowed_turn_refs": normalized_allowed_turn_refs,
-            "execution_contract": self._projection._execution_contract(state),
-            "framing": _json_copy(dict(framing or {}), label="task framing"),
-            "host_refs": normalized_host_refs,
-            "input_payload": (
-                None
-                if input_payload is None
-                else _json_copy(dict(input_payload), label="task input payload")
-            ),
-            "input_refs": sorted(set(input_refs)),
-            "job_kind": kind,
-            "metadata": _json_copy(dict(metadata or {}), label="task metadata"),
-            "partition_ref": partition_ref,
-            "raw_artifact": raw_artifact,
-            "raw_manifest": (
-                None
-                if raw_manifest is None
-                else _json_copy(dict(raw_manifest), label="raw shard manifest")
-            ),
-            "stage": stage,
-        }
+        immutable = self._build_agent_task_immutable(
+            state,
+            stage=stage,
+            kind=kind,
+            partition_ref=partition_ref,
+            input_refs=input_refs,
+            input_payload=input_payload,
+            allowed_refs=allowed_refs,
+            allowed_turn_refs=allowed_turn_refs,
+            host_refs=host_refs,
+            metadata=metadata,
+            raw_manifest=raw_manifest,
+            raw_artifact=raw_artifact,
+            framing=framing,
+        )
         immutable_digest = content_digest(immutable)
         task_ref = self._ref(
             RefType.RUN_INPUT,

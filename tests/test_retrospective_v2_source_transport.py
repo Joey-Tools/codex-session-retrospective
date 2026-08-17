@@ -4795,6 +4795,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual(
             {
                 "authority_sha256",
+                "executable_binding_sha256",
                 "implementation",
                 "schema",
                 "version",
@@ -4802,6 +4803,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
             set(readiness),
         )
         self.assertRegex(readiness["authority_sha256"], r"^sha256:[0-9a-f]{64}$")
+        self.assertRegex(
+            readiness["executable_binding_sha256"], r"^sha256:[0-9a-f]{64}$"
+        )
         self.assertEqual(sys.implementation.name, readiness["implementation"])
         self.assertEqual(
             "source_transport_coordinator_python_readiness_v1",
@@ -4814,6 +4818,21 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 sys.version_info.micro,
             ],
             readiness["version"],
+        )
+        authority = transport_program._python_executable_authority()
+        bound_path = "/private/bound-runtime/python3"
+        with (
+            mock.patch.object(
+                transport_program,
+                "_python_executable_authority",
+                return_value=replace(authority, path=bound_path),
+            ),
+            mock.patch.object(os.path, "realpath", return_value="/private/replacement"),
+        ):
+            bound_readiness = transport.source_transport_python_runtime_readiness()
+        self.assertEqual(
+            "sha256:" + hashlib.sha256(os.fsencode(bound_path)).hexdigest(),
+            bound_readiness["executable_binding_sha256"],
         )
         with self.assertRaisesRegex(
             transport.TransportValidationError,

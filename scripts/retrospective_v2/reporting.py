@@ -331,6 +331,7 @@ _REVIEWED_PROSE_FIELDS = frozenset(
 _ALLOWED_STRING_FIELDS = frozenset(
     {
         "algorithm",
+        "authority_sha256",
         "backfill_of",
         "category_presence",
         "cause",
@@ -343,9 +344,11 @@ _ALLOWED_STRING_FIELDS = frozenset(
         "digest",
         "disposition",
         "end",
+        "executable_binding_sha256",
         "expected_effect",
         "exception",
         "identity_key_id",
+        "implementation",
         "issued_at",
         "key_id",
         "kind",
@@ -2902,6 +2905,7 @@ def _validate_retained_provenance(value: Any) -> None:
         "model",
         "production_configuration_ref",
         "prompt",
+        "runtime",
         "schema",
         "transport",
         "versions",
@@ -2940,6 +2944,38 @@ def _validate_retained_provenance(value: Any) -> None:
         or _HEX_64_RE.fullmatch(prompt["digest"]) is None
     ):
         raise RetainedInventoryError("manifest prompt provenance is incomplete")
+    runtime = _require_mapping(
+        provenance["runtime"], label="manifest.provenance.runtime"
+    )
+    if set(runtime) != {
+        "authority_sha256",
+        "executable_binding_sha256",
+        "implementation",
+        "schema",
+        "version",
+    }:
+        raise RetainedInventoryError("manifest runtime provenance is incomplete")
+    for field in ("authority_sha256", "executable_binding_sha256"):
+        value = runtime[field]
+        if (
+            not isinstance(value, str)
+            or not value.startswith("sha256:")
+            or _HEX_64_RE.fullmatch(value.removeprefix("sha256:")) is None
+        ):
+            raise RetainedInventoryError("manifest runtime authority is invalid")
+    if (
+        not isinstance(runtime["implementation"], str)
+        or _SAFE_TOKEN_RE.fullmatch(runtime["implementation"]) is None
+        or runtime["schema"] != "source_transport_coordinator_python_readiness_v1"
+        or not isinstance(runtime["version"], list)
+        or len(runtime["version"]) != 3
+        or any(
+            not isinstance(part, int) or isinstance(part, bool) or part < 0
+            for part in runtime["version"]
+        )
+        or runtime["version"][:2] < [3, 13]
+    ):
+        raise RetainedInventoryError("manifest runtime provenance is invalid")
     transport = _require_mapping(
         provenance["transport"], label="manifest.provenance.transport"
     )
