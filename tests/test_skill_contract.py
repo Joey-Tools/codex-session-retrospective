@@ -47,10 +47,20 @@ class SkillContractTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         cli_reference = (ROOT / "references" / "v2-cli.md").read_text(encoding="utf-8")
 
-        self.assertIn("`python3 -I -B -S`", skill)
-        self.assertIn("python3 -I -B -S", readme)
+        shell_runtime = "$HOME/.codex/session-retrospective/runtime/bin/python3"
+        prose_runtime = "~/.codex/session-retrospective/runtime/bin/python3"
+        invocation = '"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI"'
+        self.assertIn(prose_runtime, skill)
+        for document in (readme, cli_reference):
+            with self.subTest(document=document[:32]):
+                self.assertIn(shell_runtime, document)
+        for document in (skill, readme, cli_reference):
+            with self.subTest(copies_document=document[:32]):
+                self.assertIn("venv --copies", document)
+        self.assertIn(invocation, readme)
         self.assertNotIn('python3 "$V2_CLI"', cli_reference)
-        self.assertEqual(11, cli_reference.count('python3 -I -B -S "$V2_CLI"'))
+        self.assertNotIn('python3 -I -B -S "$V2_CLI"', cli_reference)
+        self.assertEqual(11, cli_reference.count(invocation))
 
     def test_references_and_entry_points_exist(self) -> None:
         for name in (

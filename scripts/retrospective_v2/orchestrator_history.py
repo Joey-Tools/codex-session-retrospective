@@ -30,6 +30,7 @@ from .orchestrator_support import (
     RAW_SHARD_DIRECTORY,
     RunConflictError,
     _json_copy,
+    _require_current_execution_contract,
 )
 
 
@@ -571,6 +572,7 @@ class ResultHistoryOperations(OrchestratorComponent):
         state: Mapping[str, Any] | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         current = self.store.load() if state is None else state
+        _require_current_execution_contract(current.get("provenance", {}))
         return retained_inputs.load(self.run_dir, current)
 
     def _build_retained_export(

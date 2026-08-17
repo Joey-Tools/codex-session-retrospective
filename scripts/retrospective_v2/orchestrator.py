@@ -63,6 +63,7 @@ from .orchestrator_support import (
     _checkpoint_key_id,
     _normalize_hosts,
     _normalize_source_kinds,
+    _require_current_execution_contract,
     _transport_accounting_bytes,
     consume_session_shard_frames,
     publisher_readiness,
@@ -105,11 +106,22 @@ def doctor(
     def record(name: str, ok: bool, detail: str) -> None:
         results[name] = {"detail": detail, "ok": bool(ok)}
 
-    record(
-        "python_runtime",
-        sys.version_info >= (3, 13),
-        f"python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
-    )
+    try:
+        python_runtime = source_transport.source_transport_python_runtime_readiness(
+            expected_executable=(
+                None if shadow else authority.installed_runtime_python_path()
+            )
+        )
+        version = python_runtime["version"]
+        record(
+            "python_runtime",
+            True,
+            "python "
+            + ".".join(str(part) for part in version)
+            + f"; authority {python_runtime['authority_sha256']}",
+        )
+    except (OSError, source_transport.TransportValidationError) as error:
+        record("python_runtime", False, type(error).__name__)
     io_issues = safe_io.secure_io_capability_issues()
     record(
         "safe_io_capabilities",
@@ -423,6 +435,7 @@ class RetrospectiveOrchestrator:
             source_transport_max_source_bytes_provider=(
                 lambda: SOURCE_TRANSPORT_MAX_SOURCE_BYTES
             ),
+            execution_contract_validator=_require_current_execution_contract,
         )
         self._components = build_orchestrator_components(self._context)
 
@@ -475,6 +488,15 @@ def start_run(
     require_existing_identity: bool = False,
     **kwargs: Any,
 ) -> dict[str, Any]:
+    if kwargs.get("shadow") is not True:
+        try:
+            source_transport.source_transport_python_runtime_readiness(
+                expected_executable=authority.installed_runtime_python_path()
+            )
+        except (OSError, source_transport.TransportValidationError) as error:
+            raise InvalidInputError(
+                "production coordinator Python runtime does not match the fixed install"
+            ) from error
     return RetrospectiveOrchestrator(
         run_dir,
         identity_path=identity_path,

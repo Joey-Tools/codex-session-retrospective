@@ -68,13 +68,14 @@ def production_prompt_is_closed(
     prompt: str,
     *,
     cli_path: Path,
+    python_path: Path,
     expected_mode: str,
 ) -> bool:
     try:
         tokens = shlex.split(prompt)
     except ValueError:
         return False
-    launch = ("python3", "-I", "-B", "-S", str(cli_path), "start")
+    launch = (str(python_path), "-I", "-B", "-S", str(cli_path), "start")
     launch_offsets = [
         offset
         for offset in range(len(tokens) - len(launch) + 1)
@@ -100,6 +101,7 @@ def production_prompt_is_closed(
     )
     return (
         len(launch_offsets) == 1
+        and tokens.count(str(python_path)) == 1
         and tokens.count(str(cli_path)) == 1
         and len(mode_offsets) == 1
         and mode_offsets[0] == launch_offsets[0] + len(launch)

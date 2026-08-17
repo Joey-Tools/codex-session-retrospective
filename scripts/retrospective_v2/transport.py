@@ -78,6 +78,7 @@ from .transport_program_components import (  # noqa: F401
 from .transport_program import (  # noqa: F401
     SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST,
     source_transport_python_command,
+    source_transport_python_runtime_readiness,
     transport_program_commitment,
 )
 from .transport_remote_snapshot import snapshot_remote_host_context_helper  # noqa: F401

@@ -228,10 +228,14 @@ publication phase supplies and rechecks that exact path/digest. `finalize` has
 no caller-selected signer override. Timestamp-only changes are benign because
 they are not part of the protected authority receipt.
 
-Source-program and remote-helper Python bootstraps run with `-I -B -S`; the
-captured bootstrap itself verifies isolated, no-site, no-bytecode flags before
+Source-program, descriptor-bound Git, and remote-helper Python bootstraps all
+inherit the coordinator's fixed owner-controlled copied runtime. `doctor` and
+`start` authenticate that runtime's exact executable path objects, bytes, and
+ancestor access policy before source scheduling. Every bootstrap then runs with
+`-I -B -S` and verifies isolated, no-site, no-bytecode flags before
 authenticating or compiling retained source. Global or user site initialization
-therefore cannot run before the authenticated source-only loader.
+therefore cannot run before the authenticated source-only loader; an ambient
+Homebrew Cellar interpreter is not a production entry point.
 
 Program-component stability protects object identity and access policy without
 treating size or timestamps as identity. Every regular component is read twice

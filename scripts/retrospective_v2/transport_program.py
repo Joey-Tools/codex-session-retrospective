@@ -125,6 +125,46 @@ def _python_runtime_authority(
     return _python_runtime_snapshot(_python_executable_authority(executable))
 
 
+def source_transport_python_runtime_readiness(
+    *,
+    expected_executable: str | os.PathLike[str] | None = None,
+) -> dict[str, JsonValue]:
+    """Authenticate the exact coordinator Python used by transport and Git."""
+
+    if sys.version_info < (3, 13) or not (
+        sys.flags.isolated
+        and sys.flags.ignore_environment
+        and sys.flags.no_site
+        and sys.flags.no_user_site
+        and sys.flags.dont_write_bytecode
+    ):
+        raise TransportValidationError(
+            "source transport Python runtime is not isolated Python 3.13 or newer"
+        )
+    selected = pathlib.Path(sys.executable)
+    if expected_executable is not None:
+        expected = pathlib.Path(expected_executable).expanduser().absolute()
+        if os.fspath(expected) != os.path.realpath(expected) or os.path.realpath(
+            selected
+        ) != os.fspath(expected):
+            raise TransportValidationError(
+                "coordinator Python does not match the fixed installed runtime"
+            )
+        selected = expected
+    authority = _python_executable_authority(selected)
+    return {
+        "authority_sha256": "sha256:"
+        + executable_authority.authority_digest(authority),
+        "implementation": sys.implementation.name,
+        "schema": "source_transport_coordinator_python_readiness_v1",
+        "version": [
+            sys.version_info.major,
+            sys.version_info.minor,
+            sys.version_info.micro,
+        ],
+    }
+
+
 def _program_snapshot_protocol():
     try:
         from . import transport_snapshot

@@ -1511,6 +1511,7 @@ class DurablePublicationTests(unittest.TestCase):
             automation_root=automation_root,
         )
         installed_cli = authority.installed_v2_cli_path()
+        installed_python = authority.installed_runtime_python_path()
         operations: list[dict[str, object]] = []
         for automation_id, mode in authority.STABLE_AUTOMATION_MODES.items():
             record_dir = automation_root / automation_id
@@ -1519,7 +1520,8 @@ class DurablePublicationTests(unittest.TestCase):
                 "FREQ=DAILY;BYHOUR=3" if mode == "daily" else "FREQ=WEEKLY;BYDAY=MO"
             )
             prompt = (
-                f"Run python3 -I -B -S {installed_cli} start --mode {mode} "
+                f"Run {installed_python} -I -B -S {installed_cli} "
+                f"start --mode {mode} "
                 "--publisher-gpg-program /usr/bin/true "
                 "for the exact production window."
             )

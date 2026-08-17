@@ -1,6 +1,8 @@
 # Session Retrospective v2 Data Contract
 
-The coordinator and all local transport workers require Python 3.13 or newer.
+The coordinator and all local transport workers require the same fixed
+owner-controlled copied Python 3.13-or-newer runtime. Production does not use
+ambient interpreter resolution.
 The public entrypoint remains parseable under the Python 3.9 grammar solely so
 older runtimes can emit the closed unsupported-runtime result before loading the
 engine package; that parse path does not add runtime support.

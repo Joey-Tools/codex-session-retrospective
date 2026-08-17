@@ -69,6 +69,7 @@ from retrospective_v2.identity import (  # noqa: E402
 )
 from retrospective_v2.export import export_retained_bundle  # noqa: E402
 import retrospective_v2.orchestrator as orchestrator_module  # noqa: E402
+import retrospective_v2.orchestrator_execution_contract as execution_contract_module  # noqa: E402
 from retrospective_v2.orchestrator import (  # noqa: E402
     DEFAULT_HOSTS,
     MAX_SESSION_SHARDS_RECORD_DATA_FRAMES,
@@ -743,6 +744,11 @@ class OrchestratorTests(unittest.TestCase):
                 "retrospective_v2.orchestrator.authority.history_repository_binding",
                 return_value="sha256:" + "b" * 64,
             ),
+            mock.patch.object(
+                authority,
+                "installed_runtime_python_path",
+                return_value=Path(sys.executable).resolve(),
+            ),
         ]
         for patcher in self.authority_patches:
             patcher.start()
@@ -1413,6 +1419,11 @@ class OrchestratorTests(unittest.TestCase):
         )
         self.assertTrue(readiness["checks"]["durable_history_contract"]["ok"])
         self.assertTrue(readiness["checks"]["remote_host_context_transport"]["ok"])
+        self.assertTrue(readiness["checks"]["python_runtime"]["ok"])
+        self.assertIn(
+            "authority sha256:",
+            readiness["checks"]["python_runtime"]["detail"],
+        )
         self.assertEqual(
             "5 canonical hosts",
             readiness["checks"]["canonical_host_policy"]["detail"],
@@ -1639,6 +1650,50 @@ class OrchestratorTests(unittest.TestCase):
                 **self.start_authority(),
             )
 
+    def test_doctor_and_start_reject_unauthenticated_python_runtime(self) -> None:
+        error = transport.TransportValidationError("unsafe coordinator Python")
+        with mock.patch.object(
+            transport,
+            "source_transport_python_runtime_readiness",
+            side_effect=error,
+        ):
+            readiness = doctor(
+                identity_path=self.identity_path,
+                require_existing_identity=True,
+                provenance=execution_provenance(),
+                shadow=True,
+                history_repo=self.root / "history",
+                history_target_ref="refs/heads/main",
+                publisher_gpg_program=TEST_PUBLISHER_GPG,
+                publisher_probe=lambda: {
+                    "fingerprint": PUBLISHER_FINGERPRINT,
+                    "ready": True,
+                },
+            )
+            self.assertFalse(readiness["ok"])
+            self.assertFalse(readiness["checks"]["python_runtime"]["ok"])
+            self.assertFalse(readiness["checks"]["execution_contract"]["ok"])
+            with self.assertRaisesRegex(
+                InvalidInputError,
+                "coordinator Python runtime authority",
+            ):
+                self.start_daily("unsafe-python-runtime")
+
+        with (
+            mock.patch.object(
+                authority,
+                "installed_runtime_python_path",
+                return_value=self.root / "different-python",
+            ),
+            self.assertRaisesRegex(InvalidInputError, "fixed install"),
+        ):
+            orchestrator_module.start_run(
+                self.root / "fixed-runtime-mismatch",
+                identity_path=self.identity_path,
+                require_existing_identity=True,
+                shadow=False,
+            )
+
     def test_execution_configuration_changes_run_job_and_trend_identity(self) -> None:
         first_config = execution_provenance(model="gpt-5.6-sol")
         second_config = execution_provenance(model="gpt-5.6-sol-2026-07-15")
@@ -1673,6 +1728,28 @@ class OrchestratorTests(unittest.TestCase):
         invalid_prompt["prompt"]["digest"] = "0" * 64
         with self.assertRaisesRegex(InvalidInputError, "executable instructions"):
             self.start_daily("configuration-invalid", provenance=invalid_prompt)
+
+    def test_resume_and_export_reject_executable_prompt_drift(self) -> None:
+        coordinator = self.start_daily("prompt-drift")
+        state = coordinator.load_state()
+
+        with mock.patch.object(
+            execution_contract_module,
+            "PROMPT_DIGEST",
+            "f" * 64,
+        ):
+            with self.assertRaisesRegex(
+                InvalidTransitionError,
+                "no longer matches the executable contract",
+            ):
+                coordinator.status()
+            with self.assertRaisesRegex(
+                InvalidTransitionError,
+                "no longer matches the executable contract",
+            ):
+                coordinator.retained_export_inputs()
+
+        self.assertEqual(state["run_ref"], coordinator.status()["run_ref"])
 
     def test_run_ref_is_bound_to_the_specification_digest(self) -> None:
         first = self.coordinator("run-ref-first")

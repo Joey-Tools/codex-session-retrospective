@@ -20,13 +20,18 @@ not own SSH host registry or private overlay installation.
 ## Installed Entry Point
 
 After a future private sync integration, the supported installed coordinator
-path will be:
+and runtime paths will be:
 
 ```bash
-python3 -I -B -S "$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py" --help
+RETROSPECTIVE_PYTHON="$HOME/.codex/session-retrospective/runtime/bin/python3"
+V2_CLI="$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" --help
 ```
 
-The coordinator requires Python 3.13 or newer. See
+The replacement sync must create the runtime with Python 3.13 or newer using
+`venv --copies` beneath owner-only ancestors. `doctor` authenticates that exact
+runtime before source scheduling, and ambient `python3` or a Homebrew Cellar
+interpreter is not accepted as the production entry point. See
 [`references/v2-cli.md`](references/v2-cli.md) for the machine-readable loop and
 [`references/v2-engine-architecture.md`](references/v2-engine-architecture.md)
 for ownership boundaries.

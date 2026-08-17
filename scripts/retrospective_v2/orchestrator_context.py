@@ -5,7 +5,7 @@ from __future__ import annotations
 import datetime as dt
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Protocol
+from typing import Any, Callable, Mapping, Protocol
 
 from . import sharding
 from .checkpoints import AtomicCheckpointStore
@@ -33,6 +33,10 @@ class RuntimeContext(Protocol):
 
     def source_transport_max_source_bytes(self) -> int: ...
 
+    def validate_execution_contract(
+        self, provenance: Mapping[str, Any]
+    ) -> dict[str, Any]: ...
+
 
 @dataclass(frozen=True, slots=True)
 class OrchestratorContext:
@@ -46,6 +50,7 @@ class OrchestratorContext:
     canonical_hosts_provider: Callable[[], tuple[str, ...]]
     agent_envelope_limit_provider: Callable[[], int]
     source_transport_max_source_bytes_provider: Callable[[], int]
+    execution_contract_validator: Callable[[Mapping[str, Any]], dict[str, Any]]
 
     def ref(self, kind: RefType, *parts: object) -> str:
         return str(self.identity.derive_ref(kind, {"parts": list(parts)}))
@@ -58,6 +63,11 @@ class OrchestratorContext:
 
     def source_transport_max_source_bytes(self) -> int:
         return self.source_transport_max_source_bytes_provider()
+
+    def validate_execution_contract(
+        self, provenance: Mapping[str, Any]
+    ) -> dict[str, Any]:
+        return self.execution_contract_validator(provenance)
 
 
 class OrchestratorComponent:

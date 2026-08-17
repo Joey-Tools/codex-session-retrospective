@@ -103,6 +103,7 @@ class CoordinatorStateOperations:
             )
         except RunStateAuthorityError as error:
             raise InvalidTransitionError(str(error)) from error
+        self._context.validate_execution_contract(state.get("provenance", {}))
 
     def _block(self, state: dict[str, Any], reason: str) -> None:
         state["blocked_reason"] = reason

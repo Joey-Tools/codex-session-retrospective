@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 from pathlib import Path
 import selectors
@@ -21,7 +20,7 @@ from . import (
     sharding,
     transport as source_transport,
 )
-from .checkpoints import CheckpointIntegrityError, canonical_json_bytes, content_digest
+from .checkpoints import CheckpointIntegrityError, content_digest
 from .contracts import JobKind
 
 # Compatibility re-exports for callers that historically imported from this module.
@@ -67,6 +66,14 @@ from .orchestrator_core import (  # noqa: F401
     _parse_timestamp,
     _safe_reason,
 )
+from .orchestrator_execution_contract import (  # noqa: F401
+    EXECUTION_CONTRACT_SCHEMA,
+    EXECUTION_VERSION_CONTRACT,
+    PROMPT_DIGEST,
+    PROMPT_VERSION,
+    _AGENT_INSTRUCTIONS,
+    _require_current_execution_contract,
+)
 from .orchestrator_transport import (  # noqa: F401
     MAX_SESSION_SHARDS_RECORD_DATA_FRAMES,
     SESSION_SHARDS_CONSERVATION_SCHEMA,
@@ -108,47 +115,6 @@ _RESULT_SCHEMA_BY_KIND = {
     JobKind.GLOBAL_SYNTHESIS.value: result_validation.SYNTHESIS_RESULT_SCHEMA,
 }
 
-_AGENT_INSTRUCTIONS = {
-    JobKind.EXTRACTOR_REDACTOR.value: (
-        "Read only the listed bounded raw shard and control manifest. Return one "
-        "extractor_result_v2 JSON object using only allowed_output_refs."
-    ),
-    JobKind.EPISODE_REVIEWER.value: (
-        "Review exactly the listed redacted episode revision as the primary reviewer. "
-        "Return one episode_review_result_v2 JSON object bound to attempt_ref and "
-        "reviewer_ref."
-    ),
-    JobKind.INDEPENDENT_RISK_REVIEWER.value: (
-        "Independently review the listed redacted episode revision without using the "
-        "primary result. Return one episode_review_result_v2 JSON object bound to the "
-        "secondary reviewer identity."
-    ),
-    JobKind.ADJUDICATOR.value: (
-        "Adjudicate only the two candidate reviews and bind their canonical hashes. "
-        "Account for every candidate item as selected, merged, or explicitly rejected "
-        "with its exact provenance. Return episode_review_adjudication_result_v2 JSON."
-    ),
-    JobKind.TOPIC_REDUCER.value: (
-        "Aggregate exactly the resolved topic_input_v2 payload across its bound "
-        "episodes and sessions. Return one topic_reduction_result_v2 object."
-    ),
-    JobKind.GLOBAL_SYNTHESIS.value: (
-        "Synthesize only the validated topic results, episode reviews, coverage, and "
-        "bound independent safety reviews. Return one global_synthesis_result_v2 "
-        "JSON object."
-    ),
-}
-
-EXECUTION_CONTRACT_SCHEMA = "retrospective_execution_contract_v2"
-PROMPT_VERSION = "session_retrospective_agent_prompts_v2"
-PROMPT_DIGEST = hashlib.sha256(canonical_json_bytes(_AGENT_INSTRUCTIONS)).hexdigest()
-EXECUTION_VERSION_CONTRACT = {
-    "detector": "episode_detector_v2",
-    "policy": "source_and_partial_policy_v2",
-    "redaction": "extractor_redaction_v2",
-    "schema": "retrospective_schema_v2",
-    "segmentation": "episode_segmentation_v2",
-}
 _MODEL_PARAMETER_KEYS = frozenset(
     {"reasoning_effort", "seed", "service_tier", "temperature", "top_p"}
 )
@@ -231,6 +197,12 @@ def _build_provenance(
         "source_transport_schema",
     }:
         raise InvalidInputError("source transport provenance has an unexpected shape")
+    try:
+        source_transport.source_transport_python_runtime_readiness()
+    except (OSError, source_transport.TransportValidationError) as error:
+        raise InvalidInputError(
+            "coordinator Python runtime authority is incompatible"
+        ) from error
     try:
         helper_commitment = source_transport.remote_host_context_helper_commitment()
     except (OSError, source_transport.TransportValidationError) as error:

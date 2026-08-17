@@ -693,6 +693,51 @@ superseded_by:
   deliberately interrupted after this finding and are non-counting; their
   runner processes were proved absent. The superseding signed head must rerun
   the four exact partitions before final delivery.
+- Signed head `f424d646` closes the punctuation-only suffix gap. Its local
+  Python 3.13 partitions pass 397/397 in 1,066.093 seconds, 446/446 in 807.337
+  seconds, 450/450 in 900.799 seconds, and 373/373 in 870.166 seconds. Hosted CI
+  passed the same four partitions and aggregate gate, and exact-secret
+  admission was clean with complete temporary cleanup. The fresh-context Codex
+  processor then found two control-plane issues, so that head's otherwise-green
+  evidence is stale for delivery: resumed runs could retain their old prompt
+  digest while consuming new in-memory agent instructions, and the documented
+  ambient/Homebrew Python entrypoint could fail the transport executable
+  ancestor authority contract.
+- The executable prompt, version, and resume validator now have one dedicated
+  deterministic foundation module. Every checkpoint load and direct retained
+  export validates the persisted self-digest plus the current prompt and policy
+  contract; remote helper commitments remain governed by their separate
+  run-owned snapshot and lease revalidation contract. The low-level state
+  component receives the validator through its runtime context and does not
+  import high-level orchestration services.
+- Production coordination now uses the fixed owner-controlled copied runtime
+  at `~/.codex/session-retrospective/runtime/bin/python3`, created by replacement
+  sync with Python 3.13-or-newer `venv --copies`. `doctor` and `start`
+  authenticate the exact isolated interpreter and its ancestor access policy;
+  source transport, descriptor-bound Git, and remote-helper launches inherit
+  that same `sys.executable`. Automation cutover records require the exact
+  installed runtime path and reject ambient or non-isolated launch forms.
+- Focused final-tree evidence passes the 11 new and adjacent regressions, CLI
+  60/60, source transport 102/102, result-contract audit 17/17, publication
+  marker transaction 1/1, and module boundaries 19/19. Ruff lint and formatting
+  plus `git diff --check` pass. The final four disjoint repository partitions,
+  signed replacement head, exact-secret admission, and fresh review processors
+  remain the delivery gates.
+- An intermediate four-shard attempt was deliberately interrupted and is
+  non-counting after final review of the production runtime contract found that
+  the coordinator still needed to compare `sys.executable` with the exact fixed
+  installed path. All four deadline supervisors and test runners exited 130 and
+  were proved absent before the final-tree checks resumed.
+- The final runtime-path implementation authenticates that exact installed
+  executable rather than only its Python flags and ancestry. On this frozen
+  tree, the complete CLI module passes 60/60 in 87.306 seconds, source transport
+  passes 102/102 in 24.655 seconds, and orchestration passes 114/114 in 212.957
+  seconds. These focused results supersede the pre-tightening module runs.
+- The final frozen tree contains 1,669 unique test identifiers partitioned
+  exactly once as 397, 446, 451, and 375 tests. Shards 0 through 3 pass 397/397
+  in 1,041.627 seconds, 446/446 in 787.938 seconds, 451/451 in 881.784 seconds,
+  and 375/375 in 850.763 seconds. Every bounded runner exits zero, every shard
+  reports `OK`, and the retained-log failure scans are empty.
 
 ## Follow-up Work
 

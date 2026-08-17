@@ -42,6 +42,7 @@ from .orchestrator_support import (
     _SOURCE_TERMINAL,
     _normalize_timestamp,
     _parse_timestamp,
+    _require_current_execution_contract,
     publisher_readiness,
 )
 
@@ -558,21 +559,7 @@ class StateProjectionOperations(OrchestratorComponent):
 
     @staticmethod
     def _execution_contract(state: Mapping[str, Any]) -> dict[str, Any]:
-        provenance = state.get("provenance")
-        if not isinstance(provenance, Mapping):
-            raise InvalidTransitionError("run execution provenance is missing")
-        configuration_root = provenance.get("configuration_root")
-        contract = {
-            key: copy.deepcopy(value)
-            for key, value in provenance.items()
-            if key != "configuration_root"
-        }
-        if (
-            not isinstance(configuration_root, str)
-            or content_digest(contract) != configuration_root
-        ):
-            raise InvalidTransitionError("run execution provenance changed")
-        return contract
+        return _require_current_execution_contract(state.get("provenance", {}))
 
     def _safe_coverage_payload(self, state: Mapping[str, Any]) -> dict[str, Any]:
         return {

@@ -105,6 +105,11 @@ class CliContractTests(unittest.TestCase):
                 "retrospective_v2.orchestrator.authority.load_production_marker",
                 return_value={"authentication_tag": "test"},
             ),
+            mock.patch.object(
+                authority,
+                "installed_runtime_python_path",
+                return_value=Path(sys.executable).resolve(),
+            ),
         ]
         for patcher in self.authority_patches:
             patcher.start()
@@ -236,7 +241,7 @@ class CliContractTests(unittest.TestCase):
         if schedule_override is not None:
             schedule = schedule_override
         prompt = (
-            "Run python3 -I -B -S "
+            f"Run {authority.installed_runtime_python_path()} -I -B -S "
             f"{authority.installed_v2_cli_path()} start --mode {mode} "
             f"--publisher-gpg-program {TEST_PUBLISHER_GPG} "
             f"for the exact production window.{prompt_suffix}"
@@ -610,7 +615,8 @@ class CliContractTests(unittest.TestCase):
             if automation_id == "daily-session-retrospective":
                 record.write_text(
                     record.read_text(encoding="utf-8").replace(
-                        "python3 -I -B -S", "python3"
+                        f"{authority.installed_runtime_python_path()} -I -B -S",
+                        str(authority.installed_runtime_python_path()),
                     ),
                     encoding="utf-8",
                 )

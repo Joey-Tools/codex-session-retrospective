@@ -2134,6 +2134,12 @@ def installed_v2_cli_path() -> Path:
     ).absolute()
 
 
+def installed_runtime_python_path() -> Path:
+    """Return the fixed owner-controlled production Python copy."""
+
+    return (Path.home() / ".codex/session-retrospective/runtime/bin/python3").absolute()
+
+
 def automation_cutover_record_path() -> Path:
     return (
         Path.home() / ".codex/session-retrospective" / AUTOMATION_CUTOVER_RECORD_FILE
@@ -2457,6 +2463,7 @@ def _open_validated_installed_automation(
         or not automation_cutover_files.production_prompt_is_closed(
             prompt,
             cli_path=cli_path,
+            python_path=installed_runtime_python_path(),
             expected_mode=expected_mode,
         )
         or any(token in prompt for token in forbidden_prompt_tokens)

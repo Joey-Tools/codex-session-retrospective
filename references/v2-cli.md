@@ -23,12 +23,17 @@ publication authority. Owner-local marker and provider files are derived state.
 All examples use the same installed path:
 
 ```bash
+RETROSPECTIVE_PYTHON="$HOME/.codex/session-retrospective/runtime/bin/python3"
 V2_CLI="$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
 PUBLISHER_GPG="/absolute/owner-controlled/path/to/gpg"
 ```
 
-Every invocation must use `python3 -I -B -S`. The coordinator fails closed
-before importing its engine when any required isolation flag is absent.
+Every invocation must use `"$RETROSPECTIVE_PYTHON" -I -B -S`. The fixed
+runtime is an owner-controlled Python 3.13-or-newer `venv --copies` installed
+by the replacement sync beneath owner-only ancestors. The coordinator fails
+closed before importing its engine when any required isolation flag is absent,
+and `doctor` rejects a runtime whose executable identity, content, or ancestor
+access policy cannot be authenticated.
 `doctor` and `start` also require the same absolute `--publisher-gpg-program`.
 The coordinator authenticates that executable's path identity, content, and
 ancestor access policy, persists the authority digest in the run specification,
@@ -43,7 +48,7 @@ Shadow `doctor` and `start` require both an explicit `--identity-path` and
 ## Run Loop
 
 ```bash
-python3 -I -B -S "$V2_CLI" doctor \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" doctor \
   --shadow \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
@@ -52,7 +57,7 @@ python3 -I -B -S "$V2_CLI" doctor \
   --history-target-ref refs/heads/main \
   --publisher-gpg-program "$PUBLISHER_GPG"
 
-python3 -I -B -S "$V2_CLI" start \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" start \
   --shadow \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
@@ -65,7 +70,7 @@ python3 -I -B -S "$V2_CLI" start \
   --history-target-ref refs/heads/main \
   --publisher-gpg-program "$PUBLISHER_GPG"
 
-python3 -I -B -S "$V2_CLI" status \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" status \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
   --run-dir "$RUN"
@@ -86,7 +91,7 @@ session-shards` descriptor stream and its exact requested records stream in one
 owner-only JSONL file, then bind it to the manifest source:
 
 ```bash
-python3 -I -B -S "$V2_CLI" accept-source \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" accept-source \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
   --run-dir "$RUN" \
@@ -134,7 +139,7 @@ Pass the previous exact retained bundle directory when an operator-selected
 period is required:
 
 ```bash
-python3 -I -B -S "$V2_CLI" export \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" export \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
   --run-dir "$RUN" \
@@ -148,7 +153,7 @@ the latest publication from the run's configured signed Git history instead,
 use the mutually exclusive authenticated-history path:
 
 ```bash
-python3 -I -B -S "$V2_CLI" export \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" export \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
   --run-dir "$RUN" \
@@ -167,7 +172,7 @@ claim atomically returns a claim-specific envelope, output sink, `claim_ref`, an
 bounded expiry:
 
 ```bash
-python3 -I -B -S "$V2_CLI" status \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" status \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
   --run-dir "$RUN" \
@@ -175,7 +180,7 @@ python3 -I -B -S "$V2_CLI" status \
   --claim-attempt-ref <attempt_ref> \
   --dispatcher-ref <dispatcher_ref>
 
-python3 -I -B -S "$V2_CLI" accept-agent-result \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" accept-agent-result \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
   --run-dir "$RUN" \
@@ -197,7 +202,7 @@ Start the Daily partial with the complete canonical host set and no production
 provider or marker binding:
 
 ```bash
-python3 -I -B -S "$V2_CLI" start \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" start \
   --shadow \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
@@ -211,7 +216,7 @@ python3 -I -B -S "$V2_CLI" start \
   --history-target-ref refs/heads/main \
   --publisher-gpg-program "$PUBLISHER_GPG"
 
-python3 -I -B -S "$V2_CLI" advance \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" advance \
   --identity-path "$IDENTITY" \
   --require-existing-identity \
   --run-dir "$PARTIAL_RUN" \
@@ -224,7 +229,7 @@ Complete the normal loop and shadow export. Only after the partial reaches
 successor:
 
 ```bash
-python3 -I -B -S "$V2_CLI" start \
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" start \
   --shadow \
   --identity-path "$IDENTITY" \
   --require-existing-identity \

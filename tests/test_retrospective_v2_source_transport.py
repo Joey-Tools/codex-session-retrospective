@@ -4783,6 +4783,46 @@ class SourceTransportProtocolTests(unittest.TestCase):
             finally:
                 os.chmod(runtime_parent, 0o700)
 
+    def test_coordinator_python_runtime_readiness_binds_exact_runtime(self) -> None:
+        readiness = transport.source_transport_python_runtime_readiness()
+        self.assertEqual(
+            readiness,
+            transport.source_transport_python_runtime_readiness(
+                expected_executable=Path(sys.executable).resolve()
+            ),
+        )
+
+        self.assertEqual(
+            {
+                "authority_sha256",
+                "implementation",
+                "schema",
+                "version",
+            },
+            set(readiness),
+        )
+        self.assertRegex(readiness["authority_sha256"], r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(sys.implementation.name, readiness["implementation"])
+        self.assertEqual(
+            "source_transport_coordinator_python_readiness_v1",
+            readiness["schema"],
+        )
+        self.assertEqual(
+            [
+                sys.version_info.major,
+                sys.version_info.minor,
+                sys.version_info.micro,
+            ],
+            readiness["version"],
+        )
+        with self.assertRaisesRegex(
+            transport.TransportValidationError,
+            "fixed installed runtime",
+        ):
+            transport.source_transport_python_runtime_readiness(
+                expected_executable=self.root / "different-python"
+            )
+
     def test_status_rejects_authenticated_noncanonical_source_lease(self) -> None:
         self._write_sources("legacy-python-alias")
         coordinator = self._coordinator("legacy-python-alias")

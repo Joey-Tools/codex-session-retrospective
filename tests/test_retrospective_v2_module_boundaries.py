@@ -255,6 +255,7 @@ ORCHESTRATOR_FOUNDATION_MODULES = {
     "orchestrator_components.py",
     "orchestrator_context.py",
     "orchestrator_core.py",
+    "orchestrator_execution_contract.py",
     "orchestrator_protocols.py",
     "orchestrator_support.py",
     "orchestrator_transport.py",
@@ -329,13 +330,13 @@ TRANSPORT_MODULES = {
 }
 
 TRANSPORT_LINE_INVENTORY = {
-    "transport.py": 239,
+    "transport.py": 240,
     "transport_auth.py": 143,
     "transport_capture.py": 999,
     "transport_contracts.py": 991,
     "transport_discovery.py": 240,
     "transport_paths.py": 100,
-    "transport_program.py": 346,
+    "transport_program.py": 386,
     "transport_program_components.py": 207,
     "transport_remote.py": 328,
     "transport_remote_snapshot.py": 86,
@@ -352,7 +353,8 @@ BOUNDED_MODULE_LINES = {
     "legacy_history_git.py": 325,
     "legacy_history_worktree.py": 600,
     "finalize.py": 120,
-    "authority.py": 3_325,
+    "authority.py": 3_330,
+    "orchestrator_execution_contract.py": 100,
     "cleanup_inventory.py": 925,
     "cleanup_sidecars.py": 300,
     "orchestrator.py": 750,
@@ -1038,7 +1040,7 @@ spec.loader.exec_module(module)
                 len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
                 for name in ORCHESTRATOR_FOUNDATION_MODULES
             ),
-            3_350,
+            3_400,
         )
         run_state_authority_inventory = {
             name: len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
@@ -1145,7 +1147,7 @@ spec.loader.exec_module(module)
         }
         self.assertEqual(TRANSPORT_MODULES, set(TRANSPORT_LINE_INVENTORY))
         self.assertEqual(TRANSPORT_LINE_INVENTORY, observed)
-        self.assertEqual(7_359, sum(observed.values()))
+        self.assertEqual(7_400, sum(observed.values()))
         self.assertLessEqual(
             sum(observed.values()),
             TRANSPORT_AGGREGATE_LINE_LIMIT,
@@ -1192,8 +1194,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(8_881, branch_total)
-        self.assertLessEqual(branch_total, 8_881)
+        self.assertEqual(8_895, branch_total)
+        self.assertLessEqual(branch_total, 8_895)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 
