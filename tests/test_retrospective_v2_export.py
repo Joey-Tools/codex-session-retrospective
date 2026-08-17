@@ -1579,6 +1579,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
     def test_retained_credentials_use_the_complete_shared_detector(self) -> None:
         slack_probe = "".join(("xoxb-", "A" * 16))
         jwt_segment = "".join(("eyJ", "A" * 8))
+        multiword_value = " ".join(("correct", "horse", "battery", "staple"))
+        punctuation_value = "".join(("!@#", "$%^", "&*()"))
         github_probes = tuple(
             "".join((prefix, "A" * 16)) for prefix in ("gho_", "ghr_", "ghs_", "ghu_")
         )
@@ -1626,7 +1628,12 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             f"Authorization: [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
             f"run deploy --token [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
             f"credential is missing {SYNTHETIC_ACCESS_TOKEN}",
+            f"credential is required {SYNTHETIC_ACCESS_TOKEN}",
             f"Bearer [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
+            f'password="{multiword_value}"',
+            f'password="[REDACTED_CREDENTIAL] {multiword_value}"',
+            f"password='{punctuation_value}'",
+            f'password="[REDACTED_CREDENTIAL] {punctuation_value}"',
             *github_probes,
         )
         for probe in probes:
@@ -1674,6 +1681,17 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                     "forbidden locator or credential-shaped value",
                 ):
                     validate_retained_artifacts(tampered)
+
+        for safe_narrative in (
+            "credential is required before deployment",
+            "credential was missing during dry run",
+            "credential is redacted in report",
+        ):
+            with self.subTest(safe_narrative=safe_narrative):
+                safe_review = review_data()
+                safe_review["turn_findings"][1]["rewritten_prompt"] = safe_narrative
+                artifacts = assemble_retained_artifacts(run_state(), safe_review)
+                validate_retained_artifacts(artifacts)
 
     def test_non_http_uri_schemes_are_rejected_before_and_after_assembly(self) -> None:
         prefixed_mixed_scheme_uri = f"locator_a{'9' * 32}+.-x://?prod-build-queue"

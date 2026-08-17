@@ -878,6 +878,8 @@ class ResultValidationTests(unittest.TestCase):
         stateless_github = "".join(
             ("ghs_", "123456_", jwt_segment, ".", "B" * 12, ".", "C" * 16)
         )
+        multiword_value = " ".join(("correct", "horse", "battery", "staple"))
+        punctuation_value = "".join(("!@#", "$%^", "&*()"))
         long_authorization = "".join(("Authorization: Basic ", "D" * 1200, "TAIL"))
         truncated_private_key = "".join(("-----BEGIN ", "PRIVATE KEY-----\n", "E" * 96))
         truncated_dsa_private_key = "".join(
@@ -960,6 +962,11 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_CREDENTIAL]",
             ),
             (
+                f"credential is required {SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
                 f"Bearer [REDACTED_CREDENTIAL] {SYNTHETIC_ACCESS_TOKEN}",
                 (SYNTHETIC_ACCESS_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
@@ -973,6 +980,26 @@ class ResultValidationTests(unittest.TestCase):
             (
                 f"credential\u00a0is\u00a0missing\u00a0{SYNTHETIC_ACCESS_TOKEN}",
                 (SYNTHETIC_ACCESS_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f'password="{multiword_value}"',
+                tuple(multiword_value.split()),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f'password="[REDACTED_CREDENTIAL] {multiword_value}"',
+                tuple(multiword_value.split()),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f"password='{punctuation_value}'",
+                (punctuation_value,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                f'password="[REDACTED_CREDENTIAL] {punctuation_value}"',
+                (punctuation_value,),
                 "[REDACTED_CREDENTIAL]",
             ),
         )
@@ -999,6 +1026,10 @@ class ResultValidationTests(unittest.TestCase):
             "refreshToken=missing",
             "credential is required",
             "credential is  required",
+            "credential is required before deployment",
+            "credential was missing during dry run",
+            "credential is redacted in report",
+            'credential is "required before deployment"',
             "run deploy --token [REDACTED_CREDENTIAL]",
             "run deploy --token  [REDACTED_CREDENTIAL]",
             "Authorization:  [REDACTED_CREDENTIAL]",
@@ -1007,6 +1038,7 @@ class ResultValidationTests(unittest.TestCase):
             "credential\u00a0is\u00a0required",
             "run deploy --token\u00a0[REDACTED_CREDENTIAL]",
             "token=[REDACTED_CREDENTIAL]\n",
+            'password=""',
             "Keep token budget under control.",
             "Token is a label.",
         ):

@@ -596,6 +596,47 @@ superseded_by:
   395/395 in 1,378.018 seconds, 445/445 in 1,086.661 seconds, 450/450 in
   1,200.665 seconds, and 373/373 in 1,178.999 seconds. All four runners exit
   zero and the retained log failure scan is empty.
+- Signed head `d52c78fd` passed exact-secret admission and all four hosted and
+  local test shards, then its fresh-context Codex processor found two remaining
+  shared-detector issues. Quoted structured values stopped after the first
+  whitespace-delimited word, while narrative status prose inherited the
+  complete-value boundary used by assignments and headers. Those head-bound
+  admission, CI, and review results became stale when the findings required a
+  new commit.
+- Structured assignment, header, and CLI values now parse matching single or
+  double quotes as one value and consume the complete quoted content. A safe
+  placeholder inside a quote is exempt only when the complete retained value
+  ends safely; material inside or after the quote remains credential-shaped.
+  Narrative `is`, `was`, and `set to` forms use a separate reviewed status
+  grammar with explicit prose connectors, so ordinary statements such as a
+  credential being required before deployment or missing during a dry run
+  remain prose rather than secrets. A reviewed status followed directly by an
+  unrecognized value remains credential-shaped and preserves the prior
+  fail-closed regression.
+- Focused adversarial coverage includes multiword and punctuation-only quoted
+  passwords, safe-placeholder prefixes with those suffixes, outside-quote
+  suffixes, and safe narrative continuations. Complete affected modules pass
+  result validation 66/66, export/reporting 66/66, and retained-result audit
+  17/17. Module boundaries pass 19/19, CI contracts pass 7/7, and skill
+  contracts pass 5/5.
+- Two intentionally retained concurrent full-suite attempts each completed
+  1,662 of 1,663 test identifiers but exposed separate publisher-canary timing
+  failures. The first real canary exceeded its 15-second budget under four-way
+  host contention; its exact retry and complete seven-test support module then
+  passed without contention. The second attempt showed that the synthetic
+  inherited-pipe test's 0.5-second budget could expire before the fake Python
+  GPG process created its child-PID receipt. Neither partial shard is counted
+  as an all-green partition.
+- The synthetic timeout test now allows five seconds for interpreter startup
+  while its 60-second inherited child still forces the same deadline and
+  process-group cleanup path; no production canary limit changed. The exact
+  regression passes 1/1 in 5.028 seconds and the support module passes 7/7 in
+  6.995 seconds. On the final production tree, shards 0, 1, and 3 pass 395/395
+  in 1,169.001 seconds, 445/445 in 877.733 seconds, and 373/373 in 950.457
+  seconds. The only test modified after those partitions belongs to shard 2;
+  its complete final-tree partition passes 450/450 in 890.352 seconds. This
+  disjoint composite covers all 1,663 stable test identifiers exactly once;
+  hosted CI must still rerun all four partitions on the signed commit.
 
 ## Follow-up Work
 

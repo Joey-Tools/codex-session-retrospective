@@ -221,7 +221,8 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                     str(payload),
                 ],
                 environment=environment,
-                timeout_seconds=0.5,
+                # Exercise inherited-pipe cleanup, not interpreter startup latency.
+                timeout_seconds=5.0,
             )
 
         self._assert_spawned_children_absent(1)
