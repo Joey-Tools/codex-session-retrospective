@@ -1124,12 +1124,96 @@ superseded_by:
   in 1,258.546 seconds, and shard 3 passes 394/394 in 1,177.375 seconds. Every
   runner exits zero with `OK`, and the combined failure and traceback scan is
   empty.
+- Signed and pushed head `60f753a1` closed the static helper-registry mutation
+  gap, but its fresh Codex processor found that the static projection was not
+  rebound to the actual helper invocation. A follow-up read-only audit also
+  identified three related boundaries: the in-process helper bootstrap must not
+  be described as an arbitrary-Python sandbox, the backward-compatible relay
+  supplied a component commitment and live `0755` path where its bootstrap
+  required raw bytes and mode `0600`, and the installed helper does not yet
+  declare the retrospective-specific commands. All evidence for that head is
+  stale.
+- The complete authenticated helper snapshot is now explicitly the semantic
+  code trust root. Its static `HOSTS` data and top-level immutable
+  `SESSION_RETROSPECTIVE_COMMANDS` capability manifest are derived without
+  execution, runtime `HOSTS` is checked against
+  a domain-separated commitment and replaced by immutable copies, and the
+  binding is rechecked on ordinary return and `SystemExit`. This protects
+  declared registry data from ordinary drift without claiming to sandbox
+  arbitrary trusted Python reflection.
+- Required `session-shards` and `source-transport` declarations are preflighted
+  by `doctor`, `start`, and again before launch. A version-skewed run-owned
+  helper produces the explicit `remote_host_context_transport_incompatible`
+  source gap, distinct from remote unreachability and no activity. Snapshot
+  authentication and ordinary helper execution failures remain hard failures.
+  The legacy relay now copies exact helper
+  bytes into a temporary owner-private `0600` snapshot, executes that raw
+  digest, retains the component commitment only as provenance, and removes the
+  snapshot after the bounded relay. This parent-only transaction no longer
+  lives in a worker-reachable module.
+- One final precommit read-only audit found five actionable classification and
+  ownership gaps: authentication errors could be downgraded to compatibility,
+  dead `add_parser` calls could pose as capabilities, `start` could bypass the
+  doctor-only check, ordinary helper failures were mislabeled as registry
+  authentication, and the legacy materializer remained worker-visible. The
+  in-progress four-shard run was stopped as non-counting; all four verified
+  supervisors and their four exact child process groups were terminated once
+  and proved absent before edits. The fixes use one dedicated capability error,
+  an immutable top-level manifest, start-time validation, distinct execution
+  failure classification, and a parent-only relay owner.
+- Current-tree focused evidence passes host inventory 9/9, source transport
+  122/122 in 46.199 seconds, module boundaries 19/19, CI contracts 12/12,
+  bootstrap 7/7, and Skill contracts 5/5. Ruff lint and changed-file formatting,
+  both workflows under `actionlint`, the official OpenAI Skill validator,
+  project-journal validation, generated bootstrap manifest check, and
+  `git diff --check` are clean.
+  The exact 16-module transport inventory is 8,681/8,690 lines and the branch
+  proxy is 9,465/9,475.
+- A final closure audit then found that the real relay discarded bootstrap
+  failure classes and treated a missing `main` as HOSTS authentication failure.
+  The four active 1,732-test supervisors were interrupted once; the bounded
+  runners closed their process groups, and exact process queries found no
+  matching survivor. That run is non-counting. The bootstrap now normalizes
+  authenticated nonzero results, snapshot/runtime authentication failures, and
+  helper entrypoint/execution failures to a closed status set. The relay raises
+  separate typed errors, while the source worker catches only genuine
+  unavailability. Six exact failure-class regressions pass in 1.598 seconds,
+  including real relay authentication and execution paths; the complete source
+  transport suite first passed 120/120 in 47.443 seconds and the updated module
+  boundaries passed 19/19 in 2.328 seconds.
+- Final diff inspection found that terminal stream-filter completion still ran
+  before child status classification, so an execution failure after a valid
+  prefix could be mislabeled as a protocol failure. The first 1,735-test shard
+  run was stopped as non-counting, and exact process queries again found no
+  surviving shard runner. Terminal filter completion now follows the closed
+  child-status classification, and fixed bootstrap status survives diagnostic
+  sink failure. Two exact regressions pass 2/2 in 0.035 seconds; complete source
+  transport passes 122/122 in 46.199 seconds and module boundaries pass 19/19
+  in 2.489 seconds on the resulting tree.
+- The first complete 1,737-test partition run exposed one stale test fixture.
+  The remote output-limit test still supplied the migration-only probe as the
+  installed transport helper, so the new capability and inventory preflight
+  correctly rejected it. Shards 0, 2, and 3 passed 416/416, 456/456, and
+  399/399; shard 1 passed 465 tests and failed only that fixture assertion.
+  The test now uses the dedicated current-contract remote-host-context helper
+  fixture while the migration probe keeps its separate static-contract tests.
+  The exact repaired test passes 1/1.
+- The final frozen-tree Python 3.13.12 run passes all 1,737 tests with no
+  failure or traceback markers: shard 0 passes 416/416 in 1,834.318 seconds,
+  shard 1 passes 466/466 in 1,399.425 seconds, shard 2 passes 456/456 in
+  1,572.511 seconds, and shard 3 passes 399/399 in 1,466.617 seconds. Signing,
+  exact-secret admission, fresh local Codex processing, hosted CI, and
+  current-head GitHub Codex remain.
 
 ## Follow-up Work
 
 1. Register `Joey-Tools/codex-session-retrospective` in `codex-workspace` after
    the standalone source PR merges.
-2. Design and review replacement private sync and installed-release
+2. Extend and release the canonical `remote-host-context` transport with the
+   exact `session-shards` and `source-transport` declarations before enabling
+   remote retrospective runs. That integration belongs to its owning
+   repository and is not implemented by this standalone source PR.
+3. Design and review replacement private sync and installed-release
    integration as a separate workstream.
 
 ## Acceptance Criteria

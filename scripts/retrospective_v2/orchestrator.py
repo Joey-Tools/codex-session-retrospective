@@ -254,18 +254,35 @@ def doctor(
                 "remote-host-context inventory is unavailable"
             )
         helper_commitment = authenticated_inventory.helper_commitment
+        provenance_transport = (
+            provenance.get("transport") if isinstance(provenance, Mapping) else None
+        )
         expected_helper = (
             normalized_provenance.get("transport", {}).get(
                 "remote_host_context_helper_commitment"
             )
             if normalized_provenance is not None
+            else provenance_transport.get("remote_host_context_helper_commitment")
+            if isinstance(provenance_transport, Mapping)
             else None
         )
         helper_ok = helper_commitment == expected_helper
+        commands_ok = (
+            source_transport.REMOTE_HOST_CONTEXT_RETROSPECTIVE_COMMANDS.issubset(
+                authenticated_inventory.helper_commands
+            )
+        )
+        helper_ok = helper_ok and commands_ok
         record(
             "remote_host_context_transport",
             helper_ok,
-            helper_commitment if helper_ok else "helper commitment mismatch",
+            (
+                helper_commitment
+                if helper_ok
+                else "helper command capability mismatch"
+                if helper_commitment == expected_helper
+                else "helper commitment mismatch"
+            ),
         )
     except (OSError, source_transport.TransportValidationError) as error:
         record("remote_host_context_transport", False, type(error).__name__)

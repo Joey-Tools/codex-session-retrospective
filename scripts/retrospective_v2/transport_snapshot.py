@@ -18,9 +18,7 @@ except (ImportError, ModuleNotFoundError):
         canonical_json_bytes,
         strict_json_loads,
     )
-    from transport_contracts import (  # type: ignore[no-redef]
-        TransportValidationError,
-    )
+    from transport_contracts import TransportValidationError  # type: ignore[no-redef]
 
 
 _BOOTSTRAP_DARWIN_ACL_SOURCE = (
@@ -66,18 +64,26 @@ SOURCE_TRANSPORT_SNAPSHOT_BOOTSTRAP = (
     + ")),'<source-transport-snapshot>','exec'))"
 )
 
+REMOTE_HELPER_EXIT_UNAVAILABLE = 75
+REMOTE_HELPER_EXIT_AUTHENTICATION = 76
+REMOTE_HELPER_EXIT_EXECUTION = 77
+
 _REMOTE_HELPER_BOOTSTRAP_SOURCE = "\n".join(
     (
-        "import hashlib,os,stat,sys",
-        "if not sys.flags.isolated or not sys.flags.no_site or not sys.flags.dont_write_bytecode: raise SystemExit('remote helper Python isolation failed')",
+        "import hashlib,json,os,stat,sys,types",
+        "def _fail(message,code):\n try: sys.stderr.write(message+'\\n')\n except BaseException: pass\n raise SystemExit(code)",
+        f"if not sys.flags.isolated or not sys.flags.no_site or not sys.flags.dont_write_bytecode: _fail('remote helper Python isolation failed',{REMOTE_HELPER_EXIT_AUTHENTICATION})",
         _BOOTSTRAP_DARWIN_ACL_SOURCE,
-        "schema,digest,path=sys.argv[1:4]",
-        "flags=os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK\nfd=os.open(path,flags)",
-        "try:\n before=os.fstat(fd); named_before=os.stat(path,follow_symlinks=False); acl_before=_no_extended_acl(fd)\n remaining=4194305\n chunks=[]\n while remaining:\n  chunk=os.read(fd,min(65536,remaining))\n  if not chunk: break\n  chunks.append(chunk); remaining-=len(chunk)\n data=b''.join(chunks)\n after=os.fstat(fd); named_after=os.stat(path,follow_symlinks=False); acl_after=_no_extended_acl(fd)\nfinally:\n os.close(fd)",
-        "policy=lambda meta: stat.S_ISREG(meta.st_mode) and meta.st_uid==os.geteuid() and stat.S_IMODE(meta.st_mode)==0o600 and meta.st_nlink==1\nidentity=lambda meta:(meta.st_dev,meta.st_ino,meta.st_uid,meta.st_gid,meta.st_mode,meta.st_nlink,meta.st_size)\nvalid=policy(before) and policy(after) and identity(before)==identity(after)==identity(named_before)==identity(named_after) and len(data)==after.st_size and len(data)<=4194304",
-        "if schema!='remote_host_context_helper_snapshot_v1' or not valid or not acl_before or not acl_after or 'sha256:'+hashlib.sha256(data).hexdigest()!=digest: raise SystemExit('remote helper snapshot authentication failed')",
-        "sys.argv=[path,*sys.argv[4:]]\nglobals()['__file__']=path",
-        "exec(compile(data,path,'exec'),globals())",
+        "schema,digest,path,hosts_digest=sys.argv[1:5]",
+        "def _authenticated_source():\n flags=os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW|os.O_NONBLOCK\n fd=os.open(path,flags)\n try:\n  before=os.fstat(fd); named_before=os.stat(path,follow_symlinks=False); acl_before=_no_extended_acl(fd)\n  remaining=4194305\n  chunks=[]\n  while remaining:\n   chunk=os.read(fd,min(65536,remaining))\n   if not chunk: break\n   chunks.append(chunk); remaining-=len(chunk)\n  data=b''.join(chunks)\n  after=os.fstat(fd); named_after=os.stat(path,follow_symlinks=False); acl_after=_no_extended_acl(fd)\n finally:\n  os.close(fd)\n policy=lambda meta: stat.S_ISREG(meta.st_mode) and meta.st_uid==os.geteuid() and stat.S_IMODE(meta.st_mode)==0o600 and meta.st_nlink==1\n identity=lambda meta:(meta.st_dev,meta.st_ino,meta.st_uid,meta.st_gid,meta.st_mode,meta.st_nlink,meta.st_size)\n valid=policy(before) and policy(after) and identity(before)==identity(after)==identity(named_before)==identity(named_after) and len(data)==after.st_size and len(data)<=4194304\n if schema!='remote_host_context_helper_snapshot_v2' or not valid or not acl_before or not acl_after or 'sha256:'+hashlib.sha256(data).hexdigest()!=digest: raise RuntimeError\n return data",
+        f"try: data=_authenticated_source()\nexcept BaseException: _fail('remote helper snapshot authentication failed',{REMOTE_HELPER_EXIT_AUTHENTICATION})",
+        "trusted_dumps=json.dumps\ntrusted_sha256=hashlib.sha256\ntrusted_mapping_proxy=types.MappingProxyType",
+        "class _HostInventoryAuthenticationError(Exception): pass",
+        "def _freeze_hosts(value,dumps=trusted_dumps,sha256=trusted_sha256,mapping_proxy=trusted_mapping_proxy):\n if type(value) is not dict or not 1<=len(value)<=64: raise _HostInventoryAuthenticationError\n frozen={}\n for key,row in value.items():\n  if type(key) is not str or type(row) is not dict or any(type(field) is not str or type(item) is not str for field,item in row.items()): raise _HostInventoryAuthenticationError\n  frozen[key]=mapping_proxy(dict(row))\n canonical=dumps(value,allow_nan=False,ensure_ascii=False,separators=(',',':'),sort_keys=True).encode('utf-8')\n domain=b'codex-session-retrospective/remote-host-context-runtime-hosts/v1\\x00'\n if 'sha256:'+sha256(domain+canonical).hexdigest()!=hosts_digest: raise _HostInventoryAuthenticationError\n return mapping_proxy(frozen)",
+        f"module_name='_remote_host_context_snapshot_'+digest[7:23]\nif module_name in sys.modules: _fail('remote helper runtime host inventory authentication failed',{REMOTE_HELPER_EXIT_AUTHENTICATION})\nmodule=types.ModuleType(module_name); module.__file__=path",
+        "sys.argv=[path,*sys.argv[5:]]\nsys.modules[module_name]=module",
+        f"try:\n exec(compile(data,path,'exec'),module.__dict__)\n frozen_hosts=_freeze_hosts(module.__dict__.get('HOSTS'))\n module.__dict__['HOSTS']=frozen_hosts\n main=module.__dict__.get('main')\n if not callable(main): raise RuntimeError('remote helper entrypoint is unavailable')\n sys.modules.pop(module_name,None)\n try:\n  result=main()\n except SystemExit as outcome:\n  result=outcome.code\n finally:\n  if module.__dict__.get('HOSTS') is not frozen_hosts: raise _HostInventoryAuthenticationError\nexcept _HostInventoryAuthenticationError:\n _fail('remote helper runtime host inventory authentication failed',{REMOTE_HELPER_EXIT_AUTHENTICATION})\nexcept BaseException:\n _fail('remote helper execution failed',{REMOTE_HELPER_EXIT_EXECUTION})\nfinally:\n if sys.modules.get(module_name) is module: sys.modules.pop(module_name,None)",
+        f"if result is None: result=0\nif type(result) is not int: _fail('remote helper execution failed',{REMOTE_HELPER_EXIT_EXECUTION})\nraise SystemExit(0 if result==0 else {REMOTE_HELPER_EXIT_UNAVAILABLE})",
     )
 )
 REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP = (
@@ -89,7 +95,7 @@ REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP = (
     )
     + ")),'<remote-helper-snapshot>','exec'))"
 )
-REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA = "remote_host_context_helper_snapshot_v1"
+REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA = "remote_host_context_helper_snapshot_v2"
 
 
 def _source_transport_snapshot_path(cache: pathlib.Path, digest: str) -> pathlib.Path:

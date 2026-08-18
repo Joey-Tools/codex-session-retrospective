@@ -20,30 +20,39 @@ from typing import Any, Callable, Mapping, Sequence
 
 try:
     from . import safe_io
-    from .transport_contracts import TransportValidationError, _canonical_commitment
+    from .transport_contracts import (
+        RemoteTransportCapabilityError,
+        TransportValidationError,
+        _canonical_commitment,
+    )
     from .transport_host_inventory import (
         AuthenticatedHostInventory,
         HostInventoryError,
-        parse_authenticated_helper_hosts,
+        _parse_authenticated_helper_contract,
     )
     from .transport_program_components import _program_component
     from .transport_snapshot import (
+        REMOTE_HELPER_EXIT_AUTHENTICATION,
+        REMOTE_HELPER_EXIT_EXECUTION,
         REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
         REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
     )
 except (ImportError, ModuleNotFoundError):
     import safe_io  # type: ignore[no-redef]
     from transport_contracts import (  # type: ignore[no-redef]
+        RemoteTransportCapabilityError,
         TransportValidationError,
         _canonical_commitment,
     )
     from transport_host_inventory import (  # type: ignore[no-redef]
         AuthenticatedHostInventory,
         HostInventoryError,
-        parse_authenticated_helper_hosts,
+        _parse_authenticated_helper_contract,
     )
     from transport_program_components import _program_component  # type: ignore[no-redef]
     from transport_snapshot import (  # type: ignore[no-redef]
+        REMOTE_HELPER_EXIT_AUTHENTICATION,
+        REMOTE_HELPER_EXIT_EXECUTION,
         REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
         REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
     )
@@ -54,9 +63,21 @@ REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH = pathlib.PurePosixPath(
 REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS = 60
 REMOTE_HOST_CONTEXT_FIXED_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
 REMOTE_HOST_CONTEXT_AUTH_ENVIRONMENT_KEYS = ("SSH_AUTH_SOCK",)
-REMOTE_HOST_CONTEXT_LEGACY_COMMANDS = frozenset(
-    {"fetch-rollout", "preflight", "rollout-summary", "session-meta"}
+REMOTE_HOST_CONTEXT_RETROSPECTIVE_COMMANDS = frozenset(
+    {"session-shards", "source-transport"}
 )
+
+
+class RemoteTransportUnavailableError(RuntimeError):
+    """Raised only when the helper transport could not produce a result."""
+
+
+class RemoteTransportAuthenticationError(TransportValidationError):
+    """Raised when the run-owned helper snapshot cannot be authenticated."""
+
+
+class RemoteTransportExecutionError(RuntimeError):
+    """Raised when authenticated helper code violates its execution contract."""
 
 
 def remote_host_context_helper_path() -> pathlib.Path:
@@ -82,22 +103,10 @@ def remote_host_context_host_inventory(
     """Read HOSTS from the descriptor-authenticated helper without executing it."""
 
     helper = remote_host_context_helper_path() if path is None else pathlib.Path(path)
-    component = _program_component(
-        helper,
-        role="remote_host_context_helper",
-        allow_missing=False,
-        include_content=True,
+    inventory, _runtime_commitment, helper_commitment, commands = _authenticated_hosts(
+        helper
     )
-    try:
-        payload = base64.b64decode(str(component["content_b64"]), validate=True)
-        return AuthenticatedHostInventory(
-            parse_authenticated_helper_hosts(payload),
-            remote_host_context_helper_component_commitment(component),
-        )
-    except (binascii.Error, KeyError, TypeError, ValueError, HostInventoryError) as exc:
-        raise TransportValidationError(
-            "remote-host-context helper HOSTS inventory is invalid"
-        ) from exc
+    return AuthenticatedHostInventory(inventory, helper_commitment, commands)
 
 
 def remote_host_context_helper_component_commitment(
@@ -114,6 +123,62 @@ def remote_host_context_helper_component_commitment(
     )
 
 
+def _authenticated_hosts(
+    helper: pathlib.Path,
+    *,
+    expected_commitment: str | None = None,
+    content_snapshot: bool = False,
+) -> tuple[Any, str, str, tuple[str, ...]]:
+    component = _program_component(
+        helper,
+        role="remote_host_context_helper",
+        allow_missing=False,
+        include_content=True,
+    )
+    helper_commitment = remote_host_context_helper_component_commitment(component)
+    observed_commitment = (
+        str(component["content_commitment"]) if content_snapshot else helper_commitment
+    )
+    if expected_commitment is not None and (
+        not isinstance(expected_commitment, str)
+        or not hmac.compare_digest(observed_commitment, expected_commitment)
+    ):
+        raise TransportValidationError("remote-host-context helper snapshot changed")
+    try:
+        payload = base64.b64decode(str(component["content_b64"]), validate=True)
+        inventory, runtime_commitment, commands = _parse_authenticated_helper_contract(
+            payload
+        )
+    except (binascii.Error, KeyError, TypeError, ValueError, HostInventoryError) as exc:
+        raise TransportValidationError(
+            "remote-host-context helper HOSTS inventory is invalid"
+        ) from exc
+    return inventory, runtime_commitment, helper_commitment, commands
+
+
+def _remote_helper_bootstrap_argv(
+    helper: pathlib.Path,
+    commitment: str,
+    runtime_commitment: str,
+    arguments: Sequence[str],
+) -> tuple[str, ...]:
+    return (
+        sys.executable,
+        "-I",
+        "-B",
+        "-S",
+        "-X",
+        f"pycache_prefix={os.devnull}",
+        "-c",
+        REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
+        REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
+        commitment,
+        str(helper),
+        runtime_commitment,
+        *arguments,
+    )
+
+
 def remote_host_context_snapshot_source_binding(
     snapshot_path: str | os.PathLike[str],
     snapshot_commitment: str,
@@ -121,24 +186,15 @@ def remote_host_context_snapshot_source_binding(
 ) -> tuple[str, str]:
     """Derive route and lexical Codex root from an authenticated helper snapshot."""
 
-    component = _program_component(
-        pathlib.Path(snapshot_path),
-        role="remote_host_context_helper",
-        allow_missing=False,
-        include_content=True,
+    inventory, _runtime_commitment, _helper_commitment, _commands = (
+        _authenticated_hosts(
+            pathlib.Path(snapshot_path),
+            expected_commitment=snapshot_commitment,
+            content_snapshot=True,
+        )
     )
-    if not isinstance(snapshot_commitment, str) or not hmac.compare_digest(
-        str(component["content_commitment"]), snapshot_commitment
-    ):
-        raise TransportValidationError("remote-host-context helper snapshot changed")
     try:
-        payload = base64.b64decode(str(component["content_b64"]), validate=True)
-    except (binascii.Error, ValueError) as exc:
-        raise TransportValidationError(
-            "remote-host-context helper snapshot is invalid"
-        ) from exc
-    try:
-        resolved = parse_authenticated_helper_hosts(payload).resolve(host)
+        resolved = inventory.resolve(host)
     except HostInventoryError as exc:
         raise TransportValidationError(
             "remote-host-context helper snapshot does not define the requested host"
@@ -178,65 +234,25 @@ def _remote_host_context_command(
         )
     ):
         raise ValueError("remote-host-context helper snapshot binding is invalid")
-    return (
-        sys.executable,
-        "-I",
-        "-B",
-        "-S",
-        "-X",
-        f"pycache_prefix={os.devnull}",
-        "-c",
-        REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
-        REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
-        helper_commitment,
-        str(helper),
-        command,
-        "--host",
-        str(args.host),
-        *command_arguments,
-    )
-
-
-def relay_remote_host_context_cli(
-    arguments: Sequence[str],
-    *,
-    max_output_bytes: int,
-) -> None:
-    """Relay one bounded legacy CLI request through the canonical transport."""
-
-    normalized = tuple(arguments)
-    if (
-        not normalized
-        or normalized[0] not in REMOTE_HOST_CONTEXT_LEGACY_COMMANDS
-        or any(
-            not isinstance(value, str)
-            or not value
-            or "\x00" in value
-            or "\r" in value
-            or "\n" in value
-            for value in normalized
+    _inventory, runtime_hosts_commitment, _helper_commitment, commands = (
+        _authenticated_hosts(
+            helper,
+            expected_commitment=helper_commitment,
+            content_snapshot=True,
         )
-    ):
-        raise ValueError("remote-host-context legacy request is invalid")
-    helper = remote_host_context_helper_path()
-    helper_commitment = remote_host_context_helper_commitment(helper)
-    argv = (
-        sys.executable,
-        "-I",
-        "-B",
-        "-S",
-        "-X",
-        f"pycache_prefix={os.devnull}",
-        "-c",
-        REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
-        REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
-        helper_commitment,
-        str(helper),
-        *normalized,
     )
-    _relay_remote_host_context_command(
-        argv,
-        max_output_bytes=max_output_bytes,
+    if (
+        command in REMOTE_HOST_CONTEXT_RETROSPECTIVE_COMMANDS
+        and command not in commands
+    ):
+        raise RemoteTransportCapabilityError(
+            "remote-host-context helper lacks the required retrospective command"
+        )
+    return _remote_helper_bootstrap_argv(
+        helper,
+        helper_commitment,
+        runtime_hosts_commitment,
+        (command, "--host", str(args.host), *command_arguments),
     )
 
 
@@ -360,7 +376,9 @@ def _relay_remote_host_context_command(
             start_new_session=os.name == "posix",
         )
     except OSError as exc:
-        raise RuntimeError("remote-host-context transport unavailable") from exc
+        raise RemoteTransportUnavailableError(
+            "remote-host-context transport unavailable"
+        ) from exc
 
     leader_reaped = False
 
@@ -368,7 +386,9 @@ def _relay_remote_host_context_command(
     active_error: BaseException | None = None
     try:
         if process.stdout is None:
-            raise RuntimeError("remote-host-context transport unavailable")
+            raise RemoteTransportUnavailableError(
+                "remote-host-context transport unavailable"
+            )
         os.set_blocking(process.stdout.fileno(), False)
         selector.register(process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS
@@ -413,7 +433,25 @@ def _relay_remote_host_context_command(
                     )
                 output.write(filtered)
             if timed_out:
-                raise RuntimeError("remote-host-context transport unavailable")
+                raise RemoteTransportUnavailableError(
+                    "remote-host-context transport unavailable"
+                )
+            # Close the task-owned group while the unreaped leader still pins
+            # its PID/PGID. Reaping first would open a reuse race.
+            return_code = _close_remote_process_group(process)
+            leader_reaped = True
+            if return_code == REMOTE_HELPER_EXIT_AUTHENTICATION:
+                raise RemoteTransportAuthenticationError(
+                    "remote-host-context helper authentication failed"
+                )
+            if return_code == REMOTE_HELPER_EXIT_EXECUTION:
+                raise RemoteTransportExecutionError(
+                    "remote-host-context helper execution failed"
+                )
+            if return_code != 0:
+                raise RemoteTransportUnavailableError(
+                    "remote-host-context transport unavailable"
+                )
             if stream_filter is not None:
                 filtered = _filter_remote_output(stream_filter)
                 output_bytes += len(filtered)
@@ -422,12 +460,6 @@ def _relay_remote_host_context_command(
                         "remote-host-context transport exceeded its output envelope"
                     )
                 output.write(filtered)
-            # Close the task-owned group while the unreaped leader still pins
-            # its PID/PGID. Reaping first would open a reuse race.
-            return_code = _close_remote_process_group(process)
-            leader_reaped = True
-            if return_code != 0:
-                raise RuntimeError("remote-host-context transport unavailable")
             if validator is not None:
                 try:
                     validator(output)

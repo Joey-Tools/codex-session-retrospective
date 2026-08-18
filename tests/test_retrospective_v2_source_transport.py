@@ -64,12 +64,37 @@ from retrospective_v2.source_session_policy import (  # noqa: E402
 from tests.test_retrospective_v2_orchestrator import (  # noqa: E402
     bind_remote_host_context_helper_fixture,
     execution_provenance,
+    TEST_HELPER_COMMANDS,
     TEST_PUBLISHER_GPG,
 )
 
 
 WINDOW_START = "2026-07-06T00:00:00Z"
 WINDOW_END = "2026-07-07T00:00:00Z"
+
+
+def executable_remote_helper_source(
+    output: str,
+    *,
+    after_hosts: str = "",
+    main_prefix: str = "",
+) -> str:
+    return (
+        "HOSTS = {\n"
+        "    'local': {'kind': 'local', 'label': 'local', "
+        "'codex_root': '~/.codex'},\n"
+        "    'remote.example': {'kind': 'ssh', 'label': 'remote.example', "
+        "'ssh_target': 'remote.example', "
+        "'codex_root': '/home/remote.example/.codex'},\n"
+        "}\n"
+        f"{after_hosts}"
+        "def main():\n"
+        f"{main_prefix}"
+        f"    print({output!r})\n"
+        "    return 0\n"
+        "if __name__ == '__main__':\n"
+        "    raise SystemExit(main())\n"
+    )
 
 
 class SourceTransportProtocolTests(unittest.TestCase):
@@ -487,6 +512,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         return transport.AuthenticatedHostInventory(
             transport.HostInventory(entries, ()),
             helper_commitment,
+            TEST_HELPER_COMMANDS,
         )
 
     def _coordinator(
@@ -1438,7 +1464,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             ) as relay,
             self.assertRaisesRegex(
                 transport.TransportValidationError,
-                "snapshot does not define the requested host",
+                "HOSTS inventory is invalid",
             ),
         ):
             transport_source._run_private_transport_worker(bound)
@@ -1586,7 +1612,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self,
     ) -> None:
         helper = self.root / "remote-helper.py"
-        helper.write_text("print('{}')\n", encoding="ascii")
+        helper.write_text(executable_remote_helper_source("{}"), encoding="ascii")
         snapshot, commitment = (
             transport_remote_snapshot.snapshot_remote_host_context_helper(
                 helper,
@@ -1616,6 +1642,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         self.assertEqual(commitment, command[9])
         self.assertEqual(str(snapshot), command[10])
+        self.assertRegex(command[11], r"\Asha256:[0-9a-f]{64}\Z")
+        self.assertEqual("probe", command[12])
         self.assertEqual(0o600, snapshot.stat().st_mode & 0o777)
         missing_no_site = subprocess.run(
             [component for component in command if component != "-S"],
@@ -1679,22 +1707,38 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
     def test_legacy_cli_relay_uses_the_canonical_snapshot_transport(self) -> None:
         helper = self.root / "legacy-remote-helper.py"
-        helper.write_text("print('{}')\n", encoding="ascii")
+        helper.write_text(executable_remote_helper_source("{}"), encoding="ascii")
         commitment = transport.remote_host_context_helper_commitment(helper)
+        observed_snapshot: Path | None = None
+
+        def inspect_relay(argv, *, max_output_bytes) -> None:
+            nonlocal observed_snapshot
+            observed_snapshot = Path(argv[10])
+            self.assertNotEqual(helper, observed_snapshot)
+            self.assertEqual(helper.read_bytes(), observed_snapshot.read_bytes())
+            self.assertEqual(0o600, observed_snapshot.stat().st_mode & 0o777)
+            self.assertEqual(
+                "sha256:" + hashlib.sha256(helper.read_bytes()).hexdigest(),
+                argv[9],
+            )
+            self.assertNotEqual(commitment, argv[9])
+            self.assertEqual(4096, max_output_bytes)
+
         with (
             mock.patch.object(
-                transport_remote,
+                transport_remote_snapshot,
                 "remote_host_context_helper_path",
                 return_value=helper,
             ),
             mock.patch.object(
-                transport_remote,
+                transport_remote_snapshot,
                 "remote_host_context_helper_commitment",
                 return_value=commitment,
             ),
             mock.patch.object(
-                transport_remote,
+                transport_remote_snapshot,
                 "_relay_remote_host_context_command",
+                side_effect=inspect_relay,
             ) as relay,
         ):
             transport.relay_remote_host_context_cli(
@@ -1708,13 +1752,16 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual(
             transport_snapshot.REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA, argv[8]
         )
-        self.assertEqual(commitment, argv[9])
-        self.assertEqual(str(helper), argv[10])
+        self.assertRegex(argv[9], r"\Asha256:[0-9a-f]{64}\Z")
+        self.assertEqual(str(observed_snapshot), argv[10])
+        self.assertRegex(argv[11], r"\Asha256:[0-9a-f]{64}\Z")
         self.assertEqual(
             ("session-meta", "--host", "remote.example", "--limit", "10"),
-            argv[11:],
+            argv[12:],
         )
         self.assertEqual(4096, relay.call_args.kwargs["max_output_bytes"])
+        self.assertIsNotNone(observed_snapshot)
+        self.assertFalse(observed_snapshot.exists())
 
         for invalid in ((), ("source-transport",), ("preflight", "bad\nvalue")):
             with self.subTest(arguments=invalid), self.assertRaises(ValueError):
@@ -1755,7 +1802,11 @@ class SourceTransportProtocolTests(unittest.TestCase):
             "    'local': {'kind': 'local', 'label': 'local', 'codex_root': '~/.codex'},\n"
             "    'remote.example': {'kind': 'ssh', 'label': 'remote.example', "
             f"'ssh_target': 'remote.example', 'codex_root': {str(self.codex_root)!r}}},\n"
-            "}\n",
+            "}\n"
+            "SESSION_RETROSPECTIVE_COMMANDS = ('source-transport',)\n"
+            "def transport_capabilities(subparsers):\n"
+            "    for command in SESSION_RETROSPECTIVE_COMMANDS:\n"
+            "        subparsers.add_parser(command)\n",
             encoding="ascii",
         )
         snapshot, commitment = (
@@ -1856,18 +1907,188 @@ class SourceTransportProtocolTests(unittest.TestCase):
             "remote_host_context_transport_unavailable", terminal["reason"]
         )
 
+    def test_missing_remote_transport_capability_emits_an_explicit_gap(self) -> None:
+        helper = self.root / "remote-helper-without-source-transport.py"
+        helper.write_text(
+            "HOSTS = {\n"
+            "    'local': {'kind': 'local', 'label': 'local', "
+            "'codex_root': '~/.codex'},\n"
+            "    'remote.example': {'kind': 'ssh', 'label': 'remote.example', "
+            f"'ssh_target': 'remote.example', 'codex_root': {str(self.codex_root)!r}}},\n"
+            "}\n",
+            encoding="ascii",
+        )
+        snapshot, commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "missing-source-transport-snapshots",
+            )
+        )
+        arguments = self._direct_source_arguments(
+            "missing-source-transport-capability",
+            host="remote.example",
+            source_kind="history",
+            max_records=8,
+            max_source_bytes=1024 * 1024,
+            resume_position=None,
+            session_selector_commitment=None,
+            window_start=WINDOW_START,
+            window_end=WINDOW_END,
+        )
+        arguments.extend(
+            (
+                "--remote-helper",
+                str(snapshot),
+                "--remote-helper-commitment",
+                commitment,
+            )
+        )
+        remote_context = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="remote",
+            host="remote.example",
+        )
+        actual_argv, bound_arguments = self._bound_worker_invocation(
+            arguments,
+            source_root_binding=remote_context.source_root_commitment,
+        )
+        output_path = self.root / "missing-source-transport-gap.jsonl"
+
+        with (
+            output_path.open("w", encoding="ascii") as output,
+            mock.patch.object(sys, "stdout", output),
+            mock.patch.object(sys, "argv", [actual_argv[1], *bound_arguments]),
+            mock.patch.object(
+                sys,
+                "_retrospective_v2_transport_orig_argv",
+                actual_argv,
+                create=True,
+            ),
+            mock.patch.object(
+                transport_source,
+                "_relay_remote_host_context_command",
+            ) as relay,
+        ):
+            self.assertEqual(
+                0,
+                transport_source._run_private_transport_worker(bound_arguments),
+            )
+
+        relay.assert_not_called()
+        terminal = json.loads(output_path.read_text(encoding="ascii").splitlines()[-1])
+        self.assertEqual("gap", terminal["status"])
+        self.assertEqual(
+            "remote_host_context_transport_incompatible",
+            terminal["reason"],
+        )
+
+        authentication_output = self.root / "remote-helper-authentication-failure.jsonl"
+        with (
+            authentication_output.open("w", encoding="ascii") as output,
+            mock.patch.object(sys, "stdout", output),
+            mock.patch.object(sys, "argv", [actual_argv[1], *bound_arguments]),
+            mock.patch.object(
+                sys,
+                "_retrospective_v2_transport_orig_argv",
+                actual_argv,
+                create=True,
+            ),
+            mock.patch.object(
+                transport_source,
+                "_remote_host_context_command",
+                side_effect=transport.TransportValidationError(
+                    "remote-host-context helper snapshot changed"
+                ),
+            ),
+            self.assertRaisesRegex(
+                transport.TransportValidationError,
+                "helper snapshot changed",
+            ),
+        ):
+            transport_source._run_private_transport_worker(bound_arguments)
+
+        self.assertEqual("", authentication_output.read_text(encoding="ascii"))
+
+        failure_cases = (
+            (
+                transport.RemoteTransportUnavailableError(
+                    "remote-host-context transport unavailable"
+                ),
+                True,
+            ),
+            (
+                transport.RemoteTransportAuthenticationError(
+                    "remote-host-context helper authentication failed"
+                ),
+                False,
+            ),
+            (
+                transport.RemoteTransportExecutionError(
+                    "remote-host-context helper execution failed"
+                ),
+                False,
+            ),
+            (RuntimeError("remote-host-context protocol invalid"), False),
+        )
+        for index, (failure, emits_gap) in enumerate(failure_cases):
+            failure_output = self.root / f"remote-helper-failure-{index}.jsonl"
+            with (
+                self.subTest(failure=type(failure).__name__),
+                failure_output.open("w", encoding="ascii") as output,
+                mock.patch.object(sys, "stdout", output),
+                mock.patch.object(sys, "argv", [actual_argv[1], *bound_arguments]),
+                mock.patch.object(
+                    sys,
+                    "_retrospective_v2_transport_orig_argv",
+                    actual_argv,
+                    create=True,
+                ),
+                mock.patch.object(
+                    transport_source,
+                    "_remote_host_context_command",
+                    return_value=("authenticated-helper",),
+                ),
+                mock.patch.object(
+                    transport_source,
+                    "_relay_remote_host_context_command",
+                    side_effect=failure,
+                ),
+            ):
+                if emits_gap:
+                    self.assertEqual(
+                        0,
+                        transport_source._run_private_transport_worker(bound_arguments),
+                    )
+                else:
+                    with self.assertRaises(type(failure)):
+                        transport_source._run_private_transport_worker(bound_arguments)
+            frames = failure_output.read_text(encoding="ascii").splitlines()
+            if emits_gap:
+                self.assertEqual(
+                    "remote_host_context_transport_unavailable",
+                    json.loads(frames[-1])["reason"],
+                )
+            else:
+                self.assertEqual([], frames)
+
     def test_remote_helper_launch_uses_run_owned_snapshot_after_live_replacement(
         self,
     ) -> None:
         helper = self.root / "live-remote-helper.py"
-        helper.write_text("print('original-helper')\n", encoding="ascii")
+        helper.write_text(
+            executable_remote_helper_source("original-helper"),
+            encoding="ascii",
+        )
         snapshot, commitment = (
             transport_remote_snapshot.snapshot_remote_host_context_helper(
                 helper,
                 self.root / "remote-helper-snapshots",
             )
         )
-        helper.write_text("print('replacement-helper')\n", encoding="ascii")
+        helper.write_text(
+            executable_remote_helper_source("replacement-helper"),
+            encoding="ascii",
+        )
         arguments = mock.Mock(
             remote_helper=str(snapshot),
             remote_helper_commitment=commitment,
@@ -1885,6 +2106,393 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual("original-helper", completed.stdout.strip())
         self.assertNotEqual(helper.read_bytes(), snapshot.read_bytes())
 
+    def test_remote_helper_runtime_hosts_rejects_ordinary_route_mutation(
+        self,
+    ) -> None:
+        cases = {
+            "top-level": (
+                {
+                    "after_hosts": (
+                        "globals()['HOSTS']['remote.example']['ssh_target'] = "
+                        "'other-host'\n"
+                    )
+                },
+                "runtime host inventory authentication failed",
+            ),
+            "delayed": (
+                {
+                    "main_prefix": (
+                        "    globals()['HOSTS']['remote.example']['ssh_target'] = "
+                        "'other-host'\n"
+                    )
+                },
+                "remote helper execution failed",
+            ),
+            "delayed-builtins-import": (
+                {
+                    "after_hosts": "import builtins\n",
+                    "main_prefix": (
+                        "    builtins.globals()['HOSTS']['remote.example']"
+                        "['ssh_target'] = 'other-host'\n"
+                    ),
+                },
+                "remote helper execution failed",
+            ),
+            "permanent-rebind-system-exit": (
+                {
+                    "main_prefix": (
+                        "    main.__globals__['HOSTS'] = {'local': {}}\n"
+                        "    raise SystemExit(0)\n"
+                    ),
+                },
+                "runtime host inventory authentication failed",
+            ),
+        }
+        for label, (options, expected_error) in cases.items():
+            with self.subTest(label=label):
+                helper = self.root / f"reflective-{label}-remote-helper.py"
+                helper.write_text(
+                    executable_remote_helper_source("unexpected", **options),
+                    encoding="ascii",
+                )
+                snapshot, commitment = (
+                    transport_remote_snapshot.snapshot_remote_host_context_helper(
+                        helper,
+                        self.root / f"reflective-{label}-snapshots",
+                    )
+                )
+                arguments = mock.Mock(
+                    remote_helper=str(snapshot),
+                    remote_helper_commitment=commitment,
+                    host="remote.example",
+                )
+
+                completed = subprocess.run(
+                    transport._remote_host_context_command(arguments, "probe", ()),
+                    check=False,
+                    capture_output=True,
+                    env=transport._remote_host_context_environment(),
+                    text=True,
+                    timeout=30,
+                )
+
+                self.assertNotEqual(0, completed.returncode)
+                self.assertEqual("", completed.stdout)
+                self.assertIn(expected_error, completed.stderr)
+                if label == "top-level":
+                    with self.assertRaises(
+                        transport.RemoteTransportAuthenticationError
+                    ):
+                        transport._relay_remote_host_context_command(
+                            transport._remote_host_context_command(
+                                arguments, "probe", ()
+                            ),
+                            max_output_bytes=1024,
+                        )
+
+    def test_remote_helper_execution_failure_is_not_an_inventory_failure(self) -> None:
+        helper = self.root / "failing-remote-helper.py"
+        helper.write_text(
+            executable_remote_helper_source(
+                "unexpected",
+                main_prefix="    raise RuntimeError('expected helper failure')\n",
+            ),
+            encoding="ascii",
+        )
+        snapshot, commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "failing-helper-snapshots",
+            )
+        )
+        arguments = mock.Mock(
+            remote_helper=str(snapshot),
+            remote_helper_commitment=commitment,
+            host="remote.example",
+        )
+
+        command = transport._remote_host_context_command(arguments, "probe", ())
+        completed = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            env=transport._remote_host_context_environment(),
+            text=True,
+            timeout=30,
+        )
+
+        self.assertNotEqual(0, completed.returncode)
+        self.assertEqual("", completed.stdout)
+        self.assertIn("remote helper execution failed", completed.stderr)
+        self.assertNotIn("inventory authentication failed", completed.stderr)
+        with self.assertRaisesRegex(
+            transport.RemoteTransportExecutionError,
+            "helper execution failed",
+        ):
+            transport._relay_remote_host_context_command(
+                command,
+                max_output_bytes=1024,
+            )
+
+    def test_remote_helper_missing_or_noncallable_main_is_execution_failure(
+        self,
+    ) -> None:
+        source_prefix = executable_remote_helper_source("unused").split(
+            "def main():", 1
+        )[0]
+        for label, suffix in (("missing", ""), ("noncallable", "main = 7\n")):
+            with self.subTest(label=label):
+                helper = self.root / f"{label}-main-remote-helper.py"
+                helper.write_text(source_prefix + suffix, encoding="ascii")
+                snapshot, commitment = (
+                    transport_remote_snapshot.snapshot_remote_host_context_helper(
+                        helper,
+                        self.root / f"{label}-main-helper-snapshots",
+                    )
+                )
+                arguments = mock.Mock(
+                    remote_helper=str(snapshot),
+                    remote_helper_commitment=commitment,
+                    host="remote.example",
+                )
+                command = transport._remote_host_context_command(arguments, "probe", ())
+
+                completed = subprocess.run(
+                    command,
+                    check=False,
+                    capture_output=True,
+                    env=transport._remote_host_context_environment(),
+                    text=True,
+                    timeout=30,
+                )
+                self.assertEqual(
+                    transport_snapshot.REMOTE_HELPER_EXIT_EXECUTION,
+                    completed.returncode,
+                )
+                self.assertIn("remote helper execution failed", completed.stderr)
+                self.assertNotIn("inventory authentication failed", completed.stderr)
+                with self.assertRaises(transport.RemoteTransportExecutionError):
+                    transport._relay_remote_host_context_command(
+                        command,
+                        max_output_bytes=1024,
+                    )
+
+    def test_remote_helper_nonzero_result_is_transport_unavailable(self) -> None:
+        helper = self.root / "unavailable-remote-helper.py"
+        helper.write_text(
+            executable_remote_helper_source(
+                "unused",
+                main_prefix="    return 9\n",
+            ),
+            encoding="ascii",
+        )
+        snapshot, commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "unavailable-helper-snapshots",
+            )
+        )
+        arguments = mock.Mock(
+            remote_helper=str(snapshot),
+            remote_helper_commitment=commitment,
+            host="remote.example",
+        )
+        command = transport._remote_host_context_command(arguments, "probe", ())
+
+        with self.assertRaises(transport.RemoteTransportUnavailableError):
+            transport._relay_remote_host_context_command(
+                command,
+                max_output_bytes=1024,
+            )
+
+    def test_remote_relay_classifies_execution_before_terminal_filter(self) -> None:
+        stream_filter = mock.Mock()
+        stream_filter.feed.return_value = b""
+        stream_filter.finish.side_effect = ValueError("incomplete protocol")
+        command = (
+            sys.executable,
+            "-I",
+            "-B",
+            "-S",
+            "-c",
+            "print('partial'); raise SystemExit("
+            f"{transport_snapshot.REMOTE_HELPER_EXIT_EXECUTION})",
+        )
+
+        with self.assertRaises(transport.RemoteTransportExecutionError):
+            transport._relay_remote_host_context_command(
+                command,
+                max_output_bytes=1024,
+                stream_filter=stream_filter,
+            )
+
+        stream_filter.feed.assert_called()
+        stream_filter.finish.assert_not_called()
+
+    def test_remote_helper_replacement_between_authenticated_reads_fails(self) -> None:
+        helper = self.root / "replaced-between-reads-helper.py"
+        helper.write_text(
+            executable_remote_helper_source("original-helper"), encoding="ascii"
+        )
+        snapshot, commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "replaced-between-reads-snapshots",
+            )
+        )
+        arguments = mock.Mock(
+            remote_helper=str(snapshot),
+            remote_helper_commitment=commitment,
+            host="remote.example",
+        )
+        original_authenticated_hosts = transport_remote._authenticated_hosts
+        calls = 0
+
+        def replace_before_second_read(*args, **kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                snapshot.write_text(
+                    executable_remote_helper_source("replacement-helper"),
+                    encoding="ascii",
+                )
+            return original_authenticated_hosts(*args, **kwargs)
+
+        with (
+            mock.patch.object(
+                transport_remote,
+                "_authenticated_hosts",
+                side_effect=replace_before_second_read,
+            ),
+            self.assertRaisesRegex(
+                transport.TransportValidationError,
+                "helper snapshot changed",
+            ),
+        ):
+            transport.remote_host_context_snapshot_source_binding(
+                snapshot,
+                commitment,
+                "remote.example",
+            )
+            transport._remote_host_context_command(arguments, "probe", ())
+
+        self.assertEqual(2, calls)
+
+    def test_remote_relay_preserves_post_binding_snapshot_authentication(self) -> None:
+        helper = self.root / "post-binding-replacement-helper.py"
+        helper.write_text(
+            executable_remote_helper_source("original-helper"), encoding="ascii"
+        )
+        snapshot, commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "post-binding-replacement-snapshots",
+            )
+        )
+        arguments = mock.Mock(
+            remote_helper=str(snapshot),
+            remote_helper_commitment=commitment,
+            host="remote.example",
+        )
+        command = transport._remote_host_context_command(arguments, "probe", ())
+        snapshot.write_bytes(snapshot.read_bytes() + b"\n")
+        os.chmod(snapshot, 0o600)
+
+        with self.assertRaisesRegex(
+            transport.RemoteTransportAuthenticationError,
+            "helper authentication failed",
+        ):
+            transport._relay_remote_host_context_command(
+                command,
+                max_output_bytes=1024,
+            )
+
+        missing_snapshot, missing_commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "post-binding-missing-snapshots",
+            )
+        )
+        missing_arguments = mock.Mock(
+            remote_helper=str(missing_snapshot),
+            remote_helper_commitment=missing_commitment,
+            host="remote.example",
+        )
+        missing_command = transport._remote_host_context_command(
+            missing_arguments, "probe", ()
+        )
+        missing_snapshot.unlink()
+        with self.assertRaises(transport.RemoteTransportAuthenticationError):
+            transport._relay_remote_host_context_command(
+                missing_command,
+                max_output_bytes=1024,
+            )
+
+    def test_required_retrospective_command_is_preflighted_before_launch(
+        self,
+    ) -> None:
+        helper = self.root / "remote-helper-without-retrospective-command.py"
+        helper.write_text(
+            executable_remote_helper_source("unexpected"), encoding="ascii"
+        )
+        snapshot, commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "missing-capability-snapshots",
+            )
+        )
+        arguments = mock.Mock(
+            remote_helper=str(snapshot),
+            remote_helper_commitment=commitment,
+            host="remote.example",
+        )
+
+        with self.assertRaisesRegex(
+            transport.TransportValidationError,
+            "lacks the required retrospective command",
+        ):
+            transport._remote_host_context_command(
+                arguments,
+                "source-transport",
+                (),
+            )
+
+    def test_remote_helper_runtime_module_supports_dataclass_definitions(self) -> None:
+        helper = self.root / "dataclass-remote-helper.py"
+        helper.write_text(
+            "import dataclasses\n"
+            "@dataclasses.dataclass(frozen=True)\n"
+            "class Result:\n"
+            "    value: str\n"
+            + executable_remote_helper_source(
+                "dataclass-helper",
+                main_prefix="    Result('ready')\n",
+            ),
+            encoding="ascii",
+        )
+        snapshot, commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "dataclass-helper-snapshots",
+            )
+        )
+        arguments = mock.Mock(
+            remote_helper=str(snapshot),
+            remote_helper_commitment=commitment,
+            host="remote.example",
+        )
+
+        completed = subprocess.run(
+            transport._remote_host_context_command(arguments, "probe", ()),
+            check=True,
+            capture_output=True,
+            env=transport._remote_host_context_environment(),
+            text=True,
+            timeout=30,
+        )
+
+        self.assertEqual("dataclass-helper", completed.stdout.strip())
+
     def test_remote_lease_rejects_helper_replaced_after_inventory_freeze(
         self,
     ) -> None:
@@ -1896,6 +2504,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
             "    'remote': {'kind': 'ssh', 'label': 'remote', "
             "'ssh_target': 'remote', 'codex_root': '/home/remote/.codex'},\n"
             "}\n"
+            "SESSION_RETROSPECTIVE_COMMANDS = "
+            "('session-shards', 'source-transport')\n"
             "# original helper\n"
         )
         helper.write_text(original_helper, encoding="ascii")
@@ -1961,11 +2571,13 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 (),
             ),
             original.helper_commitment,
+            original.helper_commands,
         )
         replacements = {
             "helper": transport.AuthenticatedHostInventory(
                 original.inventory,
                 "sha256:" + "f" * 64,
+                original.helper_commands,
             ),
             "inventory": expanded,
         }
@@ -2002,7 +2614,10 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self,
     ) -> None:
         helper = self.root / "bound-remote-helper.py"
-        helper.write_text("print('original-helper')\n", encoding="ascii")
+        helper.write_text(
+            executable_remote_helper_source("original-helper"),
+            encoding="ascii",
+        )
         snapshot, commitment = (
             transport_remote_snapshot.snapshot_remote_host_context_helper(
                 helper,
@@ -2015,7 +2630,10 @@ class SourceTransportProtocolTests(unittest.TestCase):
             host="remote.example",
         )
         command = transport._remote_host_context_command(arguments, "probe", ())
-        snapshot.write_text("print('replacement-helper')\n", encoding="ascii")
+        snapshot.write_text(
+            executable_remote_helper_source("replacement-helper"),
+            encoding="ascii",
+        )
         os.chmod(snapshot, 0o600)
 
         completed = subprocess.run(
@@ -2032,7 +2650,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
     @darwin_security_test
     def test_remote_helper_launch_rejects_snapshot_extended_acl(self) -> None:
         helper = self.root / "acl-remote-helper.py"
-        helper.write_text("print('{}')\n", encoding="ascii")
+        helper.write_text(executable_remote_helper_source("{}"), encoding="ascii")
         snapshot, commitment = (
             transport_remote_snapshot.snapshot_remote_host_context_helper(
                 helper,
@@ -2087,9 +2705,11 @@ class SourceTransportProtocolTests(unittest.TestCase):
         fake_os.read = mock.Mock(side_effect=(payload, b""))
         fake_os.stat = mock.Mock(side_effect=(first, changed))
         digest = "sha256:" + hashlib.sha256(payload).hexdigest()
+        diagnostics = io.StringIO()
 
         with (
             mock.patch.dict(sys.modules, {"os": fake_os}),
+            mock.patch.object(sys, "stderr", diagnostics),
             mock.patch.object(
                 sys,
                 "flags",
@@ -2107,17 +2727,49 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     transport_snapshot.REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
                     digest,
                     str(self.root / "snapshot.py"),
+                    "sha256:" + "0" * 64,
                 ],
             ),
-            self.assertRaisesRegex(SystemExit, "snapshot authentication failed"),
+            self.assertRaises(SystemExit) as outcome,
         ):
             exec(
                 transport_snapshot._REMOTE_HELPER_BOOTSTRAP_SOURCE,
                 {"__name__": "__main__"},
             )
 
+        self.assertEqual(
+            transport_snapshot.REMOTE_HELPER_EXIT_AUTHENTICATION,
+            outcome.exception.code,
+        )
+        self.assertIn("snapshot authentication failed", diagnostics.getvalue())
         self.assertEqual(2, fake_os.fstat.call_count)
         self.assertEqual(2, fake_os.stat.call_count)
+
+    def test_remote_helper_bootstrap_status_survives_diagnostic_failure(self) -> None:
+        diagnostics = mock.Mock()
+        diagnostics.write.side_effect = OSError("diagnostic sink unavailable")
+        with (
+            mock.patch.object(sys, "stderr", diagnostics),
+            mock.patch.object(
+                sys,
+                "flags",
+                types.SimpleNamespace(
+                    isolated=0,
+                    no_site=1,
+                    dont_write_bytecode=1,
+                ),
+            ),
+            self.assertRaises(SystemExit) as outcome,
+        ):
+            exec(
+                transport_snapshot._REMOTE_HELPER_BOOTSTRAP_SOURCE,
+                {"__name__": "__main__"},
+            )
+
+        self.assertEqual(
+            transport_snapshot.REMOTE_HELPER_EXIT_AUTHENTICATION,
+            outcome.exception.code,
+        )
 
     def test_prepare_source_rejects_remote_snapshot_changed_after_output_capture(
         self,
@@ -2130,7 +2782,10 @@ class SourceTransportProtocolTests(unittest.TestCase):
             "    'remote': {'kind': 'ssh', 'label': 'remote', "
             "'ssh_target': 'remote', 'codex_root': '/home/remote/.codex'},\n"
             "}\n"
-            "raise SystemExit(1)\n",
+            "SESSION_RETROSPECTIVE_COMMANDS = "
+            "('session-shards', 'source-transport')\n"
+            "def main():\n"
+            "    return 1\n",
             encoding="ascii",
         )
         provenance = execution_provenance()
@@ -6038,6 +6693,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 transport_snapshot.REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
                 digest,
                 str(fifo),
+                "sha256:" + "0" * 64,
                 "session-shards",
             ),
             capture_output=True,

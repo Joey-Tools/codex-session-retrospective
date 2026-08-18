@@ -243,6 +243,12 @@ def _build_provenance(
             "coordinator implementation authority is incompatible"
         ) from error
     helper_commitment = authenticated_host_inventory.helper_commitment
+    if not source_transport.REMOTE_HOST_CONTEXT_RETROSPECTIVE_COMMANDS.issubset(
+        authenticated_host_inventory.helper_commands
+    ):
+        raise InvalidInputError(
+            "remote-host-context helper lacks required retrospective capabilities"
+        )
     if (
         transport_value.get("remote_host_context_helper_commitment")
         != helper_commitment

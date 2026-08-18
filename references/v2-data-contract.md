@@ -50,6 +50,27 @@ scheduling cannot change the program that executes, replacing it between leases
 cannot mix helper versions within one run, and source acceptance revalidates the
 same run-owned commitment.
 
+The complete authenticated helper snapshot is a semantic code trust root. A
+bounded AST pass separately derives the static `HOSTS` literal and one
+top-level literal-tuple `SESSION_RETROSPECTIVE_COMMANDS` capability manifest
+without executing the helper. The canonical helper builds its parser
+registration from that same immutable manifest. The bootstrap compares the
+runtime `HOSTS` value with that exact domain-separated commitment and replaces
+it with immutable row and outer proxies before `main`. These checks reject
+ordinary registry drift and accidental runtime mutation; they are not a Python
+sandbox and do not claim to contain arbitrary reflective behavior from already
+trusted helper bytes. Missing `session-shards` or `source-transport`
+capabilities fail both `doctor` and `start` before run creation. If an older
+run-owned snapshot reaches worker preflight, source transport records the
+version skew as `remote_host_context_transport_incompatible`; only the
+dedicated missing-capability error may take that path. Snapshot authentication,
+binding, or execution failures remain hard failures and are never reclassified
+as remote unreachability, no activity, or compatibility gaps. The bootstrap
+normalizes its outcome into a closed status set: authenticated helper nonzero
+results mean transport unavailable, while snapshot/runtime authentication and
+helper entrypoint/execution failures retain separate typed relay errors. The
+worker catches only the unavailable type when producing a coverage gap.
+
 `session_index` and `history` use bounded metadata JSONL transport. Active and
 archived rollouts use bounded rollout JSONL transport. Remote execution is always
 delegated to `$remote-host-context`; v2 contains no SSH command, host table, or

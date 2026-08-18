@@ -38,6 +38,7 @@ try:
         SOURCE_TRANSPORT_RESUME_PROBE_BYTES,
         SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
         SOURCE_TRANSPORT_STREAM_SCHEMA,
+        RemoteTransportCapabilityError,
         TransportValidationError,
         _REASON_RE,
         _TOKEN_RE,
@@ -59,6 +60,7 @@ try:
         ROOT_ROLLOUT_RELATIVE_RE,
     )
     from .transport_remote import (
+        RemoteTransportUnavailableError,
         _relay_remote_host_context_command,
         _remote_host_context_command,
         remote_host_context_snapshot_source_binding,
@@ -93,6 +95,7 @@ except (ImportError, ModuleNotFoundError):
         SOURCE_TRANSPORT_RESUME_PROBE_BYTES,
         SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
         SOURCE_TRANSPORT_STREAM_SCHEMA,
+        RemoteTransportCapabilityError,
         TransportValidationError,
         _REASON_RE,
         _TOKEN_RE,
@@ -114,6 +117,7 @@ except (ImportError, ModuleNotFoundError):
         ROOT_ROLLOUT_RELATIVE_RE,
     )
     from transport_remote import (  # type: ignore[no-redef]
+        RemoteTransportUnavailableError,
         _relay_remote_host_context_command,
         _remote_host_context_command,
         remote_host_context_snapshot_source_binding,
@@ -1907,11 +1911,18 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
         raise TransportValidationError(
             "remote source transport source root commitment changed"
         )
-    command = _remote_host_context_command(
-        args,
-        "source-transport",
-        _source_transport_remote_arguments(args),
-    )
+    try:
+        command = _remote_host_context_command(
+            args,
+            "source-transport",
+            _source_transport_remote_arguments(args),
+        )
+    except RemoteTransportCapabilityError:
+        _emit_source_transport_gap(
+            args,
+            reason="remote_host_context_transport_incompatible",
+        )
+        return 0
     wire_limit = (
         args.max_source_bytes * 2
         + args.max_records * 4096
@@ -1929,7 +1940,7 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
                 max_output_bytes=wire_limit,
             ),
         )
-    except RuntimeError:
+    except RemoteTransportUnavailableError:
         _emit_source_transport_gap(
             args,
             reason="remote_host_context_transport_unavailable",

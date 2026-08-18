@@ -48,6 +48,7 @@ from .transport_contracts import (  # noqa: F401
     SourceTransportCapture,
     TransportLease,
     TransportReceipt,
+    RemoteTransportCapabilityError,
     TransportValidationError,
     _bounded_token,
     _BoundedLine,
@@ -85,15 +86,21 @@ from .transport_program import (  # noqa: F401
     source_transport_python_runtime_readiness,
     transport_program_commitment,
 )
-from .transport_remote_snapshot import snapshot_remote_host_context_helper  # noqa: F401
+from .transport_remote_snapshot import (  # noqa: F401
+    relay_remote_host_context_cli,
+    snapshot_remote_host_context_helper,
+)
 from .transport_remote import (  # noqa: F401
     REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS,
     REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH,
+    REMOTE_HOST_CONTEXT_RETROSPECTIVE_COMMANDS,
+    RemoteTransportAuthenticationError,
+    RemoteTransportExecutionError,
+    RemoteTransportUnavailableError,
     _relay_remote_host_context_command,
     _relay_valid_utf8,
     _remote_host_context_command,
     _remote_host_context_environment,
-    relay_remote_host_context_cli,
     remote_host_context_host_inventory,
     remote_host_context_helper_commitment,
     remote_host_context_helper_path,

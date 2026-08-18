@@ -35,4 +35,12 @@ HOSTS = {
     },
 }
 
+SESSION_RETROSPECTIVE_COMMANDS = ("session-shards", "source-transport")
+
+
+def _retrospective_transport_capabilities(subparsers):
+    for command in SESSION_RETROSPECTIVE_COMMANDS:
+        subparsers.add_parser(command)
+
+
 raise SystemExit("remote-host-context commitment fixture must not be executed")

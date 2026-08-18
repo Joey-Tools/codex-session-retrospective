@@ -24,6 +24,9 @@ SCRIPTS = REPO_ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 SCRIPT_PATH = SCRIPTS / "retrospective_v2/transport.py"
 MIGRATION_PROBE_PATH = SCRIPTS / "remote_codex_probe.py"
+REMOTE_HOST_CONTEXT_HELPER_FIXTURE = (
+    REPO_ROOT / "tests" / "fixtures" / "remote_host_context_helper.py"
+)
 
 from retrospective_v2 import transport as MODULE  # noqa: E402
 from retrospective_v2 import transport_session_shards as SHARDS_MODULE  # noqa: E402
@@ -1676,7 +1679,7 @@ class RemoteSessionShardsRelayTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as raw:
             remote_helper, remote_helper_commitment = (
                 MODULE.snapshot_remote_host_context_helper(
-                    MIGRATION_PROBE_PATH,
+                    REMOTE_HOST_CONTEXT_HELPER_FIXTURE,
                     Path(raw) / "snapshots",
                 )
             )

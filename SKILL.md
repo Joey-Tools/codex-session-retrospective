@@ -31,7 +31,12 @@ v1 helper for a v2 run.
    configured identity, policy, history, transport, and publisher executable
    contracts to match. Supply one stable absolute owner-controlled GPG path as
    `--publisher-gpg-program` to both `doctor` and `start`; do not resolve it
-   from ambient `PATH` or attempt to override it during `finalize`.
+   from ambient `PATH` or attempt to override it during `finalize`. The exact
+   authenticated `$remote-host-context` helper must declare both
+   `session-shards` and `source-transport` in its immutable capability
+   manifest; otherwise `doctor` and `start` stop before creating a run. An
+   older run-owned snapshot reports the explicit compatibility gap rather than
+   retrying it as host unreachability.
 2. Start one immutable `daily`, `weekly`, `baseline`, or `session` run.
 3. Repeat the machine-readable coordinator loop. Execute rollout leases only
    through `$remote-host-context session-shards`:

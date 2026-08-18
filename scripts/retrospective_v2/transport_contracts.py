@@ -92,6 +92,10 @@ class TransportValidationError(ValueError):
     """Raised when authenticated source transport evidence is not closed."""
 
 
+class RemoteTransportCapabilityError(TransportValidationError):
+    """Raised when a trusted remote helper lacks a declared capability."""
+
+
 @dataclass(frozen=True, slots=True)
 class CapturedSourceRecord:
     source_locator: str

@@ -86,7 +86,18 @@ commitment, and isolated bootstrap logic for that external helper; the worker
 manifest does not expose the parent materializer.
 The bootstrap keeps the helper descriptor open through its bounded read and
 revalidates object identity plus owner/mode/link/size policy before executing
-the retained exact bytes.
+the retained exact bytes. The same parent-only owner performs the legacy CLI
+snapshot and relay transaction; worker-reachable modules cannot materialize the
+live installed helper.
+The authenticated helper snapshot remains the semantic code authority; the
+bootstrap is not an arbitrary-Python sandbox. It binds the exact static `HOSTS`
+data again at runtime, installs immutable copies for ordinary execution, and
+rechecks the binding on every `main` return or `main` `SystemExit` path. One
+top-level immutable `SESSION_RETROSPECTIVE_COMMANDS` manifest is the helper's
+semantic capability contract and is also the canonical source used by its
+parser registration. It provides a closed preflight for `session-shards` and
+`source-transport`, so an older helper produces an explicit compatibility gap
+before transport starts.
 Both source-program bootstraps use no-follow, nonblocking descriptor opens and
 compare the opened object with the named object before and after the bounded
 read. They require a stable regular-file identity, owner/group/mode, single-link
@@ -103,8 +114,12 @@ These are point-in-time identity, content, and access-policy checks; they do not
 claim to defeat an actively malicious same-UID replacement of the canonical
 target after the final validation.
 `transport_remote.py` launches the retained snapshot, never the live installed
-path. This preserves the worker manifest's no-parent-write boundary while
-closing the commitment-to-execution replacement window. The parent derives the
+path. Parent-only `transport_remote_snapshot.py` owns the backward-compatible
+CLI relay: it first copies the live installed helper to an owner-private `0600`
+content snapshot and passes the raw snapshot digest; the distinct component
+commitment remains source provenance. This preserves the worker manifest's
+no-parent-write boundary while closing the
+commitment-to-execution replacement window. The parent derives the
 live-helper source commitment from the same descriptor-bound read used to create
 the snapshot and requires it to equal the run's frozen transport provenance, so
 one run cannot mix helper versions across source leases.
@@ -274,13 +289,16 @@ stability similarly compares only BSD immutable, append, nounlink, restricted,
 and datavault flags; `UF_HIDDEN` and other presentation flags are not access
 policy.
 
-The transport slice remains independently bounded after this hardening: 7,450
-physical lines across a 7,475-line aggregate limit. One exact 15-module
+The transport slice remains independently bounded after this hardening: 8,681
+physical lines across an 8,690-line aggregate limit. One exact 16-module
 inventory and its aggregate are enforced together, so omitting a transport
-module cannot create a false budget pass. The facade remains 241/250 lines and
-`transport_remote.py` is 374/400 lines after adding the closed
-`remote-host-context` CLI relay; Retrospective still contains no SSH host table
-or transport implementation.
+module cannot create a false budget pass. The facade remains 266 lines;
+`transport_host_inventory.py` is 551/560 lines,
+`transport_remote.py` is 493/550 lines, the parent snapshot/legacy owner is
+175/200 lines, the executable bootstrap owner is 243/250 lines, and the source
+worker owner is 1,948/1,950 lines after adding the authenticated host/command
+contract and closed failure-class relay. Retrospective still contains no SSH
+host table or transport implementation.
 
 The orchestrator foundation remains below its aggregate limit. The seven agent
 support modules remain below 1,100 lines; the complete result-schema owner is

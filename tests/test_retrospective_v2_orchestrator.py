@@ -113,6 +113,9 @@ TEST_HOST_INVENTORY = transport.parse_authenticated_helper_hosts(
     REMOTE_HOST_CONTEXT_HELPER_FIXTURE.read_bytes()
 )
 TEST_HOSTS = TEST_HOST_INVENTORY.canonical_hosts
+TEST_HELPER_COMMANDS = transport.remote_host_context_host_inventory(
+    REMOTE_HOST_CONTEXT_HELPER_FIXTURE
+).helper_commands
 
 
 def bind_remote_host_context_helper_fixture(test_case: unittest.TestCase) -> None:
@@ -171,6 +174,7 @@ def authenticated_host_inventory(
     return transport.AuthenticatedHostInventory(
         TEST_HOST_INVENTORY,
         helper_commitment,
+        TEST_HELPER_COMMANDS,
     )
 
 
@@ -1531,6 +1535,51 @@ class OrchestratorTests(unittest.TestCase):
             "5 canonical hosts",
             readiness["checks"]["canonical_host_policy"]["detail"],
         )
+        legacy_inventory = transport.AuthenticatedHostInventory(
+            TEST_HOST_INVENTORY,
+            transport.remote_host_context_helper_commitment(
+                REMOTE_HOST_CONTEXT_HELPER_FIXTURE
+            ),
+        )
+        missing_transport_capabilities = doctor(
+            identity_path=self.identity_path,
+            require_existing_identity=True,
+            provenance=execution_provenance(),
+            shadow=True,
+            history_repo=self.root / "history",
+            history_target_ref="refs/heads/main",
+            publisher_gpg_program=TEST_PUBLISHER_GPG,
+            publisher_probe=lambda: {
+                "fingerprint": PUBLISHER_FINGERPRINT,
+                "ready": True,
+            },
+            host_inventory_provider=lambda: legacy_inventory,
+        )
+        self.assertFalse(missing_transport_capabilities["ok"])
+        self.assertEqual(
+            "helper command capability mismatch",
+            missing_transport_capabilities["checks"]["remote_host_context_transport"][
+                "detail"
+            ],
+        )
+        incompatible_start = RetrospectiveOrchestrator(
+            self.root / "missing-transport-capability-start",
+            clock=self.clock,
+            identity_path=self.identity_path,
+            host_inventory_provider=lambda: legacy_inventory,
+        )
+        with self.assertRaisesRegex(
+            InvalidInputError,
+            "lacks required retrospective capabilities",
+        ):
+            incompatible_start.start(
+                mode=RunMode.DAILY,
+                start=WINDOW_START,
+                end=DAILY_END,
+                hosts=TEST_HOSTS,
+                created_at="2026-07-14T12:00:00Z",
+                **self.start_authority(),
+            )
 
         production = doctor(
             identity_path=self.identity_path,

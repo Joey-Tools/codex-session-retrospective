@@ -1,4 +1,8 @@
-"""Static host inventory derived from authenticated remote helper source bytes."""
+"""Declared data derived from authenticated, semantically trusted helper bytes.
+
+The parser rejects ordinary registry drift and binds declared command literals.
+It is not a Python sandbox; the complete helper commitment remains code authority.
+"""
 
 from __future__ import annotations
 
@@ -22,11 +26,16 @@ HOST_INVENTORY_SCHEMA = "remote_host_context_host_inventory_v1"
 HOST_INVENTORY_COMMITMENT_DOMAIN = (
     b"codex-session-retrospective/remote-host-context-host-inventory/v1\x00"
 )
+RUNTIME_HOSTS_COMMITMENT_DOMAIN = (
+    b"codex-session-retrospective/remote-host-context-runtime-hosts/v1\x00"
+)
 MAX_HOST_INVENTORY_CANONICAL_ENTRIES = MAX_RUN_HOSTS
 MAX_HOST_INVENTORY_ALIASES = 32
 MAX_HOST_INVENTORY_KEYS = (
     MAX_HOST_INVENTORY_CANONICAL_ENTRIES + MAX_HOST_INVENTORY_ALIASES
 )
+MAX_REMOTE_HELPER_COMMANDS = 32
+REMOTE_HELPER_CAPABILITY_MANIFEST = "SESSION_RETROSPECTIVE_COMMANDS"
 MAX_REMOTE_HOST_CONTEXT_HELPER_BYTES = 4 * 1024 * 1024
 MAX_REMOTE_HOST_CONTEXT_HELPER_AST_NODES = 100_000
 MAX_HOST_KEY_BYTES = 128
@@ -252,10 +261,20 @@ class HostInventory:
 class AuthenticatedHostInventory:
     inventory: HostInventory
     helper_commitment: str
+    helper_commands: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if _COMMITMENT_RE.fullmatch(self.helper_commitment) is None:
             raise HostInventoryError("helper commitment is invalid")
+        if (
+            self.helper_commands != tuple(sorted(set(self.helper_commands)))
+            or len(self.helper_commands) > MAX_REMOTE_HELPER_COMMANDS
+            or any(
+                _HOST_KEY_RE.fullmatch(command) is None
+                for command in self.helper_commands
+            )
+        ):
+            raise HostInventoryError("helper command inventory is invalid")
 
     @property
     def inventory_commitment(self) -> str:
@@ -301,9 +320,29 @@ def _host_literal(node: ast.AST) -> dict[str, dict[str, str]]:
     return value
 
 
-def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
-    """Parse one static top-level HOSTS assignment without executing helper code."""
+def _command_manifest_literal(node: ast.AST) -> tuple[str, ...]:
+    if not isinstance(node, ast.Tuple) or any(
+        not isinstance(item, ast.Constant) or not isinstance(item.value, str)
+        for item in node.elts
+    ):
+        raise HostInventoryError(
+            "remote helper capability manifest must be a literal tuple"
+        )
+    commands = tuple(
+        _bounded_token(item.value, label="helper command") for item in node.elts
+    )
+    if len(commands) > MAX_REMOTE_HELPER_COMMANDS or commands != tuple(
+        sorted(set(commands))
+    ):
+        raise HostInventoryError(
+            "remote helper capability manifest must be sorted and unique"
+        )
+    return commands
 
+
+def _parse_authenticated_helper_contract(
+    source: bytes,
+) -> tuple[HostInventory, str, tuple[str, ...]]:
     if (
         not isinstance(source, bytes)
         or not source
@@ -333,6 +372,8 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
         pending.extend(ast.iter_child_nodes(current))
     assignments: list[ast.AST] = []
     definition_target: ast.Name | None = None
+    command_assignments: list[ast.AST] = []
+    command_definition_target: ast.Name | None = None
     for statement in tree.body:
         if isinstance(statement, ast.AnnAssign) and isinstance(
             statement.target, ast.Name
@@ -340,6 +381,12 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
             if statement.target.id == "HOSTS" and statement.value is not None:
                 assignments.append(statement.value)
                 definition_target = statement.target
+            elif (
+                statement.target.id == REMOTE_HELPER_CAPABILITY_MANIFEST
+                and statement.value is not None
+            ):
+                command_assignments.append(statement.value)
+                command_definition_target = statement.target
         elif isinstance(statement, ast.Assign):
             targets = [
                 target for target in statement.targets if isinstance(target, ast.Name)
@@ -351,9 +398,22 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
                     )
                 assignments.append(statement.value)
                 definition_target = targets[0]
+            if any(
+                target.id == REMOTE_HELPER_CAPABILITY_MANIFEST for target in targets
+            ):
+                if len(statement.targets) != 1 or len(targets) != 1:
+                    raise HostInventoryError(
+                        "helper capability assignment must have one name target"
+                    )
+                command_assignments.append(statement.value)
+                command_definition_target = targets[0]
     if len(assignments) != 1:
         raise HostInventoryError(
             "remote helper must define exactly one top-level HOSTS"
+        )
+    if len(command_assignments) > 1:
+        raise HostInventoryError(
+            "remote helper must define at most one top-level capability manifest"
         )
     parents = {
         id(child): parent
@@ -368,6 +428,13 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
             and node is not definition_target
         ):
             raise HostInventoryError("remote helper HOSTS is reassigned")
+        if (
+            isinstance(node, ast.Name)
+            and node.id == REMOTE_HELPER_CAPABILITY_MANIFEST
+            and isinstance(node.ctx, (ast.Store, ast.Del))
+            and node is not command_definition_target
+        ):
+            raise HostInventoryError("remote helper capability manifest is reassigned")
         if isinstance(node, (ast.Attribute, ast.Subscript)):
             root: ast.expr = node
             while isinstance(root, (ast.Attribute, ast.Subscript)):
@@ -405,6 +472,9 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
                 raise HostInventoryError(
                     "remote helper HOSTS escapes its static inventory"
                 )
+    commands = (
+        _command_manifest_literal(command_assignments[0]) if command_assignments else ()
+    )
     raw = _host_literal(assignments[0])
     rows: dict[str, CanonicalHost] = {}
     labels: dict[str, str] = {}
@@ -452,7 +522,7 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
         ):
             raise HostInventoryError("HOSTS alias differs from its canonical entry")
         aliases.append(HostAlias(alias=key, canonical_host=label))
-    return HostInventory(
+    inventory = HostInventory(
         tuple(
             sorted(
                 canonical.values(),
@@ -461,6 +531,16 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
         ),
         tuple(sorted(aliases, key=lambda item: item.alias)),
     )
+    runtime_payload = RUNTIME_HOSTS_COMMITMENT_DOMAIN + canonical_json_bytes(raw)
+    runtime_commitment = "sha256:" + hashlib.sha256(runtime_payload).hexdigest()
+    return inventory, runtime_commitment, commands
+
+
+def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
+    inventory, _runtime_commitment, _commands = _parse_authenticated_helper_contract(
+        source
+    )
+    return inventory
 
 
 def require_inventory_commitment(inventory: HostInventory, commitment: object) -> str:

@@ -9,6 +9,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from retrospective_v2 import transport  # noqa: E402
+from retrospective_v2 import transport_host_inventory  # noqa: E402
 
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "remote_host_context_helper.py"
@@ -20,7 +21,13 @@ def helper_source(rows: str, *, declaration: str = "HOSTS") -> bytes:
 
 class HostInventoryTests(unittest.TestCase):
     def test_fixture_inventory_is_canonical_and_round_trips(self) -> None:
-        inventory = transport.parse_authenticated_helper_hosts(FIXTURE.read_bytes())
+        fixture_source = FIXTURE.read_bytes()
+        inventory = transport.parse_authenticated_helper_hosts(fixture_source)
+        bound_inventory, runtime_commitment, commands = (
+            transport_host_inventory._parse_authenticated_helper_contract(
+                fixture_source
+            )
+        )
 
         self.assertEqual(
             (
@@ -41,6 +48,9 @@ class HostInventoryTests(unittest.TestCase):
             inventory,
             transport.HostInventory.from_dict(inventory.to_dict()),
         )
+        self.assertEqual(inventory, bound_inventory)
+        self.assertRegex(runtime_commitment, r"\Asha256:[0-9a-f]{64}\Z")
+        self.assertEqual(("session-shards", "source-transport"), commands)
         self.assertRegex(inventory.commitment, r"\Asha256:[0-9a-f]{64}\Z")
         self.assertEqual(
             inventory.commitment,
@@ -107,6 +117,84 @@ class HostInventoryTests(unittest.TestCase):
         inventory = transport.parse_authenticated_helper_hosts(source)
 
         self.assertEqual(("local",), inventory.canonical_hosts)
+
+    def test_runtime_commitment_binds_literal_route_and_root_values(self) -> None:
+        source = helper_source(
+            "    'local': {'kind': 'local', 'label': 'local', "
+            "'codex_root': '~/.codex'},\n"
+            "    'remote': {'kind': 'ssh', 'label': 'remote', "
+            "'ssh_target': 'remote', 'codex_root': '/home/remote/.codex'},\n"
+        )
+        replacement = source.replace(
+            b"'ssh_target': 'remote'", b"'ssh_target': 'other'"
+        )
+
+        _inventory, commitment, _commands = (
+            transport_host_inventory._parse_authenticated_helper_contract(source)
+        )
+        _replacement_inventory, replacement_commitment, _replacement_commands = (
+            transport_host_inventory._parse_authenticated_helper_contract(replacement)
+        )
+
+        self.assertNotEqual(commitment, replacement_commitment)
+
+    def test_literal_helper_capability_manifest_is_closed_and_bounded(self) -> None:
+        source = helper_source(
+            "    'local': {'kind': 'local', 'label': 'local', "
+            "'codex_root': '~/.codex'},\n"
+        ) + (
+            b"SESSION_RETROSPECTIVE_COMMANDS = "
+            b"('session-shards', 'source-transport')\n"
+            b"def register(subparsers):\n"
+            b"    for command in SESSION_RETROSPECTIVE_COMMANDS:\n"
+            b"        subparsers.add_parser(command)\n"
+        )
+
+        _inventory, _commitment, commands = (
+            transport_host_inventory._parse_authenticated_helper_contract(source)
+        )
+
+        self.assertEqual(("session-shards", "source-transport"), commands)
+
+        invalid = {
+            "dead parser calls": (
+                helper_source(
+                    "    'local': {'kind': 'local', 'label': 'local', "
+                    "'codex_root': '~/.codex'},\n"
+                )
+                + b"def never_called(subparsers):\n"
+                + b"    subparsers.add_parser('session-shards')\n"
+                + b"    subparsers.add_parser('source-transport')\n"
+            ),
+            "unordered": source.replace(
+                b"('session-shards', 'source-transport')",
+                b"('source-transport', 'session-shards')",
+            ),
+            "duplicate": source.replace(
+                b"('session-shards', 'source-transport')",
+                b"('session-shards', 'session-shards')",
+            ),
+            "mutable list": source.replace(
+                b"('session-shards', 'source-transport')",
+                b"['session-shards', 'source-transport']",
+            ),
+            "reassigned": source
+            + b"SESSION_RETROSPECTIVE_COMMANDS = ('source-transport',)\n",
+        }
+        for label, candidate in invalid.items():
+            with self.subTest(label=label):
+                if label == "dead parser calls":
+                    parsed = (
+                        transport_host_inventory._parse_authenticated_helper_contract(
+                            candidate
+                        )
+                    )
+                    self.assertEqual((), parsed[2])
+                else:
+                    with self.assertRaises(transport.HostInventoryError):
+                        transport_host_inventory._parse_authenticated_helper_contract(
+                            candidate
+                        )
 
     def test_local_host_binding_is_exact(self) -> None:
         cases = {
