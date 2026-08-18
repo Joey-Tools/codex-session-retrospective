@@ -399,20 +399,6 @@ _LABELED_INTERNAL_HOST_RE = re.compile(
     r"(?i)\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
     r"(?!\[REDACTED)[a-z0-9][a-z0-9._-]*(?::\d{1,5})?"
 )
-_EMAIL_RE = re.compile(
-    r"(?i)(?<![a-z0-9.!#$%&'*+/=?^_`{|}~-])"
-    r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
-    r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
-    r"(?![a-z0-9-])"
-)
-_PHONE_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:\+\d{1,3}[ .-]?)?(?:\(\d{3}\)|\d{3})"
-    r"[ .-]?\d{3}[ .-]?\d{4}(?![A-Za-z0-9])"
-)
-_LABELED_PERSONAL_ID_RE = re.compile(
-    r"(?i)\b(?:account|customer|employee|person|user)[_ -]?(?:id|name)"
-    r"\s*(?:=|:)\s*(?!\[REDACTED)[\"']?[A-Za-z0-9._@+-]{3,}"
-)
 _UNIX_PATH_RE = re.compile(
     r"(?<![A-Za-z0-9_])/(?!/)"
     r"[A-Za-z0-9._~+@%=-]+(?:/[A-Za-z0-9._~+@%=-]+)*"
@@ -791,11 +777,8 @@ def scan_for_leaks(
             findings.add(LeakFinding("ip_address", path, match.start(), match.end()))
         for match in privacy_locators.ipv6_matches(text):
             findings.add(LeakFinding("ip_address", path, match.start(), match.end()))
-        for pattern in (_EMAIL_RE, _PHONE_RE, _LABELED_PERSONAL_ID_RE):
-            for match in pattern.finditer(text):
-                findings.add(
-                    LeakFinding("personal_identifier", path, match.start(), match.end())
-                )
+        for start, end in privacy_locators.personal_identifier_spans(text):
+            findings.add(LeakFinding("personal_identifier", path, start, end))
         for pattern in (
             _RELATIVE_PATH_RE,
             _UNIX_PATH_RE,
@@ -855,8 +838,7 @@ def _post_redact_text(
     ) in privacy_locators.CREDENTIAL_REDACTION_PATTERNS:
         redacted = pattern.sub(replacement, redacted)
     redacted = privacy_locators.SCP_STYLE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
-    for pattern in (_EMAIL_RE, _PHONE_RE, _LABELED_PERSONAL_ID_RE):
-        redacted = pattern.sub("[REDACTED_PERSONAL_IDENTIFIER]", redacted)
+    redacted = privacy_locators.redact_personal_identifiers(redacted)
     redacted = privacy_locators.URI_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     redacted = privacy_locators.BARE_PRIVATE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     redacted = _LABELED_INTERNAL_HOST_RE.sub("[REDACTED_INTERNAL_HOST]", redacted)

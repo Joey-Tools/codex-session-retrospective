@@ -1762,6 +1762,52 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 with self.assertRaisesRegex(RetainedPrivacyError, "forbidden locator"):
                     validate_retained_artifacts(report_tampered)
 
+    def test_retained_validation_rejects_shared_personal_identifier_families(
+        self,
+    ) -> None:
+        for personal_value in ("employee name: Alice", "+44 20 7946 0958"):
+            with self.subTest(personal_value=personal_value, phase="direct"):
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError, "personal identifier"
+                ):
+                    reporting_module.validate_retained_value({"cause": personal_value})
+
+            with self.subTest(personal_value=personal_value, phase="assembly"):
+                reviews = review_data()
+                reviews["turn_findings"][1]["cause"] = personal_value
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError, "personal identifier"
+                ):
+                    assemble_retained_artifacts(run_state(), reviews)
+
+            with self.subTest(personal_value=personal_value, phase="reread"):
+                artifacts = assemble_retained_artifacts(run_state(), review_data())
+                tampered = dict(artifacts)
+                rows = [
+                    json.loads(line)
+                    for line in tampered["turn_findings.jsonl"].splitlines()
+                ]
+                high_impact = next(
+                    row for row in rows if row["disposition"] == "high_impact"
+                )
+                high_impact["cause"] = personal_value
+                tampered["turn_findings.jsonl"] = b"".join(
+                    canonical_json_bytes(row) for row in rows
+                )
+                refresh_bundle_digest(tampered)
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError, "personal identifier"
+                ):
+                    validate_retained_artifacts(tampered)
+
+            with self.subTest(personal_value=personal_value, phase="report"):
+                artifacts = assemble_retained_artifacts(run_state(), review_data())
+                tampered = dict(artifacts)
+                tampered["report.md"] += f"\n{personal_value}\n".encode("ascii")
+                refresh_bundle_digest(tampered)
+                with self.assertRaisesRegex(RetainedPrivacyError, "forbidden locator"):
+                    validate_retained_artifacts(tampered)
+
     def test_retained_credentials_use_the_complete_shared_detector(self) -> None:
         slack_probe = "".join(("xoxb-", "A" * 16))
         jwt_segment = "".join(("eyJ", "A" * 8))

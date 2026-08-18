@@ -31,6 +31,28 @@ SCP_STYLE_LOCATOR_RE = re.compile(
     r":[^\s<>\"'`]*",
     re.ASCII | re.IGNORECASE,
 )
+EMAIL_RE = re.compile(
+    r"(?<![a-z0-9.!#$%&'*+/=?^_`{|}~-])"
+    r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+    r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
+    r"(?![a-z0-9-])",
+    re.ASCII | re.IGNORECASE,
+)
+PHONE_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:"
+    r"\+(?:(?:\(\d{1,4}\)|\d{1,4})[ .-]){2,5}"
+    r"(?:\(\d{2,4}\)|\d{2,4})|"
+    r"\+\d{7,15}|"
+    r"(?:\+\d{1,3}[ .-]?)?(?:\(\d{3}\)|\d{3})"
+    r"[ .-]?\d{3}[ .-]?\d{4}"
+    r")(?![A-Za-z0-9])",
+    re.ASCII,
+)
+LABELED_PERSONAL_ID_RE = re.compile(
+    r"\b(?:account|customer|employee|person|user)[_ -]?(?:id|name)"
+    r"\s*(?:=|:)\s*(?!\[REDACTED)[\"']?[A-Za-z0-9._@+-]{3,}",
+    re.ASCII | re.IGNORECASE,
+)
 IPV4_CANDIDATE_RE = re.compile(
     r"(?<![0-9A-Za-z.])"
     r"(?P<address>(?:[0-9]{1,3}\.){3}[0-9]{1,3})"
@@ -438,6 +460,41 @@ def contains_credential_material(value: str) -> bool:
         pattern.search(value) is not None
         for _category, pattern, _replacement in CREDENTIAL_REDACTION_PATTERNS
     )
+
+
+def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
+    """Yield deterministic merged spans for supported personal identifiers."""
+
+    candidates: list[tuple[int, int]] = []
+    for pattern in (EMAIL_RE, PHONE_RE, LABELED_PERSONAL_ID_RE):
+        for match in pattern.finditer(value):
+            if pattern is PHONE_RE:
+                digit_count = sum(character.isdigit() for character in match.group())
+                if not 7 <= digit_count <= 15:
+                    continue
+            candidates.append((match.start(), match.end()))
+    candidates.sort(key=lambda span: (span[0], span[1]))
+    if not candidates:
+        return
+    start, end = candidates[0]
+    for candidate_start, candidate_end in candidates[1:]:
+        if candidate_start < end:
+            end = max(end, candidate_end)
+            continue
+        yield start, end
+        start, end = candidate_start, candidate_end
+    yield start, end
+
+
+def contains_personal_identifier(value: str) -> bool:
+    return next(personal_identifier_spans(value), None) is not None
+
+
+def redact_personal_identifiers(value: str) -> str:
+    spans = tuple(personal_identifier_spans(value))
+    for start, end in reversed(spans):
+        value = value[:start] + "[REDACTED_PERSONAL_IDENTIFIER]" + value[end:]
+    return value
 
 
 def redact_ip_addresses(value: str) -> str:

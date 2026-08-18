@@ -275,7 +275,6 @@ _OPAQUE_REF_RE = re.compile(
     r"(?:[a-z][a-z0-9_]*_ref_v2|source_snapshot_v2):[0-9a-f]{64}\Z"
 )
 _HEX_64_RE = re.compile(r"[0-9a-f]{64}\Z")
-_EMAIL_RE = re.compile(r"(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b")
 _LOCAL_PATH_RE = re.compile(
     r"(?:(?<![A-Za-z0-9_])/(?!/)"
     r"[A-Za-z0-9._~+@%=-]+(?:/[A-Za-z0-9._~+@%=-]+)*|"
@@ -743,12 +742,12 @@ def _validate_safe_string(value: str, *, path: str) -> None:
             privacy_locators.BARE_PRIVATE_LOCATOR_RE.search(value),
             bare_fqdn,
             privacy_locators.contains_ip_address(value),
-            _EMAIL_RE.search(value),
+            privacy_locators.contains_personal_identifier(value),
             _LOCAL_PATH_RE.search(value),
         )
     ):
         raise RetainedPrivacyError(
-            f"{path} contains a URL, email address, IP address, or local path"
+            f"{path} contains a URL, personal identifier, IP address, or local path"
         )
     if not _SAFE_TOKEN_RE.fullmatch(value):
         raise RetainedPrivacyError(
@@ -774,12 +773,12 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
             privacy_locators.BARE_PRIVATE_LOCATOR_RE.search(value),
             privacy_locators.BARE_FQDN_RE.search(value),
             privacy_locators.contains_ip_address(value),
-            _EMAIL_RE.search(value),
+            privacy_locators.contains_personal_identifier(value),
             _LOCAL_PATH_RE.search(value),
         )
     ):
         raise RetainedPrivacyError(
-            f"{path} contains a URL, email address, IP address, or local path"
+            f"{path} contains a URL, personal identifier, IP address, or local path"
         )
     if (
         _SOURCE_TEXT_MARKER_RE.search(value)
@@ -3863,7 +3862,7 @@ def _validate_report_bytes(
             privacy_locators.BARE_PRIVATE_LOCATOR_RE.search(locator_scan_text),
             privacy_locators.BARE_FQDN_RE.search(locator_scan_text),
             privacy_locators.contains_ip_address(locator_scan_text),
-            _EMAIL_RE.search(text),
+            privacy_locators.contains_personal_identifier(text),
             _LOCAL_PATH_RE.search(text),
             privacy_locators.contains_credential_material(text),
         )

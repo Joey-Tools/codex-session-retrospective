@@ -803,6 +803,35 @@ class AuditedResultContractTests(unittest.TestCase):
         self.assertIn("[REDACTED_INTERNAL_HOST]", text)
         self.assertEqual(scan_for_leaks(validated), ())
 
+    def test_audit_redacts_grouped_and_compact_international_phone_numbers(
+        self,
+    ) -> None:
+        for phone in ("+44 20 7946 0958", "+442079460958"):
+            with self.subTest(phone=phone):
+                source = f"Call {phone} before continuing."
+                findings = scan_for_leaks({"summary": source})
+                self.assertEqual(
+                    {finding.category for finding in findings},
+                    {"personal_identifier"},
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    "Call [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
+
+        for safe in (
+            "Release 2026-08-18 uses Python 3.13.12 and build 123456.",
+            "Bounds +12 34 56 and +1234-5678-9012-3456-7890 stay numeric labels.",
+        ):
+            with self.subTest(safe=safe):
+                self.assertEqual(scan_for_leaks({"summary": safe}), ())
+
     def test_audit_ipv4_redaction_covers_public_ports_without_matching_versions(
         self,
     ) -> None:

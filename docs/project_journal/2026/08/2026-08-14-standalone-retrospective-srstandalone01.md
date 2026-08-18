@@ -1168,7 +1168,7 @@ superseded_by:
   project-journal validation, generated bootstrap manifest check, and
   `git diff --check` are clean.
   The exact 16-module transport inventory is 8,681/8,690 lines and the branch
-  proxy is 9,465/9,475.
+  proxy is 9,472/9,475.
 - A final closure audit then found that the real relay discarded bootstrap
   failure classes and treated a missing `main` as HOSTS authentication failure.
   The four active 1,732-test supervisors were interrupted once; the bounded
@@ -1204,6 +1204,30 @@ superseded_by:
   1,572.511 seconds, and shard 3 passes 399/399 in 1,466.617 seconds. Signing,
   exact-secret admission, fresh local Codex processing, hosted CI, and
   current-head GitHub Codex remain.
+- Signed head `b64a9e88` passed exact-secret admission, the fresh local Codex
+  processor with `No findings.`, and complete hosted CI. The first GitHub Codex
+  requests failed before review because the JoeyTeng GitHub identity was not
+  connected to Codex. After that connection and an explicitly authorized
+  same-head request, current-head GitHub Codex returned two actionable privacy
+  findings and one branch-name finding. All clean evidence for that head is
+  stale.
+- Personal-identifier policy is now shared by the agent-output redactor and the
+  independent retained validator. The retained scalar, reviewed prose, and
+  rendered-report reread paths reject labeled names and IDs; grouped and
+  compact `+` international phone numbers are detected only when they contain
+  7 through 15 digits. Dates, Python versions, short numeric labels, and
+  overlong grouped labels remain negative cases. The default-branch finding is
+  not actionable: GitHub repository metadata, `origin/HEAD`, and PR base all
+  identify `master`; `refs/heads/main` appears only as the separately owned
+  retained-history target example.
+- The focused privacy and retained suites pass 164/164. The complete stable
+  four-way partition executed all 1,739 test IDs: shard 0 passed 417/417 in
+  2,063.272 seconds, shard 1 passed 467/467 in 1,617.616 seconds, shard 3 passed
+  399/399 in 1,678.082 seconds, and shard 2 passed 455 tests before the exact
+  branch-inventory assertion reported the intentional 9,465 to 9,472 policy
+  increase. No production code changed after that run; the exact inventory was
+  updated without relaxing its 9,475 ceiling, and the complete module-boundary
+  suite then passed 19/19 in 2.125 seconds, closing the sole failed test ID.
 
 ## Follow-up Work
 
