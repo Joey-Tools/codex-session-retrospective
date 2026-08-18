@@ -3689,6 +3689,7 @@ def validate_synthesis_result(
     independent_review_results: Sequence[Mapping[str, Any]] = (),
     require_global_review_union: bool = True,
     source_allowed_refs: Collection[str] | None = None,
+    source_allowed_turn_refs: Collection[str] | None = None,
     source_prompt_rewrites: Sequence[Mapping[str, Any]] = (),
     topic_results: Sequence[Mapping[str, Any]] = (),
     original_prompts: Sequence[str] = (),
@@ -3700,13 +3701,18 @@ def validate_synthesis_result(
     source_refs = (
         refs if source_allowed_refs is None else frozenset(source_allowed_refs)
     )
+    source_turn_refs = (
+        allowed_turn_refs
+        if source_allowed_turn_refs is None
+        else frozenset(source_allowed_turn_refs)
+    )
     independent_reviews_by_hash: dict[str, Mapping[str, Any]] = {}
     for index, review in enumerate(independent_review_results):
         try:
             validated_review = validate_episode_review_result(
                 review,
                 source_refs,
-                allowed_turn_refs=allowed_turn_refs,
+                allowed_turn_refs=source_turn_refs,
                 expected_reviewer_slot="secondary",
                 original_prompts=original_prompts,
                 tool_outputs=tool_outputs,

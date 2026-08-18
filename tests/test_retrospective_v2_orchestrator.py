@@ -35,6 +35,7 @@ from retrospective_v2 import (  # noqa: E402
     executable_authority,
     implementation_authority,
     reporting,
+    reduction_lineage,
     retained_export_coordination,
     retained_inputs,
     result_validation,
@@ -5513,7 +5514,34 @@ class OrchestratorTests(unittest.TestCase):
             )
         )
 
-    def test_review_reduction_splits_when_only_nonfinal_shape_fits(self) -> None:
+    def test_lineage_commitment_is_exact_order_independent_and_constant_size(
+        self,
+    ) -> None:
+        refs = [
+            typed_ref(RefType.TURN, f"lineage-commitment-{index}")
+            for index in range(3_000)
+        ]
+        commitment = reduction_lineage.ref_set_commitment([*reversed(refs), refs[0]])
+
+        self.assertEqual(3_000, commitment["canonical_count"])
+        self.assertEqual(
+            commitment,
+            reduction_lineage.ref_set_commitment(refs),
+        )
+        self.assertLess(len(canonical_json_bytes(commitment)), 256)
+        self.assertNotIn(refs[0], canonical_json_bytes(commitment).decode("utf-8"))
+        self.assertNotEqual(
+            commitment["canonical_sha256"],
+            reduction_lineage.ref_set_commitment([*refs[:-1], refs[0]])[
+                "canonical_sha256"
+            ],
+        )
+        with self.assertRaisesRegex(ValueError, "lineage refs must be strings"):
+            reduction_lineage.ref_set_commitment([refs[0], 1])
+
+    def test_review_reduction_compacts_once_when_final_shape_does_not_fit(
+        self,
+    ) -> None:
         coordinator = self.coordinator("review-final-shape-capacity")
         reduction = coordinator._components.reduction
         jobs = coordinator._components.jobs
@@ -5526,25 +5554,29 @@ class OrchestratorTests(unittest.TestCase):
             "session_ref": typed_ref(RefType.SESSION, "review-final-shape"),
             "turn_refs": [
                 typed_ref(RefType.TURN, f"review-final-shape-{index}")
-                for index in range(2)
+                for index in range(3_000)
             ],
         }
         kind = JobKind.EPISODE_REVIEWER.value
+        turn_ref_commitment = reduction_lineage.ref_set_commitment(
+            revision["turn_refs"]
+        )
         tasks = [
             {
+                "allowed_turn_refs": [turn_ref],
                 "category": "agent",
                 "job_kind": kind,
                 "metadata": {
                     "hierarchy_final": False,
                     "hierarchy_level": 0,
                     "hierarchy_root_ref": revision_ref,
-                    "underlying_turn_refs": [turn_ref],
+                    "turn_ref_commitment": turn_ref_commitment,
                 },
                 "stage": RunStage.EPISODE_REVIEW.value,
                 "status": "accepted",
                 "task_ref": typed_ref(RefType.RUN_INPUT, f"review-final-child-{index}"),
             }
-            for index, turn_ref in enumerate(revision["turn_refs"])
+            for index, turn_ref in enumerate(revision["turn_refs"][:2])
         ]
         state = {"jobs": {task["task_ref"]: task for task in tasks}}
 
@@ -5552,6 +5584,15 @@ class OrchestratorTests(unittest.TestCase):
             return {
                 "child_result_hashes": [
                     hashlib.sha256(child["task_ref"].encode()).hexdigest()
+                    for child in children
+                ],
+                "child_results": [
+                    {
+                        "high_impact_turns": [
+                            {"turn_ref": child["allowed_turn_refs"][0]}
+                        ],
+                        "prompt_rewrites": [],
+                    }
                     for child in children
                 ],
                 "schema": "episode_review_hierarchical_input_v2",
@@ -5585,14 +5626,153 @@ class OrchestratorTests(unittest.TestCase):
                 full_input={"schema": "episode_review_input_v2"},
             )
 
-        self.assertEqual(2, create_task.call_count)
-        for call in create_task.call_args_list:
-            self.assertFalse(call.kwargs["metadata"]["hierarchy_final"])
-            self.assertTrue(
-                call.kwargs["partition_ref"].startswith(f"{RefType.RUN_INPUT.value}:")
-            )
+        create_task.assert_called_once()
+        call = create_task.call_args
+        self.assertFalse(call.kwargs["metadata"]["hierarchy_final"])
+        self.assertEqual(
+            turn_ref_commitment,
+            call.kwargs["metadata"]["turn_ref_commitment"],
+        )
+        self.assertEqual(3_000, turn_ref_commitment["canonical_count"])
+        self.assertEqual(
+            sorted(revision["turn_refs"][:2]),
+            call.kwargs["allowed_turn_refs"],
+        )
+        self.assertTrue(
+            call.kwargs["partition_ref"].startswith(f"{RefType.RUN_INPUT.value}:")
+        )
 
-    def test_topic_reduction_splits_when_only_nonfinal_shape_fits(self) -> None:
+    def test_adjudicator_probes_the_exact_task_before_creation(self) -> None:
+        coordinator = self.coordinator("adjudicator-exact-capacity")
+        reduction = coordinator._components.reduction
+        jobs = coordinator._components.jobs
+        projection = coordinator._components.projection
+        revision_ref = typed_ref(RefType.EPISODE_REVISION, "adjudicator-exact-capacity")
+        revision = {
+            "episode_ref": typed_ref(RefType.EPISODE, "adjudicator-exact-capacity"),
+            "episode_revision_ref": revision_ref,
+            "session_ref": typed_ref(RefType.SESSION, "adjudicator-exact-capacity"),
+            "turn_refs": [
+                typed_ref(RefType.TURN, f"adjudicator-lineage-{index}")
+                for index in range(3_000)
+            ],
+        }
+        candidate_results = [
+            {
+                "episode_ref": revision["episode_ref"],
+                "episode_revision_ref": revision_ref,
+                "high_impact_turns": [{"turn_ref": revision["turn_refs"][index]}],
+                "prompt_rewrites": [],
+                "schema": result_validation.EPISODE_REVIEW_RESULT_SCHEMA,
+            }
+            for index in range(2)
+        ]
+        primary_task = {
+            "result": candidate_results[0],
+            "task_ref": typed_ref(RefType.RUN_INPUT, "adjudicator-primary"),
+        }
+        secondary_task = {
+            "result": candidate_results[1],
+            "task_ref": typed_ref(RefType.RUN_INPUT, "adjudicator-secondary"),
+        }
+        plan = {
+            "adjudication_required": True,
+            "blocked_reason": None,
+            "jobs": [
+                {
+                    "kind": JobKind.ADJUDICATOR.value,
+                    "reason_codes": ["candidate_conflict"],
+                }
+            ],
+            "primary_review_completed": True,
+            "review_gaps": [],
+            "review_required": True,
+            "second_review_required": True,
+            "secondary_review_completed": True,
+        }
+
+        def review_task(_state, _revision_ref, kind):
+            if kind == JobKind.EPISODE_REVIEWER.value:
+                return primary_task
+            if kind == JobKind.INDEPENDENT_RISK_REVIEWER.value:
+                return secondary_task
+            return None
+
+        for exact_fits in (False, True):
+            with self.subTest(exact_fits=exact_fits):
+                state = {
+                    "episodes": [revision],
+                    "extracted_turns": {},
+                    "jobs": {},
+                }
+                with (
+                    mock.patch.object(
+                        jobs,
+                        "_load_extracted_turns",
+                        return_value={},
+                    ),
+                    mock.patch.object(
+                        projection,
+                        "_review_task",
+                        side_effect=review_task,
+                    ),
+                    mock.patch.object(
+                        projection,
+                        "_review_plan_result",
+                        side_effect=lambda task: None
+                        if task is None
+                        else task["result"],
+                    ),
+                    mock.patch.object(
+                        projection,
+                        "_is_completed_episode_review",
+                        return_value=True,
+                    ),
+                    mock.patch.object(
+                        episode_review,
+                        "plan_episode_review_jobs",
+                        return_value=plan,
+                    ),
+                    mock.patch.object(
+                        jobs,
+                        "_agent_input_fits",
+                        return_value=exact_fits,
+                    ) as fits,
+                    mock.patch.object(jobs, "_create_agent_task") as create_task,
+                ):
+                    if exact_fits:
+                        self.assertTrue(reduction._refresh_review_plan(state))
+                    else:
+                        with self.assertRaisesRegex(
+                            InvalidTransitionError,
+                            "adjudication task exceeds its exact input bound",
+                        ):
+                            reduction._refresh_review_plan(state)
+
+                fits.assert_called_once()
+                probe = fits.call_args.kwargs
+                self.assertEqual(
+                    sorted(revision["turn_refs"][:2]),
+                    probe["allowed_turn_refs"],
+                )
+                self.assertEqual(
+                    3_000,
+                    probe["metadata"]["turn_ref_commitment"]["canonical_count"],
+                )
+                if exact_fits:
+                    create_task.assert_called_once()
+                    created = dict(create_task.call_args.kwargs)
+                    self.assertEqual(
+                        RunStage.EPISODE_REVIEW.value,
+                        created.pop("stage"),
+                    )
+                    self.assertEqual(probe, created)
+                else:
+                    create_task.assert_not_called()
+
+    def test_topic_reduction_compacts_once_when_final_shape_does_not_fit(
+        self,
+    ) -> None:
         coordinator = self.coordinator("topic-final-shape-capacity")
         reduction = coordinator._components.reduction
         jobs = coordinator._components.jobs
@@ -5601,8 +5781,9 @@ class OrchestratorTests(unittest.TestCase):
         workstream_ref = typed_ref(RefType.WORKSTREAM, "topic-final-shape-workstream")
         episode_refs = [
             typed_ref(RefType.EPISODE_REVISION, f"topic-final-child-{index}")
-            for index in range(2)
+            for index in range(3_000)
         ]
+        episode_revision_commitment = reduction_lineage.ref_set_commitment(episode_refs)
         tasks = [
             {
                 "allowed_turn_refs": [
@@ -5611,22 +5792,24 @@ class OrchestratorTests(unittest.TestCase):
                 "category": "agent",
                 "job_kind": JobKind.TOPIC_REDUCER.value,
                 "metadata": {
+                    "episode_revision_ref": episode_ref,
                     "hierarchy_final": False,
                     "hierarchy_level": 0,
                     "hierarchy_root_ref": root_ref,
-                    "underlying_episode_refs": [episode_ref],
+                    "episode_revision_commitment": episode_revision_commitment,
                 },
                 "stage": RunStage.TOPIC_REDUCTION.value,
                 "status": "accepted",
                 "task_ref": typed_ref(RefType.RUN_INPUT, f"topic-final-task-{index}"),
             }
-            for index, episode_ref in enumerate(episode_refs)
+            for index, episode_ref in enumerate(episode_refs[:2])
         ]
         state = {
             "jobs": {task["task_ref"]: task for task in tasks},
             "topic_inputs": {
                 root_ref: {
                     "schema": "topic_partition_index_v2",
+                    "episode_revision_commitment": episode_revision_commitment,
                     "topic_ref": topic_ref,
                     "workstream_ref": workstream_ref,
                 }
@@ -5638,6 +5821,16 @@ class OrchestratorTests(unittest.TestCase):
                 "child_result_hashes": [
                     hashlib.sha256(child["task_ref"].encode()).hexdigest()
                     for child in children
+                ],
+                "child_topic_results": [
+                    {
+                        "episode_revision_refs": [episode_ref],
+                        "high_impact_turns": [],
+                        "prompt_rewrites": [],
+                    }
+                    for episode_ref in (
+                        child["metadata"]["episode_revision_ref"] for child in children
+                    )
                 ],
                 "schema": "topic_hierarchical_input_v2",
                 "topic_candidate_ref": root_ref,
@@ -5671,12 +5864,200 @@ class OrchestratorTests(unittest.TestCase):
         ):
             reduction._refresh_topic_hierarchies(state)
 
-        self.assertEqual(2, create_task.call_count)
-        for call in create_task.call_args_list:
-            self.assertFalse(call.kwargs["metadata"]["hierarchy_final"])
-            self.assertTrue(
-                call.kwargs["partition_ref"].startswith(f"{RefType.RUN_INPUT.value}:")
+        create_task.assert_called_once()
+        call = create_task.call_args
+        self.assertFalse(call.kwargs["metadata"]["hierarchy_final"])
+        self.assertEqual(
+            episode_revision_commitment,
+            call.kwargs["metadata"]["episode_revision_commitment"],
+        )
+        self.assertEqual(3_000, episode_revision_commitment["canonical_count"])
+        self.assertEqual(sorted(episode_refs[:2]), call.kwargs["input_refs"][1:])
+        self.assertTrue(
+            call.kwargs["partition_ref"].startswith(f"{RefType.RUN_INPUT.value}:")
+        )
+
+    def test_topic_leaf_probes_the_exact_selected_task_before_creation(self) -> None:
+        coordinator = self.coordinator("topic-leaf-exact-capacity")
+        reduction = coordinator._components.reduction
+        jobs = coordinator._components.jobs
+        root_ref = typed_ref(RefType.TOPIC_CANDIDATE, "topic-leaf-exact-capacity")
+        topic_ref = typed_ref(RefType.TOPIC, "topic-leaf-exact-capacity")
+        workstream_ref = typed_ref(RefType.WORKSTREAM, "topic-leaf-exact-capacity")
+        episode_refs = [
+            typed_ref(RefType.EPISODE_REVISION, f"topic-leaf-lineage-{index}")
+            for index in range(3_000)
+        ]
+        visible_episode_ref = episode_refs[0]
+        visible_turn_ref = typed_ref(RefType.TURN, "topic-leaf-visible")
+        topic_input = {
+            "adjudication_candidate_results": {},
+            "adjudication_required_episode_revision_refs": [],
+            "episode_contexts": [],
+            "episode_reviews": [
+                {
+                    "high_impact_turns": [{"turn_ref": visible_turn_ref}],
+                    "prompt_rewrites": [],
+                }
+            ],
+            "expected_episode_revision_refs": [visible_episode_ref],
+            "schema": result_validation.TOPIC_INPUT_SCHEMA,
+            "topic_candidate_ref": root_ref,
+            "workstream_ref": workstream_ref,
+        }
+        commitment = reduction_lineage.ref_set_commitment(episode_refs)
+
+        for exact_fits in (False, True):
+            with self.subTest(exact_fits=exact_fits):
+                state = {
+                    "jobs": {},
+                    "topic_inputs": {
+                        root_ref: {
+                            "episode_revision_commitment": commitment,
+                        }
+                    },
+                }
+                partition = {
+                    "allowed_refs": [root_ref, topic_ref, visible_episode_ref],
+                    "allowed_turn_refs": [visible_turn_ref],
+                    "episode_revision_commitment": commitment,
+                    "topic_input": topic_input,
+                }
+                with (
+                    mock.patch.object(
+                        jobs,
+                        "_agent_input_fits",
+                        return_value=exact_fits,
+                    ) as fits,
+                    mock.patch.object(jobs, "_create_agent_task") as create_task,
+                ):
+                    if exact_fits:
+                        reduction._seed_topic_hierarchy(
+                            state,
+                            partitions=[partition],
+                            topic_ref=topic_ref,
+                            root_ref=root_ref,
+                        )
+                    else:
+                        with self.assertRaisesRegex(
+                            InvalidTransitionError,
+                            "topic leaf exceeds its exact task input bound",
+                        ):
+                            reduction._seed_topic_hierarchy(
+                                state,
+                                partitions=[partition],
+                                topic_ref=topic_ref,
+                                root_ref=root_ref,
+                            )
+
+                if exact_fits:
+                    fits.assert_called_once()
+                    create_task.assert_called_once()
+                    created = dict(create_task.call_args.kwargs)
+                    self.assertEqual(
+                        RunStage.TOPIC_REDUCTION.value,
+                        created.pop("stage"),
+                    )
+                    self.assertEqual(fits.call_args.kwargs, created)
+                else:
+                    self.assertEqual(2, fits.call_count)
+                    create_task.assert_not_called()
+                for call in fits.call_args_list:
+                    self.assertEqual(
+                        commitment,
+                        call.kwargs["metadata"]["episode_revision_commitment"],
+                    )
+                    self.assertEqual(
+                        [visible_turn_ref],
+                        call.kwargs["allowed_turn_refs"],
+                    )
+
+    def test_review_hierarchy_fails_after_one_nonreducing_compaction_level(
+        self,
+    ) -> None:
+        coordinator = self.coordinator("review-no-progress")
+        reduction = coordinator._components.reduction
+        jobs = coordinator._components.jobs
+        revision_ref = typed_ref(RefType.EPISODE_REVISION, "review-no-progress")
+        turn_refs = [
+            typed_ref(RefType.TURN, f"review-no-progress-{index}") for index in range(2)
+        ]
+        commitment = reduction_lineage.ref_set_commitment(turn_refs)
+        revision = {
+            "episode_ref": typed_ref(RefType.EPISODE, "review-no-progress"),
+            "episode_revision_ref": revision_ref,
+            "session_ref": typed_ref(RefType.SESSION, "review-no-progress"),
+            "turn_refs": turn_refs,
+        }
+        tasks = [
+            {
+                "allowed_turn_refs": [turn_ref],
+                "category": "agent",
+                "job_kind": JobKind.EPISODE_REVIEWER.value,
+                "metadata": {
+                    "hierarchy_final": False,
+                    "hierarchy_level": 1,
+                    "hierarchy_root_ref": revision_ref,
+                    "turn_ref_commitment": commitment,
+                },
+                "stage": RunStage.EPISODE_REVIEW.value,
+                "status": "accepted",
+                "task_ref": typed_ref(
+                    RefType.RUN_INPUT, f"review-no-progress-task-{index}"
+                ),
+            }
+            for index, turn_ref in enumerate(turn_refs)
+        ]
+        state = {"jobs": {task["task_ref"]: task for task in tasks}}
+
+        def reduce_payload(_revision, children):
+            return {
+                "child_result_hashes": [child["task_ref"] for child in children],
+                "child_results": [
+                    {
+                        "high_impact_turns": [
+                            {"turn_ref": child["allowed_turn_refs"][0]}
+                        ],
+                        "prompt_rewrites": [],
+                    }
+                    for child in children
+                ],
+            }
+
+        with (
+            mock.patch.object(
+                reduction,
+                "_review_reduce_payload",
+                side_effect=reduce_payload,
+            ),
+            mock.patch.object(
+                reduction,
+                "_task_metadata",
+                side_effect=lambda task: task["metadata"],
+            ),
+            mock.patch.object(
+                jobs,
+                "_agent_input_fits",
+                side_effect=lambda _state, **task_input: len(
+                    task_input["input_payload"]["child_results"]
+                )
+                == 1,
+            ),
+            mock.patch.object(jobs, "_create_agent_task") as create_task,
+            self.assertRaisesRegex(
+                InvalidTransitionError,
+                "cannot reduce its task count within the exact bound",
+            ),
+        ):
+            reduction._ensure_review_hierarchy(
+                state,
+                revision=revision,
+                kind=JobKind.EPISODE_REVIEWER.value,
+                metadata={"episode_revision_ref": revision_ref},
+                full_input={"schema": "episode_review_input_v2"},
             )
+
+        create_task.assert_not_called()
 
     def test_shard_stage_rolls_back_files_when_checkpoint_commit_fails(self) -> None:
         coordinator = self.start_daily("shard-stage-checkpoint-rollback")
@@ -6209,6 +6590,9 @@ class OrchestratorTests(unittest.TestCase):
                 ),
             }
             state["topic_inputs"][root_ref] = {
+                "episode_revision_commitment": reduction_lineage.ref_set_commitment(
+                    topic_input["expected_episode_revision_refs"]
+                ),
                 "expected_episode_revision_refs": topic_input[
                     "expected_episode_revision_refs"
                 ],
@@ -6240,6 +6624,11 @@ class OrchestratorTests(unittest.TestCase):
                             item[0]["turn_refs"][0]
                             for item in episode_rows[start : start + 3]
                         ],
+                        "episode_revision_commitment": (
+                            reduction_lineage.ref_set_commitment(
+                                topic_input["expected_episode_revision_refs"]
+                            )
+                        ),
                         "topic_input": sliced,
                     }
                 )
@@ -6278,9 +6667,12 @@ class OrchestratorTests(unittest.TestCase):
                 final_topic_input["input_payload"],
             )
             self.assertEqual(
-                set(topic_input["expected_episode_revision_refs"]),
-                set(final_topic_input["metadata"]["underlying_episode_refs"]),
+                reduction_lineage.ref_set_commitment(
+                    topic_input["expected_episode_revision_refs"]
+                ),
+                final_topic_input["metadata"]["episode_revision_commitment"],
             )
+            self.assertNotIn("underlying_episode_refs", final_topic_input["metadata"])
             state["jobs"] = {
                 task_ref: task
                 for task_ref, task in state["jobs"].items()
@@ -6332,6 +6724,13 @@ class OrchestratorTests(unittest.TestCase):
                     "episode_revision_ref": typed_ref(
                         RefType.EPISODE_REVISION, f"synthesis-revision-{index}"
                     ),
+                    "high_impact_turns": [
+                        {
+                            "turn_ref": typed_ref(
+                                RefType.TURN, f"synthesis-visible-{index}"
+                            )
+                        }
+                    ],
                     "payload": "v" * 18_000,
                     "schema": result_validation.EPISODE_REVIEW_RESULT_SCHEMA,
                 }
@@ -6342,7 +6741,10 @@ class OrchestratorTests(unittest.TestCase):
                     "episode_revision_ref": typed_ref(
                         RefType.EPISODE_REVISION, f"synthesis-revision-{index}"
                     ),
-                    "turn_refs": [typed_ref(RefType.TURN, f"synthesis-{index}")],
+                    "turn_refs": [
+                        typed_ref(RefType.TURN, f"synthesis-bulk-{index}-{turn_index}")
+                        for turn_index in range(300)
+                    ],
                 }
                 for index in range(12)
             ]
@@ -6364,21 +6766,23 @@ class OrchestratorTests(unittest.TestCase):
                     topic_results=topic_results,
                     independent_reviews=independent_reviews,
                 )
-            turns_by_revision = {
-                revision["episode_revision_ref"]: revision["turn_refs"][0]
-                for revision in state["episodes"]
-            }
             for task in coordinator._tasks_for_stage(
                 state, RunStage.GLOBAL_SYNTHESIS.value
             ):
                 immutable = agent_task_inputs.for_task(coordinator.run_dir, task)
                 expected_turn_refs = sorted(
-                    turns_by_revision[review["episode_revision_ref"]]
+                    review["high_impact_turns"][0]["turn_ref"]
                     for review in immutable["input_payload"]["independent_reviews"]
                 )
                 self.assertEqual(
                     expected_turn_refs,
                     immutable["allowed_turn_refs"],
+                )
+                self.assertFalse(
+                    any(
+                        "synthesis-bulk" in turn_ref
+                        for turn_ref in immutable["allowed_turn_refs"]
+                    )
                 )
             for _ in range(12):
                 synthesis_tasks = coordinator._tasks_for_stage(
@@ -6575,7 +6979,14 @@ class OrchestratorTests(unittest.TestCase):
 
         def force_synthesis_leaf(state, **kwargs):
             if kwargs["kind"] == JobKind.GLOBAL_SYNTHESIS.value:
-                return False
+                if kwargs["metadata"]["hierarchy_final"] is True:
+                    return False
+                payload = kwargs["input_payload"]
+                return (
+                    len(payload.get("topic_results", []))
+                    + len(payload.get("independent_reviews", []))
+                    <= 1
+                )
             return original_fits(state, **kwargs)
 
         with mock.patch.object(
@@ -6704,6 +7115,11 @@ class OrchestratorTests(unittest.TestCase):
                 coordinator,
                 "_seed_topic_hierarchy",
                 side_effect=capture_seed,
+            ),
+            mock.patch.object(
+                coordinator._components.jobs,
+                "_agent_input_fits",
+                return_value=True,
             ),
         ):
             coordinator._build_topic_inputs(state)

@@ -2410,6 +2410,35 @@ class ResultValidationTests(unittest.TestCase):
 
         self.assertEqual(value, validated)
 
+    def test_synthesis_separates_authenticated_source_turn_refs_from_output_refs(
+        self,
+    ) -> None:
+        secondary = episode_review(
+            reviewer_slot="secondary",
+            high_impact_turns=[high_impact(TURN_A)],
+        )
+        value = synthesis_result()
+
+        with self.assertRaisesRegex(
+            ResultValidationError,
+            "reference is not in the job allow-list",
+        ):
+            validate_synthesis_result(
+                value,
+                ALL_REFS,
+                allowed_turn_refs={TURN_B},
+                independent_review_results=[secondary],
+            )
+        validated = validate_synthesis_result(
+            value,
+            ALL_REFS,
+            allowed_turn_refs=set(),
+            independent_review_results=[secondary],
+            source_allowed_turn_refs={TURN_A},
+        )
+
+        self.assertEqual(value, validated)
+
     def test_synthesis_commits_129_distinct_topic_roots_and_signals(self) -> None:
         topic_results = []
         allowed_refs = set(ALL_REFS)

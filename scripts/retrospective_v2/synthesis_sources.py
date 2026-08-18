@@ -20,22 +20,6 @@ _REWRITE_FIELDS = (
 )
 
 
-def _revision_index(state: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
-    revisions = state.get("episodes")
-    if not isinstance(revisions, list) or any(
-        not isinstance(revision, Mapping) for revision in revisions
-    ):
-        raise result_validation.ResultValidationError(
-            "synthesis episode revision index is invalid"
-        )
-    index = {revision.get("episode_revision_ref"): revision for revision in revisions}
-    if None in index or len(index) != len(revisions):
-        raise result_validation.ResultValidationError(
-            "synthesis episode revision index is ambiguous"
-        )
-    return index
-
-
 def _topic_revision_episodes(
     topic_results: Sequence[Mapping[str, Any]],
 ) -> dict[str, str]:
@@ -108,32 +92,3 @@ def prompt_rewrites(
                     "synthesis source prompt rewrites conflict"
                 )
     return [rewrites[turn_ref] for turn_ref in sorted(rewrites)]
-
-
-def turn_refs(
-    state: Mapping[str, Any],
-    topic_results: Sequence[Mapping[str, Any]],
-    independent_reviews: Sequence[Mapping[str, Any]],
-) -> list[str]:
-    """Return only turn refs reachable from one synthesis subtree."""
-
-    revision_refs = set(_topic_revision_episodes(topic_results))
-    for review in independent_reviews:
-        revision_ref = review.get("episode_revision_ref")
-        if not isinstance(revision_ref, str):
-            raise result_validation.ResultValidationError(
-                "synthesis independent review lineage is invalid"
-            )
-        revision_refs.add(revision_ref)
-    revisions = _revision_index(state)
-    if not revision_refs <= set(revisions):
-        raise result_validation.ResultValidationError(
-            "synthesis subtree references an unknown episode revision"
-        )
-    return sorted(
-        {
-            turn_ref
-            for revision_ref in revision_refs
-            for turn_ref in revisions[revision_ref]["turn_refs"]
-        }
-    )

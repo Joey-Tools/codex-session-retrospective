@@ -984,6 +984,36 @@ superseded_by:
   1,420.932 seconds. Every log contains exact `Selected`, `Ran`, and `OK`
   terminal lines, and the combined traceback/failure scan is empty. Signing,
   admission, fresh review, hosted CI, and GitHub Codex evidence remain.
+- Signed and pushed head `59e05774` closed the final-vs-intermediate reduction
+  sizing gap and passed exact-secret admission. Its fresh-context Codex
+  processor found two remaining P1 representability defects: complete turn and
+  episode-revision arrays were copied through every reduction level, so a legal
+  large run could never converge to a bounded final sidecar; and adjudication
+  plus initial topic leaves did not probe the exact sidecar later supplied to
+  task creation. That head's review and CI evidence is stale.
+- Complete reduction lineage is now represented by type-preserving canonical
+  count-and-SHA-256 commitments, while task-visible turn and episode references
+  are bounded projections of already accepted child results. Review, topic,
+  adjudication, and synthesis task construction use shared exact input builders
+  for both capacity probing and creation. A hierarchy may perform one bounded
+  compaction when only the non-final shape fits, but an unchanged task count or
+  a still-oversized final shape fails explicitly instead of looping.
+- Current-tree regressions cover 3,000-member turn and episode lineages,
+  near-boundary adjudication and topic-leaf sidecars, exact probe/create
+  identity, bounded synthesis turn authorization, and hierarchy no-progress.
+  Result and episode validation passes 76/76 in 1.427 seconds, module boundaries
+  pass 19/19 in 1.979 seconds, and the complete orchestrator module passes
+  129/129 in 490.965 seconds. Ruff lint and changed-file formatting plus
+  `git diff --check` are clean.
+- The final Python 3.13 tree contains 1,695 unique test identifiers partitioned
+  exactly once as 405, 455, 449, and 386 tests. One durable four-process run
+  completed every partition with supervisor exit zero: shard 0 passed 405/405
+  in 1,639.689 seconds, shard 1 passed 455/455 in 1,274.751 seconds, shard 2
+  passed 449/449 in 1,413.625 seconds, and shard 3 passed 386/386 in 1,340.130
+  seconds. Every retained log contains exact `Selected`, `Ran`, and `OK`
+  terminal lines, and the combined traceback/failure scan is empty. Signing,
+  admission, fresh review, hosted CI, and GitHub Codex evidence remain delivery
+  gates.
 
 ## Follow-up Work
 

@@ -367,11 +367,12 @@ BOUNDED_MODULE_LINES = {
     "orchestrator.py": 750,
     "orchestrator_components.py": 250,
     "orchestrator_context.py": 180,
-    "orchestrator_history.py": 1_000,
+    "orchestrator_history.py": 1_025,
     "orchestrator_jobs.py": 530,
     "orchestrator_lifecycle.py": 3_325,
     "orchestrator_projection.py": 1_000,
     "orchestrator_reduction.py": 2_500,
+    "orchestrator_synthesis.py": 400,
     "orchestrator_scheduler.py": 1_100,
     "orchestrator_source.py": 2_150,
     "orchestrator_source_segments.py": 150,
@@ -384,7 +385,8 @@ BOUNDED_MODULE_LINES = {
     "agent_task_inputs.py": 375,
     "extracted_turns.py": 200,
     "raw_shard_staging.py": 100,
-    "reduction_task_inputs.py": 110,
+    "reduction_lineage.py": 110,
+    "reduction_task_inputs.py": 160,
     "source_acceptance.py": 275,
     "source_inputs.py": 400,
     "source_payloads.py": 100,
@@ -392,7 +394,7 @@ BOUNDED_MODULE_LINES = {
     "synthesis_lineage.py": 250,
     "synthesis_evidence.py": 200,
     "synthesis_sources.py": 175,
-    "synthesis_tasks.py": 100,
+    "synthesis_tasks.py": 110,
     "source_spool.py": 350,
     "source_staging.py": 350,
     "source_capacity.py": 150,
@@ -1222,8 +1224,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_146, branch_total)
-        self.assertLessEqual(branch_total, 9_150)
+        self.assertEqual(9_177, branch_total)
+        self.assertLessEqual(branch_total, 9_200)
         self.assertLessEqual(functions_over_200, 20)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

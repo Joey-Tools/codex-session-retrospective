@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Mapping, Sequence
 
-from . import result_validation
+from . import reduction_lineage, result_validation
 
 
 def input_payload(
@@ -70,4 +70,36 @@ def metadata(
         "validation_child_task_refs": sorted(set(validation_child_task_refs)),
         "validation_independent_review_hashes": review_hashes,
         "validation_topic_result_commitment": topic_commitment,
+    }
+
+
+def task_input(
+    *,
+    kind: str,
+    root_ref: str,
+    partition_ref: str,
+    payload: Mapping[str, Any],
+    allowed_refs: Sequence[str],
+    topic_results: Sequence[Mapping[str, Any]],
+    independent_reviews: Sequence[Mapping[str, Any]],
+    level: int,
+    final: bool,
+    validation_child_task_refs: Sequence[str] = (),
+) -> dict[str, Any]:
+    return {
+        "kind": kind,
+        "partition_ref": partition_ref,
+        "input_refs": list(allowed_refs),
+        "input_payload": dict(payload),
+        "allowed_refs": list(allowed_refs),
+        "allowed_turn_refs": reduction_lineage.synthesis_visible_turn_refs(payload),
+        "metadata": metadata(
+            root_ref=root_ref,
+            payload=payload,
+            topic_results=topic_results,
+            independent_reviews=independent_reviews,
+            level=level,
+            final=final,
+            validation_child_task_refs=validation_child_task_refs,
+        ),
     }

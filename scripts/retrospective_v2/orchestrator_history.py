@@ -13,6 +13,7 @@ from . import (
     agent_task_inputs,
     authority,
     catalog,
+    reduction_lineage,
     result_validation,
     retained_inputs,
     safe_io,
@@ -223,12 +224,14 @@ class ResultHistoryOperations(OrchestratorComponent):
                 )
             return result_validation.validate_topic_result(
                 result,
-                metadata["validation_topic_input"],
+                input_payload,
                 allowed_refs,
                 expected_topic_ref=metadata["topic_ref"],
                 allowed_turn_refs=allowed_turn_refs,
-                adjudication_candidate_results=metadata.get(
-                    "adjudication_candidate_results", {}
+                adjudication_candidate_results=(
+                    input_payload.get("adjudication_candidate_results", {})
+                    if isinstance(input_payload, Mapping)
+                    else {}
                 ),
             )
         if kind == JobKind.GLOBAL_SYNTHESIS.value:
@@ -246,6 +249,9 @@ class ResultHistoryOperations(OrchestratorComponent):
                         "independent_review_results": independent_review_results,
                         "topic_results": topic_results,
                     }
+                ),
+                source_allowed_turn_refs=reduction_lineage.result_turn_refs(
+                    independent_review_results
                 ),
                 source_prompt_rewrites=synthesis_sources.prompt_rewrites(
                     self.run_dir, state, topic_results
