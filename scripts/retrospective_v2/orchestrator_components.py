@@ -28,6 +28,9 @@ class CoordinatorStateComponent(OrchestratorComponent):
     load_state = CoordinatorStateOperations.load_state
     _append_gap = CoordinatorStateOperations._append_gap
     _assert_state_identity = CoordinatorStateOperations._assert_state_identity
+    _assert_current_host_inventory = (
+        CoordinatorStateOperations._assert_current_host_inventory
+    )
     _block = CoordinatorStateOperations._block
     _now = CoordinatorStateOperations._now
     _require_stage = staticmethod(CoordinatorStateOperations._require_stage)

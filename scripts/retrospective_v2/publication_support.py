@@ -11,7 +11,7 @@ import stat
 import subprocess
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import ExitStack, contextmanager
 from copy import deepcopy
 from pathlib import Path
@@ -19,10 +19,14 @@ from typing import Any
 
 from . import authority, executable_authority, reporting, safe_io
 from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
-from .contracts import CANONICAL_HOSTS
 from .identity import IdentityKey
 from .run_state_authority import validate_run_source_authority
-from .run_state_contracts import RunStateAuthorityError
+from .run_state_contracts import (
+    RunStateAuthorityError,
+    frozen_authenticated_host_inventory,
+)
+from .transport_host_inventory import AuthenticatedHostInventory
+from .transport_remote import remote_host_context_host_inventory
 from .publication_contracts import (  # noqa: F401
     _ATTEMPT_REF_RE,
     _CREDENTIAL_KEYS,
@@ -695,6 +699,7 @@ def _load_run_publication_authority(
     identity_path: Path,
     bundle_dir: Path,
     inventory: ArtifactInventory,
+    host_inventory_provider: Callable[[], AuthenticatedHostInventory] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     identity = IdentityKey.load(identity_path)
     snapshot = AtomicCheckpointStore(run_dir, identity=identity).read()
@@ -705,10 +710,28 @@ def _load_run_publication_authority(
         validate_run_source_authority(
             identity,
             run_state,
-            canonical_hosts=CANONICAL_HOSTS,
         )
     except RunStateAuthorityError as exc:
         raise PublicationRejected(str(exc)) from exc
+    provider = (
+        remote_host_context_host_inventory
+        if host_inventory_provider is None
+        else host_inventory_provider
+    )
+    try:
+        current_inventory = provider()
+        frozen_inventory = frozen_authenticated_host_inventory(run_state)
+    except (OSError, ValueError, RunStateAuthorityError) as exc:
+        raise PublicationRejected(
+            "current authenticated host inventory is unavailable"
+        ) from exc
+    if not (
+        current_inventory.inventory_commitment == frozen_inventory.inventory_commitment
+        and current_inventory.helper_commitment == frozen_inventory.helper_commitment
+    ):
+        raise PublicationRejected(
+            "authenticated host inventory drifted from the frozen run inventory"
+        )
     if run_state.get("shadow") is not False:
         raise PublicationRejected("shadow runs cannot create formal publication")
     if run_state.get("stage") not in {"export", "finalize", "complete"}:
@@ -770,6 +793,7 @@ def _load_run_publication_authority(
         marker = authority.load_production_marker(
             run_authority["production_marker"],
             identity=identity,
+            canonical_hosts=frozen_inventory.inventory.canonical_hosts,
             history_repo=run_authority["history_repo"],
             target_ref=run_authority["history_target_ref"],
             configuration_root=run_authority["configuration_root"],

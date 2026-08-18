@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import datetime as dt
+import hmac
 from typing import Any, Iterable, Mapping
 from .checkpoints import CheckpointNotFoundError
 from .contracts import (
@@ -11,7 +12,10 @@ from .contracts import (
 )
 from .identity import IdentityKeyMismatchError
 from .run_state_authority import validate_run_source_authority
-from .run_state_contracts import RunStateAuthorityError
+from .run_state_contracts import (
+    RunStateAuthorityError,
+    frozen_authenticated_host_inventory,
+)
 
 from .orchestrator_core import (
     InvalidInputError,
@@ -99,11 +103,33 @@ class CoordinatorStateOperations:
             validate_run_source_authority(
                 self.identity,
                 state,
-                canonical_hosts=self._canonical_hosts(),
             )
         except RunStateAuthorityError as error:
             raise InvalidTransitionError(str(error)) from error
         self._context.validate_execution_contract(state.get("provenance", {}))
+
+    def _assert_current_host_inventory(self, state: Mapping[str, Any]) -> None:
+        self._assert_state_identity(state)
+        frozen = frozen_authenticated_host_inventory(state)
+        try:
+            current = self._context.current_host_inventory()
+        except (OSError, ValueError) as error:
+            raise InvalidTransitionError(
+                "current authenticated host inventory is unavailable"
+            ) from error
+        if not (
+            hmac.compare_digest(
+                current.inventory_commitment,
+                frozen.inventory_commitment,
+            )
+            and hmac.compare_digest(
+                current.helper_commitment,
+                frozen.helper_commitment,
+            )
+        ):
+            raise InvalidTransitionError(
+                "authenticated host inventory drifted from the frozen run inventory"
+            )
 
     def _block(self, state: dict[str, Any], reason: str) -> None:
         state["blocked_reason"] = reason

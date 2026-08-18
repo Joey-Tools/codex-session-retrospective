@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import copy
 import datetime as dt
+import io
 import json
 import os
 from pathlib import Path, PurePosixPath
-import subprocess
 import sys
 import tempfile
 import tracemalloc
@@ -15,7 +15,6 @@ from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
-CLI = SCRIPTS / "session_retrospective_v2.py"
 sys.path.insert(0, str(SCRIPTS))
 
 import session_retrospective_v2 as cli  # noqa: E402
@@ -35,6 +34,7 @@ from retrospective_v2.orchestrator import (  # noqa: E402
     RetrospectiveOrchestrator,
 )
 from tests.test_retrospective_v2_orchestrator import (  # noqa: E402
+    TEST_HOSTS,
     bind_remote_host_context_helper_fixture,
     execution_provenance,
     TEST_PUBLISHER_GPG,
@@ -55,6 +55,12 @@ class SessionShardsAdapterCliTests(unittest.TestCase):
         self.home.mkdir(mode=0o700)
         self.codex_root = self.home / ".codex"
         self.codex_root.mkdir(mode=0o700)
+        self.scheduler_local_root_patch = mock.patch.object(
+            transport,
+            "_local_codex_root",
+            return_value=self.codex_root,
+        )
+        self.scheduler_local_root_patch.start()
         self.codex_root.joinpath("session_index.jsonl").write_bytes(b"")
         self.codex_root.joinpath("history.jsonl").write_bytes(b"")
         self.rollout = (
@@ -140,7 +146,7 @@ class SessionShardsAdapterCliTests(unittest.TestCase):
             mode="daily",
             start=WINDOW_START,
             end=WINDOW_END,
-            hosts=orchestrator_module.DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             created_at=self.created_at,
             history_repo=self.root / "history",
             history_target_ref="refs/heads/main",
@@ -149,28 +155,43 @@ class SessionShardsAdapterCliTests(unittest.TestCase):
             allow_partial=True,
             shadow=True,
         )
-        for host in orchestrator_module.DEFAULT_HOSTS:
+        for host in TEST_HOSTS:
             if host != "local":
                 self.coordinator.holdout_host(
                     host,
                     reason="shadow_missing_host_holdout",
                 )
-        self.environment = dict(os.environ)
-        self.environment["HOME"] = str(self.home)
 
     def tearDown(self) -> None:
         self.history_patch.stop()
+        self.scheduler_local_root_patch.stop()
         self.temporary.cleanup()
 
     def capture(self, lease_view: dict[str, object]) -> bytes:
         lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
-        completed = subprocess.run(
-            list(lease.command_argv),
-            check=True,
-            capture_output=True,
-            env=self.environment,
+        marker_index = lease.command_argv.index("source-transport")
+        worker_arguments = lease.command_argv[marker_index:-4]
+        scan_context = transport._source_transport_scan_context(
+            self.codex_root,
+            route="local",
+            host="local",
         )
-        return completed.stdout
+        output_path = self.root / (
+            f"{lease.lease_ref.removeprefix('lease_ref_v2:')}.jsonl"
+        )
+        with (
+            output_path.open("w", encoding="ascii") as output,
+            mock.patch.object(sys, "stdout", output),
+        ):
+            self.assertEqual(
+                0,
+                transport._run_private_source_transport_scan(
+                    worker_arguments,
+                    scan_context=scan_context,
+                    execution_commitment=lease.execution_argv_commitment,
+                ),
+            )
+        return output_path.read_bytes()
 
     def advance_to_active_rollout(self) -> dict[str, object]:
         for _ in range(20):
@@ -260,19 +281,18 @@ class SessionShardsAdapterCliTests(unittest.TestCase):
         return path
 
     def invoke(self, *arguments: str) -> tuple[dict[str, object], str]:
-        completed = subprocess.run(
-            [sys.executable, "-I", "-B", "-S", str(CLI), *arguments],
-            cwd=self.root,
-            env=self.environment,
-            text=True,
-            capture_output=True,
-            timeout=30,
-            check=False,
-        )
-        self.assertEqual(1, completed.stdout.count("\n"), completed.stdout)
-        result = json.loads(completed.stdout)
-        self.assertEqual(completed.returncode, result["exit_code"])
-        return result, completed.stdout + completed.stderr
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with (
+            mock.patch.object(sys, "stdout", stdout),
+            mock.patch.object(sys, "stderr", stderr),
+        ):
+            exit_code = cli.main(list(arguments))
+        output = stdout.getvalue()
+        self.assertEqual(1, output.count("\n"), output)
+        result = json.loads(output)
+        self.assertEqual(exit_code, result["exit_code"])
+        return result, output + stderr.getvalue()
 
     def test_descriptor_record_frames_close_prepare_to_accept_loop(self) -> None:
         lease = self.advance_to_active_rollout()

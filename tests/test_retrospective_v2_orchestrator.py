@@ -74,7 +74,6 @@ from retrospective_v2.export import export_retained_bundle  # noqa: E402
 import retrospective_v2.orchestrator as orchestrator_module  # noqa: E402
 import retrospective_v2.orchestrator_execution_contract as execution_contract_module  # noqa: E402
 from retrospective_v2.orchestrator import (  # noqa: E402
-    DEFAULT_HOSTS,
     MAX_SESSION_SHARDS_RECORD_DATA_FRAMES,
     PUBLISHER_FINGERPRINT,
     PUBLISHER_UID,
@@ -110,6 +109,10 @@ REMOTE_HOST = "miku-bot-dev"
 REMOTE_HOST_CONTEXT_HELPER_FIXTURE = (
     Path(__file__).resolve().parent / "fixtures" / "remote_host_context_helper.py"
 )
+TEST_HOST_INVENTORY = transport.parse_authenticated_helper_hosts(
+    REMOTE_HOST_CONTEXT_HELPER_FIXTURE.read_bytes()
+)
+TEST_HOSTS = TEST_HOST_INVENTORY.canonical_hosts
 
 
 def bind_remote_host_context_helper_fixture(test_case: unittest.TestCase) -> None:
@@ -155,6 +158,20 @@ def execution_provenance(
         },
         "versions": dict(orchestrator_module.EXECUTION_VERSION_CONTRACT),
     }
+
+
+def authenticated_host_inventory(
+    provenance: dict[str, object] | None = None,
+) -> transport.AuthenticatedHostInventory:
+    selected = provenance or execution_provenance()
+    transport_contract = selected["transport"]
+    assert isinstance(transport_contract, dict)
+    helper_commitment = transport_contract["remote_host_context_helper_commitment"]
+    assert isinstance(helper_commitment, str)
+    return transport.AuthenticatedHostInventory(
+        TEST_HOST_INVENTORY,
+        helper_commitment,
+    )
 
 
 def typed_ref(kind: RefType, seed: str) -> str:
@@ -1084,7 +1101,7 @@ class OrchestratorTests(unittest.TestCase):
         self,
         name: str,
         *,
-        hosts: tuple[str, ...] = DEFAULT_HOSTS,
+        hosts: tuple[str, ...] = TEST_HOSTS,
         allow_partial: bool = False,
         backfill_of: str | None = None,
         prior_episode_heads: list[dict[str, object]] | None = None,
@@ -1463,31 +1480,25 @@ class OrchestratorTests(unittest.TestCase):
         }
 
     def test_doctor_identity_publisher_and_all_host_policy(self) -> None:
-        expected_hosts = (
-            "local",
-            "BL-mac-mini-m4-hoteng",
-            "miku-bot-dev",
-            "hoteng-srv-01",
-            "codex-hoteng-srv-01",
-        )
-        self.assertEqual(expected_hosts, contracts.CANONICAL_HOSTS)
-        self.assertEqual(expected_hosts, DEFAULT_HOSTS)
+        expected_hosts = TEST_HOSTS
+        self.assertEqual(expected_hosts, TEST_HOSTS)
         self.assertEqual(
-            expected_hosts[1:],
-            contracts.CANONICAL_REMOTE_HOSTS,
+            TEST_HOST_INVENTORY.remote_hosts,
+            tuple(host for host in expected_hosts if host != "local"),
         )
         self.assertEqual(
-            len(expected_hosts)
+            contracts.MAX_RUN_HOSTS
             * len(REQUIRED_SOURCE_KINDS)
             * contracts.MAX_SOURCE_ACCEPTANCE_SEGMENTS_PER_CELL,
             contracts.MAX_RUN_SOURCE_SEGMENTS,
         )
+        self.assertGreater(contracts.MAX_RUN_HOSTS, len(expected_hosts))
         self.assertEqual(
             sorted(
                 str(self.identity.derive_ref(RefType.HOST, {"parts": [host]}))
                 for host in expected_hosts
             ),
-            authority._production_host_refs(self.identity),
+            authority._production_host_refs(self.identity, expected_hosts),
         )
         readiness = doctor(
             identity_path=self.identity_path,
@@ -1615,7 +1626,7 @@ class OrchestratorTests(unittest.TestCase):
             ("session-subset", ("local",), "every canonical host"),
             (
                 "session-unknown",
-                (*DEFAULT_HOSTS, "unknown-host"),
+                (*TEST_HOSTS, "unknown-host"),
                 "only canonical hosts",
             ),
         ):
@@ -1635,7 +1646,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.SESSION,
             start=WINDOW_START,
             end=WINDOW_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             session_target=session_target,
             session_target_selector=session_selector,
             **self.start_authority(),
@@ -1648,7 +1659,7 @@ class OrchestratorTests(unittest.TestCase):
         )
 
         def swap_host_bindings(current):
-            left, right = DEFAULT_HOSTS[:2]
+            left, right = TEST_HOSTS[:2]
             left_ref, right_ref = (
                 current["host_refs"][left],
                 current["host_refs"][right],
@@ -1665,11 +1676,11 @@ class OrchestratorTests(unittest.TestCase):
         for label, mutate in (
             (
                 "host",
-                lambda current: current["host_refs"].pop(DEFAULT_HOSTS[-1]),
+                lambda current: current["host_refs"].pop(TEST_HOSTS[-1]),
             ),
             (
                 "source-kind",
-                lambda current: current["source"]["cells"][DEFAULT_HOSTS[0]].pop(
+                lambda current: current["source"]["cells"][TEST_HOSTS[0]].pop(
                     REQUIRED_SOURCE_KINDS[-1]
                 ),
             ),
@@ -1681,7 +1692,7 @@ class OrchestratorTests(unittest.TestCase):
                     mode=RunMode.SESSION,
                     start=WINDOW_START,
                     end=WINDOW_END,
-                    hosts=DEFAULT_HOSTS,
+                    hosts=TEST_HOSTS,
                     session_target=session_target,
                     session_target_selector=session_selector,
                     **self.start_authority(),
@@ -1715,7 +1726,7 @@ class OrchestratorTests(unittest.TestCase):
                     mode=mode,
                     start=start,
                     end=end,
-                    hosts=DEFAULT_HOSTS,
+                    hosts=TEST_HOSTS,
                     **self.start_authority(),
                 )
 
@@ -2001,7 +2012,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.DAILY,
             start=WINDOW_START,
             end=DAILY_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             created_at="2026-07-14T12:00:00Z",
             **first_authority,
         )
@@ -2021,7 +2032,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.DAILY,
             start=WINDOW_START,
             end=DAILY_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             run_ref=run_ref,
             created_at="2026-07-14T12:00:00Z",
             **first_authority,
@@ -2040,7 +2051,7 @@ class OrchestratorTests(unittest.TestCase):
                 mode=RunMode.DAILY,
                 start=WINDOW_START,
                 end=DAILY_END,
-                hosts=DEFAULT_HOSTS,
+                hosts=TEST_HOSTS,
                 run_ref=run_ref,
                 created_at="2026-07-14T12:00:00Z",
                 **second_authority,
@@ -2052,7 +2063,7 @@ class OrchestratorTests(unittest.TestCase):
                 mode=RunMode.DAILY,
                 start=WINDOW_START,
                 end=DAILY_END,
-                hosts=DEFAULT_HOSTS,
+                hosts=TEST_HOSTS,
                 created_at="2099-01-01T00:00:00Z",
                 **self.start_authority(),
             )
@@ -2241,7 +2252,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.BASELINE,
             start="2026-04-08T00:00:00Z",
             end=DAILY_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             **self.start_authority(),
         )
         self.drain_sources(baseline)
@@ -2259,7 +2270,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.SESSION,
             start=WINDOW_START,
             end=DAILY_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             session_target=str(
                 self.identity.derive_session_ref(
                     transport.session_selector_commitment(selector)
@@ -2289,7 +2300,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.WEEKLY,
             start=WINDOW_START,
             end=WINDOW_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             created_at="2026-07-14T12:00:00Z",
             **self.start_authority(),
         )
@@ -3019,7 +3030,7 @@ class OrchestratorTests(unittest.TestCase):
     def test_unauthenticated_partial_gap_blocks_before_materialization(self) -> None:
         coordinator = self.start_daily(
             "mixed",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
         )
         good = b'{"timestamp":"2026-07-06T01:00:00Z","ok":true}\n'
@@ -3070,7 +3081,7 @@ class OrchestratorTests(unittest.TestCase):
             with self.subTest(shadow=shadow):
                 coordinator = self.start_daily(
                     f"authorized-partial-{shadow}",
-                    hosts=DEFAULT_HOSTS,
+                    hosts=TEST_HOSTS,
                     allow_partial=True,
                     shadow=shadow,
                 )
@@ -3090,7 +3101,7 @@ class OrchestratorTests(unittest.TestCase):
     def test_backlog_clears_only_through_matching_backfill_lineage(self) -> None:
         partial = self.start_daily(
             "production-partial-backlog",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
         )
         held = partial.holdout_host(REMOTE_HOST, reason="missing_host_holdout")
@@ -3116,7 +3127,7 @@ class OrchestratorTests(unittest.TestCase):
         ):
             self.start_daily(
                 "ordinary-full-cannot-clear",
-                hosts=DEFAULT_HOSTS,
+                hosts=TEST_HOSTS,
                 durable_history=published_partial,
             )
 
@@ -3200,7 +3211,7 @@ class OrchestratorTests(unittest.TestCase):
     ) -> None:
         partial = self.start_daily(
             "shadow-partial-successor",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
             shadow=True,
         )
@@ -3299,7 +3310,7 @@ class OrchestratorTests(unittest.TestCase):
     def test_controlled_source_gap_cannot_authorize_agent_gap(self) -> None:
         coordinator = self.start_daily(
             "partial-agent-gap",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
         )
         coordinator.holdout_host(REMOTE_HOST, reason="missing_host_holdout")
@@ -3375,7 +3386,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.WEEKLY,
             start=WINDOW_START,
             end=WINDOW_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             created_at="2026-07-14T12:00:00Z",
             **self.start_authority(),
         )
@@ -3618,7 +3629,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.DAILY,
             start=WINDOW_START,
             end=DAILY_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             created_at="2026-07-14T12:00:00Z",
             **self.start_authority(),
         )
@@ -3787,7 +3798,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.DAILY,
             start=WINDOW_START,
             end=DAILY_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             created_at="2026-07-14T12:00:00Z",
             **self.start_authority(),
         )
@@ -3856,7 +3867,7 @@ class OrchestratorTests(unittest.TestCase):
             mode=RunMode.DAILY,
             start=WINDOW_START,
             end=DAILY_END,
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             created_at="2026-07-14T12:00:00Z",
             **self.start_authority(),
         )
@@ -3917,7 +3928,7 @@ class OrchestratorTests(unittest.TestCase):
                 mode=RunMode.DAILY,
                 start=WINDOW_START,
                 end=DAILY_END,
-                hosts=DEFAULT_HOSTS,
+                hosts=TEST_HOSTS,
                 created_at="2026-07-14T12:00:00Z",
                 **self.start_authority(),
             )
@@ -4003,7 +4014,7 @@ class OrchestratorTests(unittest.TestCase):
                 mode=RunMode.DAILY,
                 start=WINDOW_START,
                 end=DAILY_END,
-                hosts=DEFAULT_HOSTS,
+                hosts=TEST_HOSTS,
                 created_at="2026-07-14T12:00:00Z",
                 **self.start_authority(),
             )
@@ -4913,6 +4924,7 @@ class OrchestratorTests(unittest.TestCase):
                 policy=None,
                 model=None,
                 versions=None,
+                authenticated_host_inventory=authenticated_host_inventory(),
             ),
             "run_ref": typed_ref(RefType.RUN, "exact-envelope-limit"),
         }
@@ -5088,6 +5100,7 @@ class OrchestratorTests(unittest.TestCase):
                 policy=None,
                 model=None,
                 versions=None,
+                authenticated_host_inventory=authenticated_host_inventory(),
             ),
             "run_ref": typed_ref(RefType.RUN, "agent-task-cache-metrics"),
         }
@@ -6325,6 +6338,7 @@ class OrchestratorTests(unittest.TestCase):
                 policy=None,
                 model=None,
                 versions=None,
+                authenticated_host_inventory=authenticated_host_inventory(),
             ),
             "run_ref": typed_ref(RefType.RUN, "bounded-agent-hierarchies"),
             "topic_inputs": {},
@@ -7178,7 +7192,7 @@ class OrchestratorTests(unittest.TestCase):
             coordinator._build_topic_inputs(state)
 
     def test_backfill_requires_head_set_cas_and_emits_successor_revision(self) -> None:
-        seed = self.start_daily("backfill-seed", hosts=DEFAULT_HOSTS)
+        seed = self.start_daily("backfill-seed", hosts=TEST_HOSTS)
         seed_payload = b'{"timestamp":"2026-07-06T01:00:00Z","text":"work"}\n'
 
         def seed_handler(lease):
@@ -7207,7 +7221,7 @@ class OrchestratorTests(unittest.TestCase):
 
         partial = self.start_daily(
             "backfill-partial",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
             shadow=True,
         )
@@ -7406,7 +7420,7 @@ class OrchestratorTests(unittest.TestCase):
     def test_backfill_allows_initial_episode_from_exact_controlled_host(self) -> None:
         partial = self.start_daily(
             "backfill-new-partial",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
             shadow=True,
         )
@@ -7473,7 +7487,7 @@ class OrchestratorTests(unittest.TestCase):
     ) -> None:
         partial = self.start_daily(
             "backfill-reset-partial",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
             shadow=True,
         )
@@ -8083,7 +8097,7 @@ class OrchestratorTests(unittest.TestCase):
 
         partial = self.start_daily(
             "partial",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
             shadow=True,
         )
@@ -8506,7 +8520,7 @@ class OrchestratorTests(unittest.TestCase):
     ) -> None:
         coordinator = self.start_daily(
             "legacy-shadow-cleanup-replay",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
             shadow=True,
         )
@@ -8621,7 +8635,7 @@ class OrchestratorTests(unittest.TestCase):
 
         shadow = self.start_daily(
             "legacy-v4-shadow-wire",
-            hosts=DEFAULT_HOSTS,
+            hosts=TEST_HOSTS,
             allow_partial=True,
             shadow=True,
         )

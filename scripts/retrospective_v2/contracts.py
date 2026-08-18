@@ -16,19 +16,6 @@ from typing import Mapping, Sequence, TypeAlias
 JsonScalar: TypeAlias = None | bool | int | float | str
 JsonValue: TypeAlias = JsonScalar | list["JsonValue"] | dict[str, "JsonValue"]
 
-CANONICAL_HOST_ROLE_INVENTORY = (
-    ("local", "local"),
-    ("BL-mac-mini-m4-hoteng", "remote"),
-    ("miku-bot-dev", "remote"),
-    ("hoteng-srv-01", "remote"),
-    ("codex-hoteng-srv-01", "remote"),
-)
-CANONICAL_HOSTS = tuple(host for host, _role in CANONICAL_HOST_ROLE_INVENTORY)
-CANONICAL_REMOTE_HOSTS = tuple(
-    host for host, role in CANONICAL_HOST_ROLE_INVENTORY if role == "remote"
-)
-CANONICAL_HOST_COUNT = len(CANONICAL_HOSTS)
-
 SHA256_HEX_LENGTH = 64
 CHECKPOINT_FORMAT_VERSION = 2
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
@@ -57,12 +44,11 @@ MAX_SESSION_SHARD_BYTES = 512 * 1024
 MAX_SESSION_SHARDS_PER_PAGE = 1024
 
 # One run must stay strictly within the capacity of its authenticated cleanup
-# inventory. These limits cover every canonical host and four source kinds.
+# inventory. MAX_RUN_HOSTS is a resource ceiling, not a host registry.
+MAX_RUN_HOSTS = 16
 MAX_SOURCE_ACCEPTANCE_BYTES = 64 * 1024 * 1024
 MAX_SOURCE_ACCEPTANCE_SEGMENTS_PER_CELL = 64
-MAX_RUN_SOURCE_SEGMENTS = (
-    CANONICAL_HOST_COUNT * 4 * MAX_SOURCE_ACCEPTANCE_SEGMENTS_PER_CELL
-)
+MAX_RUN_SOURCE_SEGMENTS = MAX_RUN_HOSTS * 4 * MAX_SOURCE_ACCEPTANCE_SEGMENTS_PER_CELL
 MAX_RUN_SOURCE_SPOOL_LOCKS = MAX_RUN_SOURCE_SEGMENTS
 MAX_RUN_SOURCE_RECORDS = 100_000
 MAX_RUN_SOURCE_BYTES = 4 * 1024 * 1024 * 1024

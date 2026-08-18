@@ -995,6 +995,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
         ttl_seconds: int = DEFAULT_AGENT_CLAIM_TTL_SECONDS,
     ) -> dict[str, Any]:
         self._state.ensure_retention_active()
+        self._state._assert_current_host_inventory(self.store.read().state)
         normalized_job_ref = self._state._validate_ref(
             job_ref, RefType.JOB, label="job_ref"
         )

@@ -49,6 +49,7 @@ from .orchestrator_support import (
     _TASK_TERMINAL,
     _parse_timestamp,
 )
+from .run_state_contracts import frozen_host_inventory
 
 
 class StageSchedulingOperations(OrchestratorComponent):
@@ -74,6 +75,11 @@ class StageSchedulingOperations(OrchestratorComponent):
         self._lifecycle = lifecycle
 
     def advance(self) -> dict[str, Any]:
+        try:
+            preflight = self.store.read().state
+        except CheckpointNotFoundError as error:
+            raise RunNotStartedError("run has not been started") from error
+        self._state._assert_current_host_inventory(preflight)
         self._lifecycle.gc_expired_raw()
         raw_stages: list[tuple[Any, Any]] = []
         task_input_staging = agent_task_inputs.Staging()
@@ -438,7 +444,9 @@ class StageSchedulingOperations(OrchestratorComponent):
         prepared_files: dict[Path, bytes],
     ) -> list[str]:
         scheduled: list[str] = []
+        host_inventory = frozen_host_inventory(state)
         for host in state["source"]["cells"]:
+            host_entry = host_inventory.resolve(host)
             active = any(
                 job.get("category") == "source"
                 and job.get("host") == host
@@ -477,7 +485,7 @@ class StageSchedulingOperations(OrchestratorComponent):
                 source_cursor, _backlog, cursor_time = self._projection._cursor_before(
                     state["cursors"][host]["before"]
                 )
-                command_argv = self._source_transport_command(
+                command_argv, source_root_binding = self._source_transport_command(
                     host=host,
                     source_kind=source_kind,
                     window=state["window"],
@@ -488,6 +496,8 @@ class StageSchedulingOperations(OrchestratorComponent):
                     resume_position=cell.get("continuation_position"),
                     session_target=state["session_target"],
                     session_selector_commitment=state["session_selector_commitment"],
+                    host_role=host_entry.role,
+                    host_codex_root=host_entry.codex_root,
                     remote_helper_source_commitment=state["provenance"]["transport"][
                         "remote_host_context_helper_commitment"
                     ],
@@ -505,6 +515,8 @@ class StageSchedulingOperations(OrchestratorComponent):
                     window_end=state["window"]["end"],
                     process_nonce=process_nonce,
                     command_argv=command_argv,
+                    execution_argv_commitment=command_argv[-1],
+                    source_root_commitment=source_root_binding,
                     transport_program_commitment=(
                         source_transport.transport_program_commitment(
                             command_argv,
@@ -571,9 +583,11 @@ class StageSchedulingOperations(OrchestratorComponent):
         resume_position: Mapping[str, object] | None,
         session_target: str | None,
         session_selector_commitment: str | None,
+        host_role: str,
+        host_codex_root: str,
         remote_helper_source_commitment: str,
         prepared_files: dict[Path, bytes],
-    ) -> tuple[str, ...]:
+    ) -> tuple[tuple[str, ...], str]:
         worker = Path(__file__).resolve().with_name("transport_worker.py")
         command = [
             *source_transport.source_transport_python_command(
@@ -625,7 +639,18 @@ class StageSchedulingOperations(OrchestratorComponent):
                     session_selector_commitment,
                 )
             )
-        if host != "local":
+        if host == "local":
+            if host_role != "local":
+                raise source_transport.TransportValidationError(
+                    "local source host has a non-local frozen route"
+                )
+            route = "local"
+            codex_root = str(source_transport._local_codex_root())
+        else:
+            if host_role != "remote":
+                raise source_transport.TransportValidationError(
+                    "remote source host has a non-remote frozen route"
+                )
             helper_snapshot, helper_commitment = (
                 source_transport.snapshot_remote_host_context_helper(
                     source_transport.remote_host_context_helper_path(),
@@ -646,7 +671,27 @@ class StageSchedulingOperations(OrchestratorComponent):
                     helper_commitment,
                 )
             )
-        return tuple(command)
+            route = host_role
+            codex_root = host_codex_root
+        source_root_binding = source_transport.source_root_commitment(
+            codex_root=codex_root,
+            route=route,
+            host=host,
+        )
+        command.extend(
+            (
+                source_transport.SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
+                source_root_binding,
+            )
+        )
+        execution_binding = source_transport.execution_argv_commitment(command)
+        command.extend(
+            (
+                source_transport.SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
+                execution_binding,
+            )
+        )
+        return tuple(command), source_root_binding
 
     def _stage_prepared_file(
         self,

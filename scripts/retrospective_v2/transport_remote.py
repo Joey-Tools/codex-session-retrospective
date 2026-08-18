@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import codecs
+import hmac
 import os
 import pathlib
 import pwd
@@ -18,6 +21,11 @@ from typing import Any, Callable, Mapping, Sequence
 try:
     from . import safe_io
     from .transport_contracts import TransportValidationError, _canonical_commitment
+    from .transport_host_inventory import (
+        AuthenticatedHostInventory,
+        HostInventoryError,
+        parse_authenticated_helper_hosts,
+    )
     from .transport_program_components import _program_component
     from .transport_snapshot import (
         REMOTE_HOST_CONTEXT_SNAPSHOT_BOOTSTRAP,
@@ -28,6 +36,11 @@ except (ImportError, ModuleNotFoundError):
     from transport_contracts import (  # type: ignore[no-redef]
         TransportValidationError,
         _canonical_commitment,
+    )
+    from transport_host_inventory import (  # type: ignore[no-redef]
+        AuthenticatedHostInventory,
+        HostInventoryError,
+        parse_authenticated_helper_hosts,
     )
     from transport_program_components import _program_component  # type: ignore[no-redef]
     from transport_snapshot import (  # type: ignore[no-redef]
@@ -63,6 +76,30 @@ def remote_host_context_helper_commitment(
     )
 
 
+def remote_host_context_host_inventory(
+    path: str | os.PathLike[str] | None = None,
+) -> AuthenticatedHostInventory:
+    """Read HOSTS from the descriptor-authenticated helper without executing it."""
+
+    helper = remote_host_context_helper_path() if path is None else pathlib.Path(path)
+    component = _program_component(
+        helper,
+        role="remote_host_context_helper",
+        allow_missing=False,
+        include_content=True,
+    )
+    try:
+        payload = base64.b64decode(str(component["content_b64"]), validate=True)
+        return AuthenticatedHostInventory(
+            parse_authenticated_helper_hosts(payload),
+            remote_host_context_helper_component_commitment(component),
+        )
+    except (binascii.Error, KeyError, TypeError, ValueError, HostInventoryError) as exc:
+        raise TransportValidationError(
+            "remote-host-context helper HOSTS inventory is invalid"
+        ) from exc
+
+
 def remote_host_context_helper_component_commitment(
     component: Mapping[str, Any],
 ) -> str:
@@ -75,6 +112,51 @@ def remote_host_context_helper_component_commitment(
             "schema": "remote_host_context_helper_commitment_v2",
         }
     )
+
+
+def remote_host_context_snapshot_source_binding(
+    snapshot_path: str | os.PathLike[str],
+    snapshot_commitment: str,
+    host: str,
+) -> tuple[str, str]:
+    """Derive route and lexical Codex root from an authenticated helper snapshot."""
+
+    component = _program_component(
+        pathlib.Path(snapshot_path),
+        role="remote_host_context_helper",
+        allow_missing=False,
+        include_content=True,
+    )
+    if not isinstance(snapshot_commitment, str) or not hmac.compare_digest(
+        str(component["content_commitment"]), snapshot_commitment
+    ):
+        raise TransportValidationError("remote-host-context helper snapshot changed")
+    try:
+        payload = base64.b64decode(str(component["content_b64"]), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise TransportValidationError(
+            "remote-host-context helper snapshot is invalid"
+        ) from exc
+    try:
+        resolved = parse_authenticated_helper_hosts(payload).resolve(host)
+    except HostInventoryError as exc:
+        raise TransportValidationError(
+            "remote-host-context helper snapshot does not define the requested host"
+        ) from exc
+    route = resolved.role
+    codex_root = resolved.codex_root
+    if route == "remote":
+        lexical_root = pathlib.PurePosixPath(codex_root)
+        if (
+            not lexical_root.is_absolute()
+            or lexical_root.parent == lexical_root
+            or str(lexical_root) != codex_root
+            or any(part in {"", ".", ".."} for part in lexical_root.parts[1:])
+        ):
+            raise TransportValidationError(
+                "remote-host-context helper Codex root is not an exact lexical path"
+            )
+    return route, codex_root
 
 
 def _remote_host_context_command(
@@ -261,6 +343,7 @@ def _relay_remote_host_context_command(
     max_output_bytes: int,
     validator: Callable[[Any], None] | None = None,
     stream_filter: Any | None = None,
+    publisher: Callable[[Any], None] | None = None,
 ) -> None:
     """Run the canonical helper with bounded, content-free failure handling."""
 
@@ -353,10 +436,14 @@ def _relay_remote_host_context_command(
                         "remote-host-context transport emitted an invalid protocol stream"
                     ) from exc
             try:
-                _relay_valid_utf8(output)
-            except UnicodeDecodeError as exc:
+                if publisher is None:
+                    _relay_valid_utf8(output)
+                else:
+                    output.seek(0)
+                    publisher(output)
+            except (TransportValidationError, UnicodeDecodeError, ValueError) as exc:
                 raise RuntimeError(
-                    "remote-host-context transport emitted invalid UTF-8"
+                    "remote-host-context transport emitted an invalid protocol stream"
                 ) from exc
     except BaseException as exc:
         active_error = exc

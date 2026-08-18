@@ -1056,6 +1056,46 @@ superseded_by:
   passed 452/452 in 1,574.257 seconds, and shard 3 passed 387/387 in 1,500.523
   seconds. Every retained log contains exact `Selected`, `Ran`, and `OK`
   terminal lines, and the combined traceback/failure scan is empty.
+- A fresh-context Codex processor of signed head `5e030ff2` found four final
+  control-boundary gaps. Source leases accepted caller-projected roots and host
+  labels without binding the actual worker command; the public entrypoint put
+  the repository `scripts/` directory on import resolution before source
+  authentication; compact CamelCase credential fields could bypass retained
+  privacy checks; and Retrospective duplicated the five-host registry instead
+  of deriving it from `remote-host-context`. That head's review and prior
+  head-bound evidence became stale.
+- The authenticated `remote-host-context` helper is now the sole host-registry
+  source. A bounded AST parser reads exactly one static `HOSTS` literal without
+  executing helper code, normalizes canonical hosts and aliases, and freezes
+  the inventory plus its helper commitment in every run. Resume, scheduling,
+  publication, and remote execution reject inventory or helper drift. Local
+  roots derive from the account database rather than ambient `HOME`; remote
+  roots derive from the run-owned authenticated helper snapshot.
+- Source transport lease v3 commits the exact execution argv prefix and lexical
+  source root. The worker validates the actual OS argv, authenticated Python,
+  route, host, and root before scanning. The remote relay revalidates legacy
+  helper output and publishes only a locally rebound header; subagents still
+  receive no SSH authority. The public v2 entrypoint is now an authenticated
+  source-only bootstrap with a generated closed module manifest, while the CLI
+  implementation lives inside that authenticated package. Retained credential
+  assignment detection also covers bounded CamelCase secret/token suffixes.
+- The first 1,721-test four-shard attempt is non-counting. Child subprocesses
+  created bytecode in the authenticated source tree and two migrated fixtures
+  still relied on ambient `HOME` to select a local Codex root. The shard runner
+  now exports `PYTHONDONTWRITEBYTECODE=1` before discovery, with a real child
+  import regression. Test-only scans use an explicit private root context;
+  production continues to ignore ambient `HOME`. One later shard-0 attempt
+  exposed the same stale assumption in the descriptor-to-accept CLI fixture;
+  its failed 412/413 result is also non-counting. The complete adapter/CLI
+  module then passed 11/11 in 50.903 seconds, including the exact repaired case.
+- Final Python 3.13.12 evidence covers all 1,721 unique tests exactly once on
+  the final tree: shard 0 passes 413/413 in 1,512.907 seconds, shard 1 passes
+  459/459 in 1,271.819 seconds, shard 2 passes 456/456 in 1,415.460 seconds,
+  and shard 3 passes 393/393 in 1,332.137 seconds. Every runner exits zero and
+  reports `OK`. Ruff lint passes repository-wide; all 47 changed Python files
+  pass formatting; the generated bootstrap manifest, both workflows under
+  `actionlint`, the official OpenAI Skill validator, project-journal validator,
+  `git diff --check`, and the no-bytecode source-tree check are clean.
 
 ## Follow-up Work
 

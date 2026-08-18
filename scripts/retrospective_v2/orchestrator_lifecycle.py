@@ -42,6 +42,7 @@ from .orchestrator_protocols import (
     LifecycleStatePort,
 )
 from .run_state_holdouts import verify_shadow_daily_successor
+from .run_state_contracts import frozen_host_inventory
 
 from .orchestrator_support import (
     InvalidInputError,
@@ -111,6 +112,7 @@ class RunLifecycleOperations(OrchestratorComponent):
         configuration_ref: str,
         model_era: str,
         policy_era: str,
+        canonical_hosts: Sequence[str],
     ) -> tuple[
         authority.DurableHistoryState,
         executable_authority.ExecutableAuthority,
@@ -150,6 +152,7 @@ class RunLifecycleOperations(OrchestratorComponent):
                     authority.load_production_marker(
                         marker_path,
                         identity=self.identity,
+                        canonical_hosts=canonical_hosts,
                         history_repo=history_path,
                         target_ref=history_target_ref,
                         configuration_root=configuration_root,
@@ -233,8 +236,14 @@ class RunLifecycleOperations(OrchestratorComponent):
         )
         if allow_partial and mode_value != RunMode.DAILY.value:
             raise InvalidInputError("partial state is available only for daily runs")
-        canonical_hosts = self._canonical_hosts()
-        host_values = _normalize_hosts(canonical_hosts if hosts is None else hosts)
+        try:
+            authenticated_inventory = self._current_host_inventory()
+        except (OSError, ValueError) as error:
+            raise InvalidInputError(
+                "authenticated remote-host-context inventory is unavailable"
+            ) from error
+        canonical_hosts = authenticated_inventory.inventory.canonical_hosts
+        host_values = _normalize_hosts(hosts, canonical_hosts=canonical_hosts)
         source_values = _normalize_source_kinds(source_kinds)
         if any(host not in canonical_hosts for host in host_values):
             raise InvalidInputError("runs may target only canonical hosts")
@@ -335,6 +344,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             policy=policy_provenance,
             model=model_provenance,
             versions=version_provenance,
+            authenticated_host_inventory=authenticated_inventory,
         )
         configuration_ref = self._ref(
             RefType.CONFIGURATION,
@@ -364,6 +374,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             configuration_ref=configuration_ref,
             model_era=model_era,
             policy_era=policy_era,
+            canonical_hosts=canonical_hosts,
         )
 
         normalized_prior_heads = [
@@ -515,6 +526,8 @@ class RunLifecycleOperations(OrchestratorComponent):
             ),
             "backfill_expected_backlog_ref": backfill_expected_backlog_ref,
             "hosts": list(host_values),
+            "host_inventory": authenticated_inventory.inventory.to_dict(),
+            "host_inventory_commitment": authenticated_inventory.inventory_commitment,
             "identity_key_id": self.identity.key_id,
             "authority": {
                 "configuration_root": normalized_provenance["configuration_root"],
@@ -662,6 +675,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             clock=self._state._now(),
         ):
             return {"cleaned": False, "eligible": False}
+        self._state._assert_current_host_inventory(preflight)
         locked_staging_dir, retention_lock = retained_exports.lock_from_checkpoint(
             preflight
         )
@@ -1684,6 +1698,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             os.path.realpath(os.path.abspath(os.fspath(Path(staging_dir).expanduser())))
         )
         snapshot = self.store.read()
+        self._state._assert_current_host_inventory(snapshot.state)
         existing_coverage = snapshot.state.get("publication", {}).get(
             "coverage_receipt"
         )
@@ -1705,7 +1720,11 @@ class RunLifecycleOperations(OrchestratorComponent):
             auth_domain="shadow_coverage_auth_v2",
             payload=payload,
         )
-        authority.verify_shadow_coverage_receipt(self.identity, coverage)
+        authority.verify_shadow_coverage_receipt(
+            self.identity,
+            coverage,
+            canonical_hosts=frozen_host_inventory(snapshot.state).canonical_hosts,
+        )
 
         def mutate(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             self._state._assert_state_identity(state)
@@ -1766,6 +1785,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             raise InvalidInputError("bundle_digest must be a lowercase SHA-256 digest")
         locator = retained_export_api.normalize_retained_export_destination(staging_dir)
         deadline_value = retention_deadline or self.export_retention_deadline()
+        self._state._assert_current_host_inventory(self.store.read().state)
 
         def mutate(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
             self._state._assert_state_identity(state)
@@ -1904,6 +1924,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             or _SHA256_RE.fullmatch(plan_digest) is None
         ):
             raise InvalidInputError("publication plan_digest is invalid")
+        self._state._assert_current_host_inventory(self.store.read().state)
 
         normalized_bundle = None if bundle_dir is None else Path(bundle_dir).absolute()
         binding: Mapping[str, Any] | None = None
@@ -2282,6 +2303,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             authority.load_production_marker(
                 binding["production_marker"],
                 identity=self.identity,
+                canonical_hosts=frozen_host_inventory(state).canonical_hosts,
                 history_repo=binding["history_repo"],
                 target_ref=binding["history_target_ref"],
                 configuration_root=binding["configuration_root"],
@@ -2613,6 +2635,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             verified = authority.verify_shadow_coverage_receipt(
                 self.identity,
                 raw_coverage,
+                canonical_hosts=frozen_host_inventory(state).canonical_hosts,
             )
         except authority.ProductionMarkerError as error:
             raise InvalidTransitionError(
@@ -2655,6 +2678,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             verified = authority.verify_shadow_coverage_receipt(
                 self.identity,
                 raw_coverage,
+                canonical_hosts=frozen_host_inventory(state).canonical_hosts,
             )
             window_start, window_end = authority._normalize_shadow_window(
                 state.get("mode"),
@@ -2936,7 +2960,7 @@ class RunLifecycleOperations(OrchestratorComponent):
     def complete_published_cleanup(self) -> dict[str, Any]:
         snapshot = self.store.read()
         state = snapshot.state
-        self._state._assert_state_identity(state)
+        self._state._assert_current_host_inventory(state)
         if state["publication"].get("phase") == "complete":
             snapshot = retained_inputs.clear_legacy_terminal_payload(
                 self.store,
@@ -3038,7 +3062,7 @@ class RunLifecycleOperations(OrchestratorComponent):
     def complete_shadow_export(self) -> dict[str, Any]:
         snapshot = self.store.read()
         state = snapshot.state
-        self._state._assert_state_identity(state)
+        self._state._assert_current_host_inventory(state)
         phase = state["publication"].get("phase")
         if phase == "shadow_complete":
             snapshot = retained_inputs.clear_legacy_terminal_payload(
@@ -3212,6 +3236,8 @@ class RunLifecycleOperations(OrchestratorComponent):
             "extracted_turns": {},
             "gaps": [],
             "host_refs": host_refs,
+            "host_inventory": copy.deepcopy(specification["host_inventory"]),
+            "host_inventory_commitment": specification["host_inventory_commitment"],
             "identity_key_id": self.identity.key_id,
             "jobs": {},
             "lineage": {

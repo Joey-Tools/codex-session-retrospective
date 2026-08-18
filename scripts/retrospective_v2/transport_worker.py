@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Private executable boundary for authenticated v2 source transport leases."""
+"""Private executable boundary for authenticated v3 source transport leases."""
 
 from __future__ import annotations
 

@@ -359,6 +359,7 @@ _ALLOWED_STRING_FIELDS = frozenset(
         "exception",
         "identity_key_id",
         "implementation",
+        "host_inventory_commitment",
         "issued_at",
         "key_id",
         "kind",
@@ -2921,6 +2922,7 @@ def _validate_retained_provenance(value: Any) -> None:
         "agent_execution",
         "configuration_root",
         "engine_version",
+        "host_inventory_commitment",
         "implementation",
         "model",
         "production_configuration_ref",
@@ -2940,6 +2942,13 @@ def _validate_retained_provenance(value: Any) -> None:
         or _HEX_64_RE.fullmatch(provenance["configuration_root"]) is None
     ):
         raise RetainedInventoryError("manifest configuration_root is invalid")
+    inventory_commitment = provenance["host_inventory_commitment"]
+    if (
+        not isinstance(inventory_commitment, str)
+        or not inventory_commitment.startswith("sha256:")
+        or _HEX_64_RE.fullmatch(inventory_commitment.removeprefix("sha256:")) is None
+    ):
+        raise RetainedInventoryError("manifest host inventory commitment is invalid")
     production_configuration_ref = provenance["production_configuration_ref"]
     if (
         not isinstance(production_configuration_ref, str)
@@ -2986,7 +2995,11 @@ def _validate_retained_provenance(value: Any) -> None:
         ):
             raise RetainedInventoryError("manifest implementation authority is invalid")
     if (
-        implementation["schema"] != "coordinator_implementation_readiness_v1"
+        implementation["schema"]
+        not in {
+            "coordinator_implementation_readiness_v1",
+            "coordinator_implementation_readiness_v2",
+        }
         or implementation["implementation"] != "session_retrospective_v2_python_source"
         or not isinstance(implementation["file_count"], int)
         or isinstance(implementation["file_count"], bool)

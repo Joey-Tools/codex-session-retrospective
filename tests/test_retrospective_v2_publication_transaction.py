@@ -81,6 +81,7 @@ from retrospective_v2.orchestrator import (  # noqa: E402
     RunConflictError,
 )
 from tests.test_retrospective_v2_orchestrator import (  # noqa: E402
+    TEST_HOSTS,
     authenticated_receipt,
     bind_remote_host_context_helper_fixture,
     execution_provenance,
@@ -1395,12 +1396,14 @@ class DurablePublicationTests(unittest.TestCase):
             identity_path=self.identity_path,
             require_existing_identity=True,
         )
+        self.host_inventory = transport.remote_host_context_host_inventory()
         self.provenance = execution_provenance()
         provenance = orchestrator_module._build_provenance(
             provenance=self.provenance,
             policy=None,
             model=None,
             versions=None,
+            authenticated_host_inventory=self.host_inventory,
         )
         self.configuration_ref = probe._ref(
             RefType.CONFIGURATION, provenance["configuration_root"]
@@ -1425,6 +1428,7 @@ class DurablePublicationTests(unittest.TestCase):
         self.marker = authority.issue_production_marker(
             self.marker_path,
             identity=self.identity,
+            canonical_hosts=TEST_HOSTS,
             history_repo=self.repo,
             target_ref=TARGET_REF,
             configuration_root=self.configuration_root,
@@ -1493,6 +1497,7 @@ class DurablePublicationTests(unittest.TestCase):
             authority.issue_production_marker(
                 self.root / "invalid-target-marker.json",
                 identity=self.identity,
+                canonical_hosts=TEST_HOSTS,
                 history_repo=self.repo,
                 target_ref="HEAD",
                 configuration_root=self.configuration_root,
@@ -1812,7 +1817,7 @@ class DurablePublicationTests(unittest.TestCase):
         return coordinator, coverage, cleanup
 
     def build_shadow_gate_evidence(self) -> list[dict[str, object]]:
-        production_hosts = orchestrator_module.DEFAULT_HOSTS
+        production_hosts = TEST_HOSTS
         weekly_evidence: list[dict[str, object]] = []
         for index, start, end in (
             (1, "2026-06-22T00:00:00Z", "2026-06-29T00:00:00Z"),
@@ -1828,6 +1833,7 @@ class DurablePublicationTests(unittest.TestCase):
             weekly_evidence.append(
                 authority.issue_shadow_gate_receipt(
                     self.identity,
+                    canonical_hosts=TEST_HOSTS,
                     calibration_receipt=self.calibration_receipt,
                     mode="weekly",
                     coverage_receipts=(coverage,),
@@ -1858,6 +1864,7 @@ class DurablePublicationTests(unittest.TestCase):
         lineage = backfill.load_state()["lineage"]["backfill_lineage_receipt"]
         daily = authority.issue_shadow_gate_receipt(
             self.identity,
+            canonical_hosts=TEST_HOSTS,
             calibration_receipt=self.calibration_receipt,
             mode="daily",
             coverage_receipts=(partial_coverage, backfill_coverage),
@@ -1875,7 +1882,7 @@ class DurablePublicationTests(unittest.TestCase):
         shadow: bool = False,
         allow_partial: bool = False,
         holdout_host: str | None = None,
-        hosts: tuple[str, ...] = orchestrator_module.DEFAULT_HOSTS,
+        hosts: tuple[str, ...] = TEST_HOSTS,
         backfill_of: str | None = None,
         controlled_gap_receipt: Mapping[str, object] | None = None,
         bind_export: bool = True,
@@ -2930,7 +2937,7 @@ class DurablePublicationTests(unittest.TestCase):
                 mode="daily",
                 start=WINDOW_START,
                 end=WINDOW_END,
-                hosts=orchestrator_module.DEFAULT_HOSTS,
+                hosts=TEST_HOSTS,
                 history_repo=self.repo,
                 history_target_ref=TARGET_REF,
                 provider_state=self.provider_state,
@@ -2970,6 +2977,7 @@ class DurablePublicationTests(unittest.TestCase):
         loaded = authority.load_production_marker(
             self.marker_path,
             identity=self.identity,
+            canonical_hosts=TEST_HOSTS,
             history_repo=self.repo,
             target_ref=TARGET_REF,
             configuration_root=self.configuration_root,
@@ -2986,6 +2994,7 @@ class DurablePublicationTests(unittest.TestCase):
             authority.load_production_marker(
                 self.marker_path,
                 identity=self.identity,
+                canonical_hosts=TEST_HOSTS,
                 history_repo=self.repo,
                 target_ref=TARGET_REF,
                 configuration_root=self.configuration_root,
@@ -3032,6 +3041,7 @@ class DurablePublicationTests(unittest.TestCase):
                 authority.issue_production_marker(
                     self.root / f"mismatched-binding-{index}.json",
                     identity=self.identity,
+                    canonical_hosts=TEST_HOSTS,
                     history_repo=self.repo,
                     target_ref=TARGET_REF,
                     configuration_root=configuration_root,
@@ -3054,6 +3064,7 @@ class DurablePublicationTests(unittest.TestCase):
             authority.issue_production_marker(
                 self.root / "missing-shadows.json",
                 identity=self.identity,
+                canonical_hosts=TEST_HOSTS,
                 history_repo=self.repo,
                 target_ref=TARGET_REF,
                 configuration_root=self.configuration_root,
@@ -3075,6 +3086,7 @@ class DurablePublicationTests(unittest.TestCase):
             authority.issue_production_marker(
                 self.root / "mixed-configuration-evidence.json",
                 identity=self.identity,
+                canonical_hosts=TEST_HOSTS,
                 history_repo=self.repo,
                 target_ref=TARGET_REF,
                 configuration_root=self.configuration_root,
@@ -3101,6 +3113,7 @@ class DurablePublicationTests(unittest.TestCase):
             authority.issue_production_marker(
                 self.root / "failed-calibration.json",
                 identity=self.identity,
+                canonical_hosts=TEST_HOSTS,
                 history_repo=self.repo,
                 target_ref=TARGET_REF,
                 configuration_root=self.configuration_root,
@@ -3123,6 +3136,7 @@ class DurablePublicationTests(unittest.TestCase):
             authority.issue_production_marker(
                 self.root / "invalid-daily.json",
                 identity=self.identity,
+                canonical_hosts=TEST_HOSTS,
                 history_repo=self.repo,
                 target_ref=TARGET_REF,
                 configuration_root=self.configuration_root,
@@ -3195,6 +3209,7 @@ class DurablePublicationTests(unittest.TestCase):
             authority.verify_shadow_coverage_receipt(
                 self.identity,
                 legacy_daily,
+                canonical_hosts=TEST_HOSTS,
             )
 
         unknown_backfill = copy.deepcopy(
@@ -3247,7 +3262,11 @@ class DurablePublicationTests(unittest.TestCase):
             authority.ProductionMarkerError,
             "daily backfill shadow coverage is invalid",
         ):
-            authority.verify_shadow_coverage_receipt(self.identity, unknown_backfill)
+            authority.verify_shadow_coverage_receipt(
+                self.identity,
+                unknown_backfill,
+                canonical_hosts=TEST_HOSTS,
+            )
 
         forged = json.loads(json.dumps(self.marker))
         daily = next(
@@ -3287,6 +3306,7 @@ class DurablePublicationTests(unittest.TestCase):
             authority.load_production_marker(
                 self.marker_path,
                 identity=self.identity,
+                canonical_hosts=TEST_HOSTS,
                 history_repo=self.repo,
                 target_ref=TARGET_REF,
                 configuration_root=self.configuration_root,

@@ -9,6 +9,11 @@ from typing import Any, Mapping
 from .checkpoints import canonical_json_bytes, content_digest
 from .contracts import JobKind
 from .orchestrator_core import InvalidTransitionError, _json_copy
+from .transport_host_inventory import (
+    HostInventory,
+    HostInventoryError,
+    require_inventory_commitment,
+)
 
 
 def _prompt(value: str) -> str:
@@ -162,6 +167,14 @@ def _require_current_execution_contract(
         raise InvalidTransitionError(
             "run execution provenance no longer matches the executable contract"
         )
+    try:
+        inventory = HostInventory.from_dict(contract.get("host_inventory"))
+        require_inventory_commitment(
+            inventory,
+            contract.get("host_inventory_commitment"),
+        )
+    except (HostInventoryError, TypeError) as exc:
+        raise InvalidTransitionError("run execution host inventory is invalid") from exc
     runtime = contract.get("runtime")
     if (
         not isinstance(runtime, Mapping)

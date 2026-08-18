@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import pathlib
 import re
 from dataclasses import dataclass, replace
 from typing import Any, Mapping, Sequence
@@ -32,10 +33,10 @@ except (ImportError, ModuleNotFoundError):
         strict_json_loads,
     )
 
-TRANSPORT_LEASE_SCHEMA = "source_transport_lease_v2"
+TRANSPORT_LEASE_SCHEMA = "source_transport_lease_v3"
 SOURCE_SNAPSHOT_SCHEMA = "authoritative_source_snapshot_v2"
 TRANSPORT_RECEIPT_SCHEMA = "source_transport_receipt_v2"
-TRANSPORT_LEASE_AUTH_PREFIX = "source_transport_lease_auth_v2:"
+TRANSPORT_LEASE_AUTH_PREFIX = "source_transport_lease_auth_v3:"
 SOURCE_SNAPSHOT_REF_PREFIX = "source_snapshot_v2:"
 TRANSPORT_RECEIPT_REF_PREFIX = "source_transport_receipt_v2:"
 SOURCE_TRANSPORT_STREAM_SCHEMA = "source_transport_stream_v3"
@@ -48,6 +49,8 @@ SOURCE_TRANSPORT_BOUNDARY_PROBE_BYTES = SOURCE_TRANSPORT_RESUME_PROBE_BYTES
 SOURCE_DISCOVERY_MAX_DIRECTORY_ENTRIES = 250_000
 SOURCE_DISCOVERY_MAX_PATH_BYTES = 64 * 1024 * 1024
 SOURCE_DISCOVERY_TIMEOUT_SECONDS = 30.0
+SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION = "--execution-argv-commitment"
+SOURCE_TRANSPORT_SOURCE_ROOT_OPTION = "--source-root-commitment"
 SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST = (
     "catalog.py",
     "contracts.py",
@@ -55,6 +58,7 @@ SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST = (
     "transport_capture.py",
     "transport_contracts.py",
     "transport_discovery.py",
+    "transport_host_inventory.py",
     "transport_paths.py",
     "transport_program_components.py",
     "transport_remote.py",
@@ -214,6 +218,67 @@ def _locator_session_commitments(value: object) -> list[str]:
 
 def _canonical_commitment(value: JsonValue) -> str:
     return "sha256:" + hashlib.sha256(canonical_json_bytes(value)).hexdigest()
+
+
+def execution_argv_commitment(command_prefix: Sequence[str]) -> str:
+    """Commit the exact OS argument prefix preceding the final commitment pair."""
+
+    argv = tuple(command_prefix)
+    if not argv or len(argv) > 62:
+        raise TransportValidationError(
+            "source transport execution argv prefix must contain 1 to 62 arguments"
+        )
+    for index, argument in enumerate(argv):
+        if (
+            not isinstance(argument, str)
+            or not argument
+            or "\x00" in argument
+            or len(argument.encode("utf-8")) > 4096
+        ):
+            raise TransportValidationError(
+                f"source transport execution argv prefix[{index}] is invalid"
+            )
+    return _canonical_commitment(
+        {
+            "command_prefix": list(argv),
+            "schema": "source_transport_execution_argv_v1",
+        }
+    )
+
+
+def source_root_commitment(*, codex_root: str, route: str, host: str) -> str:
+    """Commit an exact lexical Codex root and its local or remote route."""
+
+    if route not in {"local", "remote"}:
+        raise TransportValidationError("source transport route is invalid")
+    _bounded_token(host, "source transport root host")
+    if (
+        not isinstance(codex_root, str)
+        or not codex_root
+        or "\x00" in codex_root
+        or "\r" in codex_root
+        or "\n" in codex_root
+        or len(codex_root.encode("utf-8")) > 4096
+    ):
+        raise TransportValidationError("source transport Codex root is invalid")
+    lexical_root = pathlib.PurePosixPath(codex_root)
+    if (
+        not lexical_root.is_absolute()
+        or lexical_root.parent == lexical_root
+        or str(lexical_root) != codex_root
+        or any(part in {"", ".", ".."} for part in lexical_root.parts[1:])
+    ):
+        raise TransportValidationError(
+            "source transport Codex root must be an exact absolute lexical path"
+        )
+    return _canonical_commitment(
+        {
+            "codex_root": codex_root,
+            "host": host,
+            "route": route,
+            "schema": "source_transport_source_root_v1",
+        }
+    )
 
 
 def _normalize_source_resume_position(
@@ -460,6 +525,8 @@ class TransportLease:
     window_end: str
     process_nonce: str
     command_argv: tuple[str, ...]
+    execution_argv_commitment: str
+    source_root_commitment: str
     transport_program_commitment: str
     source_byte_limit: int
     record_limit: int
@@ -549,6 +616,42 @@ class TransportLease:
                 )
         object.__setattr__(self, "command_argv", argv)
         _sha256(
+            self.execution_argv_commitment,
+            "transport lease execution_argv_commitment",
+        )
+        _sha256(
+            self.source_root_commitment,
+            "transport lease source_root_commitment",
+        )
+        if (
+            argv.count(SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION) != 1
+            or argv[-2:]
+            != (
+                SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
+                self.execution_argv_commitment,
+            )
+            or not hmac.compare_digest(
+                execution_argv_commitment(argv[:-2]),
+                self.execution_argv_commitment,
+            )
+        ):
+            raise TransportValidationError(
+                "transport lease execution argv binding is invalid"
+            )
+        root_option_count = argv.count(SOURCE_TRANSPORT_SOURCE_ROOT_OPTION)
+        if root_option_count != 1:
+            raise TransportValidationError(
+                "transport lease source root binding is invalid"
+            )
+        root_index = argv.index(SOURCE_TRANSPORT_SOURCE_ROOT_OPTION)
+        if (
+            root_index + 1 >= len(argv) - 2
+            or argv[root_index + 1] != self.source_root_commitment
+        ):
+            raise TransportValidationError(
+                "transport lease source root binding is invalid"
+            )
+        _sha256(
             self.transport_program_commitment,
             "transport lease transport_program_commitment",
         )
@@ -567,6 +670,7 @@ class TransportLease:
     def unsigned_dict(self) -> dict[str, JsonValue]:
         return {
             "command_argv": list(self.command_argv),
+            "execution_argv_commitment": self.execution_argv_commitment,
             "frame_byte_limit": self.frame_byte_limit,
             "host": self.host,
             "host_ref": self.host_ref,
@@ -583,6 +687,7 @@ class TransportLease:
             "cursor_time": self.cursor_time,
             "source_byte_limit": self.source_byte_limit,
             "source_kind": self.source_kind.value,
+            "source_root_commitment": self.source_root_commitment,
             "transport_program_commitment": self.transport_program_commitment,
             "window": {"end": self.window_end, "start": self.window_start},
         }
@@ -604,6 +709,7 @@ class TransportLease:
             {
                 "authentication_tag",
                 "command_argv",
+                "execution_argv_commitment",
                 "frame_byte_limit",
                 "host",
                 "host_ref",
@@ -620,6 +726,7 @@ class TransportLease:
                 "cursor_time",
                 "source_byte_limit",
                 "source_kind",
+                "source_root_commitment",
                 "transport_program_commitment",
                 "window",
             },
@@ -637,6 +744,7 @@ class TransportLease:
         return cls(
             authentication_tag=value["authentication_tag"],  # type: ignore[arg-type]
             command_argv=tuple(argv),  # type: ignore[arg-type]
+            execution_argv_commitment=value["execution_argv_commitment"],  # type: ignore[arg-type]
             frame_byte_limit=value["frame_byte_limit"],  # type: ignore[arg-type]
             host=value["host"],  # type: ignore[arg-type]
             host_ref=value["host_ref"],  # type: ignore[arg-type]
@@ -653,6 +761,7 @@ class TransportLease:
             cursor_time=value["cursor_time"],  # type: ignore[arg-type]
             source_byte_limit=value["source_byte_limit"],  # type: ignore[arg-type]
             source_kind=value["source_kind"],  # type: ignore[arg-type]
+            source_root_commitment=value["source_root_commitment"],  # type: ignore[arg-type]
             transport_program_commitment=value["transport_program_commitment"],  # type: ignore[arg-type]
             window_start=window["start"],  # type: ignore[arg-type]
             window_end=window["end"],  # type: ignore[arg-type]

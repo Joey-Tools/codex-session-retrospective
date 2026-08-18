@@ -590,9 +590,11 @@ identity, bytes, and ancestor access policy; it never retains the local path.
 Both digests are included in the configuration root and are recomputed before
 any resumed command may consume or advance a checkpoint. An opaque
 configuration commitment cannot replace these fields. Implementation authority
-binds the closed coordinator Python inventory, exact source bytes, and file and
-ancestor access policy. It is also recomputed before status, transition, or
-retained export consumes the run; local source paths are not retained.
+uses a schema-v2 startup receipt that binds the closed coordinator Python
+inventory, captured exact source bytes, and file and ancestor access policy.
+Resumed commands validate that immutable receipt before comparing it with run
+provenance; they execute the captured bytes rather than rereading a live source
+path. Local source paths are not retained.
 Agent execution provenance includes the exact deterministic task-cache
 hit/miss/reuse conservation alongside every job, result, retry, reviewer, and
 issued/claimed/completed timestamp.

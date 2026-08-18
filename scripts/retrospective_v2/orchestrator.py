@@ -29,7 +29,6 @@ from .identity import IdentityKey, IdentityKeyMismatchError
 
 from .orchestrator_support import (
     DEFAULT_AGENT_CLAIM_TTL_SECONDS,
-    DEFAULT_HOSTS,
     ENGINE_VERSION,
     EXECUTION_CONTRACT_SCHEMA,
     EXECUTION_VERSION_CONTRACT,
@@ -76,6 +75,7 @@ from .orchestrator_components import (
 )
 from .orchestrator_context import Clock, OrchestratorContext
 from .orchestrator_projection import StateProjectionOperations
+from .transport_host_inventory import AuthenticatedHostInventory
 
 
 def doctor(
@@ -98,6 +98,7 @@ def doctor(
     publisher_gnupg_home: str
     | os.PathLike[str] = authority.DEFAULT_PUBLISHER_GNUPG_HOME,
     publisher_gpg_program: str | os.PathLike[str] | None = None,
+    host_inventory_provider: Callable[[], AuthenticatedHostInventory] | None = None,
 ) -> dict[str, Any]:
     """Run actual capability probes and return a safe readiness report."""
 
@@ -198,9 +199,18 @@ def doctor(
         publisher_fingerprint,
     )
     normalized_hosts: tuple[str, ...] | None = None
+    canonical_hosts: tuple[str, ...] | None = None
+    authenticated_inventory: AuthenticatedHostInventory | None = None
     try:
-        normalized_hosts = _normalize_hosts(hosts)
-        host_policy_ok = set(normalized_hosts) == set(DEFAULT_HOSTS)
+        inventory_provider = (
+            source_transport.remote_host_context_host_inventory
+            if host_inventory_provider is None
+            else host_inventory_provider
+        )
+        authenticated_inventory = inventory_provider()
+        canonical_hosts = authenticated_inventory.inventory.canonical_hosts
+        normalized_hosts = _normalize_hosts(hosts, canonical_hosts=canonical_hosts)
+        host_policy_ok = set(normalized_hosts) == set(canonical_hosts)
         record(
             "canonical_host_policy",
             host_policy_ok,
@@ -210,7 +220,7 @@ def doctor(
                 else "configured hosts differ from the canonical role set"
             ),
         )
-    except InvalidInputError as error:
+    except (OSError, ValueError, InvalidInputError) as error:
         record("canonical_host_policy", False, str(error))
     try:
         normalized_kinds = _normalize_source_kinds(source_kinds)
@@ -219,11 +229,16 @@ def doctor(
         record("source_matrix", False, str(error))
     normalized_provenance: dict[str, Any] | None = None
     try:
+        if authenticated_inventory is None:
+            raise InvalidInputError(
+                "authenticated remote-host-context inventory is unavailable"
+            )
         normalized_provenance = _build_provenance(
             provenance=provenance,
             policy=None,
             model=None,
             versions=None,
+            authenticated_host_inventory=authenticated_inventory,
         )
         record(
             "execution_contract",
@@ -234,7 +249,11 @@ def doctor(
         record("execution_contract", False, str(error))
     helper_ok = False
     try:
-        helper_commitment = source_transport.remote_host_context_helper_commitment()
+        if authenticated_inventory is None:
+            raise source_transport.TransportValidationError(
+                "remote-host-context inventory is unavailable"
+            )
+        helper_commitment = authenticated_inventory.helper_commitment
         expected_helper = (
             normalized_provenance.get("transport", {}).get(
                 "remote_host_context_helper_commitment"
@@ -309,6 +328,7 @@ def doctor(
             or history_repo is None
             or not isinstance(history_target_ref, str)
             or production_marker is None
+            or canonical_hosts is None
         ):
             record(
                 "production_marker_binding",
@@ -327,6 +347,7 @@ def doctor(
                 authority.load_production_marker(
                     production_marker,
                     identity=resolved_identity,
+                    canonical_hosts=canonical_hosts,
                     history_repo=history_repo,
                     target_ref=history_target_ref,
                     configuration_root=normalized_provenance["configuration_root"],
@@ -378,6 +399,7 @@ class RetrospectiveOrchestrator:
         identity: IdentityKey | None = None,
         require_existing_identity: bool = False,
         shard_limits: sharding.ShardLimits | None = None,
+        host_inventory_provider: Callable[[], AuthenticatedHostInventory] | None = None,
     ) -> None:
         resolved_run_dir = Path(run_dir).expanduser().absolute()
         expected_key_id = (
@@ -430,7 +452,11 @@ class RetrospectiveOrchestrator:
             store=resolved_store,
             shard_limits=resolved_shard_limits,
             clock=clock or (lambda: dt.datetime.now(dt.timezone.utc)),
-            canonical_hosts_provider=lambda: DEFAULT_HOSTS,
+            host_inventory_provider=(
+                source_transport.remote_host_context_host_inventory
+                if host_inventory_provider is None
+                else host_inventory_provider
+            ),
             agent_envelope_limit_provider=lambda: MAX_AGENT_ENVELOPE_BYTES,
             source_transport_max_source_bytes_provider=(
                 lambda: SOURCE_TRANSPORT_MAX_SOURCE_BYTES
@@ -470,8 +496,8 @@ class RetrospectiveOrchestrator:
     def _agent_envelope_limit(self) -> int:
         return self._context.agent_envelope_limit()
 
-    def _canonical_hosts(self) -> tuple[str, ...]:
-        return self._context.canonical_hosts()
+    def _current_host_inventory(self) -> AuthenticatedHostInventory:
+        return self._context.current_host_inventory()
 
     def _source_transport_max_source_bytes(self) -> int:
         return self._context.source_transport_max_source_bytes()
@@ -716,7 +742,6 @@ def advance(
 
 
 __all__ = [
-    "DEFAULT_HOSTS",
     "ENGINE_VERSION",
     "InvalidInputError",
     "InvalidTransitionError",

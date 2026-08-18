@@ -9,7 +9,6 @@ from typing import Any, Mapping, Sequence
 
 from .checkpoints import canonical_json_bytes
 from .contracts import (
-    CANONICAL_HOSTS,
     MAX_AGENT_CLAIM_GENERATIONS_PER_ATTEMPT,
     RunStage,
     SourceCellStatus,
@@ -18,7 +17,6 @@ from .contracts import (
 
 ENGINE_VERSION = "2.0"
 STATE_SCHEMA_VERSION = 2
-DEFAULT_HOSTS = CANONICAL_HOSTS
 REQUIRED_SOURCE_KINDS = (
     SourceKind.SESSION_INDEX.value,
     SourceKind.HISTORY.value,
@@ -147,8 +145,15 @@ def _safe_reason(value: Any, *, fallback: str) -> str:
     return fallback
 
 
-def _normalize_hosts(hosts: Sequence[str] | None) -> tuple[str, ...]:
-    selected = DEFAULT_HOSTS if hosts is None else tuple(hosts)
+def _normalize_hosts(
+    hosts: Sequence[str] | None,
+    *,
+    canonical_hosts: Sequence[str],
+) -> tuple[str, ...]:
+    canonical = tuple(canonical_hosts)
+    if not canonical or len(canonical) != len(set(canonical)):
+        raise InvalidInputError("canonical host inventory is invalid")
+    selected = canonical if hosts is None else tuple(hosts)
     if not selected:
         raise InvalidInputError("at least one host is required")
     normalized: list[str] = []
@@ -165,8 +170,8 @@ def _normalize_hosts(hosts: Sequence[str] | None) -> tuple[str, ...]:
             raise InvalidInputError(f"duplicate host: {host}")
         seen.add(host)
         normalized.append(host)
-    if set(normalized) == set(DEFAULT_HOSTS):
-        return DEFAULT_HOSTS
+    if set(normalized) == set(canonical):
+        return canonical
     return tuple(normalized)
 
 

@@ -32,6 +32,8 @@ def issue_transport_lease(
     window_end: str,
     process_nonce: str,
     command_argv: Sequence[str],
+    execution_argv_commitment: str,
+    source_root_commitment: str,
     transport_program_commitment: str,
     source_byte_limit: int,
     record_limit: int,
@@ -54,6 +56,8 @@ def issue_transport_lease(
         window_end=window_end,
         process_nonce=process_nonce,
         command_argv=tuple(command_argv),
+        execution_argv_commitment=execution_argv_commitment,
+        source_root_commitment=source_root_commitment,
         transport_program_commitment=transport_program_commitment,
         source_byte_limit=source_byte_limit,
         record_limit=record_limit,
@@ -66,14 +70,14 @@ def issue_transport_lease(
         authentication_tag=placeholder,
     )
     tag = TRANSPORT_LEASE_AUTH_PREFIX + identity.derive_digest(
-        "source-transport-lease/v2", lease.unsigned_dict()
+        "source-transport-lease/v3", lease.unsigned_dict()
     )
     return replace(lease, authentication_tag=tag)
 
 
 def verify_transport_lease(identity: IdentityKey, lease: TransportLease) -> None:
     expected = TRANSPORT_LEASE_AUTH_PREFIX + identity.derive_digest(
-        "source-transport-lease/v2", lease.unsigned_dict()
+        "source-transport-lease/v3", lease.unsigned_dict()
     )
     if not hmac.compare_digest(expected, lease.authentication_tag):
         raise TransportValidationError("transport lease authentication failed")

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 from pathlib import Path
 import sys
 import unittest
@@ -13,6 +14,12 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 TEST_ROOT = ROOT / "tests"
 MAX_SHARDS = 16
+
+
+def harden_child_python_environment() -> None:
+    """Prevent subprocess tests from writing bytecode into the source tree."""
+
+    os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
 
 
 def shard_for_test_id(test_id: str, shard_count: int) -> int:
@@ -70,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("test shards require Python 3.13")
     if not (sys.flags.isolated and sys.flags.no_site and sys.flags.dont_write_bytecode):
         raise SystemExit("invoke test shards with python3 -I -B -S")
+    harden_child_python_environment()
     args = build_parser().parse_args(argv)
     sys.path.insert(0, str(ROOT))
     discovered = unittest.defaultTestLoader.discover(str(TEST_ROOT))

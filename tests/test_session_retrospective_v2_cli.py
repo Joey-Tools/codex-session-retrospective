@@ -24,7 +24,12 @@ SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import session_retrospective_v2 as cli  # noqa: E402
-from retrospective_v2 import authority, automation_cutover_files  # noqa: E402
+from retrospective_v2 import (  # noqa: E402
+    authority,
+    automation_cutover_files,
+    transport,
+    transport_source,
+)
 from retrospective_v2.contracts import (  # noqa: E402
     RefType,
     RunMode,
@@ -39,6 +44,7 @@ from retrospective_v2 import reporting  # noqa: E402
 from retrospective_v2 import safe_io  # noqa: E402
 from tests.test_retrospective_v2_orchestrator import (  # noqa: E402
     activity_manifest,
+    authenticated_host_inventory,
     authenticated_receipt,
     bind_remote_host_context_helper_fixture,
     execution_provenance,
@@ -135,14 +141,14 @@ class CliContractTests(unittest.TestCase):
             for node in module.body
             if isinstance(node, ast.If) and "sys.version_info" in ast.unparse(node.test)
         )
-        first_engine_import = next(
+        bootstrap_capture = next(
             node
-            for node in module.body
-            if isinstance(node, (ast.Import, ast.ImportFrom))
-            and "retrospective_v2" in ast.unparse(node)
+            for node in ast.walk(module)
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_capture_startup_authority"
         )
 
-        self.assertLess(runtime_guard.lineno, first_engine_import.lineno)
+        self.assertLess(runtime_guard.lineno, bootstrap_capture.lineno)
 
     def test_entrypoint_requires_all_python_isolation_flags(self) -> None:
         entrypoint = SCRIPTS / "session_retrospective_v2.py"
@@ -1229,6 +1235,7 @@ class CliContractTests(unittest.TestCase):
             policy=None,
             model=None,
             versions=None,
+            authenticated_host_inventory=authenticated_host_inventory(),
         )
         successor = {
             "authentication_tag": "shadow_daily_successor_auth_v2:" + "f" * 64,
@@ -1671,47 +1678,77 @@ class CliContractTests(unittest.TestCase):
         prepare.assert_not_called()
 
     def test_accept_source_exact_command_replays_after_lost_response(self) -> None:
+        codex_root = self.root / ".codex"
+        codex_root.mkdir(mode=0o700)
+        session_index = codex_root / "session_index.jsonl"
+        session_index.write_text(
+            '{"id":"initial","timestamp":"2026-07-06T01:00:00Z"}\n',
+            encoding="ascii",
+        )
         coordinator = RetrospectiveOrchestrator(
             self.run_dir,
             clock=lambda: self.created_at,
             identity_path=self.identity_path,
         )
-        coordinator.start(
-            mode=RunMode.DAILY,
-            start=WINDOW_START,
-            end=WINDOW_END,
-            shadow=True,
-            provenance=execution_provenance(),
-            history_repo=self.history_repo,
-            history_target_ref="refs/heads/main",
-            publisher_gpg_program=TEST_PUBLISHER_GPG,
-            created_at=self.created_at,
-        )
-        for _ in range(4):
-            leases = coordinator.status()["active_source_leases"]
-            if leases:
-                lease = next(
-                    item
-                    for item in leases
-                    if item["host"] == "local"
-                    and item["source_kind"] == SourceKind.SESSION_INDEX.value
-                )
-                break
-            coordinator.advance()
-        else:
-            self.fail("source lease was not scheduled")
+        with mock.patch.object(
+            transport,
+            "_local_codex_root",
+            return_value=codex_root,
+        ):
+            coordinator.start(
+                mode=RunMode.DAILY,
+                start=WINDOW_START,
+                end=WINDOW_END,
+                shadow=True,
+                provenance=execution_provenance(),
+                history_repo=self.history_repo,
+                history_target_ref="refs/heads/main",
+                publisher_gpg_program=TEST_PUBLISHER_GPG,
+                created_at=self.created_at,
+            )
+            for _ in range(4):
+                leases = coordinator.status()["active_source_leases"]
+                if leases:
+                    lease = next(
+                        item
+                        for item in leases
+                        if item["host"] == "local"
+                        and item["source_kind"] == SourceKind.SESSION_INDEX.value
+                    )
+                    break
+                coordinator.advance()
+            else:
+                self.fail("source lease was not scheduled")
         stream_path = Path(lease["source_transport_output"])
         self.assertTrue(stream_path.parent.is_dir())
         self.assertEqual(0o700, stream_path.parent.stat().st_mode & 0o777)
-        environment = {**os.environ, "HOME": str(self.root)}
-        completed = subprocess.run(
-            lease["source_transport_command"],
-            check=True,
-            capture_output=True,
-            env=environment,
+        transport_lease = transport.TransportLease.from_dict(lease["transport_lease"])
+        marker_index = transport_lease.command_argv.index("source-transport")
+        worker_arguments = transport_lease.command_argv[marker_index:-4]
+        scan_context = transport_source._source_transport_scan_context(
+            codex_root,
+            route="local",
+            host="local",
         )
-        stream_path.write_bytes(completed.stdout)
-        os.chmod(stream_path, 0o600)
+
+        def capture_stream() -> None:
+            with (
+                stream_path.open("w", encoding="ascii") as output,
+                mock.patch.object(sys, "stdout", output),
+            ):
+                self.assertEqual(
+                    0,
+                    transport_source._run_private_source_transport_scan(
+                        worker_arguments,
+                        scan_context=scan_context,
+                        execution_commitment=(
+                            transport_lease.execution_argv_commitment
+                        ),
+                    ),
+                )
+            os.chmod(stream_path, 0o600)
+
+        capture_stream()
         arguments = (
             "accept-source",
             "--identity-path",
@@ -1733,20 +1770,11 @@ class CliContractTests(unittest.TestCase):
         self.assertTrue(replayed.ok, replayed.error)
         self.assertTrue(replayed.result["idempotent"])
 
-        codex_root = self.root / ".codex"
-        codex_root.mkdir(mode=0o700)
-        codex_root.joinpath("session_index.jsonl").write_text(
+        session_index.write_text(
             '{"id":"changed","timestamp":"2026-07-06T01:00:00Z"}\n',
             encoding="ascii",
         )
-        changed = subprocess.run(
-            lease["source_transport_command"],
-            check=True,
-            capture_output=True,
-            env=environment,
-        )
-        stream_path.write_bytes(changed.stdout)
-        os.chmod(stream_path, 0o600)
+        capture_stream()
         mismatch = self.parse_dispatch(*arguments)
         self.assertFalse(mismatch.ok)
         self.assertEqual(cli.ExitCode.CONFLICT, mismatch.exit_code)

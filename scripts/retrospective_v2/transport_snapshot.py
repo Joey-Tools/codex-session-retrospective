@@ -53,7 +53,7 @@ _SOURCE_TRANSPORT_SNAPSHOT_BOOTSTRAP_SOURCE = "\n".join(
         "sources={name.removesuffix('.py'):base64.b64decode(content,validate=True) for name,content in snapshot['modules'].items()}\npaths={name.removesuffix('.py'):snapshot['package_dir']+'/'+name for name in snapshot['modules']}",
         "class _Loader(importlib.abc.Loader):\n def __init__(self,name): self.name=name\n def create_module(self,spec): return None\n def exec_module(self,module): module.__file__=paths[self.name]; exec(compile(sources[self.name],paths[self.name],'exec'),module.__dict__)",
         "class _Finder(importlib.abc.MetaPathFinder):\n def find_spec(self,fullname,path=None,target=None): return importlib.util.spec_from_loader(fullname,_Loader(fullname)) if fullname in sources else None",
-        "sys.meta_path.insert(0,_Finder())\nsys.argv=[sys.argv[4],*sys.argv[5:]]",
+        "sys.meta_path.insert(0,_Finder())\nsys._retrospective_v2_transport_orig_argv=tuple(sys.orig_argv)\nsys.argv=[sys.argv[4],*sys.argv[5:]]",
         "sys._retrospective_v2_transport_snapshot=digest\nglobals()['__file__']=paths['transport_worker']\nexec(compile(sources['transport_worker'],paths['transport_worker'],'exec'),globals())",
     )
 )

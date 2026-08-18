@@ -11,6 +11,7 @@ from . import sharding
 from .checkpoints import AtomicCheckpointStore
 from .contracts import RefType
 from .identity import IdentityKey
+from .transport_host_inventory import AuthenticatedHostInventory
 
 
 Clock = Callable[[], dt.datetime | str]
@@ -29,7 +30,7 @@ class RuntimeContext(Protocol):
 
     def agent_envelope_limit(self) -> int: ...
 
-    def canonical_hosts(self) -> tuple[str, ...]: ...
+    def current_host_inventory(self) -> AuthenticatedHostInventory: ...
 
     def source_transport_max_source_bytes(self) -> int: ...
 
@@ -47,7 +48,7 @@ class OrchestratorContext:
     store: AtomicCheckpointStore
     shard_limits: sharding.ShardLimits
     clock: Clock
-    canonical_hosts_provider: Callable[[], tuple[str, ...]]
+    host_inventory_provider: Callable[[], AuthenticatedHostInventory]
     agent_envelope_limit_provider: Callable[[], int]
     source_transport_max_source_bytes_provider: Callable[[], int]
     execution_contract_validator: Callable[[Mapping[str, Any]], dict[str, Any]]
@@ -58,8 +59,8 @@ class OrchestratorContext:
     def agent_envelope_limit(self) -> int:
         return self.agent_envelope_limit_provider()
 
-    def canonical_hosts(self) -> tuple[str, ...]:
-        return self.canonical_hosts_provider()
+    def current_host_inventory(self) -> AuthenticatedHostInventory:
+        return self.host_inventory_provider()
 
     def source_transport_max_source_bytes(self) -> int:
         return self.source_transport_max_source_bytes_provider()
@@ -102,8 +103,8 @@ class OrchestratorComponent:
     def _agent_envelope_limit(self) -> int:
         return self._context.agent_envelope_limit()
 
-    def _canonical_hosts(self) -> tuple[str, ...]:
-        return self._context.canonical_hosts()
+    def _current_host_inventory(self) -> AuthenticatedHostInventory:
+        return self._context.current_host_inventory()
 
     def _source_transport_max_source_bytes(self) -> int:
         return self._context.source_transport_max_source_bytes()

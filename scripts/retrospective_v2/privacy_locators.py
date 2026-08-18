@@ -225,6 +225,20 @@ _CREDENTIAL_FIELD_PATTERN_TEXT = (
     + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
     + r"['\"]?"
 )
+_CAMEL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
+    r"(?:(?<![\w-])|(?<=[._-]))['\"]?"
+    r"(?-i:(?=[A-Za-z0-9]{1,64}['\"]?"
+    + _CREDENTIAL_INLINE_SPACE_ATOMIC_PATTERN_TEXT
+    + r"(?:=|:))[a-z][A-Za-z0-9]*"
+    r"(?:Token|Secret|Password|ApiKey|AccessKey|PrivateKey))['\"]?"
+)
+_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
+    r"(?:"
+    + _CREDENTIAL_FIELD_PATTERN_TEXT
+    + r"|"
+    + _CAMEL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT
+    + r")"
+)
 _AUTH_SCHEME_PATTERN_TEXT = (
     r"(?:Bearer|Basic|Digest|Negotiate|Token|Api[-_]?Key|HMAC|"
     r"AWS4-HMAC-SHA256|Signature|OAuth|MAC)"
@@ -301,7 +315,7 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "credential",
         re.compile(
-            _CREDENTIAL_FIELD_PATTERN_TEXT
+            _CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT
             + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
             + r"(?:=|:)"
             + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
@@ -316,7 +330,7 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
         "credential",
         re.compile(
             r"(?:"
-            + _CREDENTIAL_FIELD_PATTERN_TEXT
+            + _CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT
             + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
             + r"(?:=|:)"
             + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT

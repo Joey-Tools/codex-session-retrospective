@@ -783,6 +783,7 @@ class ResultHistoryOperations(OrchestratorComponent):
             state["provenance"]["configuration_root"],
         )
         retained_provenance = copy.deepcopy(state["provenance"])
+        retained_provenance.pop("host_inventory", None)
         retained_provenance.update(
             {
                 "agent_execution": self._retained_agent_execution(state),

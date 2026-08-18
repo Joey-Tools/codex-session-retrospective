@@ -24,11 +24,11 @@ from . import (
 )
 from .checkpoints import CheckpointIntegrityError, content_digest
 from .contracts import JobKind
+from .transport_host_inventory import AuthenticatedHostInventory
 
 # Compatibility re-exports for callers that historically imported from this module.
 from .orchestrator_core import (  # noqa: F401
     DEFAULT_AGENT_CLAIM_TTL_SECONDS,
-    DEFAULT_HOSTS,
     ENGINE_VERSION,
     EXTRACTOR_SHARD_MAX_BYTES,
     InvalidInputError,
@@ -158,6 +158,7 @@ def _build_provenance(
     policy: Mapping[str, Any] | str | None,
     model: Mapping[str, Any] | str | None,
     versions: Mapping[str, Any] | None,
+    authenticated_host_inventory: AuthenticatedHostInventory,
 ) -> dict[str, Any]:
     if any(value is not None for value in (policy, model, versions)):
         raise InvalidInputError("legacy free-form provenance fields are not accepted")
@@ -241,12 +242,7 @@ def _build_provenance(
         raise InvalidInputError(
             "coordinator implementation authority is incompatible"
         ) from error
-    try:
-        helper_commitment = source_transport.remote_host_context_helper_commitment()
-    except (OSError, source_transport.TransportValidationError) as error:
-        raise InvalidInputError(
-            "remote-host-context helper cannot be statically authenticated"
-        ) from error
+    helper_commitment = authenticated_host_inventory.helper_commitment
     if (
         transport_value.get("remote_host_context_helper_commitment")
         != helper_commitment
@@ -257,6 +253,10 @@ def _build_provenance(
             "source transport or remote-host-context helper commitment changed"
         )
     result = {
+        "host_inventory": authenticated_host_inventory.inventory.to_dict(),
+        "host_inventory_commitment": (
+            authenticated_host_inventory.inventory_commitment
+        ),
         "implementation": _json_copy(
             implementation_value, label="coordinator implementation provenance"
         ),

@@ -88,6 +88,12 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.home.mkdir(mode=0o700)
         self.codex_root = self.home / ".codex"
         self.codex_root.mkdir(mode=0o700)
+        self.scheduler_local_root_patch = mock.patch.object(
+            transport,
+            "_local_codex_root",
+            return_value=self.codex_root,
+        )
+        self.scheduler_local_root_patch.start()
         self.identity = IdentityKey.create(self.root / "identity-v2.key")
         self.history = authority.DurableHistoryState(
             head_commit="a" * 40,
@@ -105,15 +111,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
             side_effect=lambda *_args, **_kwargs: self.history,
         )
         self.history_patch.start()
-        self.host_policy_patch = mock.patch.object(
-            orchestrator_module,
-            "DEFAULT_HOSTS",
-            ("local",),
-        )
-        self.host_policy_patch.start()
 
     def tearDown(self) -> None:
-        self.host_policy_patch.stop()
+        self.scheduler_local_root_patch.stop()
         self.history_patch.stop()
         self.snapshot_cache_patch.stop()
         self.temporary_directory.cleanup()
@@ -459,6 +459,36 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 f"rollout-2026-07-06T02-0{index}-00-{session_id}.jsonl"
             ).write_bytes(self._line(session_id, kind="session_meta"))
 
+    def _authenticated_inventory(
+        self,
+        hosts: tuple[str, ...],
+        provenance: dict[str, object],
+    ) -> transport.AuthenticatedHostInventory:
+        entries = tuple(
+            sorted(
+                (
+                    transport.CanonicalHost(
+                        host=host,
+                        role="local" if host == "local" else "remote",
+                        codex_root=(
+                            "~/.codex" if host == "local" else f"/home/{host}/.codex"
+                        ),
+                        transport_target=None if host == "local" else host,
+                    )
+                    for host in hosts
+                ),
+                key=lambda item: (item.role != "local", item.host),
+            )
+        )
+        transport_contract = provenance["transport"]
+        assert isinstance(transport_contract, dict)
+        helper_commitment = transport_contract["remote_host_context_helper_commitment"]
+        assert isinstance(helper_commitment, str)
+        return transport.AuthenticatedHostInventory(
+            transport.HostInventory(entries, ()),
+            helper_commitment,
+        )
+
     def _coordinator(
         self,
         name: str,
@@ -470,11 +500,24 @@ class SourceTransportProtocolTests(unittest.TestCase):
         session_target_selector: str | None = None,
         window_start: str = WINDOW_START,
         window_end: str = WINDOW_END,
+        host_inventory_provider=None,
     ) -> RetrospectiveOrchestrator:
+        selected_provenance = provenance or execution_provenance()
+        if host_inventory_provider is None:
+            authenticated_inventory = self._authenticated_inventory(
+                hosts,
+                selected_provenance,
+            )
+
+            def static_host_inventory_provider():
+                return authenticated_inventory
+
+            host_inventory_provider = static_host_inventory_provider
         coordinator = RetrospectiveOrchestrator(
             self.root / name,
             clock=lambda: "2026-07-15T00:00:00Z",
             identity_path=self.root / "identity-v2.key",
+            host_inventory_provider=host_inventory_provider,
         )
         coordinator.start(
             mode=mode,
@@ -487,7 +530,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             history_repo=self.root / "history",
             history_target_ref="refs/heads/main",
             publisher_gpg_program=TEST_PUBLISHER_GPG,
-            provenance=provenance or execution_provenance(),
+            provenance=selected_provenance,
             shadow=True,
         )
         return coordinator
@@ -508,20 +551,10 @@ class SourceTransportProtocolTests(unittest.TestCase):
         environment: dict[str, str] | None = None,
     ) -> dict[str, object]:
         lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
-        completed = subprocess.run(
-            list(lease.command_argv),
-            check=False,
-            capture_output=True,
-            env=environment,
-        )
-        self.assertEqual(
-            0,
-            completed.returncode,
-            completed.stderr.decode("utf-8", errors="replace"),
-        )
+        captured = self._capture_private_lease_output(lease)
         preparation = coordinator.prepare_source(
             lease.lease_ref,
-            completed.stdout.splitlines(keepends=True),
+            captured.splitlines(keepends=True),
         )
         return coordinator.accept_source(
             lease.lease_ref,
@@ -529,6 +562,34 @@ class SourceTransportProtocolTests(unittest.TestCase):
             transport_receipt=preparation.receipt,
             raw_records=preparation.raw_records,
         )
+
+    def _capture_private_lease_output(
+        self,
+        lease: transport.TransportLease,
+    ) -> bytes:
+        marker_index = lease.command_argv.index("source-transport")
+        worker_arguments = lease.command_argv[marker_index:-4]
+        scan_context = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="local",
+            host="local",
+        )
+        output_path = (
+            self.root / f"{lease.lease_ref.removeprefix('lease_ref_v2:')}.jsonl"
+        )
+        with (
+            output_path.open("w", encoding="ascii") as output,
+            mock.patch.object(sys, "stdout", output),
+        ):
+            self.assertEqual(
+                0,
+                transport_source._run_private_source_transport_scan(
+                    worker_arguments,
+                    scan_context=scan_context,
+                    execution_commitment=lease.execution_argv_commitment,
+                ),
+            )
+        return output_path.read_bytes()
 
     def _direct_source_frames(
         self,
@@ -538,17 +599,62 @@ class SourceTransportProtocolTests(unittest.TestCase):
         max_records: int,
         max_source_bytes: int = 16 * 1024 * 1024,
         resume_position: dict[str, object] | None = None,
-        reported_host: str | None = None,
+        host: str = "local",
         session_selector_commitment: str | None = None,
         window_start: str = WINDOW_START,
         window_end: str = WINDOW_END,
     ) -> list[dict[str, object]]:
         output_path = self.root / f"{name}.jsonl"
+        arguments = self._direct_source_arguments(
+            name,
+            host=host,
+            source_kind=source_kind,
+            max_records=max_records,
+            max_source_bytes=max_source_bytes,
+            resume_position=resume_position,
+            session_selector_commitment=session_selector_commitment,
+            window_start=window_start,
+            window_end=window_end,
+        )
+        scan_context = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="local" if host == "local" else "remote",
+            host=host,
+        )
+        with (
+            output_path.open("w", encoding="ascii") as output,
+            mock.patch.object(sys, "stdout", output),
+        ):
+            self.assertEqual(
+                0,
+                transport_source._run_private_source_transport_scan(
+                    arguments,
+                    scan_context=scan_context,
+                ),
+            )
+        return [
+            json.loads(line)
+            for line in output_path.read_text(encoding="ascii").splitlines()
+        ]
+
+    def _direct_source_arguments(
+        self,
+        name: str,
+        *,
+        host: str,
+        source_kind: str,
+        max_records: int,
+        max_source_bytes: int,
+        resume_position: dict[str, object] | None,
+        session_selector_commitment: str | None,
+        window_start: str,
+        window_end: str,
+    ) -> list[str]:
         lease_ref = str(self.identity.derive_ref(RefType.LEASE, {"case": name}))
         arguments = [
             "source-transport",
             "--host",
-            "local",
+            host,
             "--source-kind",
             source_kind,
             "--window-start",
@@ -565,8 +671,6 @@ class SourceTransportProtocolTests(unittest.TestCase):
             str(max_records),
             "--max-frame-bytes",
             "8192",
-            "--direct-root",
-            str(self.codex_root),
         ]
         if resume_position is not None:
             arguments.extend(
@@ -575,8 +679,6 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     transport.encode_source_resume_position(resume_position),
                 )
             )
-        if reported_host is not None:
-            arguments.extend(("--reported-host", reported_host))
         if session_selector_commitment is not None:
             arguments.extend(
                 (
@@ -593,18 +695,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     session_selector_commitment,
                 )
             )
-        with (
-            output_path.open("w", encoding="ascii") as output,
-            mock.patch.object(sys, "stdout", output),
-        ):
-            self.assertEqual(
-                0,
-                transport_source._run_private_transport_worker(arguments),
-            )
-        return [
-            json.loads(line)
-            for line in output_path.read_text(encoding="ascii").splitlines()
-        ]
+        return arguments
 
     def _direct_source_lease(
         self,
@@ -630,6 +721,27 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 )
             )
         )
+        arguments = self._direct_source_arguments(
+            name,
+            host="local",
+            source_kind=source_kind,
+            max_records=max_records,
+            max_source_bytes=max_source_bytes,
+            resume_position=resume_position,
+            session_selector_commitment=session_selector_commitment,
+            window_start=WINDOW_START,
+            window_end=WINDOW_END,
+        )
+        scan_context = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="local",
+            host="local",
+        )
+        bound_arguments = transport_source._private_source_transport_bound_arguments(
+            arguments,
+            scan_context=scan_context,
+        )
+        command_argv = ("transport_worker.py", *bound_arguments)
         return transport.issue_transport_lease(
             self.identity,
             lease_ref=str(self.identity.derive_ref(RefType.LEASE, {"case": name})),
@@ -641,7 +753,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
             window_start=WINDOW_START,
             window_end=WINDOW_END,
             process_nonce=name,
-            command_argv=("python3.13", "transport_worker.py"),
+            command_argv=command_argv,
+            execution_argv_commitment=command_argv[-1],
+            source_root_commitment=scan_context.source_root_commitment,
             transport_program_commitment="sha256:" + "0" * 64,
             source_byte_limit=max_source_bytes,
             record_limit=max_records,
@@ -651,6 +765,77 @@ class SourceTransportProtocolTests(unittest.TestCase):
             source_cursor=None,
             cursor_time=None,
             resume_position=resume_position,
+        )
+
+    def _bound_worker_invocation(
+        self,
+        arguments: list[str],
+        *,
+        source_root_binding: str,
+    ) -> tuple[tuple[str, ...], tuple[str, ...]]:
+        worker = str(Path(transport_program.__file__).with_name("transport_worker.py"))
+        command_prefix = (
+            sys.executable,
+            worker,
+            *arguments,
+            transport.SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
+            source_root_binding,
+        )
+        execution_binding = transport.execution_argv_commitment(command_prefix)
+        worker_arguments = (
+            *arguments,
+            transport.SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
+            source_root_binding,
+            transport.SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
+            execution_binding,
+        )
+        return (
+            *command_prefix,
+            transport.SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
+            execution_binding,
+        ), worker_arguments
+
+    def _bind_native_local_command(
+        self,
+        command_prefix: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        root_binding = transport.source_root_commitment(
+            codex_root=str(transport_source._local_codex_root()),
+            route="local",
+            host="local",
+        )
+        bound_prefix = (
+            *command_prefix,
+            transport.SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
+            root_binding,
+        )
+        return (
+            *bound_prefix,
+            transport.SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
+            transport.execution_argv_commitment(bound_prefix),
+        )
+
+    def _native_no_activity_command(
+        self,
+        command: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        prefix = list(command[:-2])
+        for option, value in (
+            ("--source-kind", "active_rollout"),
+            ("--window-start", "2099-01-01T00:00:00Z"),
+            ("--window-end", "2099-01-02T00:00:00Z"),
+        ):
+            prefix[prefix.index(option) + 1] = value
+        root_index = prefix.index(transport.SOURCE_TRANSPORT_SOURCE_ROOT_OPTION) + 1
+        prefix[root_index] = transport.source_root_commitment(
+            codex_root=str(transport_source._local_codex_root()),
+            route="local",
+            host="local",
+        )
+        return (
+            *prefix,
+            transport.SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
+            transport.execution_argv_commitment(prefix),
         )
 
     def _complete_native_sources(
@@ -818,20 +1003,13 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     [action["action"] for action in actions],
                 )
                 self.assertNotIn("execute-source", json.dumps(lease))
-                environment = dict(os.environ)
-                environment["HOME"] = str(self.home)
                 transport_lease = transport.TransportLease.from_dict(
                     lease["transport_lease"]
                 )
-                completed = subprocess.run(
-                    list(transport_lease.command_argv),
-                    check=True,
-                    capture_output=True,
-                    env=environment,
-                )
-                self.assertNotIn(b"AcmeNonTargetSecret", completed.stdout)
+                captured = self._capture_private_lease_output(transport_lease)
+                self.assertNotIn(b"AcmeNonTargetSecret", captured)
                 capture = transport.capture_source_transport(
-                    completed.stdout.splitlines(keepends=True),
+                    captured.splitlines(keepends=True),
                     lease=transport_lease,
                 )
                 inventory_counts[lease["source_kind"]] = len(capture.inventory)
@@ -839,7 +1017,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     self.assertNotIn(b"AcmeNonTargetSecret", record.payload)
                 preparation = coordinator.prepare_source(
                     transport_lease.lease_ref,
-                    completed.stdout.splitlines(keepends=True),
+                    captured.splitlines(keepends=True),
                 )
                 coordinator.accept_source(
                     transport_lease.lease_ref,
@@ -927,13 +1105,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
         coordinator = self._coordinator("forgery-run")
         lease_view = self._first_lease(coordinator)
         lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
-        with mock.patch.dict(os.environ, {"HOME": str(self.home)}):
-            completed = subprocess.run(
-                list(lease.command_argv),
-                check=True,
-                capture_output=True,
-            )
-        lines = completed.stdout.splitlines(keepends=True)
+        captured = self._capture_private_lease_output(lease)
+        lines = captured.splitlines(keepends=True)
         capture = transport.capture_source_transport(lines, lease=lease)
         self.assertEqual(SourceCellStatus.NO_ACTIVITY, capture.terminal_status)
         with self.assertRaisesRegex(
@@ -1053,6 +1226,321 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertIn(
             "source transport Python isolation failed", missing_no_site.stderr
         )
+
+    def test_worker_rejects_actual_argv_add_delete_and_reorder_before_source_open(
+        self,
+    ) -> None:
+        arguments = self._direct_source_arguments(
+            "actual-argv-attacks",
+            host="local",
+            source_kind="history",
+            max_records=8,
+            max_source_bytes=1024 * 1024,
+            resume_position=None,
+            session_selector_commitment=None,
+            window_start=WINDOW_START,
+            window_end=WINDOW_END,
+        )
+        context = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="local",
+            host="local",
+        )
+        actual, bound = self._bound_worker_invocation(
+            arguments,
+            source_root_binding=context.source_root_commitment,
+        )
+        prefix = list(bound[:-2])
+        process_index = prefix.index("--process-nonce")
+        source_index = prefix.index("--source-kind")
+        attacks = {
+            "add": [*prefix, "unexpected-argument", *bound[-2:]],
+            "delete": [
+                *prefix[: process_index + 1],
+                *prefix[process_index + 2 :],
+                *bound[-2:],
+            ],
+            "reorder": [
+                *prefix[:source_index],
+                *prefix[source_index + 2 : process_index],
+                *prefix[source_index : source_index + 2],
+                *prefix[process_index:],
+                *bound[-2:],
+            ],
+        }
+        for label, attacked in attacks.items():
+            with self.subTest(label=label):
+                attacked_actual = (*actual[:2], *attacked)
+                with (
+                    mock.patch.object(sys, "argv", [actual[1], *attacked]),
+                    mock.patch.object(
+                        sys,
+                        "_retrospective_v2_transport_orig_argv",
+                        attacked_actual,
+                        create=True,
+                    ),
+                    mock.patch.object(
+                        transport_source,
+                        "_SOURCE_TRANSPORT_OPEN_COMPONENT_HOOK",
+                        create=True,
+                    ) as source_open,
+                    self.assertRaisesRegex(
+                        transport.TransportValidationError,
+                        "actual OS argv commitment changed",
+                    ),
+                ):
+                    transport_source._run_private_transport_worker(attacked)
+                source_open.assert_not_called()
+
+    def test_worker_normalizes_the_macos_venv_launcher_argv_zero(self) -> None:
+        arguments = self._direct_source_arguments(
+            "macos-venv-launcher",
+            host="local",
+            source_kind="active_rollout",
+            max_records=8,
+            max_source_bytes=1024 * 1024,
+            resume_position=None,
+            session_selector_commitment=None,
+            window_start="2099-01-01T00:00:00Z",
+            window_end="2099-01-02T00:00:00Z",
+        )
+        context = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="local",
+            host="local",
+        )
+        actual, bound = self._bound_worker_invocation(
+            arguments,
+            source_root_binding=context.source_root_commitment,
+        )
+        launcher_rewritten = ("/Framework/Python.app/Python", *actual[1:])
+        with (
+            mock.patch.object(sys, "argv", [actual[1], *bound]),
+            mock.patch.object(
+                sys,
+                "_retrospective_v2_transport_orig_argv",
+                launcher_rewritten,
+                create=True,
+            ),
+        ):
+            self.assertEqual(
+                tuple(bound),
+                transport_source._validate_actual_execution_argv(bound),
+            )
+
+    def test_local_source_root_ignores_home_environment(self) -> None:
+        account = types.SimpleNamespace(pw_dir=str(self.home), pw_name="test-user")
+        redirected = self.root / "redirected-home"
+        with (
+            mock.patch.dict(os.environ, {"HOME": str(redirected)}),
+            mock.patch.object(pwd, "getpwuid", return_value=account),
+        ):
+            root = transport_source._local_codex_root()
+        self.assertEqual(self.codex_root, root)
+        self.assertNotEqual(redirected / ".codex", root)
+
+    def test_source_root_commitment_ignores_timestamps_but_binds_lexical_root(
+        self,
+    ) -> None:
+        original = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="local",
+            host="local",
+        )
+        metadata = self.codex_root.stat()
+        os.utime(
+            self.codex_root,
+            ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 1_000_000_000),
+        )
+        churned = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="local",
+            host="local",
+        )
+        substitute = self.home / "substitute-codex"
+        substitute.mkdir(mode=0o700)
+        replaced = transport_source._source_transport_scan_context(
+            substitute,
+            route="local",
+            host="local",
+        )
+        self.assertEqual(
+            original.source_root_commitment,
+            churned.source_root_commitment,
+        )
+        self.assertNotEqual(
+            original.source_root_commitment,
+            replaced.source_root_commitment,
+        )
+
+    def test_remote_to_local_route_downgrade_fails_before_source_open(self) -> None:
+        helper = self.root / "downgraded-route-helper.py"
+        helper.write_text(
+            "HOSTS = {\n"
+            "    'remote.example': {\n"
+            "        'kind': 'local',\n"
+            "        'label': 'remote.example',\n"
+            "        'codex_root': '~/.codex',\n"
+            "    },\n"
+            "}\n",
+            encoding="ascii",
+        )
+        snapshot, helper_commitment = (
+            transport_remote_snapshot.snapshot_remote_host_context_helper(
+                helper,
+                self.root / "downgraded-route-snapshots",
+            )
+        )
+        arguments = self._direct_source_arguments(
+            "remote-route-downgrade",
+            host="remote.example",
+            source_kind="history",
+            max_records=8,
+            max_source_bytes=1024 * 1024,
+            resume_position=None,
+            session_selector_commitment=None,
+            window_start=WINDOW_START,
+            window_end=WINDOW_END,
+        )
+        arguments.extend(
+            (
+                "--remote-helper",
+                str(snapshot),
+                "--remote-helper-commitment",
+                helper_commitment,
+            )
+        )
+        root_binding = transport.source_root_commitment(
+            codex_root=str(self.codex_root),
+            route="remote",
+            host="remote.example",
+        )
+        actual, bound = self._bound_worker_invocation(
+            arguments,
+            source_root_binding=root_binding,
+        )
+        with (
+            mock.patch.object(sys, "argv", [actual[1], *bound]),
+            mock.patch.object(
+                sys,
+                "_retrospective_v2_transport_orig_argv",
+                actual,
+                create=True,
+            ),
+            mock.patch.object(
+                transport_source,
+                "_SOURCE_TRANSPORT_OPEN_COMPONENT_HOOK",
+                create=True,
+            ) as source_open,
+            mock.patch.object(
+                transport_source,
+                "_relay_remote_host_context_command",
+            ) as relay,
+            self.assertRaisesRegex(
+                transport.TransportValidationError,
+                "cannot use a local helper route",
+            ),
+        ):
+            transport_source._run_private_transport_worker(bound)
+        source_open.assert_not_called()
+        relay.assert_not_called()
+
+    def test_helper_path_change_fails_actual_argv_binding_before_snapshot_open(
+        self,
+    ) -> None:
+        arguments = self._direct_source_arguments(
+            "helper-path-change",
+            host="remote.example",
+            source_kind="history",
+            max_records=8,
+            max_source_bytes=1024 * 1024,
+            resume_position=None,
+            session_selector_commitment=None,
+            window_start=WINDOW_START,
+            window_end=WINDOW_END,
+        )
+        arguments.extend(
+            (
+                "--remote-helper",
+                str(self.root / "original-helper.py"),
+                "--remote-helper-commitment",
+                "sha256:" + "1" * 64,
+            )
+        )
+        root_binding = transport.source_root_commitment(
+            codex_root="/home/test/.codex",
+            route="remote",
+            host="remote.example",
+        )
+        actual, bound = self._bound_worker_invocation(
+            arguments,
+            source_root_binding=root_binding,
+        )
+        attacked = list(bound)
+        helper_index = attacked.index("--remote-helper") + 1
+        attacked[helper_index] = str(self.root / "replacement-helper.py")
+        attacked_actual = (*actual[:2], *attacked)
+        with (
+            mock.patch.object(sys, "argv", [actual[1], *attacked]),
+            mock.patch.object(
+                sys,
+                "_retrospective_v2_transport_orig_argv",
+                attacked_actual,
+                create=True,
+            ),
+            mock.patch.object(
+                transport_remote,
+                "_program_component",
+            ) as snapshot_open,
+            self.assertRaisesRegex(
+                transport.TransportValidationError,
+                "actual OS argv commitment changed",
+            ),
+        ):
+            transport_source._run_private_transport_worker(attacked)
+        snapshot_open.assert_not_called()
+
+    def test_capture_rejects_execution_and_root_header_forgery(self) -> None:
+        frames = self._direct_source_frames(
+            "header-binding-forgery",
+            source_kind="history",
+            max_records=8,
+        )
+        lease = self._direct_source_lease(
+            "header-binding-forgery",
+            source_kind="history",
+            max_records=8,
+        )
+        for field in ("execution_argv_commitment", "source_root_commitment"):
+            forged = json.loads(json.dumps(frames))
+            forged[0][field] = "sha256:" + "f" * 64
+            with (
+                self.subTest(field=field),
+                self.assertRaisesRegex(
+                    transport.TransportValidationError,
+                    "header is not bound to its authenticated lease",
+                ),
+            ):
+                transport.capture_source_transport(
+                    (
+                        json.dumps(frame, separators=(",", ":"), sort_keys=True) + "\n"
+                        for frame in forged
+                    ),
+                    lease=lease,
+                )
+        self_reported = json.loads(json.dumps(frames))
+        self_reported[0]["codex_root"] = str(self.root / "stream-selected-root")
+        with self.assertRaisesRegex(
+            transport.TransportValidationError,
+            "header is not bound to its authenticated lease",
+        ):
+            transport.capture_source_transport(
+                (
+                    json.dumps(frame, separators=(",", ":"), sort_keys=True) + "\n"
+                    for frame in self_reported
+                ),
+                lease=lease,
+            )
 
     def test_native_transport_ignores_uncommitted_unchecked_hash_bytecode(
         self,
@@ -1250,16 +1738,26 @@ class SourceTransportProtocolTests(unittest.TestCase):
             "remote-session-stream",
             source_kind="history",
             max_records=8,
-            reported_host="remote.example",
+            host="remote.example",
             session_selector_commitment=selector,
         )
+        legacy_frames = json.loads(json.dumps(frames))
+        legacy_frames[0].pop("execution_argv_commitment")
+        legacy_frames[0].pop("source_root_commitment")
         payload = b"".join(
             json.dumps(frame, separators=(",", ":"), sort_keys=True).encode("ascii")
             + b"\n"
-            for frame in frames
+            for frame in legacy_frames
         )
         helper = self.root / "remote-session-helper.py"
-        helper.write_text("print('{}')\n", encoding="ascii")
+        helper.write_text(
+            "HOSTS = {\n"
+            "    'local': {'kind': 'local', 'label': 'local', 'codex_root': '~/.codex'},\n"
+            "    'remote.example': {'kind': 'ssh', 'label': 'remote.example', "
+            f"'ssh_target': 'remote.example', 'codex_root': {str(self.codex_root)!r}}},\n"
+            "}\n",
+            encoding="ascii",
+        )
         snapshot, commitment = (
             transport_remote_snapshot.snapshot_remote_host_context_helper(
                 helper,
@@ -1300,9 +1798,18 @@ class SourceTransportProtocolTests(unittest.TestCase):
             "--remote-helper-commitment",
             commitment,
         ]
+        remote_context = transport_source._source_transport_scan_context(
+            self.codex_root,
+            route="remote",
+            host="remote.example",
+        )
+        actual_argv, bound_arguments = self._bound_worker_invocation(
+            arguments,
+            source_root_binding=remote_context.source_root_commitment,
+        )
         observed_command: tuple[str, ...] | None = None
 
-        def relay(command, *, max_output_bytes, validator) -> None:
+        def relay(command, *, max_output_bytes, validator, publisher) -> None:
             nonlocal observed_command
             observed_command = tuple(command)
             self.assertGreater(max_output_bytes, len(payload))
@@ -1312,7 +1819,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     validator(output)
                 except transport.TransportValidationError as error:
                     raise RuntimeError("invalid protocol stream") from error
-            sys.stdout.buffer.write(payload)
+                publisher(output)
 
         output_path = self.root / "remote-session-relay.jsonl"
         with (
@@ -1323,10 +1830,21 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 "_relay_remote_host_context_command",
                 side_effect=relay,
             ),
+            mock.patch.object(
+                sys,
+                "argv",
+                [actual_argv[-len(bound_arguments) - 1], *bound_arguments],
+            ),
+            mock.patch.object(
+                sys,
+                "_retrospective_v2_transport_orig_argv",
+                actual_argv,
+                create=True,
+            ),
         ):
             self.assertEqual(
                 0,
-                transport_source._run_private_transport_worker(arguments),
+                transport_source._run_private_transport_worker(bound_arguments),
             )
 
         self.assertIsNotNone(observed_command)
@@ -1367,17 +1885,25 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual("original-helper", completed.stdout.strip())
         self.assertNotEqual(helper.read_bytes(), snapshot.read_bytes())
 
-    def test_remote_lease_rejects_helper_replaced_after_run_provenance(
+    def test_remote_lease_rejects_helper_replaced_after_inventory_freeze(
         self,
     ) -> None:
         helper = self.root / "run-bound-remote-helper.py"
-        helper.write_text("print('original-helper')\n", encoding="ascii")
+        original_helper = (
+            "HOSTS = {\n"
+            "    'local': {'kind': 'local', 'label': 'local', "
+            "'codex_root': '~/.codex'},\n"
+            "    'remote': {'kind': 'ssh', 'label': 'remote', "
+            "'ssh_target': 'remote', 'codex_root': '/home/remote/.codex'},\n"
+            "}\n"
+            "# original helper\n"
+        )
+        helper.write_text(original_helper, encoding="ascii")
         provenance = execution_provenance()
         provenance["transport"]["remote_host_context_helper_commitment"] = (
             transport.remote_host_context_helper_commitment(helper)
         )
         with (
-            mock.patch.object(orchestrator_module, "DEFAULT_HOSTS", ("remote",)),
             mock.patch.object(
                 transport_remote,
                 "remote_host_context_helper_path",
@@ -1391,14 +1917,18 @@ class SourceTransportProtocolTests(unittest.TestCase):
         ):
             coordinator = self._coordinator(
                 "remote-helper-run-provenance",
-                hosts=("remote",),
+                hosts=("local", "remote"),
                 provenance=provenance,
+                host_inventory_provider=transport.remote_host_context_host_inventory,
             )
-            helper.write_text("print('replacement-helper')\n", encoding="ascii")
+            helper.write_text(
+                original_helper.replace("original helper", "replacement helper"),
+                encoding="ascii",
+            )
 
             with self.assertRaisesRegex(
-                transport.TransportValidationError,
-                "differs from the run provenance",
+                InvalidTransitionError,
+                "host inventory drifted",
             ):
                 self._first_lease(coordinator)
 
@@ -1407,9 +1937,66 @@ class SourceTransportProtocolTests(unittest.TestCase):
             self.assertTrue(
                 all(
                     cell["status"] == "pending"
-                    for cell in state["source"]["cells"]["remote"].values()
+                    for host_cells in state["source"]["cells"].values()
+                    for cell in host_cells.values()
                 )
             )
+
+    def test_source_scheduling_rejects_inventory_or_helper_authority_drift(
+        self,
+    ) -> None:
+        provenance = execution_provenance()
+        original = self._authenticated_inventory(("local",), provenance)
+        expanded = transport.AuthenticatedHostInventory(
+            transport.HostInventory(
+                (
+                    original.inventory.local_host,
+                    transport.CanonicalHost(
+                        host="remote",
+                        role="remote",
+                        codex_root="/home/remote/.codex",
+                        transport_target="remote",
+                    ),
+                ),
+                (),
+            ),
+            original.helper_commitment,
+        )
+        replacements = {
+            "helper": transport.AuthenticatedHostInventory(
+                original.inventory,
+                "sha256:" + "f" * 64,
+            ),
+            "inventory": expanded,
+        }
+        for label, replacement in replacements.items():
+            with self.subTest(label=label):
+                current = {"inventory": original}
+
+                def provider():
+                    return current["inventory"]
+
+                coordinator = self._coordinator(
+                    f"host-authority-drift-{label}",
+                    provenance=provenance,
+                    host_inventory_provider=provider,
+                )
+                current["inventory"] = replacement
+
+                with self.assertRaisesRegex(
+                    InvalidTransitionError,
+                    "host inventory drifted",
+                ):
+                    coordinator.advance()
+
+                state = coordinator.load_state()
+                self.assertEqual({}, state["jobs"])
+                self.assertTrue(
+                    all(
+                        cell["status"] == "pending"
+                        for cell in state["source"]["cells"]["local"].values()
+                    )
+                )
 
     def test_remote_helper_launch_rejects_snapshot_changed_after_command_binding(
         self,
@@ -1536,13 +2123,21 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self,
     ) -> None:
         helper = self.root / "failing-remote-helper.py"
-        helper.write_text("raise SystemExit(1)\n", encoding="ascii")
+        helper.write_text(
+            "HOSTS = {\n"
+            "    'local': {'kind': 'local', 'label': 'local', "
+            "'codex_root': '~/.codex'},\n"
+            "    'remote': {'kind': 'ssh', 'label': 'remote', "
+            "'ssh_target': 'remote', 'codex_root': '/home/remote/.codex'},\n"
+            "}\n"
+            "raise SystemExit(1)\n",
+            encoding="ascii",
+        )
         provenance = execution_provenance()
         provenance["transport"]["remote_host_context_helper_commitment"] = (
             transport.remote_host_context_helper_commitment(helper)
         )
         with (
-            mock.patch.object(orchestrator_module, "DEFAULT_HOSTS", ("remote",)),
             mock.patch.object(
                 transport_remote,
                 "remote_host_context_helper_path",
@@ -1556,12 +2151,19 @@ class SourceTransportProtocolTests(unittest.TestCase):
         ):
             coordinator = self._coordinator(
                 "remote-snapshot-before-acceptance",
-                hosts=("remote",),
+                hosts=("local", "remote"),
                 provenance=provenance,
+                host_inventory_provider=transport.remote_host_context_host_inventory,
             )
-            lease = transport.TransportLease.from_dict(
-                self._first_lease(coordinator)["transport_lease"]
-            )
+            lease_view = self._first_lease(coordinator)
+            while lease_view["host"] != "remote":
+                local_lease = transport.TransportLease.from_dict(
+                    lease_view["transport_lease"]
+                )
+                self._capture_prepare_accept(coordinator, lease_view)
+                self.assertEqual("local", local_lease.host)
+                lease_view = self._first_lease(coordinator)
+            lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
             completed = subprocess.run(
                 list(lease.command_argv),
                 check=True,
@@ -1799,14 +2401,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
         coordinator = self._coordinator("metadata-window")
         lease_view = self._first_lease(coordinator)
         lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
-        with mock.patch.dict(os.environ, {"HOME": str(self.home)}):
-            completed = subprocess.run(
-                list(lease.command_argv),
-                check=True,
-                capture_output=True,
-                env=dict(os.environ),
-            )
-        lines = completed.stdout.splitlines(keepends=True)
+        captured = self._capture_private_lease_output(lease)
+        lines = captured.splitlines(keepends=True)
         capture = transport.capture_source_transport(lines, lease=lease)
 
         self.assertEqual((), tuple(record.payload for record in capture.records))
@@ -1858,15 +2454,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
         lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
         self.assertEqual(cursor_rows[0]["cursor_ref"], lease.source_cursor)
         self.assertEqual("2026-07-05T12:00:00Z", lease.cursor_time)
-        with mock.patch.dict(os.environ, {"HOME": str(self.home)}):
-            completed = subprocess.run(
-                list(lease.command_argv),
-                check=True,
-                capture_output=True,
-                env=dict(os.environ),
-            )
+        captured = self._capture_private_lease_output(lease)
         capture = transport.capture_source_transport(
-            completed.stdout.splitlines(keepends=True),
+            captured.splitlines(keepends=True),
             lease=lease,
         )
         self.assertEqual("before_cursor", capture.inventory[0]["reason"])
@@ -1946,7 +2536,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 output,
             ),
         ):
-            exit_code = transport_source._run_private_transport_worker(
+            exit_code = transport_source._run_private_source_transport_scan(
                 [
                     "source-transport",
                     "--host",
@@ -1967,9 +2557,12 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     "2",
                     "--max-frame-bytes",
                     "8192",
-                    "--direct-root",
-                    str(self.codex_root),
-                ]
+                ],
+                scan_context=transport_source._source_transport_scan_context(
+                    self.codex_root,
+                    route="local",
+                    host="local",
+                ),
             )
         frames = [
             json.loads(line)
@@ -2473,14 +3066,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
             history_view = self._first_lease(coordinator)
             self.assertEqual("history", history_view["source_kind"])
             lease = transport.TransportLease.from_dict(history_view["transport_lease"])
-            completed = subprocess.run(
-                list(lease.command_argv),
-                check=True,
-                capture_output=True,
-                env=dict(os.environ),
-            )
+            captured = self._capture_private_lease_output(lease)
 
-        frames = completed.stdout.splitlines(keepends=True)
+        frames = captured.splitlines(keepends=True)
         capture = transport.capture_source_transport(frames, lease=lease)
         self.assertEqual(SourceCellStatus.GAP, capture.terminal_status)
         self.assertEqual("source_record_oversized", capture.terminal_reason)
@@ -2523,15 +3111,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 lease = transport.TransportLease.from_dict(
                     lease_view["transport_lease"]
                 )
-                environment = {**os.environ, "HOME": str(self.home)}
-                completed = subprocess.run(
-                    list(lease.command_argv),
-                    check=True,
-                    capture_output=True,
-                    env=environment,
-                )
+                captured = self._capture_private_lease_output(lease)
                 capture = transport.capture_source_transport(
-                    completed.stdout.splitlines(keepends=True),
+                    captured.splitlines(keepends=True),
                     lease=lease,
                 )
                 self.assertEqual(SourceCellStatus.GAP, capture.terminal_status)
@@ -2596,14 +3178,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
         coordinator = self._coordinator("control-session-id")
         lease_view = self._first_lease(coordinator)
         lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
-        completed = subprocess.run(
-            list(lease.command_argv),
-            check=True,
-            capture_output=True,
-            env={**os.environ, "HOME": str(self.home)},
-        )
+        captured = self._capture_private_lease_output(lease)
         capture = transport.capture_source_transport(
-            completed.stdout.splitlines(keepends=True),
+            captured.splitlines(keepends=True),
             lease=lease,
         )
         self.assertEqual(SourceCellStatus.GAP, capture.terminal_status)
@@ -2660,7 +3237,6 @@ class SourceTransportProtocolTests(unittest.TestCase):
             for index in range(10)
         ]
         self.codex_root.joinpath("history.jsonl").write_bytes(b"".join(payloads))
-        environment = {**os.environ, "HOME": str(self.home)}
         continued_source_kind = ""
         real_materialized_segment = source_inputs.materialized_segment
         materialized_segment_calls = 0
@@ -2694,15 +3270,10 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     coordinator.advance()
                     continue
                 lease = transport.TransportLease.from_dict(leases[0]["transport_lease"])
-                completed = subprocess.run(
-                    list(lease.command_argv),
-                    check=True,
-                    capture_output=True,
-                    env=environment,
-                )
+                captured = self._capture_private_lease_output(lease)
                 preparation = coordinator.prepare_source(
                     lease.lease_ref,
-                    completed.stdout.splitlines(keepends=True),
+                    captured.splitlines(keepends=True),
                 )
                 existing_segment_count = len(
                     coordinator.load_state()["source"]["cells"]["local"][
@@ -2742,6 +3313,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
                         clock=lambda: "2026-07-15T00:00:00Z",
                         identity_path=self.root / "identity-v2.key",
                         require_existing_identity=True,
+                        host_inventory_provider=(
+                            coordinator._context.host_inventory_provider
+                        ),
                     )
                     restarted = True
             else:
@@ -3839,7 +4413,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 side_effect=replace_after_discovery,
             ),
         ):
-            exit_code = transport_source._run_private_transport_worker(
+            exit_code = transport_source._run_private_source_transport_scan(
                 [
                     "source-transport",
                     "--host",
@@ -3860,9 +4434,12 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     "16",
                     "--max-frame-bytes",
                     "8192",
-                    "--direct-root",
-                    str(self.codex_root),
-                ]
+                ],
+                scan_context=transport_source._source_transport_scan_context(
+                    self.codex_root,
+                    route="local",
+                    host="local",
+                ),
             )
 
         frames = [
@@ -4692,21 +5269,19 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual(0o600, snapshot_path.stat().st_mode & 0o777)
         self.assertFalse(transport_program.SOURCE_TRANSPORT_SNAPSHOT_CACHE.exists())
 
-        completed = subprocess.run(
-            list(lease.command_argv),
-            check=True,
-            capture_output=True,
-            env={**os.environ, "HOME": str(self.home)},
-        )
+        captured = self._capture_private_lease_output(lease)
+        provenance = execution_provenance()
+        authenticated_inventory = self._authenticated_inventory(("local",), provenance)
         resumed = RetrospectiveOrchestrator(
             coordinator.run_dir,
             clock=lambda: "2026-07-15T00:00:00Z",
             identity_path=self.root / "identity-v2.key",
             require_existing_identity=True,
+            host_inventory_provider=lambda: authenticated_inventory,
         )
         preparation = resumed.prepare_source(
             lease.lease_ref,
-            completed.stdout.splitlines(keepends=True),
+            captured.splitlines(keepends=True),
         )
         self.assertEqual(lease.lease_ref, preparation.lease_ref)
 
@@ -4719,33 +5294,33 @@ class SourceTransportProtocolTests(unittest.TestCase):
         lease_ref = str(
             self.identity.derive_ref(RefType.LEASE, {"case": "python-alias"})
         )
-        command = (
-            *transport_program.source_transport_python_command(
-                snapshot_cache,
-                executable=alias,
-            ),
-            str(worker),
-            "source-transport",
-            "--host",
-            "local",
-            "--source-kind",
-            "history",
-            "--window-start",
-            WINDOW_START,
-            "--window-end",
-            WINDOW_END,
-            "--lease-ref",
-            lease_ref,
-            "--process-nonce",
-            "python-alias",
-            "--max-source-bytes",
-            str(1024 * 1024),
-            "--max-records",
-            "16",
-            "--max-frame-bytes",
-            "8192",
-            "--direct-root",
-            str(self.codex_root),
+        command = self._bind_native_local_command(
+            (
+                *transport_program.source_transport_python_command(
+                    snapshot_cache,
+                    executable=alias,
+                ),
+                str(worker),
+                "source-transport",
+                "--host",
+                "local",
+                "--source-kind",
+                "active_rollout",
+                "--window-start",
+                "2099-01-01T00:00:00Z",
+                "--window-end",
+                "2099-01-02T00:00:00Z",
+                "--lease-ref",
+                lease_ref,
+                "--process-nonce",
+                "python-alias",
+                "--max-source-bytes",
+                str(1024 * 1024),
+                "--max-records",
+                "16",
+                "--max-frame-bytes",
+                "8192",
+            )
         )
         commitment = transport_program.transport_program_commitment(
             command,
@@ -4765,7 +5340,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         completed = subprocess.run(command, check=True, capture_output=True, timeout=10)
 
         frames = [json.loads(line) for line in completed.stdout.splitlines()]
-        self.assertTrue(frames[-1]["complete"])
+        self.assertEqual(command[-1], frames[0]["execution_argv_commitment"])
 
     def test_transport_program_binds_python_ancestors_and_rejects_replacement(
         self,
@@ -4897,6 +5472,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
         lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
         alias = self.root / "legacy-python"
         alias.symlink_to(lease.command_argv[0])
+        forged_prefix = (str(alias), *lease.command_argv[1:-2])
+        forged_execution = transport.execution_argv_commitment(forged_prefix)
         forged = transport.issue_transport_lease(
             coordinator.identity,
             lease_ref=lease.lease_ref,
@@ -4908,7 +5485,13 @@ class SourceTransportProtocolTests(unittest.TestCase):
             window_start=lease.window_start,
             window_end=lease.window_end,
             process_nonce=lease.process_nonce,
-            command_argv=(str(alias), *lease.command_argv[1:]),
+            command_argv=(
+                *forged_prefix,
+                transport.SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
+                forged_execution,
+            ),
+            execution_argv_commitment=forged_execution,
+            source_root_commitment=lease.source_root_commitment,
             transport_program_commitment=lease.transport_program_commitment,
             source_byte_limit=lease.source_byte_limit,
             record_limit=lease.record_limit,
@@ -4983,30 +5566,30 @@ class SourceTransportProtocolTests(unittest.TestCase):
             "__file__",
             str(package / "transport_program.py"),
         ):
-            argv = (
-                *transport_program.source_transport_python_command(),
-                str(worker),
-                "source-transport",
-                "--host",
-                "local",
-                "--source-kind",
-                "history",
-                "--window-start",
-                WINDOW_START,
-                "--window-end",
-                WINDOW_END,
-                "--lease-ref",
-                lease_ref,
-                "--process-nonce",
-                "committed-snapshot",
-                "--max-source-bytes",
-                str(1024 * 1024),
-                "--max-records",
-                "16",
-                "--max-frame-bytes",
-                "8192",
-                "--direct-root",
-                str(self.codex_root),
+            argv = self._bind_native_local_command(
+                (
+                    *transport_program.source_transport_python_command(),
+                    str(worker),
+                    "source-transport",
+                    "--host",
+                    "local",
+                    "--source-kind",
+                    "active_rollout",
+                    "--window-start",
+                    "2099-01-01T00:00:00Z",
+                    "--window-end",
+                    "2099-01-02T00:00:00Z",
+                    "--lease-ref",
+                    lease_ref,
+                    "--process-nonce",
+                    "committed-snapshot",
+                    "--max-source-bytes",
+                    str(1024 * 1024),
+                    "--max-records",
+                    "16",
+                    "--max-frame-bytes",
+                    "8192",
+                )
             )
             commitment = transport_program.transport_program_commitment(argv)
             worker.write_text(
@@ -5030,7 +5613,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         frames = [json.loads(line) for line in completed.stdout.splitlines()]
         self.assertFalse(marker.exists())
-        self.assertTrue(frames[-1]["complete"])
+        self.assertEqual("terminal", frames[-1]["frame"])
+        self.assertIn(frames[-1]["status"], {"complete", "gap", "no_activity"})
 
     def test_committed_program_snapshot_does_not_import_uncommitted_module(
         self,
@@ -5117,12 +5701,13 @@ class SourceTransportProtocolTests(unittest.TestCase):
         lease = transport.TransportLease.from_dict(
             self._first_lease(coordinator)["transport_lease"]
         )
+        native_command = self._native_no_activity_command(lease.command_argv)
         snapshot_path = Path(lease.command_argv[10])
         original = snapshot_path.read_bytes()
         snapshot_path.write_bytes(b"replaced snapshot")
         try:
             rejected = subprocess.run(
-                lease.command_argv,
+                native_command,
                 capture_output=True,
                 env={**os.environ, "HOME": str(self.home)},
             )
@@ -5132,7 +5717,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertNotEqual(0, rejected.returncode)
         self.assertIn(b"snapshot authentication failed", rejected.stderr)
         restored = subprocess.run(
-            lease.command_argv,
+            native_command,
             check=True,
             capture_output=True,
             env={**os.environ, "HOME": str(self.home)},
@@ -5146,11 +5731,12 @@ class SourceTransportProtocolTests(unittest.TestCase):
         lease = transport.TransportLease.from_dict(
             self._first_lease(coordinator)["transport_lease"]
         )
+        native_command = self._native_no_activity_command(lease.command_argv)
         snapshot_path = Path(lease.command_argv[10])
         self._add_darwin_acl(snapshot_path)
         try:
             rejected = subprocess.run(
-                lease.command_argv,
+                native_command,
                 capture_output=True,
                 env={**os.environ, "HOME": str(self.home)},
             )

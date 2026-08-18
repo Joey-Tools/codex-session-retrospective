@@ -4,14 +4,17 @@ from __future__ import annotations
 
 import argparse
 import base64
+import codecs
 import contextlib
 import datetime as dt
 from dataclasses import dataclass
 import errno
 import hashlib
+import hmac
 import json
 import os
 import pathlib
+import pwd
 import re
 import stat
 import sys
@@ -30,19 +33,23 @@ try:
     from . import transport_discovery
     from .transport_contracts import (
         SOURCE_TRANSPORT_MAX_RECORD_BYTES,
+        SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
         SOURCE_TRANSPORT_RESUME_PROBE_BUDGET_BYTES,
         SOURCE_TRANSPORT_RESUME_PROBE_BYTES,
+        SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
         SOURCE_TRANSPORT_STREAM_SCHEMA,
         TransportValidationError,
         _REASON_RE,
         _TOKEN_RE,
         _canonical_commitment,
         _derive_source_resume_position,
+        execution_argv_commitment,
         _normalize_source_resume_position,
         _read_bounded_line,
         _sha256,
         _source_transport_inventory_commitment,
         _source_transport_resume_probe,
+        source_root_commitment,
         _stream_frame,
         _valid_source_locator,
     )
@@ -54,6 +61,7 @@ try:
     from .transport_remote import (
         _relay_remote_host_context_command,
         _remote_host_context_command,
+        remote_host_context_snapshot_source_binding,
     )
     from .transport_resume import (
         _SourceTransportResumeProbeBudget,
@@ -80,19 +88,23 @@ except (ImportError, ModuleNotFoundError):
     import transport_discovery  # type: ignore[no-redef]
     from transport_contracts import (  # type: ignore[no-redef]
         SOURCE_TRANSPORT_MAX_RECORD_BYTES,
+        SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
         SOURCE_TRANSPORT_RESUME_PROBE_BUDGET_BYTES,
         SOURCE_TRANSPORT_RESUME_PROBE_BYTES,
+        SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
         SOURCE_TRANSPORT_STREAM_SCHEMA,
         TransportValidationError,
         _REASON_RE,
         _TOKEN_RE,
         _canonical_commitment,
         _derive_source_resume_position,
+        execution_argv_commitment,
         _normalize_source_resume_position,
         _read_bounded_line,
         _sha256,
         _source_transport_inventory_commitment,
         _source_transport_resume_probe,
+        source_root_commitment,
         _stream_frame,
         _valid_source_locator,
     )
@@ -104,6 +116,7 @@ except (ImportError, ModuleNotFoundError):
     from transport_remote import (  # type: ignore[no-redef]
         _relay_remote_host_context_command,
         _remote_host_context_command,
+        remote_host_context_snapshot_source_binding,
     )
     from transport_resume import (  # type: ignore[no-redef]
         _SourceTransportResumeProbeBudget,
@@ -119,7 +132,52 @@ SOURCE_TRANSPORT_MIN_FRAME_BYTES = 4096
 
 
 def _local_codex_root() -> pathlib.Path:
-    return pathlib.Path.home() / ".codex"
+    try:
+        account = pwd.getpwuid(os.getuid())
+    except (KeyError, OSError) as exc:
+        raise ValueError("local account identity is unavailable") from exc
+    home = account.pw_dir
+    if (
+        not isinstance(home, str)
+        or not home
+        or "\x00" in home
+        or "\r" in home
+        or "\n" in home
+    ):
+        raise ValueError("local account home is invalid")
+    root = pathlib.Path(home) / ".codex"
+    source_root_commitment(codex_root=str(root), route="local", host="local")
+    return root
+
+
+@dataclass(frozen=True, slots=True)
+class _SourceTransportScanContext:
+    codex_root: pathlib.Path
+    route: str
+    host: str
+    source_root_commitment: str
+
+
+def _source_transport_scan_context(
+    codex_root: pathlib.Path,
+    *,
+    route: str,
+    host: str,
+) -> _SourceTransportScanContext:
+    root = pathlib.Path(codex_root)
+    if (route == "local") != (host == "local"):
+        raise TransportValidationError("source transport route does not match its host")
+    commitment = source_root_commitment(
+        codex_root=str(root),
+        route=route,
+        host=host,
+    )
+    return _SourceTransportScanContext(
+        codex_root=root,
+        route=route,
+        host=host,
+        source_root_commitment=commitment,
+    )
 
 
 @dataclass(slots=True)
@@ -231,8 +289,9 @@ def _source_transport_json_bytes(value: dict[str, Any]) -> bytes:
 
 def _source_transport_header(args: argparse.Namespace) -> dict[str, Any]:
     return {
+        "execution_argv_commitment": args.execution_argv_commitment,
         "frame": "header",
-        "host": args.reported_host or args.host,
+        "host": args.host,
         "lease_ref": args.lease_ref,
         "limits": {
             "frame_bytes": args.max_frame_bytes,
@@ -244,6 +303,7 @@ def _source_transport_header(args: argparse.Namespace) -> dict[str, Any]:
         "schema": SOURCE_TRANSPORT_STREAM_SCHEMA,
         "session_selector_commitment": args.session_selector_commitment,
         "source_kind": args.source_kind,
+        "source_root_commitment": args.source_root_commitment,
         "cursor": {
             "ref": args.source_cursor,
             "time": args.cursor_time,
@@ -799,6 +859,8 @@ class _SourceTransportScanSetup:
 
 def _prepare_source_transport_scan(
     args: argparse.Namespace,
+    *,
+    scan_context: _SourceTransportScanContext,
 ) -> _SourceTransportScanSetup:
     if args.max_source_bytes < 1:
         raise ValueError("--max-source-bytes must be positive")
@@ -806,6 +868,13 @@ def _prepare_source_transport_scan(
         raise ValueError("--max-records must be positive")
     if args.max_frame_bytes < SOURCE_TRANSPORT_MIN_FRAME_BYTES:
         raise ValueError("--max-frame-bytes is below the protocol minimum")
+    if scan_context.host != args.host or not hmac.compare_digest(
+        scan_context.source_root_commitment,
+        args.source_root_commitment,
+    ):
+        raise TransportValidationError(
+            "source transport source root commitment changed"
+        )
     header = _source_transport_header(args)
     _emit_source_transport_frame(header, max_frame_bytes=args.max_frame_bytes)
 
@@ -829,11 +898,7 @@ def _prepare_source_transport_scan(
             label="source transport cursor time",
         )
     )
-    root = (
-        pathlib.Path(args.direct_root)
-        if args.direct_root is not None
-        else _local_codex_root()
-    )
+    root = scan_context.codex_root
     try:
         discovery = _source_transport_candidate_paths(
             root,
@@ -958,8 +1023,53 @@ def _terminal_source_discovery_gap(discovery: _SourceCandidateDiscovery) -> str 
     )
 
 
-def _source_transport_scan(args: argparse.Namespace) -> int:
-    setup = _prepare_source_transport_scan(args)
+def _finalize_source_transport_scan(
+    args: argparse.Namespace,
+    *,
+    discovery: _SourceCandidateDiscovery,
+    inventory: list[dict[str, Any]],
+    terminal_status: str | None,
+    terminal_reason: str | None,
+    discovery_gap_reason: str | None,
+    source_exists: bool,
+    emitted_records: int,
+    emitted_bytes: int,
+    transport_scan_bytes: int,
+    oversized_record_count: int,
+    oversized_byte_count: int,
+    resume_position: dict[str, JsonValue] | None,
+) -> int:
+    try:
+        revalidation_gap = _terminal_source_discovery_gap(discovery)
+    finally:
+        discovery.close()
+    if revalidation_gap is not None:
+        terminal_status = "gap"
+        terminal_reason = revalidation_gap
+        resume_position = None
+    _emit_source_transport_terminal(
+        args,
+        inventory=inventory,
+        terminal_status=terminal_status,
+        terminal_reason=terminal_reason,
+        discovery_gap_reason=discovery_gap_reason,
+        source_exists=source_exists,
+        emitted_records=emitted_records,
+        emitted_bytes=emitted_bytes,
+        transport_scan_bytes=transport_scan_bytes,
+        oversized_record_count=oversized_record_count,
+        oversized_byte_count=oversized_byte_count,
+        resume_position=resume_position,
+    )
+    return 0
+
+
+def _source_transport_scan(
+    args: argparse.Namespace,
+    *,
+    scan_context: _SourceTransportScanContext,
+) -> int:
+    setup = _prepare_source_transport_scan(args, scan_context=scan_context)
     window_start = setup.window_start
     window_end = setup.window_end
     cursor_time = setup.cursor_time
@@ -1435,15 +1545,9 @@ def _source_transport_scan(args: argparse.Namespace) -> int:
         finally:
             os.close(descriptor)
 
-    revalidation_gap = _terminal_source_discovery_gap(discovery)
-    if revalidation_gap is not None:
-        terminal_status = "gap"
-        terminal_reason = revalidation_gap
-        resume_position = None
-    discovery.close()
-
-    _emit_source_transport_terminal(
+    return _finalize_source_transport_scan(
         args,
+        discovery=discovery,
         inventory=inventory,
         terminal_status=terminal_status,
         terminal_reason=terminal_reason,
@@ -1456,7 +1560,6 @@ def _source_transport_scan(args: argparse.Namespace) -> int:
         oversized_byte_count=oversized_byte_count,
         resume_position=resume_position,
     )
-    return 0
 
 
 def _emit_source_transport_gap(args: argparse.Namespace, *, reason: str) -> None:
@@ -1532,9 +1635,9 @@ def _source_transport_remote_arguments(args: argparse.Namespace) -> tuple[str, .
 _PRIVATE_WORKER_PROTOCOL_MARKER = "source-transport"
 
 
-def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
-    """Run the lease-bound worker protocol without publishing a coordinator verb."""
-
+def _parse_private_transport_worker_arguments(
+    argv: Sequence[str],
+) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="transport_worker.py",
         add_help=False,
@@ -1559,10 +1662,10 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--resume-position")
     parser.add_argument("--session-target")
     parser.add_argument("--session-selector-commitment")
-    parser.add_argument("--reported-host")
-    parser.add_argument("--direct-root")
     parser.add_argument("--remote-helper")
     parser.add_argument("--remote-helper-commitment")
+    parser.add_argument(SOURCE_TRANSPORT_SOURCE_ROOT_OPTION, required=True)
+    parser.add_argument(SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION, required=True)
     args = parser.parse_args(argv)
     if args._protocol_marker != _PRIVATE_WORKER_PROTOCOL_MARKER:
         parser.error("private source transport protocol marker is invalid")
@@ -1614,16 +1717,196 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
         parser.error("source transport time bound is invalid")
     try:
         parse_typed_ref(args.lease_ref, expected=RefType.LEASE)
+        _sha256(
+            args.source_root_commitment,
+            "source transport source root commitment",
+        )
+        _sha256(
+            args.execution_argv_commitment,
+            "source transport execution argv commitment",
+        )
     except (TypeError, ValueError):
-        parser.error("source transport lease reference is invalid")
+        parser.error("source transport lease or execution binding is invalid")
+    return args
+
+
+def _validate_actual_execution_argv(argv: Sequence[str]) -> tuple[str, ...]:
+    arguments = tuple(argv)
+    if (
+        arguments.count(SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION) != 1
+        or len(arguments) < 2
+        or arguments[-2] != SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION
+        or arguments.count(SOURCE_TRANSPORT_SOURCE_ROOT_OPTION) != 1
+    ):
+        raise TransportValidationError(
+            "source transport execution argv binding is invalid"
+        )
+    actual = getattr(sys, "_retrospective_v2_transport_orig_argv", None)
+    rewritten = (sys.argv[0], *arguments)
+    if (
+        not isinstance(actual, tuple)
+        or not actual
+        or any(not isinstance(value, str) for value in actual)
+        or len(actual) < len(rewritten)
+        or actual[-len(rewritten) :] != rewritten
+        or actual[-2:] != arguments[-2:]
+    ):
+        raise TransportValidationError(
+            "source transport actual OS argv is unavailable or changed"
+        )
+    # CPython's macOS venv launcher rewrites orig_argv[0] to the framework
+    # Python.app binary. The snapshot bootstrap authenticates sys.executable
+    # separately, so bind that canonical interpreter plus the exact OS argv
+    # tail rather than trusting the launcher-rewritten spelling.
+    expected = execution_argv_commitment(
+        (os.path.realpath(sys.executable), *actual[1:-2])
+    )
+    supplied = arguments[-1]
+    if not hmac.compare_digest(expected, supplied):
+        raise TransportValidationError(
+            "source transport actual OS argv commitment changed"
+        )
+    return arguments
+
+
+def _run_private_source_transport_scan(
+    argv: Sequence[str],
+    *,
+    scan_context: _SourceTransportScanContext,
+    execution_commitment: str | None = None,
+) -> int:
+    """Run a test-owned scan against an explicit private root context."""
+
+    bound_arguments = _private_source_transport_bound_arguments(
+        argv,
+        scan_context=scan_context,
+    )
+    args = _parse_private_transport_worker_arguments(bound_arguments)
+    if execution_commitment is not None:
+        args.execution_argv_commitment = _sha256(
+            execution_commitment,
+            "private source scan execution commitment",
+        )
+    return _source_transport_scan(args, scan_context=scan_context)
+
+
+def _private_source_transport_bound_arguments(
+    argv: Sequence[str],
+    *,
+    scan_context: _SourceTransportScanContext,
+) -> tuple[str, ...]:
+    arguments = tuple(argv)
+    if (
+        SOURCE_TRANSPORT_SOURCE_ROOT_OPTION in arguments
+        or SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION in arguments
+        or "--remote-helper" in arguments
+        or "--remote-helper-commitment" in arguments
+    ):
+        raise TransportValidationError("private source scan arguments are invalid")
+    command_prefix = (
+        "transport_worker.py",
+        *arguments,
+        SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
+        scan_context.source_root_commitment,
+    )
+    execution_commitment = execution_argv_commitment(command_prefix)
+    return (
+        *arguments,
+        SOURCE_TRANSPORT_SOURCE_ROOT_OPTION,
+        scan_context.source_root_commitment,
+        SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION,
+        execution_commitment,
+    )
+
+
+def _publish_bound_source_transport_relay(
+    args: argparse.Namespace,
+    output: Any,
+    *,
+    max_output_bytes: int,
+) -> None:
+    output.seek(0)
+    header_line = _read_bounded_line(
+        output,
+        max_payload_bytes=args.max_frame_bytes + 1,
+        max_scan_bytes=args.max_frame_bytes + 1,
+    )
+    if not header_line.complete or header_line.oversized or header_line.payload is None:
+        raise TransportValidationError("remote source transport header is invalid")
+    legacy_header = dict(_stream_frame(header_line.payload.rstrip(b"\r\n")))
+    expected_header = _source_transport_header(args)
+    expected_legacy_header = dict(expected_header)
+    expected_legacy_header.pop("execution_argv_commitment")
+    expected_legacy_header.pop("source_root_commitment")
+    if legacy_header != expected_legacy_header:
+        raise TransportValidationError(
+            "remote source transport header changed after validation"
+        )
+    remainder_start = output.tell()
+    output.seek(0, os.SEEK_END)
+    input_bytes = output.tell()
+    output.seek(remainder_start)
+    bound_header_bytes = len(_source_transport_json_bytes(expected_header)) + 1
+    if input_bytes - header_line.byte_count + bound_header_bytes > max_output_bytes:
+        raise TransportValidationError(
+            "bound remote source transport exceeds its output envelope"
+        )
+    _emit_source_transport_frame(expected_header, max_frame_bytes=args.max_frame_bytes)
+    binary_stdout = getattr(sys.stdout, "buffer", None)
+    if binary_stdout is not None:
+        while chunk := output.read(64 * 1024):
+            binary_stdout.write(chunk)
+        binary_stdout.flush()
+        return
+    decoder = codecs.getincrementaldecoder("utf-8")("strict")
+    while chunk := output.read(64 * 1024):
+        sys.stdout.write(decoder.decode(chunk, final=False))
+    sys.stdout.write(decoder.decode(b"", final=True))
+    sys.stdout.flush()
+
+
+def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
+    """Run the lease-bound worker protocol without publishing a coordinator verb."""
+
+    supplied = sys.argv[1:] if argv is None else argv
+    arguments = _validate_actual_execution_argv(supplied)
+    args = _parse_private_transport_worker_arguments(arguments)
     if args.host == "local":
         if args.remote_helper is not None or args.remote_helper_commitment is not None:
-            parser.error("local source transport cannot bind a remote helper")
-        return _source_transport_scan(args)
+            raise TransportValidationError(
+                "local source transport cannot bind a remote helper"
+            )
+        scan_context = _source_transport_scan_context(
+            _local_codex_root(),
+            route="local",
+            host=args.host,
+        )
+        return _source_transport_scan(args, scan_context=scan_context)
     if args.remote_helper is None or args.remote_helper_commitment is None:
-        parser.error("remote source transport helper binding is incomplete")
-    if args.direct_root is not None or args.reported_host is not None:
-        parser.error("remote source transport cannot override its source root or host")
+        raise TransportValidationError(
+            "remote source transport helper binding is incomplete"
+        )
+    route, codex_root = remote_host_context_snapshot_source_binding(
+        args.remote_helper,
+        args.remote_helper_commitment,
+        args.host,
+    )
+    if route != "remote":
+        raise TransportValidationError(
+            "remote source transport cannot use a local helper route"
+        )
+    remote_context = _source_transport_scan_context(
+        pathlib.Path(codex_root),
+        route=route,
+        host=args.host,
+    )
+    if not hmac.compare_digest(
+        remote_context.source_root_commitment,
+        args.source_root_commitment,
+    ):
+        raise TransportValidationError(
+            "remote source transport source root commitment changed"
+        )
     command = _remote_host_context_command(
         args,
         "source-transport",
@@ -1640,6 +1923,11 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
             command,
             max_output_bytes=wire_limit,
             validator=lambda output: _validate_source_transport_relay(args, output),
+            publisher=lambda output: _publish_bound_source_transport_relay(
+                args,
+                output,
+                max_output_bytes=wire_limit,
+            ),
         )
     except RuntimeError:
         _emit_source_transport_gap(

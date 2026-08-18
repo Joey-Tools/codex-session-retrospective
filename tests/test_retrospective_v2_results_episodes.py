@@ -866,6 +866,41 @@ class ResultValidationTests(unittest.TestCase):
             (),
         )
 
+    def test_changed_camelcase_credential_label_is_redacted_below_overlap_window(
+        self,
+    ) -> None:
+        original_prompt = f"serviceAuthToken: {SYNTHETIC_ACCESS_TOKEN}"
+        rewritten = f"githubToken: {SYNTHETIC_ACCESS_TOKEN}"
+        self.assertLess(len(f": {SYNTHETIC_ACCESS_TOKEN}"), 32)
+
+        value = extractor_result()
+        value["turns"][0]["generalized_working_text"] = rewritten
+        result = validate_extractor_result(
+            value,
+            ALL_REFS,
+            original_prompts=[original_prompt],
+        )
+
+        text = result["turns"][0]["generalized_working_text"]
+        self.assertEqual("[REDACTED_CREDENTIAL]", text)
+        self.assertNotIn(SYNTHETIC_ACCESS_TOKEN, text)
+        self.assertEqual(
+            (),
+            scan_for_leaks(result, original_prompts=[original_prompt]),
+        )
+
+        for safe_text in (
+            "tokenCount: 12",
+            "githubTokenCount: 12",
+            "cacheKey=stable-cache-entry",
+            "primaryKey=turn_ref",
+            "githubtoken=missing",
+            "githubToken=missing",
+            "serviceAuthToken=[REDACTED_CREDENTIAL]",
+        ):
+            with self.subTest(safe_text=safe_text):
+                self.assertEqual((), scan_for_leaks(safe_text))
+
     def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
         jwt_segment = "".join(("eyJ", "A" * 8))
         stateless_github = "".join(

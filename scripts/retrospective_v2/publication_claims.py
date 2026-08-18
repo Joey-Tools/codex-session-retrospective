@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
-from .contracts import CANONICAL_HOSTS
 from .identity import IdentityKey
 from .orchestrator_core import InvalidTransitionError, RunConflictError
 from .publication_contracts import (
@@ -66,7 +65,6 @@ def validate_persistent_publication_claim(
         validate_run_source_authority(
             identity,
             run_state,
-            canonical_hosts=CANONICAL_HOSTS,
         )
     except RunStateAuthorityError as exc:
         raise PublicationRejected(str(exc)) from exc

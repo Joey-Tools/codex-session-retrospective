@@ -8,9 +8,10 @@ import os
 from pathlib import Path
 from typing import Any
 from . import authority
-from .checkpoints import canonical_json_bytes
+from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
 from .identity import IdentityKey
 from .publication_claims import validate_persistent_publication_claim
+from .run_state_contracts import frozen_host_inventory
 
 from .publication_support import (
     AppendOnlyViolation,
@@ -978,9 +979,18 @@ class PublicationTransaction:
             gpg_program=binding["publisher_gpg_program"],
             expected_gpg_authority_sha256=binding["publisher_gpg_authority_sha256"],
         )
+        run_state = (
+            AtomicCheckpointStore(
+                Path(binding["run_dir"]),
+                identity=identity,
+            )
+            .read()
+            .state
+        )
         marker = authority.load_production_marker(
             binding["production_marker"],
             identity=identity,
+            canonical_hosts=frozen_host_inventory(run_state).canonical_hosts,
             history_repo=binding["history_repo"],
             target_ref=binding["target_ref"],
             configuration_root=binding["configuration_root"],

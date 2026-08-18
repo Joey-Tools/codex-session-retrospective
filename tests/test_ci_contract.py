@@ -181,6 +181,27 @@ class CiContractTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     run_test_shard.shard_for_test_id(test_id, shard_count)
 
+    def test_test_shard_propagates_no_bytecode_to_child_processes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            root.joinpath("imported.py").write_text("VALUE = 1\n", encoding="ascii")
+            child = root / "child.py"
+            child.write_text("import imported\n", encoding="ascii")
+            with mock.patch.dict(os.environ, {}, clear=True):
+                run_test_shard.harden_child_python_environment()
+                completed = subprocess.run(
+                    [sys.executable, str(child)],
+                    cwd=root,
+                    env=dict(os.environ),
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertFalse(root.joinpath("__pycache__").exists())
+
     def test_isolated_shard_discovery_is_importable(self) -> None:
         completed = subprocess.run(
             [

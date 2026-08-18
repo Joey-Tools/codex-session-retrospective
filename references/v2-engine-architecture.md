@@ -9,6 +9,7 @@ operate on that single coordinator context and do not import one another:
 
 | Module | Responsibility |
 | --- | --- |
+| `cli.py` | Authenticated entrypoint-loaded CLI implementation and stable command API |
 | `orchestrator.py` | Stable facade, coordinator context, and CLI-compatible exports |
 | `orchestrator_support.py` | Source-frame consumption, shared contracts, and runtime readiness |
 | `orchestrator_state.py` | Authenticated checkpoint identity and state access primitives |
@@ -35,7 +36,7 @@ operate on that single coordinator context and do not import one another:
 | `agent_results.py` | Authenticated accepted-result sidecars and checkpoint-coupled staging |
 | `agent_raw_artifacts.py` | Sealed raw-artifact projection and envelope loading |
 | `extracted_turns.py` | Authenticated derived-turn sidecar preparation and loading |
-| `implementation_authority.py` | Coordinator source-byte inventory and access-policy authority |
+| `implementation_authority.py` | Coordinator startup-receipt and fallback source authority validation |
 | `raw_shard_staging.py` | Two-pass source-payload streaming and raw-shard rollback ownership |
 | `source_staging.py` | Preallocated receipt ledger and atomic final-file staging |
 | `orchestrator_scheduler.py` | Stage transitions, task creation, and bounded envelope scheduling |
@@ -107,6 +108,19 @@ closing the commitment-to-execution replacement window. The parent derives the
 live-helper source commitment from the same descriptor-bound read used to create
 the snapshot and requires it to equal the run's frozen transport provenance, so
 one run cannot mix helper versions across source leases.
+
+The public coordinator entrypoint is a stdlib-only trust root. Before any
+engine import, it descriptor-opens the complete generated package manifest and
+the root CLI helpers, rejects unlisted import candidates and bytecode, native,
+cache, symlink, or same-name-package substitutes, and captures stable exact
+bytes plus object-identity and access-policy evidence. Timestamp changes are
+not mutation evidence. A closed meta-path finder executes only those captured
+bytes and raises for every unknown `retrospective_v2.*` name; the live scripts
+directory is never added to `sys.path`. `implementation_authority.py` validates
+the schema-v2 startup receipt before command parsing. After adding or removing
+a production package module, update the generated block with
+`scripts/generate_retrospective_v2_bootstrap_manifest.py --write`; its default
+mode checks deterministically for a stale manifest.
 
 The transport worker imports only modules present in the authenticated program
 manifest. Its snapshot finder is the sole authority for the package namespace;

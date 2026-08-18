@@ -34,7 +34,7 @@ from . import (
 from .authority_errors import AuthorityError as AuthorityError, AutomationCutoverBlocked
 from .authority_errors import HistoryValidationError, ProductionMarkerError
 from .authority_errors import ProviderCacheConflict, ProviderCacheError
-from .contracts import CANONICAL_HOSTS, RefType, canonical_json_bytes
+from .contracts import MAX_RUN_HOSTS, RefType, canonical_json_bytes
 from .gpg_status import validsig_primary_fingerprints
 from .identity import IdentityKey
 from .orchestrator_core import LEGACY_SHADOW_CLEANUP_ROOTS, SHADOW_CLEANUP_ROOTS
@@ -1311,10 +1311,20 @@ _SOURCE_UNIT_FIELDS = {
 }
 
 
-def _production_host_refs(identity: IdentityKey) -> list[str]:
+def _production_host_refs(
+    identity: IdentityKey,
+    canonical_hosts: Sequence[str],
+) -> list[str]:
+    if (
+        isinstance(canonical_hosts, (str, bytes))
+        or not 1 <= len(canonical_hosts) <= MAX_RUN_HOSTS
+        or any(not isinstance(host, str) or not host for host in canonical_hosts)
+        or len(set(canonical_hosts)) != len(canonical_hosts)
+    ):
+        raise ProductionMarkerError("canonical host inventory is invalid")
     return sorted(
         str(identity.derive_ref(RefType.HOST, {"parts": [host]}))
-        for host in CANONICAL_HOSTS
+        for host in canonical_hosts
     )
 
 
@@ -1433,6 +1443,7 @@ def _verify_shadow_coverage_receipt(
     identity: IdentityKey,
     value: Mapping[str, object],
     *,
+    canonical_hosts: Sequence[str],
     calibration_receipt: calibration.CalibrationReceipt | None = None,
 ) -> dict[str, Any]:
     fields = {
@@ -1594,7 +1605,7 @@ def _verify_shadow_coverage_receipt(
             receipt["partial"] is not False
             or backfill_of is not None
             or gap_ref is not None
-            or configured != _production_host_refs(identity)
+            or configured != _production_host_refs(identity, canonical_hosts)
             or covered != configured
             or gap_hosts
             or units["explicit_gap"] != 0
@@ -1605,7 +1616,7 @@ def _verify_shadow_coverage_receipt(
             backfill_of is not None
             or not isinstance(gap_ref, str)
             or _CONTROLLED_GAP_REF_RE.fullmatch(gap_ref) is None
-            or configured != _production_host_refs(identity)
+            or configured != _production_host_refs(identity, canonical_hosts)
             or len(gap_hosts) != 1
         ):
             raise ProductionMarkerError("daily partial shadow coverage is invalid")
@@ -1616,14 +1627,17 @@ def _verify_shadow_coverage_receipt(
             or gap_hosts
             or configured != covered
             or len(covered) != 1
-            or any(item not in _production_host_refs(identity) for item in covered)
+            or any(
+                item not in _production_host_refs(identity, canonical_hosts)
+                for item in covered
+            )
             or units["explicit_gap"] != 0
         ):
             raise ProductionMarkerError("daily backfill shadow coverage is invalid")
     elif (
         gap_ref is not None
         or gap_hosts
-        or configured != _production_host_refs(identity)
+        or configured != _production_host_refs(identity, canonical_hosts)
         or configured != covered
         or units["explicit_gap"] != 0
     ):
@@ -1759,10 +1773,16 @@ def _verify_shadow_cleanup_receipt(
 def verify_shadow_coverage_receipt(
     identity: IdentityKey,
     value: Mapping[str, object],
+    *,
+    canonical_hosts: Sequence[str],
 ) -> dict[str, Any]:
     """Verify an orchestrator-derived shadow coverage receipt."""
 
-    return _verify_shadow_coverage_receipt(identity, value)
+    return _verify_shadow_coverage_receipt(
+        identity,
+        value,
+        canonical_hosts=canonical_hosts,
+    )
 
 
 def verify_shadow_cleanup_receipt(
@@ -1777,6 +1797,7 @@ def verify_shadow_cleanup_receipt(
 def issue_shadow_gate_receipt(
     identity: IdentityKey,
     *,
+    canonical_hosts: Sequence[str],
     calibration_receipt: calibration.CalibrationReceipt | Mapping[str, object],
     mode: str,
     coverage_receipts: Sequence[Mapping[str, object]],
@@ -1790,6 +1811,7 @@ def issue_shadow_gate_receipt(
         _verify_shadow_coverage_receipt(
             identity,
             item,
+            canonical_hosts=canonical_hosts,
             calibration_receipt=verified,
         )
         for item in coverage_receipts
@@ -1838,6 +1860,7 @@ def issue_shadow_gate_receipt(
     return _verify_shadow_gate_receipt(
         identity,
         receipt,
+        canonical_hosts=canonical_hosts,
         calibration_receipt=verified,
     )
 
@@ -1846,6 +1869,7 @@ def _verify_shadow_gate_receipt(
     identity: IdentityKey,
     value: Mapping[str, object],
     *,
+    canonical_hosts: Sequence[str],
     calibration_receipt: calibration.CalibrationReceipt,
 ) -> dict[str, Any]:
     fields = {
@@ -1918,6 +1942,7 @@ def _verify_shadow_gate_receipt(
             _verify_shadow_coverage_receipt(
                 identity,
                 item,
+                canonical_hosts=canonical_hosts,
                 calibration_receipt=calibration_receipt,
             )
             for item in raw_coverages
@@ -2048,6 +2073,7 @@ def _normalize_shadow_gate_evidence(
     values: Sequence[Mapping[str, object]],
     *,
     identity: IdentityKey,
+    canonical_hosts: Sequence[str],
     calibration_receipt: calibration.CalibrationReceipt,
 ) -> list[dict[str, Any]]:
     if isinstance(values, (str, bytes)) or len(values) != 3:
@@ -2058,6 +2084,7 @@ def _normalize_shadow_gate_evidence(
         _verify_shadow_gate_receipt(
             identity,
             value,
+            canonical_hosts=canonical_hosts,
             calibration_receipt=calibration_receipt,
         )
         for value in values
@@ -2796,6 +2823,7 @@ def issue_production_marker(
     path: str | os.PathLike[str],
     *,
     identity: IdentityKey,
+    canonical_hosts: Sequence[str],
     history_repo: str | os.PathLike[str],
     target_ref: str,
     configuration_root: str,
@@ -2828,6 +2856,7 @@ def issue_production_marker(
     evidence = _normalize_shadow_gate_evidence(
         accepted_shadow_evidence,
         identity=identity,
+        canonical_hosts=canonical_hosts,
         calibration_receipt=verified_calibration,
     )
     shadows = [item["receipt_ref"] for item in evidence]
@@ -2883,6 +2912,7 @@ def load_production_marker(
     path: str | os.PathLike[str],
     *,
     identity: IdentityKey,
+    canonical_hosts: Sequence[str],
     history_repo: str | os.PathLike[str],
     target_ref: str,
     configuration_root: str,
@@ -2966,6 +2996,7 @@ def load_production_marker(
         evidence = _normalize_shadow_gate_evidence(
             marker["accepted_shadow_evidence"],
             identity=identity,
+            canonical_hosts=canonical_hosts,
             calibration_receipt=verified_calibration,
         )
     except (TypeError, ValueError, ProductionMarkerError) as exc:

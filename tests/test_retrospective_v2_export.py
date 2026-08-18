@@ -150,6 +150,7 @@ def run_state(*, meaningful_turn_count: int = 4) -> dict[str, object]:
             },
             "configuration_root": "c" * 64,
             "engine_version": "2.0.0",
+            "host_inventory_commitment": "sha256:" + "f" * 64,
             "implementation": {
                 "access_policy_sha256": "sha256:" + "1" * 64,
                 "authority_sha256": "sha256:" + "2" * 64,
@@ -1819,6 +1820,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             f"pwd={SYNTHETIC_ACCESS_TOKEN}",
             f"credential={SYNTHETIC_ACCESS_TOKEN}",
             f"refreshToken={SYNTHETIC_REFRESH_TOKEN}",
+            f"githubToken: {SYNTHETIC_ACCESS_TOKEN}",
+            f"serviceAuthToken: {SYNTHETIC_REFRESH_TOKEN}",
             f"run deploy --token {SYNTHETIC_ACCESS_TOKEN}",
             *(
                 f"token={placeholder}{SYNTHETIC_ACCESS_TOKEN}"

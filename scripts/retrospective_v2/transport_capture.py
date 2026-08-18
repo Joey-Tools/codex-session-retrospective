@@ -23,6 +23,7 @@ try:
         _REASON_RE,
         _canonical_commitment,
         _derive_source_resume_position,
+        execution_argv_commitment,
         _exact_keys,
         _non_negative_int,
         _normalize_source_resume_position,
@@ -49,6 +50,7 @@ except (ImportError, ModuleNotFoundError):
         _REASON_RE,
         _canonical_commitment,
         _derive_source_resume_position,
+        execution_argv_commitment,
         _exact_keys,
         _non_negative_int,
         _normalize_source_resume_position,
@@ -62,10 +64,11 @@ except (ImportError, ModuleNotFoundError):
 
 
 class _SourceTransportCaptureValidator:
-    def __init__(self, lease: TransportLease) -> None:
+    def __init__(self, lease: TransportLease, *, legacy_header: bool = False) -> None:
         self.lease = lease
         self.expected_header: dict[str, JsonValue] = {
             "cursor": {"ref": lease.source_cursor, "time": lease.cursor_time},
+            "execution_argv_commitment": lease.execution_argv_commitment,
             "frame": "header",
             "host": lease.host,
             "lease_ref": lease.lease_ref,
@@ -79,8 +82,12 @@ class _SourceTransportCaptureValidator:
             "schema": SOURCE_TRANSPORT_STREAM_SCHEMA,
             "session_selector_commitment": lease.session_selector_commitment,
             "source_kind": lease.source_kind.value,
+            "source_root_commitment": lease.source_root_commitment,
             "window": {"end": lease.window_end, "start": lease.window_start},
         }
+        if legacy_header:
+            self.expected_header.pop("execution_argv_commitment")
+            self.expected_header.pop("source_root_commitment")
         self.records: list[CapturedSourceRecord] = []
         self.inventory: list[dict[str, JsonValue]] = []
         self.inventory_by_coordinate: dict[tuple[str, int], dict[str, JsonValue]] = {}
@@ -954,8 +961,12 @@ def capture_source_transport(
     lines: Iterable[bytes | str],
     *,
     lease: TransportLease,
+    _legacy_header: bool = False,
 ) -> SourceTransportCapture:
-    validator = _SourceTransportCaptureValidator(lease)
+    validator = _SourceTransportCaptureValidator(
+        lease,
+        legacy_header=_legacy_header,
+    )
     for line in lines:
         validator.accept(line)
     return validator.finish()
@@ -963,6 +974,13 @@ def capture_source_transport(
 
 def _source_transport_validation_lease(args: argparse.Namespace) -> TransportLease:
     zero = "0" * 64
+    command_prefix = (
+        "remote-host-context",
+        "source-transport",
+        "--source-root-commitment",
+        f"sha256:{zero}",
+    )
+    execution_commitment = execution_argv_commitment(command_prefix)
     return TransportLease(
         lease_ref=args.lease_ref,
         run_ref=f"run_ref_v2:{zero}",
@@ -973,7 +991,13 @@ def _source_transport_validation_lease(args: argparse.Namespace) -> TransportLea
         window_start=args.window_start,
         window_end=args.window_end,
         process_nonce=args.process_nonce,
-        command_argv=("remote-host-context",),
+        command_argv=(
+            *command_prefix,
+            "--execution-argv-commitment",
+            execution_commitment,
+        ),
+        execution_argv_commitment=execution_commitment,
+        source_root_commitment=f"sha256:{zero}",
         transport_program_commitment=f"sha256:{zero}",
         source_byte_limit=args.max_source_bytes,
         record_limit=args.max_records,
@@ -995,5 +1019,6 @@ def _validate_source_transport_relay(
     capture_source_transport(
         iter(output.readline, b""),
         lease=_source_transport_validation_lease(args),
+        _legacy_header=True,
     )
     output.seek(0)

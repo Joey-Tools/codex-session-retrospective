@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from itertools import chain
 from typing import Any
 
@@ -10,6 +10,7 @@ from .identity import IdentityKey
 from .run_state_contracts import (
     FORMAL_STAGES,
     REQUIRED_RUN_SOURCE_KINDS,
+    frozen_host_inventory,
     host_ref,
     require,
 )
@@ -129,12 +130,10 @@ def _skip_formal_cursor(
 def validate_run_source_authority(
     identity: IdentityKey,
     state: Mapping[str, Any],
-    *,
-    canonical_hosts: Sequence[str],
 ) -> None:
     """Validate source coverage, cursor derivation, and durable run authority."""
 
-    hosts = tuple(canonical_hosts)
+    hosts = frozen_host_inventory(state).canonical_hosts
     invalid_policy = "canonical host policy is invalid"
     require(bool(hosts), invalid_policy)
     require(len(hosts) == len(set(hosts)), invalid_policy)
