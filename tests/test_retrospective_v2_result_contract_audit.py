@@ -810,6 +810,9 @@ class AuditedResultContractTests(unittest.TestCase):
             "+44 20 7946 0958",
             "+44 (0)20 7946 0958",
             "+442079460958",
+            "020 7946 0958",
+            "(020) 7946 0958",
+            "02079460958",
         ):
             with self.subTest(phone=phone):
                 source = f"Call {phone} before continuing."
@@ -832,6 +835,7 @@ class AuditedResultContractTests(unittest.TestCase):
         for safe in (
             "Release 2026-08-18 uses Python 3.13.12 and build 123456.",
             "Bounds +12 34 56 and +1234-5678-9012-3456-7890 stay numeric labels.",
+            "Order 1234567890123456 remains an overlong numeric label.",
         ):
             with self.subTest(safe=safe):
                 self.assertEqual(scan_for_leaks({"summary": safe}), ())

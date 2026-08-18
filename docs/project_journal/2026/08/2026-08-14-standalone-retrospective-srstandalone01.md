@@ -1268,6 +1268,22 @@ superseded_by:
   boundaries pass 19/19 in 2.183 seconds; and the CI, Skill, and bootstrap
   contracts pass 24/24 in 5.235 seconds. Ruff lint and formatting, project
   journal validation, and `git diff --check` are clean.
+- The fresh whole-range Codex processor on signed head `1e696697` found one
+  further P1: common UK domestic forms such as `020 7946 0958`,
+  `(020) 7946 0958`, and `02079460958` still bypassed both enforcement points.
+  That head's hosted run was cancelled and its reviewer workspace postvalidated
+  clean before removal. The shared candidate policy now accepts bounded local
+  formatting but requires 10 through 15 digits without a leading plus; the
+  international branch retains its 7 through 15 digit bound. Dates, short
+  numeric labels, and overlong numeric labels remain explicit negative cases.
+  The first affected-suite run also proved that a domestic candidate could
+  consume the numeric tail of a UUID; independent domestic boundaries now
+  reject adjacency to identifier hyphens or underscores, preserving the raw-ID
+  category. The exact corrected regressions pass 3/3 in 0.638 seconds and the
+  complete affected suites pass 167/167 in 14.630 seconds. Module boundaries
+  pass 19/19 in 1.867 seconds with the exact branch inventory at the unchanged
+  9,475 ceiling; CI, Skill, and bootstrap contracts pass 24/24 in 5.339 seconds.
+  Ruff lint/format and project-journal validation are clean.
 
 ## Follow-up Work
 

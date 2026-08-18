@@ -39,11 +39,11 @@ EMAIL_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 PHONE_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?:"
-    r"\+[0-9() .-]{5,40}[0-9]|"
-    r"(?:\(\d{3}\)|\d{3})"
-    r"[ .-]?\d{3}[ .-]?\d{4}"
-    r")(?![A-Za-z0-9])",
+    r"(?:"
+    r"(?<![A-Za-z0-9])\+[0-9() .-]{5,40}[0-9](?![A-Za-z0-9])|"
+    r"(?<![A-Za-z0-9_-])[0-9(][0-9() .-]{8,40}[0-9]"
+    r"(?![A-Za-z0-9_-])"
+    r")",
     re.ASCII,
 )
 LABELED_PERSONAL_ID_RE = re.compile(
@@ -516,7 +516,8 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
         for match in pattern.finditer(value):
             if pattern is PHONE_RE:
                 digit_count = sum(character.isdigit() for character in match.group())
-                if not 7 <= digit_count <= 15:
+                minimum_digit_count = 7 if match.group().startswith("+") else 10
+                if not minimum_digit_count <= digit_count <= 15:
                     continue
             candidates.append((match.start(), match.end()))
     candidates.sort(key=lambda span: (span[0], span[1]))

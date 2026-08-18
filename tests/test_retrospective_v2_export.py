@@ -1770,6 +1770,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "employee name: Alice Smith",
             "+44 20 7946 0958",
             "+44 (0)20 7946 0958",
+            "020 7946 0958",
+            "(020) 7946 0958",
+            "02079460958",
         ):
             with self.subTest(personal_value=personal_value, phase="direct"):
                 with self.assertRaisesRegex(
