@@ -53,6 +53,54 @@ LABELED_PERSONAL_ID_RE = re.compile(
     r"\s*(?:=|:)\s*(?!\[REDACTED)[^\r\n]+",
     re.ASCII | re.IGNORECASE,
 )
+LABELED_INTERNAL_HOST_RE = re.compile(
+    r"\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
+    r"(?!\[REDACTED)[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
+    re.ASCII | re.IGNORECASE,
+)
+UNIX_PATH_RE = re.compile(
+    r"(?<![A-Za-z0-9_])/(?!/)"
+    r"[A-Za-z0-9._~+@%=-]+(?:/[A-Za-z0-9._~+@%=-]+)*"
+)
+RELATIVE_PATH_RE = re.compile(
+    r"(?<![-A-Za-z0-9_.~+@%=/\\])(?:\.{1,2}[/\\])?"
+    r"(?:[A-Za-z0-9_.~+@%=-]+[/\\])+[A-Za-z0-9_.~+@%=-]+"
+    r"(?![A-Za-z0-9_.~+@%=-])"
+)
+HOME_PATH_RE = re.compile(
+    r"(?<![A-Za-z0-9_])~[/\\]"
+    r"(?:[A-Za-z0-9._~+@%=-]+(?:[/\\][A-Za-z0-9._~+@%=-]+)*)?"
+)
+WINDOWS_PATH_RE = re.compile(
+    r"\b[A-Z]:\\(?:[^\\\s\"'<>:|?*]+(?:\\[^\\\s\"'<>:|?*]+)*)?",
+    re.ASCII | re.IGNORECASE,
+)
+UNC_PATH_RE = re.compile(r"\\\\[^\\\s]+\\[^\s\"'<>:|?*]+")
+PATH_LOCATOR_PATTERNS = (
+    RELATIVE_PATH_RE,
+    UNIX_PATH_RE,
+    HOME_PATH_RE,
+    WINDOWS_PATH_RE,
+    UNC_PATH_RE,
+)
+UUID_RE = re.compile(
+    r"(?<![A-Za-z0-9])"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+    r"(?![A-Za-z0-9])",
+    re.ASCII | re.IGNORECASE,
+)
+LONG_HEX_ID_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?:[0-9a-f]{24,})(?![A-Za-z0-9])",
+    re.ASCII | re.IGNORECASE,
+)
+RAW_ID_LABEL_RE = re.compile(
+    r"\b(?:session|thread|conversation|turn|message|tool[_ -]?call|request|"
+    r"run|job|attempt)[_ -]?(?:id|ref)\s*(?:=|:|#)\s*"
+    r"(?![a-z][a-z0-9_]*_ref_v2:)[A-Za-z0-9._:-]{6,}",
+    re.ASCII | re.IGNORECASE,
+)
+RAW_IDENTIFIER_PATTERNS = (UUID_RE, LONG_HEX_ID_RE, RAW_ID_LABEL_RE)
+CODE_FENCE_RE = re.compile(r"```[\s\S]*?```")
 IPV4_CANDIDATE_RE = re.compile(
     r"(?<![0-9A-Za-z.])"
     r"(?P<address>(?:[0-9]{1,3}\.){3}[0-9]{1,3})"
@@ -495,6 +543,14 @@ def redact_personal_identifiers(value: str) -> str:
     for start, end in reversed(spans):
         value = value[:start] + "[REDACTED_PERSONAL_IDENTIFIER]" + value[end:]
     return value
+
+
+def contains_raw_identifier(value: str) -> bool:
+    return any(pattern.search(value) for pattern in RAW_IDENTIFIER_PATTERNS)
+
+
+def contains_path_locator(value: str) -> bool:
+    return any(pattern.search(value) for pattern in PATH_LOCATOR_PATTERNS)
 
 
 def redact_ip_addresses(value: str) -> str:

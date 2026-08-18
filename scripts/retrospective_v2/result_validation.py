@@ -395,35 +395,6 @@ _INTERNAL_HOST_RE = re.compile(
     r"192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|"
     r"[^/:]+\.(?:corp|home|internal|intranet|lan|local)(?::\d+)?)"
 )
-_LABELED_INTERNAL_HOST_RE = re.compile(
-    r"(?i)\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
-    r"(?!\[REDACTED)[a-z0-9][a-z0-9._-]*(?::\d{1,5})?"
-)
-_UNIX_PATH_RE = re.compile(
-    r"(?<![A-Za-z0-9_])/(?!/)"
-    r"[A-Za-z0-9._~+@%=-]+(?:/[A-Za-z0-9._~+@%=-]+)*"
-)
-_RELATIVE_PATH_RE = re.compile(
-    r"(?<![-A-Za-z0-9_.~+@%=/\\])(?:\.{1,2}[/\\])?"
-    r"(?:[A-Za-z0-9_.~+@%=-]+[/\\])+[A-Za-z0-9_.~+@%=-]+"
-    r"(?![A-Za-z0-9_.~+@%=-])"
-)
-_WINDOWS_PATH_RE = re.compile(
-    r"(?i)\b[A-Z]:\\(?:[^\\\s\"'<>:|?*]+\\)*[^\\\s\"'<>:|?*]+"
-)
-_UNC_PATH_RE = re.compile(r"\\\\[^\\\s]+\\[^\s\"'<>:|?*]+")
-_UUID_RE = re.compile(
-    r"(?i)(?<![A-Za-z0-9])"
-    r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
-    r"(?![A-Za-z0-9])"
-)
-_LONG_HEX_RE = re.compile(r"(?i)(?<![A-Za-z0-9])(?:[0-9a-f]{24,})(?![A-Za-z0-9])")
-_RAW_ID_LABEL_RE = re.compile(
-    r"(?i)\b(?:session|thread|turn|message|tool[_ -]?call|request)[_ -]?id\s*(?:=|:)\s*"
-    r"(?![a-z][a-z0-9_]*_ref_v2:)[A-Za-z0-9._:-]{6,}"
-)
-_CODE_FENCE_RE = re.compile(r"```[\s\S]*?```")
-
 _FORBIDDEN_KEYS = frozenset(
     {
         "command_output",
@@ -771,7 +742,7 @@ def scan_for_leaks(
                 "internal_url" if _INTERNAL_HOST_RE.search(match.group(0)) else "url"
             )
             findings.add(LeakFinding(category, path, match.start(), match.end()))
-        for match in _LABELED_INTERNAL_HOST_RE.finditer(text):
+        for match in privacy_locators.LABELED_INTERNAL_HOST_RE.finditer(text):
             findings.add(LeakFinding("internal_host", path, match.start(), match.end()))
         for match in privacy_locators.ipv4_matches(text):
             findings.add(LeakFinding("ip_address", path, match.start(), match.end()))
@@ -779,21 +750,16 @@ def scan_for_leaks(
             findings.add(LeakFinding("ip_address", path, match.start(), match.end()))
         for start, end in privacy_locators.personal_identifier_spans(text):
             findings.add(LeakFinding("personal_identifier", path, start, end))
-        for pattern in (
-            _RELATIVE_PATH_RE,
-            _UNIX_PATH_RE,
-            _WINDOWS_PATH_RE,
-            _UNC_PATH_RE,
-        ):
+        for pattern in privacy_locators.PATH_LOCATOR_PATTERNS:
             for match in pattern.finditer(text):
                 findings.add(LeakFinding("path", path, match.start(), match.end()))
         if not reference_field:
-            for pattern in (_UUID_RE, _LONG_HEX_RE, _RAW_ID_LABEL_RE):
+            for pattern in privacy_locators.RAW_IDENTIFIER_PATTERNS:
                 for match in pattern.finditer(text):
                     findings.add(
                         LeakFinding("raw_id", path, match.start(), match.end())
                     )
-        for match in _CODE_FENCE_RE.finditer(text):
+        for match in privacy_locators.CODE_FENCE_RE.finditer(text):
             findings.add(LeakFinding("code", path, match.start(), match.end()))
         for match in privacy_locators.PRIVATE_KEY_BOUNDARY_RE.finditer(text):
             findings.add(
@@ -841,20 +807,17 @@ def _post_redact_text(
     redacted = privacy_locators.redact_personal_identifiers(redacted)
     redacted = privacy_locators.URI_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     redacted = privacy_locators.BARE_PRIVATE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
-    redacted = _LABELED_INTERNAL_HOST_RE.sub("[REDACTED_INTERNAL_HOST]", redacted)
+    redacted = privacy_locators.LABELED_INTERNAL_HOST_RE.sub(
+        "[REDACTED_INTERNAL_HOST]", redacted
+    )
     redacted = privacy_locators.redact_ip_addresses(redacted)
-    for pattern in (
-        _RELATIVE_PATH_RE,
-        _UNIX_PATH_RE,
-        _WINDOWS_PATH_RE,
-        _UNC_PATH_RE,
-    ):
+    for pattern in privacy_locators.PATH_LOCATOR_PATTERNS:
         redacted = pattern.sub("[REDACTED_PATH]", redacted)
     redacted = privacy_locators.BARE_FQDN_RE.sub("[REDACTED_URL]", redacted)
     if not reference_field:
-        for pattern in (_UUID_RE, _LONG_HEX_RE, _RAW_ID_LABEL_RE):
+        for pattern in privacy_locators.RAW_IDENTIFIER_PATTERNS:
             redacted = pattern.sub("[REDACTED_RAW_ID]", redacted)
-    redacted = _CODE_FENCE_RE.sub("[REDACTED_CODE]", redacted)
+    redacted = privacy_locators.CODE_FENCE_RE.sub("[REDACTED_CODE]", redacted)
     return redacted
 
 

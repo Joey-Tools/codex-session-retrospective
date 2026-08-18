@@ -1168,7 +1168,7 @@ superseded_by:
   project-journal validation, generated bootstrap manifest check, and
   `git diff --check` are clean.
   The exact 16-module transport inventory is 8,681/8,690 lines and the branch
-  proxy is 9,472/9,475.
+  proxy is 9,474/9,475.
 - A final closure audit then found that the real relay discarded bootstrap
   failure classes and treated a missing `main` as HOSTS authentication failure.
   The four active 1,732-test supervisors were interrupted once; the bounded
@@ -1230,6 +1230,21 @@ superseded_by:
   result-contract, retained-export, and episode suites pass 165/165 in 17.857
   seconds, and module boundaries remain 19/19 with the exact branch ceiling
   unchanged.
+- The immediately preceding and current-head GitHub Codex reviews then exposed
+  five more agent-output/retained-policy mismatches: UNC paths, the complete
+  raw-ID label taxonomy, inline code fences, labeled internal hosts, and long
+  hexadecimal identifiers outside the retained validator's old 32-64 range.
+  The stale local reviewer and hosted run were stopped and cleaned without
+  accepting results. Those exact regex policies now live only in
+  `privacy_locators.py`; agent scanning/redaction and retained validation remain
+  independent execution points over the shared closed policy. The complete
+  closed-taxonomy scanner/redactor and retained-validator matrices pass,
+  including 24-digit and over-64-digit identifiers; the complete affected
+  suites pass 167/167 in 15.482 seconds, module boundaries pass 19/19 with an
+  exact 9,474/9,475 branch inventory, and the CI, Skill, and bootstrap contract
+  suites pass 24/24 under the real owner-controlled Python 3.13.12 executable.
+  One earlier symlink-path invocation is non-counting because the CI contract
+  correctly rejected `/opt/homebrew/bin/python3.13` before the exact rerun.
 - The focused privacy and retained suites pass 164/164. The complete stable
   four-way partition executed all 1,739 test IDs: shard 0 passed 417/417 in
   2,063.272 seconds, shard 1 passed 467/467 in 1,617.616 seconds, shard 3 passed

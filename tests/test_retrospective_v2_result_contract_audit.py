@@ -845,6 +845,53 @@ class AuditedResultContractTests(unittest.TestCase):
         )
         self.assertEqual(scan_for_leaks(validated), ())
 
+    def test_audit_shared_sensitive_text_policy_covers_retained_gaps(self) -> None:
+        cases = (
+            ("home path ~/private/file.txt", "path", "[REDACTED_PATH]"),
+            ("drive path C:\\private\\file.txt", "path", "[REDACTED_PATH]"),
+            ("host path \\\\server\\share", "path", "[REDACTED_PATH]"),
+            ("session id: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            ("thread ref: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            ("conversation id: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            ("turn id: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            ("message id: raw_123456", "raw_id", "[REDACTED_RAW_ID]"),
+            ("tool call id: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            ("request id: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            ("run id: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            ("job id: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            ("attempt id: abcdef12", "raw_id", "[REDACTED_RAW_ID]"),
+            (
+                "The response embeds ```secret_code``` inline.",
+                "code",
+                "[REDACTED_CODE]",
+            ),
+            (
+                "Inspect host: build-node-7 before continuing.",
+                "internal_host",
+                "[REDACTED_INTERNAL_HOST]",
+            ),
+            (
+                "Inspect identifier abcdefabcdefabcdefabcdef before continuing.",
+                "raw_id",
+                "[REDACTED_RAW_ID]",
+            ),
+            (f"Inspect identifier {'a' * 65}.", "raw_id", "[REDACTED_RAW_ID]"),
+        )
+        for source, category, replacement in cases:
+            with self.subTest(source=source):
+                findings = scan_for_leaks({"summary": source})
+                self.assertIn(category, {finding.category for finding in findings})
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertIn(
+                    replacement,
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
+
     def test_audit_ipv4_redaction_covers_public_ports_without_matching_versions(
         self,
     ) -> None:

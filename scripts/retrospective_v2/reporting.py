@@ -275,16 +275,6 @@ _OPAQUE_REF_RE = re.compile(
     r"(?:[a-z][a-z0-9_]*_ref_v2|source_snapshot_v2):[0-9a-f]{64}\Z"
 )
 _HEX_64_RE = re.compile(r"[0-9a-f]{64}\Z")
-_LOCAL_PATH_RE = re.compile(
-    r"(?:(?<![A-Za-z0-9_])/(?!/)"
-    r"[A-Za-z0-9._~+@%=-]+(?:/[A-Za-z0-9._~+@%=-]+)*|"
-    r"(?:^|[\s'\"`])(?:~[/\\]|[A-Za-z]:\\)|"
-    r"(?<![-A-Za-z0-9_.~+@%=/\\])"
-    r"(?:\.{1,2}[/\\])?"
-    r"(?:[A-Za-z0-9_.~+@%=-]+[/\\])+"
-    r"[A-Za-z0-9_.~+@%=-]+"
-    r"(?![A-Za-z0-9_.~+@%=-]))"
-)
 _SOURCE_TEXT_MARKER_RE = re.compile(
     r"(?i)(?:\b(?:raw|original|verbatim)[ _-]+(?:prompt|request|message|input|text)\b|"
     r"\b(?:tool|command)[ _-]+(?:output|result)\b|\b(?:stdout|stderr|transcript)\b|"
@@ -293,12 +283,6 @@ _SOURCE_TEXT_MARKER_RE = re.compile(
 )
 _SOURCE_PAYLOAD_SHAPE_RE = re.compile(
     r"(?:^\s*(?:\{|\[|```|>>>|\$\s)|\b[A-Za-z_][A-Za-z0-9_]*=[^\s]+)"
-)
-_INTERNAL_ID_TEXT_RE = re.compile(
-    r"(?i)(?:\b[a-z][a-z0-9_]*_ref_v2:[0-9a-f]{64}\b|"
-    r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b|"
-    r"\b[0-9a-f]{32,64}\b|\b(?:session|thread|conversation|run|job|attempt)"
-    r"[ _-]?(?:id|ref)\s*[:=#])"
 )
 _FORBIDDEN_TEXT_FIELD_RE = re.compile(
     r"(?:^|_)(?:excerpt|quote|transcript|source_text|tool_output|tool_result|"
@@ -743,7 +727,8 @@ def _validate_safe_string(value: str, *, path: str) -> None:
             bare_fqdn,
             privacy_locators.contains_ip_address(value),
             privacy_locators.contains_personal_identifier(value),
-            _LOCAL_PATH_RE.search(value),
+            privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
+            privacy_locators.contains_path_locator(value),
         )
     ):
         raise RetainedPrivacyError(
@@ -774,7 +759,8 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
             privacy_locators.BARE_FQDN_RE.search(value),
             privacy_locators.contains_ip_address(value),
             privacy_locators.contains_personal_identifier(value),
-            _LOCAL_PATH_RE.search(value),
+            privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
+            privacy_locators.contains_path_locator(value),
         )
     ):
         raise RetainedPrivacyError(
@@ -783,7 +769,8 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
     if (
         _SOURCE_TEXT_MARKER_RE.search(value)
         or _SOURCE_PAYLOAD_SHAPE_RE.search(value)
-        or _INTERNAL_ID_TEXT_RE.search(value)
+        or privacy_locators.contains_raw_identifier(value)
+        or privacy_locators.CODE_FENCE_RE.search(value)
     ):
         raise RetainedPrivacyError(
             f"{path} violates the derived-summary retained content policy"
@@ -3863,7 +3850,9 @@ def _validate_report_bytes(
             privacy_locators.BARE_FQDN_RE.search(locator_scan_text),
             privacy_locators.contains_ip_address(locator_scan_text),
             privacy_locators.contains_personal_identifier(text),
-            _LOCAL_PATH_RE.search(text),
+            privacy_locators.LABELED_INTERNAL_HOST_RE.search(text),
+            privacy_locators.contains_path_locator(text),
+            privacy_locators.CODE_FENCE_RE.search(text),
             privacy_locators.contains_credential_material(text),
         )
     ):

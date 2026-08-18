@@ -1812,6 +1812,33 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 with self.assertRaisesRegex(RetainedPrivacyError, "forbidden locator"):
                     validate_retained_artifacts(tampered)
 
+    def test_retained_validation_rejects_shared_sensitive_text_families(
+        self,
+    ) -> None:
+        values = (
+            "home path ~/private/file.txt",
+            "drive path C:\\private\\file.txt",
+            "host path \\\\server\\share",
+            "session id: abcdef12",
+            "thread ref: abcdef12",
+            "conversation id: abcdef12",
+            "turn id: abcdef12",
+            "message id: raw_123456",
+            "tool call id: abcdef12",
+            "request id: abcdef12",
+            "run id: abcdef12",
+            "job id: abcdef12",
+            "attempt id: abcdef12",
+            "The response embeds ```secret_code``` inline.",
+            "Inspect host: build-node-7 before continuing.",
+            "Inspect identifier abcdefabcdefabcdefabcdef before continuing.",
+            f"Inspect identifier {'a' * 65}.",
+        )
+        for value in values:
+            with self.subTest(value=value):
+                with self.assertRaises(RetainedPrivacyError):
+                    reporting_module.validate_retained_value({"cause": value})
+
     def test_retained_credentials_use_the_complete_shared_detector(self) -> None:
         slack_probe = "".join(("xoxb-", "A" * 16))
         jwt_segment = "".join(("eyJ", "A" * 8))
