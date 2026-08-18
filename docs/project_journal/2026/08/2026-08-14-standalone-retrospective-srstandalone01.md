@@ -1333,6 +1333,47 @@ superseded_by:
   tests: shard 0 passes 418/418 in 1,576.025 seconds, shard 1 passes 470/470 in
   1,253.496 seconds, shard 2 passes 459/459 in 1,361.142 seconds, and shard 3
   passes 400/400 in 1,271.926 seconds.
+- Signed head `6d5013a8` became stale when current-head GitHub Codex found that
+  three-character values from closed sensitive labels were not retained as
+  standalone source-overlap tokens. An explicitly authorized same-head review
+  then found that the short-phone context omitted `Phone number` and
+  `Telephone number`, while the personal-label taxonomy omitted closed address
+  qualifiers such as customer, home, mailing, postal, residential, and
+  shipping. The local Codex processor was stopped without accepting output;
+  its independent workspace postvalidated clean, the trusted bundle digests
+  remained unchanged, and the exact task root was removed.
+- Source-overlap expansion now records provenance for normalized
+  three-character values extracted from a sensitive label and applies the
+  same Unicode token boundaries to leak scanning and deterministic
+  post-redaction. Normalization maps every case-folded character back to its
+  exact original source span, so expansions such as `\u00df` to `ss` redact
+  the correct bytes without making `Bob` match `Bobby`. A bounded 96-character
+  overlap preserves the complete closed label context across source windows.
+  Short phone values are extracted only under the closed context and only with
+  7 through 15 digits; dates, five-digit values, overlong numbers, and
+  unlabeled three-character text remain negative cases.
+- Precommit audits found and closed four composition gaps: source-window label
+  splits, case folding after the minimum-length decision, missing short-token
+  boundaries, and scan/redaction Unicode-semantic drift. A separate
+  phone/address audit found that contextual phone evidence was lost once only
+  its value reached agent output; the source index now retains that extracted
+  value. Its exact re-audit reports `No findings.` One broader mapping audit
+  ended transport-inconclusive and supplied no accepted finding or clean
+  evidence. Three four-shard attempts were stopped as non-counting when newer
+  findings invalidated their frozen trees; every exact runner was allowed to
+  terminate or was interrupted once, and no stale test or reviewer process
+  remained before edits resumed.
+- Current-tree affected evidence passes result/episode behavior 80/80,
+  result-contract audit 21/21, retained export/reporting 70/70, and orchestrator
+  source-overlap behavior 7/7. Module boundaries pass 19/19 with the exact
+  branch inventory reduced from 9,475 to 9,468 without raising its 9,475
+  ceiling; CI, Skill, and bootstrap contracts pass 24/24. Ruff 0.13.2 lint and
+  formatting, the official OpenAI Skill validator, the generated bootstrap
+  manifest check, and `git diff --check` are clean.
+- The final frozen code-and-test tree executes all 1,748 Python 3.13 tests
+  exactly once across four deterministic shards: shard 0 passes 419/419 in
+  1,576.422 seconds, shard 1 passes 470/470 in 1,249.070 seconds, shard 2 passes
+  459/459 in 1,356.344 seconds, and shard 3 passes 400/400 in 1,268.206 seconds.
 
 ## Follow-up Work
 

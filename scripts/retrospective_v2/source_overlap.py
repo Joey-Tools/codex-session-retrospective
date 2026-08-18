@@ -6,6 +6,8 @@ import codecs
 import contextlib
 import datetime as dt
 import functools
+from itertools import chain, islice, repeat
+from operator import itemgetter
 import re
 from collections import deque
 from collections.abc import Iterable, Iterator
@@ -14,6 +16,9 @@ from dataclasses import dataclass
 
 _MAX_CLASSIFIED_KEY_CHARS = 256
 _MAX_CONTROL_VALUE_CHARS = 4_096
+# Covers the longest audited 64-character field plus quotes, delimiter, and value.
+_SENSITIVE_LABEL_CONTEXT_CHARS = 96
+_NONSPACE_VALUE_RE = re.compile(r"\S+")
 _CONTROL_CLASSIFIER_VALUES = {
     "approval_policy": frozenset({"never", "on-failure", "on-request", "untrusted"}),
     "kind": frozenset(),
@@ -104,7 +109,10 @@ class _NormalizedValueWindows:
         if query_chars < 1 or maximum_chars < 1:
             raise ValueError("source overlap window limits must be positive")
         self.maximum_chars = maximum_chars
-        self.overlap = min(query_chars - 1, maximum_chars - 1)
+        self.overlap = min(
+            max(query_chars - 1, _SENSITIVE_LABEL_CONTEXT_CHARS),
+            maximum_chars - 1,
+        )
         self.step = maximum_chars - self.overlap
         self._chunks: deque[str] = deque()
         self._buffered_chars = 0
@@ -555,10 +563,150 @@ def json_string_value_batches(
         yield tuple(batch)
 
 
-def contains_short_token(candidates: Iterable[str], text: str) -> bool:
+def normalized_token_pattern(value: str) -> re.Pattern[str]:
+    """Compile the shared Unicode-token matcher for normalized source text."""
+
+    return re.compile(rf"(?<!\w){re.escape(value)}(?!\w)")
+
+
+def _normalized_exact_pattern(value: str) -> re.Pattern[str]:
+    return re.compile(rf"\A{re.escape(value)}\Z")
+
+
+def _normalized_substring_pattern(value: str) -> re.Pattern[str]:
+    return re.compile(re.escape(value))
+
+
+def normalized_redaction_patterns(
+    candidates: Iterable[str],
+    *,
+    extra_token_candidates: Iterable[str] = (),
+) -> tuple[re.Pattern[str], ...]:
+    """Build redaction matchers with the same short-token thresholds as scans."""
+
+    normalized = tuple(dict.fromkeys(candidates))
+    extra_tokens = tuple(dict.fromkeys(extra_token_candidates))
+    exact = map(
+        _normalized_exact_pattern, filter(lambda value: len(value) < 4, normalized)
+    )
+    tokens = map(
+        normalized_token_pattern,
+        chain(
+            filter(lambda value: 4 <= len(value) < 12, normalized),
+            extra_tokens,
+        ),
+    )
+    substrings = map(
+        _normalized_substring_pattern,
+        filter(lambda value: len(value) >= 12, normalized),
+    )
+    return tuple(chain(exact, tokens, substrings))
+
+
+def _folded_character_positions(
+    indexed_character: tuple[int, str], *, offset: int
+) -> Iterator[tuple[str, tuple[int, int]]]:
+    index, character = indexed_character
+    position = (offset + index, offset + index + 1)
+    return zip(character.casefold(), repeat(position))
+
+
+def _normalized_word_positions(
+    match: re.Match[str],
+) -> Iterator[tuple[str, tuple[int, int]]]:
+    characters = chain.from_iterable(
+        map(
+            functools.partial(_folded_character_positions, offset=match.start()),
+            enumerate(match.group(0)),
+        )
+    )
+    return chain(((" ", (match.start(), match.start())),), characters)
+
+
+def normalized_text_positions(value: str) -> tuple[str, tuple[tuple[int, int], ...]]:
+    """Normalize text and bind every normalized character to its source span."""
+
+    tagged = tuple(
+        islice(
+            chain.from_iterable(
+                map(_normalized_word_positions, _NONSPACE_VALUE_RE.finditer(value))
+            ),
+            1,
+            None,
+        )
+    )
+    return "".join(map(itemgetter(0), tagged)), tuple(map(itemgetter(1), tagged))
+
+
+def _pattern_matches(
+    pattern: re.Pattern[str], *, value: str
+) -> Iterator[re.Match[str]]:
+    return pattern.finditer(value)
+
+
+def _original_match_span(
+    match: re.Match[str], *, positions: tuple[tuple[int, int], ...]
+) -> tuple[int, int]:
+    return positions[match.start()][0], positions[match.end() - 1][1]
+
+
+def _merge_original_span(
+    merged: tuple[tuple[int, int], ...], span: tuple[int, int]
+) -> tuple[tuple[int, int], ...]:
+    previous = merged[-1]
+    combined = (previous[0], max(previous[1], span[1]))
+    return (merged + (span,), merged[:-1] + (combined,))[span[0] <= previous[1]]
+
+
+def _replace_original_span(
+    value: str, span: tuple[int, int], *, replacement: str
+) -> str:
+    return value[: span[0]] + replacement + value[span[1] :]
+
+
+def redact_normalized_matches(
+    value: str,
+    patterns: Iterable[re.Pattern[str]],
+    *,
+    replacement: str,
+) -> str:
+    """Redact normalized matches while replacing their exact original spans."""
+
+    normalized, positions = normalized_text_positions(value)
+    matches = chain.from_iterable(
+        map(functools.partial(_pattern_matches, value=normalized), patterns)
+    )
+    spans = map(
+        functools.partial(_original_match_span, positions=positions),
+        matches,
+    )
+    merged = functools.reduce(
+        _merge_original_span,
+        sorted(spans),
+        ((-1, -1),),
+    )[1:]
+    return functools.reduce(
+        functools.partial(_replace_original_span, replacement=replacement),
+        reversed(merged),
+        value,
+    )
+
+
+def contains_short_token(
+    candidates: Iterable[str],
+    text: str,
+    *,
+    extra_candidates: Iterable[str] = (),
+) -> bool:
     """Return whether a short source value occurs at Unicode token boundaries."""
 
     return any(
-        re.search(rf"(?<!\w){re.escape(candidate)}(?!\w)", text) is not None
-        for candidate in filter(lambda value: 4 <= len(value) < 12, candidates)
+        map(
+            lambda candidate: normalized_token_pattern(candidate).search(text)
+            is not None,
+            chain(
+                filter(lambda value: 4 <= len(value) < 12, candidates),
+                extra_candidates,
+            ),
+        )
     )

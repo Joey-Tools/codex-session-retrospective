@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import ipaddress
-from itertools import chain
+from itertools import chain, islice
+from operator import itemgetter
 import re
-from typing import Iterator
+from typing import Iterable, Iterator
 
 
 BARE_PRIVATE_LOCATOR_RE = re.compile(
@@ -50,6 +51,7 @@ PHONE_RE = re.compile(
 )
 CONTEXTUAL_SHORT_PHONE_RE = re.compile(
     r"\b(?:call|phone|tel|telephone|mobile|contact)"
+    r"(?:[ _-]+number)?"
     r"(?:[ \t]*:[ \t]*|[ \t]+)"
     r"(?P<phone>(?![0-9]{4}-[0-9]{2}-[0-9]{2}(?![0-9]))"
     r"[0-9(][0-9() .-]{5,40}[0-9](?![A-Za-z0-9_-]))",
@@ -58,7 +60,9 @@ CONTEXTUAL_SHORT_PHONE_RE = re.compile(
 PHONE_PATTERNS = (INTERNATIONAL_PHONE_RE, PHONE_RE, CONTEXTUAL_SHORT_PHONE_RE)
 PERSONAL_IDENTIFIER_GROUPS = {CONTEXTUAL_SHORT_PHONE_RE: "phone"}
 _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
-    r"\b(?:account|customer|employee|person|user)[_ -]?(?:id|name)"
+    r"\b(?:(?:account|customer|employee|person|user)[_ -]?(?:id|name)|"
+    r"(?:billing|customer|employee|home|mailing|person|postal|residential|"
+    r"shipping|user)[_ -]?address)"
 )
 LABELED_PERSONAL_VALUE_RE = re.compile(
     _LABELED_PERSONAL_FIELD_PATTERN_TEXT
@@ -534,8 +538,20 @@ def contains_credential_material(value: str) -> bool:
     )
 
 
+def _normalized_sensitive_value(value: str) -> str:
+    return " ".join(value.strip().strip("'\"").strip().split())
+
+
 def _normalized_sensitive_labeled_value(match: re.Match[str]) -> str:
-    return " ".join(match.group("value").strip().strip("'\"").strip().split())
+    return _normalized_sensitive_value(match.group("value"))
+
+
+def _normalized_contextual_phone_value(match: re.Match[str]) -> str:
+    return _normalized_sensitive_value(match.group("phone"))
+
+
+def _normalized_sensitive_overlap_value(value: str) -> str:
+    return " ".join(value.split()).casefold()
 
 
 def sensitive_labeled_values(value: str) -> Iterator[str]:
@@ -547,8 +563,56 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
             (_CREDENTIAL_LABELED_VALUE_RE, LABELED_PERSONAL_VALUE_RE),
         )
     )
-    normalized = map(_normalized_sensitive_labeled_value, matches)
-    return filter(lambda candidate: len(candidate) >= 4, normalized)
+    contextual_phone_values = filter(
+        lambda candidate: 7 <= sum(map(str.isdigit, candidate)) <= 15,
+        map(
+            _normalized_contextual_phone_value,
+            CONTEXTUAL_SHORT_PHONE_RE.finditer(value),
+        ),
+    )
+    normalized = chain(
+        map(_normalized_sensitive_labeled_value, matches),
+        contextual_phone_values,
+    )
+    return filter(
+        lambda candidate: len(_normalized_sensitive_overlap_value(candidate)) >= 3,
+        normalized,
+    )
+
+
+def _tag_sensitive_labeled_value(value: str) -> tuple[str, bool]:
+    return value, True
+
+
+def _tagged_sensitive_expansion(value: str) -> Iterator[tuple[str, bool]]:
+    labeled = map(_tag_sensitive_labeled_value, sensitive_labeled_values(value))
+    return chain(((value, False),), labeled)
+
+
+def expand_sensitive_labeled_values(
+    values: Iterable[str], *, maximum_items: int
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Expand source values and retain labeled three-character provenance."""
+
+    tagged = tuple(
+        islice(
+            chain.from_iterable(map(_tagged_sensitive_expansion, values)),
+            maximum_items + 1,
+        )
+    )
+    short_values = filter(
+        lambda item: (
+            item[1],
+            len(_normalized_sensitive_overlap_value(item[0])),
+        )
+        == (True, 3),
+        tagged,
+    )
+    normalized_short_values = map(
+        _normalized_sensitive_overlap_value,
+        map(itemgetter(0), short_values),
+    )
+    return tuple(map(itemgetter(0), tagged)), tuple(normalized_short_values)
 
 
 def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:

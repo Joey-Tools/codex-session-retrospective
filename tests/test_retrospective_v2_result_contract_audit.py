@@ -847,6 +847,8 @@ class AuditedResultContractTests(unittest.TestCase):
             "Phone: 61234567 before continuing.",
             "Phone:  61234567 before continuing.",
             "Phone : 61234567 before continuing.",
+            "Phone number: 6123 4567 before continuing.",
+            "Telephone number: 6123 4567 before continuing.",
             "Tel: (612) 3456 before continuing.",
         ):
             with self.subTest(source=source):
@@ -867,17 +869,42 @@ class AuditedResultContractTests(unittest.TestCase):
                 self.assertEqual(scan_for_leaks(validated), ())
 
     def test_audit_redacts_the_complete_labeled_personal_value(self) -> None:
-        source = "Observed employee name: Alice Smith before continuing."
-        value = extractor_result()
-        value["turns"][0]["generalized_working_text"] = source
+        for source in (
+            "Observed employee name: Alice Smith before continuing.",
+            "Observed billing address: 123 Main Street before continuing.",
+            "Observed customer address: 123 Main Street before continuing.",
+            "Observed employee address: 123 Main Street before continuing.",
+            "Observed home address: 123 Main Street before continuing.",
+            "Observed mailing address: 123 Main Street before continuing.",
+            "Observed person address: 123 Main Street before continuing.",
+            "Observed postal address: 123 Main Street before continuing.",
+            "Observed residential address: 123 Main Street before continuing.",
+            "Observed shipping address: 123 Main Street before continuing.",
+            "Observed user address: 123 Main Street before continuing.",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(
+                    {"personal_identifier"},
+                    {
+                        finding.category
+                        for finding in scan_for_leaks({"summary": source})
+                    },
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
 
-        validated = validate_extractor_result(value, ALL_REFS)
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    "Observed [REDACTED_PERSONAL_IDENTIFIER]",
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
 
         self.assertEqual(
-            "Observed [REDACTED_PERSONAL_IDENTIFIER]",
-            validated["turns"][0]["generalized_working_text"],
+            (),
+            scan_for_leaks({"summary": "Inspect memory address: 0x1000."}),
         )
-        self.assertEqual(scan_for_leaks(validated), ())
 
     def test_audit_shared_sensitive_text_policy_covers_retained_gaps(self) -> None:
         cases = (

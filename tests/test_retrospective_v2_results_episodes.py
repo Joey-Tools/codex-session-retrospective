@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import hashlib
+from itertools import chain
 import json
 from pathlib import Path
 import sys
@@ -369,6 +370,38 @@ class ResultValidationTests(unittest.TestCase):
             any(window.startswith("aa x") for batch in windows for window in batch)
         )
 
+    def test_source_overlap_windows_preserve_sensitive_label_context(self) -> None:
+        source = "x" * 19 + "password: abc\n" + "y" * 50
+        payload = json.dumps({"content": source}, separators=(",", ":"))
+        batches = tuple(
+            source_overlap_module.json_string_value_batches(
+                (payload,),
+                query_chars=3,
+                maximum_batch_chars=24,
+                maximum_batch_items=4,
+            )
+        )
+        windows = tuple(chain.from_iterable(batches))
+        labeled = tuple(
+            chain.from_iterable(
+                map(
+                    result_validation_module.privacy_locators.sensitive_labeled_values,
+                    windows,
+                )
+            )
+        )
+
+        self.assertIn("abc", labeled)
+        self.assertTrue(
+            any(
+                scan_for_leaks(
+                    {"text": "abc was used"},
+                    original_prompts=batch,
+                )
+                for batch in batches
+            )
+        )
+
     def test_json_value_batches_skip_keys_and_bound_memory(self) -> None:
         long_key = "never-retain-this-key-" * 3
         batches = list(
@@ -726,6 +759,11 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "customer address: 123 Main Street",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 'password: "winter123"',
                 "winter123 was rejected",
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
@@ -734,6 +772,36 @@ class ResultValidationTests(unittest.TestCase):
                 'employee name: "Alice Smith"',
                 "Alice Smith was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "password: abc",
+                "abc was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "employee name: Bob",
+                "Bob was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "password: ßx",
+                "SSX was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "password: SSX",
+                "ßx was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "password: ßxy",
+                "SSXY was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "Phone number: 6123 4567",
+                "6123 4567 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
             ),
         )
         for source, output, expected in cases:
@@ -763,20 +831,37 @@ class ResultValidationTests(unittest.TestCase):
                     scan_for_leaks(result, original_prompts=(source,)),
                 )
 
-        tool_source = "password: winter123"
-        tool_output = "winter123 was rejected"
-        value = extractor_result()
-        value["turns"][0]["generalized_working_text"] = tool_output
-        result = validate_extractor_result(
-            value,
-            ALL_REFS,
-            tool_outputs=(tool_source,),
-        )
-        self.assertEqual(
-            "[REDACTED_TOOL_OUTPUT] was rejected",
-            result["turns"][0]["generalized_working_text"],
-        )
-        for safe_source in ("status: winter123", "password: missing"):
+        for tool_source, tool_output, expected in (
+            (
+                "password: abc",
+                "abc was rejected",
+                "[REDACTED_TOOL_OUTPUT] was rejected",
+            ),
+            (
+                "Telephone number: 6123 4567",
+                "6123 4567 was rejected",
+                "[REDACTED_TOOL_OUTPUT] was rejected",
+            ),
+        ):
+            with self.subTest(tool_source=tool_source):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = tool_output
+                result = validate_extractor_result(
+                    value,
+                    ALL_REFS,
+                    tool_outputs=(tool_source,),
+                )
+                self.assertEqual(
+                    expected,
+                    result["turns"][0]["generalized_working_text"],
+                )
+        for safe_source in (
+            "status: winter123",
+            "password: missing",
+            "Phone number: 12345",
+            "Phone number: 2026-08-18",
+            "Phone number: 1234567890123456",
+        ):
             with self.subTest(safe_source=safe_source):
                 self.assertEqual(
                     (),
@@ -786,6 +871,42 @@ class ResultValidationTests(unittest.TestCase):
                         )
                     ),
                 )
+        self.assertEqual(
+            (),
+            scan_for_leaks(
+                {"text": "abc was used"},
+                original_prompts=("abc",),
+            ),
+        )
+        self.assertEqual(
+            {"text": "abc was used"},
+            result_validation_module.post_redact(
+                {"text": "abc was used"},
+                original_prompts=("abc",),
+            ),
+        )
+        self.assertEqual(
+            (),
+            scan_for_leaks(
+                {"text": "Bobby was referenced"},
+                original_prompts=("employee name: Bob",),
+            ),
+        )
+        self.assertEqual(
+            {"text": "Bobby was referenced"},
+            result_validation_module.post_redact(
+                {"text": "Bobby was referenced"},
+                original_prompts=("employee name: Bob",),
+            ),
+        )
+        self.assertEqual(
+            (),
+            tuple(
+                result_validation_module.privacy_locators.sensitive_labeled_values(
+                    "password: ab"
+                )
+            ),
+        )
 
         expanded_sources = [
             f"password: winter{index:03d}"

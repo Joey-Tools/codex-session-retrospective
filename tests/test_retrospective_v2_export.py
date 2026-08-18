@@ -1777,6 +1777,18 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Phone: 61234567 before continuing.",
             "Phone:  61234567 before continuing.",
             "Phone : 61234567 before continuing.",
+            "Phone number: 6123 4567 before continuing.",
+            "Telephone number: 6123 4567 before continuing.",
+            "billing address: 123 Main Street",
+            "customer address: 123 Main Street",
+            "employee address: 123 Main Street",
+            "home address: 123 Main Street",
+            "mailing address: 123 Main Street",
+            "person address: 123 Main Street",
+            "postal address: 123 Main Street",
+            "residential address: 123 Main Street",
+            "shipping address: 123 Main Street",
+            "user address: 123 Main Street",
         ):
             with self.subTest(personal_value=personal_value, phase="direct"):
                 with self.assertRaisesRegex(
