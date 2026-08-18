@@ -832,6 +832,19 @@ class AuditedResultContractTests(unittest.TestCase):
             with self.subTest(safe=safe):
                 self.assertEqual(scan_for_leaks({"summary": safe}), ())
 
+    def test_audit_redacts_the_complete_labeled_personal_value(self) -> None:
+        source = "Observed employee name: Alice Smith before continuing."
+        value = extractor_result()
+        value["turns"][0]["generalized_working_text"] = source
+
+        validated = validate_extractor_result(value, ALL_REFS)
+
+        self.assertEqual(
+            "Observed [REDACTED_PERSONAL_IDENTIFIER]",
+            validated["turns"][0]["generalized_working_text"],
+        )
+        self.assertEqual(scan_for_leaks(validated), ())
+
     def test_audit_ipv4_redaction_covers_public_ports_without_matching_versions(
         self,
     ) -> None:

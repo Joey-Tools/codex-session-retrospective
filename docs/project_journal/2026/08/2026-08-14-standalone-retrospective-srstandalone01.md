@@ -1220,6 +1220,16 @@ superseded_by:
   not actionable: GitHub repository metadata, `origin/HEAD`, and PR base all
   identify `master`; `refs/heads/main` appears only as the separately owned
   retained-history target example.
+- A pre-review negative probe then proved that a multi-token labeled value such
+  as `employee name: Alice Smith` left the second token after redaction. The
+  stale reviewer and hosted run were cancelled without accepting results. A
+  labeled personal-data match now consumes the complete single-line field
+  remainder, so the post-redactor cannot orphan later name tokens; focused
+  agent-result and retained-boundary regressions cover the multi-token case.
+  The exact three-case regression passes 3/3, the complete affected
+  result-contract, retained-export, and episode suites pass 165/165 in 17.857
+  seconds, and module boundaries remain 19/19 with the exact branch ceiling
+  unchanged.
 - The focused privacy and retained suites pass 164/164. The complete stable
   four-way partition executed all 1,739 test IDs: shard 0 passed 417/417 in
   2,063.272 seconds, shard 1 passed 467/467 in 1,617.616 seconds, shard 3 passed

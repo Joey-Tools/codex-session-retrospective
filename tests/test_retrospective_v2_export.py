@@ -1765,7 +1765,11 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
     def test_retained_validation_rejects_shared_personal_identifier_families(
         self,
     ) -> None:
-        for personal_value in ("employee name: Alice", "+44 20 7946 0958"):
+        for personal_value in (
+            "employee name: Alice",
+            "employee name: Alice Smith",
+            "+44 20 7946 0958",
+        ):
             with self.subTest(personal_value=personal_value, phase="direct"):
                 with self.assertRaisesRegex(
                     RetainedPrivacyError, "personal identifier"

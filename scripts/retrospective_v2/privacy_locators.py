@@ -50,7 +50,7 @@ PHONE_RE = re.compile(
 )
 LABELED_PERSONAL_ID_RE = re.compile(
     r"\b(?:account|customer|employee|person|user)[_ -]?(?:id|name)"
-    r"\s*(?:=|:)\s*(?!\[REDACTED)[\"']?[A-Za-z0-9._@+-]{3,}",
+    r"\s*(?:=|:)\s*(?!\[REDACTED)[^\r\n]+",
     re.ASCII | re.IGNORECASE,
 )
 IPV4_CANDIDATE_RE = re.compile(
