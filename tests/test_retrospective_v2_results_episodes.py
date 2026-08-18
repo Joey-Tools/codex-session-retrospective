@@ -759,6 +759,41 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "customer full name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "employee full name: Bob",
+                "Bob was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "user first name: Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "user last name: Smith",
+                "Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "customerFullName: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "employeeFirstName: Bob",
+                "Bob was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "userLastName: Smith",
+                "Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "customer address: 123 Main Street",
                 "123 Main Street was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
@@ -776,6 +811,36 @@ class ResultValidationTests(unittest.TestCase):
             (
                 "password: abc",
                 "abc was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "passphrase: purple",
+                "purple was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "passcode: 839201",
+                "839201 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "PIN: 8392",
+                "8392 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "keyPassphrase: purple",
+                "purple was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "devicePasscode: 839201",
+                "839201 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "userPin: 8392",
+                "8392 was used",
                 "[REDACTED_ORIGINAL_PROMPT] was used",
             ),
             (
@@ -878,6 +943,17 @@ class ResultValidationTests(unittest.TestCase):
                 original_prompts=("abc",),
             ),
         )
+        self.assertEqual(
+            (),
+            scan_for_leaks({"text": "Pin the dependency version before continuing."}),
+        )
+        for safe_pin_text in (
+            "Inspect pin=GPIO17 before continuing.",
+            "Run with --pin requests==2.32.5.",
+            "The pin is bent.",
+        ):
+            with self.subTest(safe_pin_text=safe_pin_text):
+                self.assertEqual((), scan_for_leaks({"text": safe_pin_text}))
         self.assertEqual(
             {"text": "abc was used"},
             result_validation_module.post_redact(

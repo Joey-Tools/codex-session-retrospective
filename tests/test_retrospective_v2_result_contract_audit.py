@@ -871,6 +871,13 @@ class AuditedResultContractTests(unittest.TestCase):
     def test_audit_redacts_the_complete_labeled_personal_value(self) -> None:
         for source in (
             "Observed employee name: Alice Smith before continuing.",
+            "Observed customer full name: Alice Smith before continuing.",
+            "Observed employee full name: Bob before continuing.",
+            "Observed user first name: Alice before continuing.",
+            "Observed user last name: Smith before continuing.",
+            "Observed customerFullName: Alice Smith before continuing.",
+            "Observed employeeFirstName: Bob before continuing.",
+            "Observed userLastName: Smith before continuing.",
             "Observed billing address: 123 Main Street before continuing.",
             "Observed customer address: 123 Main Street before continuing.",
             "Observed employee address: 123 Main Street before continuing.",
@@ -901,10 +908,15 @@ class AuditedResultContractTests(unittest.TestCase):
                 )
                 self.assertEqual(scan_for_leaks(validated), ())
 
-        self.assertEqual(
-            (),
-            scan_for_leaks({"summary": "Inspect memory address: 0x1000."}),
-        )
+        for safe_source in (
+            "Inspect memory address: 0x1000.",
+            "Inspect memory full name: stack frame.",
+            "Inspect pin=GPIO17 before continuing.",
+            "Run with --pin requests==2.32.5.",
+            "The pin is bent.",
+        ):
+            with self.subTest(safe_source=safe_source):
+                self.assertEqual((), scan_for_leaks({"summary": safe_source}))
 
     def test_audit_shared_sensitive_text_policy_covers_retained_gaps(self) -> None:
         cases = (

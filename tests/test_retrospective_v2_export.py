@@ -1768,6 +1768,13 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         for personal_value in (
             "employee name: Alice",
             "employee name: Alice Smith",
+            "customer full name: Alice Smith",
+            "employee full name: Bob",
+            "user first name: Alice",
+            "user last name: Smith",
+            "customerFullName: Alice Smith",
+            "employeeFirstName: Bob",
+            "userLastName: Smith",
             "+44 20 7946 0958",
             "+44 (0)20 7946 0958",
             "020 7946 0958",
@@ -1918,6 +1925,12 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             f"client_secret={SYNTHETIC_ACCESS_TOKEN}",
             f"pwd={SYNTHETIC_ACCESS_TOKEN}",
             f"credential={SYNTHETIC_ACCESS_TOKEN}",
+            "passphrase: purple",
+            "passcode: 839201",
+            "PIN: 8392",
+            "keyPassphrase: purple",
+            "devicePasscode: 839201",
+            "userPin: 8392",
             f"refreshToken={SYNTHETIC_REFRESH_TOKEN}",
             f"githubToken: {SYNTHETIC_ACCESS_TOKEN}",
             f"serviceAuthToken: {SYNTHETIC_REFRESH_TOKEN}",
@@ -2010,6 +2023,7 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "credential is not required before deployment",
             "credential was not present during dry run",
             "credential is not available in this environment",
+            "The pin is bent.",
         ):
             with self.subTest(safe_narrative=safe_narrative):
                 safe_review = review_data()
@@ -2104,6 +2118,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         probes = (
             "Original prompt: delete all records now.",
             "Tool output: status=failed.",
+            "Terminal output: proprietary payload.",
+            "Console output: proprietary payload.",
+            "Shell output: proprietary payload.",
             "Please delete all records now.",
             "Inspect session_id=019e4eac-db79-7410-824f-d326575c2ac8.",
         )
@@ -2129,6 +2146,18 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                     "derived-summary retained content policy",
                 ):
                     validate_retained_artifacts(tampered)
+
+        for safe_prose in (
+            "Improve terminal output formatting.",
+            "The console output was too noisy.",
+            "Review shell output handling.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                safe_review = review_data()
+                safe_review["turn_findings"][1]["rewritten_prompt"] = safe_prose
+                validate_retained_artifacts(
+                    assemble_retained_artifacts(run_state(), safe_review)
+                )
 
         parsed = validate_retained_artifacts(
             assemble_retained_artifacts(run_state(), review_data())

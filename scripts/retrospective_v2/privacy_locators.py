@@ -60,7 +60,10 @@ CONTEXTUAL_SHORT_PHONE_RE = re.compile(
 PHONE_PATTERNS = (INTERNATIONAL_PHONE_RE, PHONE_RE, CONTEXTUAL_SHORT_PHONE_RE)
 PERSONAL_IDENTIFIER_GROUPS = {CONTEXTUAL_SHORT_PHONE_RE: "phone"}
 _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
-    r"\b(?:(?:account|customer|employee|person|user)[_ -]?(?:id|name)|"
+    r"\b(?:(?:account|customer|employee|person|user)[_ -]?"
+    r"(?:id|(?:(?:first|full|last)[_ -]+)?name)|"
+    r"(?-i:(?:account|customer|employee|person|user)"
+    r"(?:Id|Name|(?:First|Full|Last)Name))|"
     r"(?:billing|customer|employee|home|mailing|person|postal|residential|"
     r"shipping|user)[_ -]?address)"
 )
@@ -303,9 +306,8 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"(?:authorization|aws[\s_-]?secret[\s_-]?access[\s_-]?key|"
     r"secret[\s_-]?access[\s_-]?key|access[\s_-]?token|"
     r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
-    r"secret(?:[\s_-]?key)?|password|passwd|pwd|credential|token|"
-    + _COMPACT_TOKEN_KEY_PATTERN_TEXT
-    + r")"
+    r"secret(?:[\s_-]?key)?|password|passphrase|passcode|passwd|pwd|(?-i:PIN)|"
+    r"credential|token|" + _COMPACT_TOKEN_KEY_PATTERN_TEXT + r")"
 )
 _CREDENTIAL_FIELD_PATTERN_TEXT = (
     r"(?:(?<![\w-])|(?<=[._-]))['\"]?(?:[A-Za-z0-9]+[._-])*"
@@ -317,7 +319,8 @@ _CAMEL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
     r"(?-i:(?=[A-Za-z0-9]{1,64}['\"]?"
     + _CREDENTIAL_INLINE_SPACE_ATOMIC_PATTERN_TEXT
     + r"(?:=|:))[a-z][A-Za-z0-9]*"
-    r"(?:Token|Secret|Password|ApiKey|AccessKey|PrivateKey))['\"]?"
+    r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|ApiKey|AccessKey|"
+    r"PrivateKey))['\"]?"
 )
 _CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
     r"(?:"

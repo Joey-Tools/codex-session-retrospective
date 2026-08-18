@@ -1374,6 +1374,37 @@ superseded_by:
   exactly once across four deterministic shards: shard 0 passes 419/419 in
   1,576.422 seconds, shard 1 passes 470/470 in 1,249.070 seconds, shard 2 passes
   459/459 in 1,356.344 seconds, and shard 3 passes 400/400 in 1,268.206 seconds.
+- Signed head `05419453` became stale when current-head GitHub Codex found three
+  remaining retained-privacy gaps: personal-name labels omitted `full`, `first`,
+  and `last` modifiers; the shared credential taxonomy omitted `passphrase`,
+  `passcode`, and `PIN`; and reviewed prose did not reject explicit terminal,
+  console, or shell output labels. Its local Codex processor was stopped without
+  accepting partial output, the independent workspace postvalidated clean, and
+  the exact task root was removed before implementation resumed.
+- Personal labels now accept the closed spaced, underscored, hyphenated, and
+  camel-case forms for account, customer, employee, person, and user names.
+  Credential labels accept passphrases and passcodes, exact uppercase `PIN`, and
+  prefixed camel-case `Passphrase`, `Passcode`, and `Pin` suffixes. Lowercase
+  dependency or hardware uses such as `pin=GPIO17`, `--pin requests==2.32.5`,
+  and `The pin is bent.` remain explicit negative cases. Retained reviewed prose
+  rejects terminal, console, and shell output only when the phrase is used as an
+  explicit `:` or `=` label, preserving ordinary summaries about output quality
+  or formatting. Scanner/redactor, source-overlap, retained assembly, retained
+  reread, and report validation share the closed implementation.
+- A bounded precommit audit first found four camel-case and false-positive gaps;
+  the corrected re-audit reports `No findings.` The affected result/episode,
+  result-contract audit, and retained export/reporting suites pass 171/171.
+  Module boundaries pass 19/19; CI, Skill, and bootstrap contracts pass 24/24;
+  Ruff lint and formatting plus `git diff --check` are clean.
+- Several early full-shard invocations are non-counting because they selected
+  the physical Homebrew Framework Python below the other-user-writable
+  `/opt/homebrew` ancestor. A single isolated failing history test exposed the
+  exact `ExecutableAuthorityError`; no production change was made. Re-running
+  through the repository's owner-controlled Python 3.13.12 copy created by
+  `venv --copies` restored the executable-authority contract. The final frozen
+  tree passes all 1,748 tests: shard 0 passes 419/419 in 1,633.108 seconds,
+  shard 1 passes 470/470 in 1,300.820 seconds, shard 2 passes 459/459 in
+  1,410.850 seconds, and shard 3 passes 400/400 in 1,322.127 seconds.
 
 ## Follow-up Work
 
