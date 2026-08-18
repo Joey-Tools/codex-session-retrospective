@@ -12,6 +12,7 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 import copy
 import hashlib
+from itertools import chain, islice
 import json
 import re
 from typing import Any
@@ -55,6 +56,8 @@ MAX_RESULT_STRING_CHARS = 4_096
 MAX_RESULT_TOTAL_STRING_CHARS = 64 * 1024
 MAX_SOURCE_OVERLAP_ITEMS = 256
 MAX_SOURCE_OVERLAP_CHARS = 512 * 1024
+MAX_EXPANDED_SOURCE_OVERLAP_ITEMS = MAX_SOURCE_OVERLAP_ITEMS * 2
+MAX_EXPANDED_SOURCE_OVERLAP_CHARS = MAX_SOURCE_OVERLAP_CHARS * 2
 MAX_GENERALIZED_TEXT_CHARS = 1_200
 MAX_REWRITE_TEXT_CHARS = 2_000
 MAX_TURNS_PER_RESULT = 20
@@ -609,11 +612,30 @@ class _SourceOverlapIndex:
     window_hashes: frozenset[int]
 
 
+def _expanded_source_overlap_candidates(candidates: Sequence[str]) -> tuple[str, ...]:
+    expanded = chain.from_iterable(
+        map(
+            lambda candidate: chain(
+                (candidate,), privacy_locators.sensitive_labeled_values(candidate)
+            ),
+            candidates,
+        )
+    )
+    bounded = tuple(islice(expanded, MAX_EXPANDED_SOURCE_OVERLAP_ITEMS + 1))
+    validated = _validate_source_texts(
+        bounded,
+        label="expanded_source_overlap",
+        maximum_items=MAX_EXPANDED_SOURCE_OVERLAP_ITEMS,
+        maximum_chars=MAX_EXPANDED_SOURCE_OVERLAP_CHARS,
+    )
+    return tuple(dict.fromkeys(validated))
+
+
 def _build_source_overlap_index(candidates: Sequence[str]) -> _SourceOverlapIndex:
     normalized: list[str] = []
     six_word_excerpts: set[str] = set()
     window_hashes: set[int] = set()
-    for candidate in candidates:
+    for candidate in _expanded_source_overlap_candidates(candidates):
         normalized_candidate = _normalized_overlap_text(candidate)
         if not normalized_candidate or _REDACTION_PLACEHOLDER_RE.fullmatch(
             candidate.strip()
@@ -665,21 +687,27 @@ def _source_overlap(
     return None
 
 
-def _validate_source_texts(values: Sequence[str], *, label: str) -> tuple[str, ...]:
+def _validate_source_texts(
+    values: Sequence[str],
+    *,
+    label: str,
+    maximum_items: int = MAX_SOURCE_OVERLAP_ITEMS,
+    maximum_chars: int = MAX_SOURCE_OVERLAP_CHARS,
+) -> tuple[str, ...]:
     if isinstance(values, (str, bytes)) or any(
         not isinstance(value, str) for value in values
     ):
         raise _error(label, "must be an array of strings")
     normalized = tuple(values)
-    if len(normalized) > MAX_SOURCE_OVERLAP_ITEMS:
+    if len(normalized) > maximum_items:
         raise _error(
             label,
-            f"must contain at most {MAX_SOURCE_OVERLAP_ITEMS} source strings",
+            f"must contain at most {maximum_items} source strings",
         )
-    if sum(len(value) for value in normalized) > MAX_SOURCE_OVERLAP_CHARS:
+    if sum(len(value) for value in normalized) > maximum_chars:
         raise _error(
             label,
-            f"must contain at most {MAX_SOURCE_OVERLAP_CHARS} source characters",
+            f"must contain at most {maximum_chars} source characters",
         )
     return normalized
 
@@ -792,17 +820,17 @@ def _post_redact_text(
     source_overlap_exempt: bool,
 ) -> str:
     redacted = privacy_locators.redact_private_key_blocks(text)
-    if not source_overlap_exempt:
-        for pattern in original_prompt_patterns:
-            redacted = pattern.sub("[REDACTED_ORIGINAL_PROMPT]", redacted)
-        for pattern in tool_output_patterns:
-            redacted = pattern.sub("[REDACTED_TOOL_OUTPUT]", redacted)
     for (
         _category,
         pattern,
         replacement,
     ) in privacy_locators.CREDENTIAL_REDACTION_PATTERNS:
         redacted = pattern.sub(replacement, redacted)
+    if not source_overlap_exempt:
+        for pattern in original_prompt_patterns:
+            redacted = pattern.sub("[REDACTED_ORIGINAL_PROMPT]", redacted)
+        for pattern in tool_output_patterns:
+            redacted = pattern.sub("[REDACTED_TOOL_OUTPUT]", redacted)
     redacted = privacy_locators.SCP_STYLE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     redacted = privacy_locators.redact_personal_identifiers(redacted)
     redacted = privacy_locators.URI_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
@@ -836,12 +864,12 @@ def post_redact(
     )
     original_prompt_patterns = tuple(
         pattern
-        for value in original_prompts
+        for value in _expanded_source_overlap_candidates(original_prompts)
         if (pattern := _literal_redaction_pattern(value)) is not None
     )
     tool_output_patterns = tuple(
         pattern
-        for value in tool_outputs
+        for value in _expanded_source_overlap_candidates(tool_outputs)
         if (pattern := _literal_redaction_pattern(value)) is not None
     )
     allowed_values = _privacy_reference_values(allowed_reference_values)

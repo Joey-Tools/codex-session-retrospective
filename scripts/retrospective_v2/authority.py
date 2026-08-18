@@ -854,6 +854,7 @@ class _GitRepository:
         max_output_bytes: int = MAX_GIT_OUTPUT_BYTES,
     ) -> subprocess.CompletedProcess[bytes]:
         arguments = (
+            *git_safety.HISTORY_TOPOLOGY_CONFIG_ARGUMENTS,
             "-c",
             "core.hooksPath=/dev/null",
             "-c",

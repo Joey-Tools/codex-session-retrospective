@@ -21,6 +21,12 @@ from .authority_errors import HistoryValidationError
 
 GitRunner = Callable[[tuple[str, ...]], subprocess.CompletedProcess[bytes]]
 DirectoryIdentity = Callable[[Path], tuple[int, ...]]
+HISTORY_TOPOLOGY_CONFIG_ARGUMENTS = (
+    "-c",
+    "core.commitGraph=false",
+    "-c",
+    "core.multiPackIndex=false",
+)
 _HISTORY_TARGET_REF_RE = re.compile(
     r"refs/heads/"
     r"(?!\.)(?!.*(?:/\.|//|\.lock(?:/|\Z)|\.\.|@\{|[\x00-\x20\x7f~^:?*\[\\]))"

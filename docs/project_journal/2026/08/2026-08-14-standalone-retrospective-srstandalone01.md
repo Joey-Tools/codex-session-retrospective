@@ -1284,6 +1284,30 @@ superseded_by:
   pass 19/19 in 1.867 seconds with the exact branch inventory at the unchanged
   9,475 ceiling; CI, Skill, and bootstrap contracts pass 24/24 in 5.339 seconds.
   Ruff lint/format and project-journal validation are clean.
+- The fresh whole-range Codex processor on signed head `94e59f48` found two
+  further P1 gaps. Durable-history graph reads did not disable repository
+  commit-graph and multi-pack-index caches, and source-overlap validation did
+  not treat values extracted from closed credential and personal-data labels
+  as standalone sensitive tokens. The head's hosted CI and GitHub Codex
+  request were cancelled and remain stale; the independent reviewer workspace
+  postvalidated clean before removal.
+- History authority, publisher, admission, and migration reads now consume one
+  shared cache-disable argument contract, so repository-local cache settings
+  cannot decide signature topology or retained publication ancestry. The
+  result validator now expands source candidates with only the existing closed
+  credential and personal-label taxonomies, preserves credential-redaction
+  precedence, and applies the same expansion to leak scanning and deterministic
+  post-redaction. Expansion is lazy and fails closed at a separate 512-item,
+  1-MiB derived-candidate ceiling. Bare, quoted, prompt, and tool-output cases
+  are covered while ordinary labels and safe credential statuses remain
+  negative cases.
+  Current-tree evidence passes the complete affected privacy/result set
+  168/168, history Git cache/credential controls 2/2, authority correctness
+  6/6, legacy descriptor-bound history checks 2/2, module boundaries 19/19,
+  and CI, Skill, and bootstrap contracts 24/24. The exact engine branch
+  inventory remains 9,475/9,475 without raising the ceiling; Ruff lint and
+  formatting, the official Skill validator, project-journal validation, the
+  generated bootstrap manifest check, and `git diff --check` are clean.
 
 ## Follow-up Work
 

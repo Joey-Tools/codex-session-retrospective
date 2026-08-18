@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+from itertools import chain
 import re
 from typing import Iterator
 
@@ -46,11 +47,15 @@ PHONE_RE = re.compile(
     r")",
     re.ASCII,
 )
-LABELED_PERSONAL_ID_RE = re.compile(
+_LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     r"\b(?:account|customer|employee|person|user)[_ -]?(?:id|name)"
-    r"\s*(?:=|:)\s*(?!\[REDACTED)[^\r\n]+",
+)
+LABELED_PERSONAL_VALUE_RE = re.compile(
+    _LABELED_PERSONAL_FIELD_PATTERN_TEXT
+    + r"\s*(?:=|:)\s*(?!\[REDACTED)(?P<value>[^\r\n]+)",
     re.ASCII | re.IGNORECASE,
 )
+LABELED_PERSONAL_ID_RE = LABELED_PERSONAL_VALUE_RE
 LABELED_INTERNAL_HOST_RE = re.compile(
     r"\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
     r"(?!\[REDACTED)[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
@@ -312,6 +317,17 @@ _AUTH_SCHEME_PATTERN_TEXT = (
     r"AWS4-HMAC-SHA256|Signature|OAuth|MAC)"
 )
 
+_CREDENTIAL_LABELED_VALUE_RE = re.compile(
+    _CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT
+    + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+    + r"(?:=|:)"
+    + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+    + r"(?P<value>"
+    + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT
+    + r")",
+    re.IGNORECASE,
+)
+
 PRIVATE_KEY_BOUNDARY_RE = re.compile(
     r"-----\s*(?P<kind>BEGIN|END)\s+"
     r"(?P<label>" + _PRIVATE_KEY_LABEL_PATTERN_TEXT + r")\s*-----",
@@ -506,6 +522,23 @@ def contains_credential_material(value: str) -> bool:
         pattern.search(value) is not None
         for _category, pattern, _replacement in CREDENTIAL_REDACTION_PATTERNS
     )
+
+
+def _normalized_sensitive_labeled_value(match: re.Match[str]) -> str:
+    return " ".join(match.group("value").strip().strip("'\"").strip().split())
+
+
+def sensitive_labeled_values(value: str) -> Iterator[str]:
+    """Yield closed-taxonomy field values that need standalone overlap checks."""
+
+    matches = chain.from_iterable(
+        map(
+            lambda pattern: pattern.finditer(value),
+            (_CREDENTIAL_LABELED_VALUE_RE, LABELED_PERSONAL_VALUE_RE),
+        )
+    )
+    normalized = map(_normalized_sensitive_labeled_value, matches)
+    return filter(lambda candidate: len(candidate) >= 4, normalized)
 
 
 def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:

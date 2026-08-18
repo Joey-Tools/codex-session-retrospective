@@ -436,6 +436,7 @@ class LocalGitCommitOperations:
         max_output_bytes: int | None = None,
     ) -> subprocess.CompletedProcess[bytes]:
         arguments = [
+            *git_safety.HISTORY_TOPOLOGY_CONFIG_ARGUMENTS,
             "-c",
             "core.hooksPath=/dev/null",
             "-c",

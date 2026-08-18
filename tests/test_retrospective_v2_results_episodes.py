@@ -713,6 +713,91 @@ class ResultValidationTests(unittest.TestCase):
                     },
                 )
 
+    def test_source_overlap_extracts_sensitive_labeled_values(self) -> None:
+        cases = (
+            (
+                "password: winter123",
+                "winter123 was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
+                "employee name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                'password: "winter123"',
+                "winter123 was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
+                'employee name: "Alice Smith"',
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+        )
+        for source, output, expected in cases:
+            with self.subTest(source=source):
+                self.assertEqual((), scan_for_leaks({"text": output}))
+                findings = scan_for_leaks(
+                    {"text": output},
+                    original_prompts=(source,),
+                )
+                self.assertIn(
+                    "original_prompt", {finding.category for finding in findings}
+                )
+
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = output
+                result = validate_extractor_result(
+                    value,
+                    ALL_REFS,
+                    original_prompts=(source,),
+                )
+                self.assertEqual(
+                    expected,
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(
+                    (),
+                    scan_for_leaks(result, original_prompts=(source,)),
+                )
+
+        tool_source = "password: winter123"
+        tool_output = "winter123 was rejected"
+        value = extractor_result()
+        value["turns"][0]["generalized_working_text"] = tool_output
+        result = validate_extractor_result(
+            value,
+            ALL_REFS,
+            tool_outputs=(tool_source,),
+        )
+        self.assertEqual(
+            "[REDACTED_TOOL_OUTPUT] was rejected",
+            result["turns"][0]["generalized_working_text"],
+        )
+        for safe_source in ("status: winter123", "password: missing"):
+            with self.subTest(safe_source=safe_source):
+                self.assertEqual(
+                    (),
+                    tuple(
+                        result_validation_module.privacy_locators.sensitive_labeled_values(
+                            safe_source
+                        )
+                    ),
+                )
+
+        expanded_sources = [
+            f"password: winter{index:03d}"
+            for index in range(result_validation_module.MAX_SOURCE_OVERLAP_ITEMS)
+        ]
+        expanded_sources[-1] += "\npassword: additional-secret"
+        with self.assertRaisesRegex(ResultValidationError, "expanded_source_overlap"):
+            scan_for_leaks(
+                {"safe": "bounded"},
+                original_prompts=expanded_sources,
+            )
+
     def test_result_complexity_is_bounded_before_privacy_processing(self) -> None:
         value = extractor_result()
         value["turns"][0]["generalized_working_text"] = "x" * (

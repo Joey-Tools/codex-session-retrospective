@@ -4383,6 +4383,8 @@ class DurablePublicationTests(unittest.TestCase):
         for calls in (publication_calls, authority_calls):
             self.assertTrue(calls)
             for argv, environment in calls:
+                self.assertIn("core.commitGraph=false", argv)
+                self.assertIn("core.multiPackIndex=false", argv)
                 self.assertIn("core.askPass=/usr/bin/false", argv)
                 self.assertIn("credential.helper=", argv)
                 self.assertEqual("/usr/bin/false", environment["GIT_ASKPASS"])
@@ -4390,6 +4392,29 @@ class DurablePublicationTests(unittest.TestCase):
                 self.assertEqual("1", environment["GIT_NO_LAZY_FETCH"])
                 self.assertEqual("0", environment["GIT_OPTIONAL_LOCKS"])
                 self.assertEqual("0", environment["GIT_TERMINAL_PROMPT"])
+
+    def test_history_git_commands_override_repository_topology_caches(self) -> None:
+        for key in ("core.commitGraph", "core.multiPackIndex"):
+            run_command(["git", "config", "--local", key, "true"], cwd=self.repo)
+        try:
+            repository = authority._GitRepository(
+                self.repo,
+                gnupg_home=self.gnupg_home,
+                git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+                gpg_program=self.gpg,
+            )
+            publisher = self.publication_adapter()
+            for key in ("core.commitGraph", "core.multiPackIndex"):
+                with self.subTest(reader="authority", key=key):
+                    self.assertEqual("false", repository.text("config", "--bool", key))
+                with self.subTest(reader="publisher", key=key):
+                    value = publisher._git(("config", "--bool", key)).stdout
+                    self.assertEqual(b"false", value.strip())
+        finally:
+            for key in ("core.commitGraph", "core.multiPackIndex"):
+                run_command(
+                    ["git", "config", "--local", "--unset-all", key], cwd=self.repo
+                )
 
     def test_privacy_reread_rejects_replacement_symlink_and_oversize_races(
         self,
