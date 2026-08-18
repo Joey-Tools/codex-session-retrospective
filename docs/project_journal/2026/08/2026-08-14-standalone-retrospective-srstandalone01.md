@@ -1096,6 +1096,18 @@ superseded_by:
   pass formatting; the generated bootstrap manifest, both workflows under
   `actionlint`, the official OpenAI Skill validator, project-journal validator,
   `git diff --check`, and the no-bytecode source-tree check are clean.
+- Signed head `44cda16f` passed exact-secret admission and started one fresh
+  Codex processor, but hosted shard 0 exposed two bootstrap fixture failures.
+  The fixture used ambient `tempfile` placement: Linux selected sticky
+  world-writable `/tmp`, which the production implementation-authority chain
+  correctly rejects, while the local Darwin temporary root was private. The
+  processor was stopped without consuming partial output, its independent
+  workspace postvalidated clean, and the task root was removed. Valid bootstrap
+  fixtures now live under the owner-controlled repository root, and an explicit
+  writable-ancestor regression preserves the fail-closed production property.
+  The bootstrap module passes 7/7, CI contracts pass 12/12 under the exact real
+  Python 3.13.12 executable, Ruff checks pass, and the new complete inventory
+  contains 1,722 unique tests partitioned as 413, 460, 456, and 393.
 
 ## Follow-up Work
 

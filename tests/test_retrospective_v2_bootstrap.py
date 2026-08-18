@@ -16,7 +16,7 @@ SOURCE_SCRIPTS = ROOT / "scripts"
 
 class RetrospectiveV2BootstrapTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temporary = tempfile.TemporaryDirectory()
+        self.temporary = tempfile.TemporaryDirectory(dir=ROOT)
         self.root = Path(self.temporary.name)
         self.scripts = self.root / "scripts"
         self.scripts.mkdir(mode=0o700)
@@ -98,6 +98,13 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
                 self.assertEqual(9, completed.returncode, completed.stderr)
                 result = json.loads(completed.stdout)
                 self.assertEqual("unsafe_python_runtime", result["error"]["code"])
+
+    def test_writable_fixture_root_is_rejected(self) -> None:
+        self.root.chmod(0o777)
+
+        completed = self.run_entrypoint("--help")
+
+        self.assert_authority_rejected(completed)
 
     def test_import_substitutes_reject_before_package_import(self) -> None:
         cases = (
