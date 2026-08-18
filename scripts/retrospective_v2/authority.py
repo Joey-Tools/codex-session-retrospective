@@ -35,6 +35,7 @@ from .authority_errors import AuthorityError as AuthorityError, AutomationCutove
 from .authority_errors import HistoryValidationError, ProductionMarkerError
 from .authority_errors import ProviderCacheConflict, ProviderCacheError
 from .contracts import CANONICAL_HOSTS, RefType, canonical_json_bytes
+from .gpg_status import validsig_primary_fingerprints
 from .identity import IdentityKey
 from .orchestrator_core import LEGACY_SHADOW_CLEANUP_ROOTS, SHADOW_CLEANUP_ROOTS
 
@@ -921,36 +922,6 @@ class _GitRepository:
         if len(payload) != size:
             raise HistoryValidationError("history artifact byte count changed")
         return payload
-
-
-def validsig_primary_fingerprints(status: bytes) -> list[str]:
-    """Return the primary-key fingerprint from each complete GPG VALIDSIG row."""
-
-    fingerprints: list[str] = []
-    marker = b"[GNUPG:] VALIDSIG "
-    for line in status.splitlines():
-        index = line.find(marker)
-        if index < 0:
-            continue
-        fields = line[index + len(marker) :].split()
-        if len(fields) not in {9, 10}:
-            raise ValueError("GPG VALIDSIG row has an unexpected shape")
-        try:
-            signing_fingerprint = fields[0].decode("ascii", errors="strict").upper()
-            primary_fingerprint = (
-                fields[9].decode("ascii", errors="strict").upper()
-                if len(fields) == 10
-                else signing_fingerprint
-            )
-        except UnicodeDecodeError as exc:
-            raise ValueError("GPG VALIDSIG fingerprint is not ASCII") from exc
-        if (
-            _FINGERPRINT_RE.fullmatch(signing_fingerprint) is None
-            or _FINGERPRINT_RE.fullmatch(primary_fingerprint) is None
-        ):
-            raise ValueError("GPG VALIDSIG fingerprint is invalid")
-        fingerprints.append(primary_fingerprint)
-    return fingerprints
 
 
 def _verify_publication_signature(

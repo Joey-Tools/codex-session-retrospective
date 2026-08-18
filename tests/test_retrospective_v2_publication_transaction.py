@@ -22,6 +22,8 @@ from typing import Mapping
 import unittest
 from unittest import mock
 
+from tests.darwin_security import darwin_security_test
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -4043,7 +4045,7 @@ class DurablePublicationTests(unittest.TestCase):
         finally:
             config_path.write_bytes(original)
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    @darwin_security_test
     def test_history_reader_and_publisher_reject_config_extended_acl(self) -> None:
         config_path = self.repo / ".git" / "config"
         self._add_darwin_acl(config_path)
@@ -4066,7 +4068,7 @@ class DurablePublicationTests(unittest.TestCase):
         finally:
             self._remove_darwin_acl(config_path)
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    @darwin_security_test
     def test_history_reader_and_publisher_reject_late_config_acl(self) -> None:
         repository = authority._GitRepository(
             self.repo,

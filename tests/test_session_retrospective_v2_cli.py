@@ -16,6 +16,8 @@ import threading
 import unittest
 from unittest import mock
 
+from tests.darwin_security import darwin_security_test
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -1198,7 +1200,7 @@ class CliContractTests(unittest.TestCase):
         self.assertTrue((retained / "automation.toml").is_file())
         self.assertTrue((directory / "automation.toml").is_file())
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL contract")
+    @darwin_security_test
     def test_cutover_record_rejects_extended_acl(self) -> None:
         automation_root = self.automation_root()
         snapshot = self.capture_cutover_snapshot("record-acl")

@@ -50,9 +50,27 @@ jobs:
           "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S scripts/run_test_shard.py \
             --shard-index "${{ matrix.shard }}" --shard-count 4
 
+  darwin-security:
+    needs: contract
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Prepare owner-controlled Python
+        run: |
+          python3 -I -B -S -m venv --copies "$RUNNER_TEMP/codex-python"
+          chmod 0755 "$RUNNER_TEMP/codex-python/bin/python3"
+      - name: Run Darwin security contracts
+        run: |
+          "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S \
+            scripts/run_darwin_security_tests.py
+
   test:
     if: always()
-    needs: [contract, test-shard]
+    needs: [contract, test-shard, darwin-security]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -60,3 +78,4 @@ jobs:
         run: |
           test "${{ needs.contract.result }}" = success
           test "${{ needs.test-shard.result }}" = success
+          test "${{ needs.darwin-security.result }}" = success

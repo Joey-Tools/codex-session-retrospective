@@ -19,6 +19,8 @@ import types
 import unittest
 from unittest import mock
 
+from tests.darwin_security import darwin_security_test
+
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -1440,7 +1442,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertNotEqual(0, completed.returncode)
         self.assertIn("snapshot authentication failed", completed.stderr)
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    @darwin_security_test
     def test_remote_helper_launch_rejects_snapshot_extended_acl(self) -> None:
         helper = self.root / "acl-remote-helper.py"
         helper.write_text("print('{}')\n", encoding="ascii")
@@ -5137,7 +5139,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         self.assertTrue(restored.stdout)
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    @darwin_security_test
     def test_committed_program_snapshot_rejects_extended_acl(self) -> None:
         self._write_sources("snapshot-acl")
         coordinator = self._coordinator("snapshot-acl")
@@ -5215,7 +5217,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 allow_missing=False,
             )
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    @darwin_security_test
     def test_program_hash_rejects_extended_acl_and_late_acl_drift(self) -> None:
         component = self.root / "acl-program-component.py"
         component.write_bytes(b"A" * (128 * 1024))

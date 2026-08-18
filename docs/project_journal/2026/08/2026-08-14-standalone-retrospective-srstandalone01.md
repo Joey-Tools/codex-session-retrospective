@@ -1014,6 +1014,48 @@ superseded_by:
   terminal lines, and the combined traceback/failure scan is empty. Signing,
   admission, fresh review, hosted CI, and GitHub Codex evidence remain delivery
   gates.
+- Signed and pushed head `a6102a80` closed the recursive reduction-lineage and
+  sidecar-capacity defects, passed exact-secret admission, and passed all
+  hosted CI producers. Its fresh-context Codex processor then found two
+  release blockers: the publication canary searched only the signing-key
+  position in `VALIDSIG` and therefore rejected a valid signing subkey, while
+  Ubuntu-only CI skipped the real Darwin ACL security contracts. The lane
+  postvalidation reproduced its exact 36-commit graph and local-config
+  receipts, the trusted control manifest remained unchanged, and the private
+  reviewer workspace was removed. All head-bound evidence became stale.
+- GPG status parsing now has one strict shared owner. Complete nine-field rows
+  bind a primary signature directly; complete ten-field rows validate both the
+  signing-subkey and primary fingerprints and return only the primary. The
+  canary requires one exact primary match and fails closed on malformed or
+  multiple rows. A realistic ten-field signing-subkey regression passes, and
+  an independent read-only GPG audit returned `No findings.`
+- CI now has a required `macos-15` producer under an owner-controlled copied
+  Python 3.13 runtime. Ten ACL and Darwin access-policy tests carry one shared
+  marker, are discovered from the complete unittest inventory, and must match
+  one canonical policy tuple. Direct platform skips are forbidden by contract;
+  skipped, expected-failure, partial, duplicate, missing, or extra inventory
+  cannot pass the producer or aggregate job. The producer also verifies the
+  active Python leaf's canonical path, regular-file type, owner, mode, and link
+  count before test discovery.
+- The first post-review full attempt is non-counting. A bounded read-only audit
+  found that its initial Darwin runner admitted skipped tests, maintained only
+  hand-copied inventories, and relied on Ubuntu to validate the macOS runtime.
+  All four task-owned supervisors and their four orphaned test process groups
+  were terminated once and proved absent before the fixes. A later optional
+  final-tree audit returned no terminal artifact within ten minutes and was
+  closed as transport-inconclusive; it supplies no review result.
+- Final focused evidence passes CI contracts 11/11, the dynamically selected
+  Darwin security inventory 10/10 in 60.655 seconds, and the combined GPG,
+  CI, and module-boundary group 38/38 in 11.581 seconds. Ruff lint and changed
+  file formatting, `actionlint`, the official OpenAI skill validator,
+  project-journal validation, and `git diff --check` pass on the same tree.
+- The final Python 3.13 tree contains 1,700 unique test identifiers partitioned
+  exactly once as 405, 456, 452, and 387 tests. One owner-only durable run
+  completed every partition with supervisor exit zero: shard 0 passed 405/405
+  in 1,785.877 seconds, shard 1 passed 456/456 in 1,436.994 seconds, shard 2
+  passed 452/452 in 1,574.257 seconds, and shard 3 passed 387/387 in 1,500.523
+  seconds. Every retained log contains exact `Selected`, `Ran`, and `OK`
+  terminal lines, and the combined traceback/failure scan is empty.
 
 ## Follow-up Work
 

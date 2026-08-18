@@ -14,6 +14,7 @@ from typing import Any, Mapping, Sequence
 from . import (
     executable_authority,
     finalize,
+    gpg_status,
     implementation_authority,
     publication_support,
     result_validation,
@@ -591,5 +592,8 @@ def publisher_sign_verify_canary(
         return False
     if verified.returncode != 0:
         return False
-    marker = f"[GNUPG:] VALIDSIG {fingerprint} ".encode("ascii")
-    return marker in verified.stdout
+    try:
+        valid = gpg_status.validsig_primary_fingerprints(verified.stdout)
+    except ValueError:
+        return False
+    return valid == [fingerprint.upper()]

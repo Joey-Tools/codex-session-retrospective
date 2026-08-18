@@ -80,8 +80,24 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                     output = Path(arguments[arguments.index("--output") + 1])
                     output.write_bytes(b"signature")
                     raise SystemExit(0)
-                fingerprint = {orchestrator_support.PUBLISHER_FINGERPRINT!r}
-                print(f"[GNUPG:] VALIDSIG {{fingerprint}} 0")
+                primary_fingerprint = {orchestrator_support.PUBLISHER_FINGERPRINT!r}
+                signing_fingerprint = primary_fingerprint
+                if mode == "subkey_validsig":
+                    signing_fingerprint = "0123456789ABCDEF0123456789ABCDEF01234567"
+                fields = [
+                    signing_fingerprint,
+                    "20260818",
+                    "1787010000",
+                    "0",
+                    "4",
+                    "0",
+                    "22",
+                    "10",
+                    "00",
+                ]
+                if mode == "subkey_validsig":
+                    fields.append(primary_fingerprint)
+                print("[GNUPG:] VALIDSIG " + " ".join(fields))
                 """
             ),
             encoding="utf-8",
@@ -125,6 +141,16 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             )
         )
         self.assertFalse(self.gpg_sentinel.exists())
+
+    def test_canary_accepts_signing_subkey_bound_to_primary(self) -> None:
+        self.gpg_mode.write_text("subkey_validsig", encoding="ascii")
+
+        self.assertTrue(
+            orchestrator_support.publisher_sign_verify_canary(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+        )
 
     def test_canary_uses_closed_subprocess_environment(self) -> None:
         captured_environments: list[dict[str, str]] = []

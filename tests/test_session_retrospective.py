@@ -19,6 +19,8 @@ import types
 import unittest
 from unittest import mock
 
+from tests.darwin_security import darwin_security_test
+
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "session_retrospective.py"
 REMOTE_PROBE_SCRIPT = SCRIPT.parent / "remote_codex_probe.py"
@@ -32504,7 +32506,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
             with self.assertRaisesRegex(SystemExit, "local safety admission"):
                 MODULE.require_history_worktree_clean(history_repo)
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL policy")
+    @darwin_security_test
     def test_history_git_rejects_extended_acl_repository(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             history_repo, _commit = write_history_repo(raw)

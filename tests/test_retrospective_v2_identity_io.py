@@ -15,6 +15,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+from tests.darwin_security import darwin_security_test
+
 
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -948,7 +950,7 @@ class SafeIoTests(unittest.TestCase):
         finally:
             os.chmod(target, 0o600)
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    @darwin_security_test
     def test_darwin_existing_owner_only_paths_reject_extended_acls(self) -> None:
         directory = self.root / "acl-directory"
         directory.mkdir(mode=0o700)
@@ -966,7 +968,7 @@ class SafeIoTests(unittest.TestCase):
             self._remove_darwin_acl(directory)
             self._remove_darwin_acl(target)
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    @darwin_security_test
     def test_darwin_creation_clears_inherited_extended_acls(self) -> None:
         inheriting = self.root / "inheriting"
         inheriting.mkdir(mode=0o700)
@@ -1010,7 +1012,7 @@ class SafeIoTests(unittest.TestCase):
         finally:
             self._remove_darwin_acl(inheriting)
 
-    @unittest.skipUnless(sys.platform == "darwin", "Darwin ACL behavior")
+    @darwin_security_test
     def test_darwin_bounded_read_rejects_late_acl_policy_change(self) -> None:
         target = self.root / "late-acl"
         payload = b"x" * (64 * 1024 + 32)
