@@ -1405,6 +1405,38 @@ superseded_by:
   tree passes all 1,748 tests: shard 0 passes 419/419 in 1,633.108 seconds,
   shard 1 passes 470/470 in 1,300.820 seconds, shard 2 passes 459/459 in
   1,410.850 seconds, and shard 3 passes 400/400 in 1,322.127 seconds.
+- Signed head `a3b3651d` became stale when current-head GitHub Codex found two
+  remaining retained-privacy gaps: bare `Full name`, `First name`, and
+  `Last name` labels without a subject prefix could pass both privacy defenses,
+  and split `pass phrase` and `pass code` labels were absent from the shared
+  credential taxonomy. The old hosted run was cancelled. One local processor
+  attempt failed before review because its supplied Git prefix omitted required
+  isolation metadata; a corrected attempt was stopped without accepting partial
+  output after the GitHub findings invalidated the head. Both independent task
+  roots postvalidated clean before removal.
+- Bare personal-name labels now use a separate closed pattern with line-start,
+  Markdown-marker, punctuation, and quoted structured boundaries, including
+  escaped double- and single-quoted values. Split passphrase and passcode forms
+  accept only horizontal space, hyphen, or underscore separators, so labels
+  cannot join across lines. Scanner/redactor, source-overlap extraction,
+  retained validation, and report validation share the implementation.
+- Bounded precommit audits found and closed four composition gaps: ordinary
+  whitespace false positives, cross-line credential matching, weak redaction
+  assertions, and incomplete source-overlap coverage. Follow-up audits then
+  closed structured-prefix, quoted-value, and escaped-quote truncation gaps;
+  the final exact re-audit reports `No findings.` One earlier four-shard run was
+  stopped as non-counting when those audits invalidated its tree. Its exact
+  processes were interrupted once, proved absent, and the bounded temporary
+  residue was removed before the final run.
+- Final current-tree evidence passes the complete affected suites 172/172,
+  module boundaries 19/19 with the exact branch inventory restored to the
+  historical 9,475 ceiling, and CI, Skill, and bootstrap contracts 24/24.
+  Ruff 0.13.2 lint and formatting, the official OpenAI Skill validator, the
+  generated bootstrap manifest check, and `git diff --check` are clean. The
+  final frozen Python 3.13 tree passes all 1,749 tests: shard 0 passes 419/419
+  in 1,649.349 seconds, shard 1 passes 471/471 in 1,321.413 seconds, shard 2
+  passes 459/459 in 1,429.073 seconds, and shard 3 passes 400/400 in 1,332.867
+  seconds.
 
 ## Follow-up Work
 

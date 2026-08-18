@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ipaddress
+import json
 from itertools import chain, islice
 from operator import itemgetter
 import re
@@ -58,7 +59,6 @@ CONTEXTUAL_SHORT_PHONE_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 PHONE_PATTERNS = (INTERNATIONAL_PHONE_RE, PHONE_RE, CONTEXTUAL_SHORT_PHONE_RE)
-PERSONAL_IDENTIFIER_GROUPS = {CONTEXTUAL_SHORT_PHONE_RE: "phone"}
 _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     r"\b(?:(?:account|customer|employee|person|user)[_ -]?"
     r"(?:id|(?:(?:first|full|last)[_ -]+)?name)|"
@@ -73,6 +73,25 @@ LABELED_PERSONAL_VALUE_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 LABELED_PERSONAL_ID_RE = LABELED_PERSONAL_VALUE_RE
+_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
+    r"\b(?:(?:first|full|last)[_ -]+name|(?-i:(?:first|full|last)Name))"
+)
+BARE_LABELED_NAME_VALUE_RE = re.compile(
+    r"(?:(?:\A|(?<=[\r\n]))[ \t]*(?:[-*+>][ \t]+)?|"
+    r"(?<=[.!?;:,([{'\"])[ \t]*)"
+    r"(?P<personal>['\"]?"
+    + _BARE_LABELED_NAME_FIELD_PATTERN_TEXT
+    + r"['\"]?[ \t]*(?:=|:)[ \t]*"
+    r"(?!\[REDACTED)(?:"
+    r'"(?P<bare_double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])+)"|'
+    r"'(?P<bare_single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])+)'|"
+    r"(?P<value>[^\r\n]+)))",
+    re.ASCII | re.IGNORECASE,
+)
+PERSONAL_IDENTIFIER_GROUPS = {
+    CONTEXTUAL_SHORT_PHONE_RE: "phone",
+    BARE_LABELED_NAME_VALUE_RE: "personal",
+}
 LABELED_INTERNAL_HOST_RE = re.compile(
     r"\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
     r"(?!\[REDACTED)[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
@@ -306,7 +325,8 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"(?:authorization|aws[\s_-]?secret[\s_-]?access[\s_-]?key|"
     r"secret[\s_-]?access[\s_-]?key|access[\s_-]?token|"
     r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
-    r"secret(?:[\s_-]?key)?|password|passphrase|passcode|passwd|pwd|(?-i:PIN)|"
+    r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?code|"
+    r"passwd|pwd|(?-i:PIN)|"
     r"credential|token|" + _COMPACT_TOKEN_KEY_PATTERN_TEXT + r")"
 )
 _CREDENTIAL_FIELD_PATTERN_TEXT = (
@@ -546,7 +566,27 @@ def _normalized_sensitive_value(value: str) -> str:
 
 
 def _normalized_sensitive_labeled_value(match: re.Match[str]) -> str:
-    return _normalized_sensitive_value(match.group("value"))
+    for group in (
+        "value",
+        "bare_double_quoted_value",
+        "bare_single_quoted_value",
+    ):
+        try:
+            candidate = match.group(group)
+        except IndexError:
+            continue
+        if candidate is not None:
+            if group == "bare_double_quoted_value":
+                try:
+                    decoded = json.loads('"' + candidate + '"')
+                except json.JSONDecodeError:
+                    decoded = candidate
+                if isinstance(decoded, str):
+                    candidate = decoded
+            elif group == "bare_single_quoted_value":
+                candidate = re.sub(r"\\(['\\])", r"\1", candidate)
+            return _normalized_sensitive_value(candidate)
+    raise ValueError("sensitive labeled value match omitted its value")
 
 
 def _normalized_contextual_phone_value(match: re.Match[str]) -> str:
@@ -563,7 +603,11 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
     matches = chain.from_iterable(
         map(
             lambda pattern: pattern.finditer(value),
-            (_CREDENTIAL_LABELED_VALUE_RE, LABELED_PERSONAL_VALUE_RE),
+            (
+                _CREDENTIAL_LABELED_VALUE_RE,
+                LABELED_PERSONAL_VALUE_RE,
+                BARE_LABELED_NAME_VALUE_RE,
+            ),
         )
     )
     contextual_phone_values = filter(
@@ -628,6 +672,7 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
         PHONE_RE,
         CONTEXTUAL_SHORT_PHONE_RE,
         LABELED_PERSONAL_ID_RE,
+        BARE_LABELED_NAME_VALUE_RE,
     ):
         for match in pattern.finditer(value):
             group = PERSONAL_IDENTIFIER_GROUPS.get(pattern, 0)

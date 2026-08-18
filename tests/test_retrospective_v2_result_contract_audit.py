@@ -908,12 +908,129 @@ class AuditedResultContractTests(unittest.TestCase):
                 )
                 self.assertEqual(scan_for_leaks(validated), ())
 
+        for source in (
+            "Full name: Alice Smith",
+            "First name: Alice",
+            "Last name: Smith",
+            "full_name: Alice Smith",
+            "last-name: Smith",
+            "fullName: Alice Smith",
+            "firstName: Alice",
+            "lastName: Smith",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(
+                    {"personal_identifier"},
+                    {
+                        finding.category
+                        for finding in scan_for_leaks({"summary": source})
+                    },
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
+
+        source = "Observed: Full name: Alice Smith"
+        value = extractor_result()
+        value["turns"][0]["generalized_working_text"] = source
+
+        validated = validate_extractor_result(value, ALL_REFS)
+
+        self.assertEqual(
+            "Observed: [REDACTED_PERSONAL_IDENTIFIER]",
+            validated["turns"][0]["generalized_working_text"],
+        )
+        self.assertEqual(scan_for_leaks(validated), ())
+
+        for source, expected in (
+            (
+                "- Full name: Alice Smith",
+                "- [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "> firstName: Alice",
+                "> [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                '"Full name: Alice Smith"',
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                '{"fullName": "Alice Smith"}',
+                "{[REDACTED_PERSONAL_IDENTIFIER]}",
+            ),
+            (
+                '{"fullName": "Alice \\"Ace\\" Smith"}',
+                "{[REDACTED_PERSONAL_IDENTIFIER]}",
+            ),
+            (
+                "{'fullName': 'Alice \\'Ace\\' Smith'}",
+                "{[REDACTED_PERSONAL_IDENTIFIER]}",
+            ),
+        ):
+            with self.subTest(structured_source=source):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    expected,
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
+
         for safe_source in (
             "Inspect memory address: 0x1000.",
             "Inspect memory full name: stack frame.",
+            "Inspect memory  full name: stack frame.",
+            "Inspect memory\tfull name: stack frame.",
+            "Inspect memory-full name: stack frame.",
             "Inspect pin=GPIO17 before continuing.",
             "Run with --pin requests==2.32.5.",
             "The pin is bent.",
+        ):
+            with self.subTest(safe_source=safe_source):
+                self.assertEqual((), scan_for_leaks({"summary": safe_source}))
+
+    def test_audit_redacts_split_passphrase_and_passcode_labels(self) -> None:
+        for source in (
+            "pass phrase: purple",
+            "pass-phrase: purple",
+            "pass_phrase: purple",
+            "pass code: 839201",
+            "pass-code: 839201",
+            "pass_code: 839201",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(
+                    {"credential"},
+                    {
+                        finding.category
+                        for finding in scan_for_leaks({"summary": source})
+                    },
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    "[REDACTED_CREDENTIAL]",
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
+
+        for safe_source in (
+            "Checks pass\nphrase: purple",
+            "Checks pass\ncode: 839201",
         ):
             with self.subTest(safe_source=safe_source):
                 self.assertEqual((), scan_for_leaks({"summary": safe_source}))

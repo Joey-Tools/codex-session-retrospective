@@ -794,6 +794,46 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "Full name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "First name: Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Last name: Smith",
+                "Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "- Full name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                '"firstName: Alice"',
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                '{"fullName": "Alice Smith"}',
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                '{"fullName": "Alice \\"Ace\\" Smith"}',
+                'Alice "Ace" Smith was referenced',
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "{'fullName': 'Alice \\'Ace\\' Smith'}",
+                "Alice 'Ace' Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "customer address: 123 Main Street",
                 "123 Main Street was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
@@ -819,7 +859,37 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was used",
             ),
             (
+                "pass phrase: purple",
+                "purple was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "pass-phrase: purple",
+                "purple was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "pass_phrase: purple",
+                "purple was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
                 "passcode: 839201",
+                "839201 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "pass code: 839201",
+                "839201 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "pass-code: 839201",
+                "839201 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "pass_code: 839201",
                 "839201 was used",
                 "[REDACTED_ORIGINAL_PROMPT] was used",
             ),
