@@ -1769,6 +1769,7 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "employee name: Alice",
             "employee name: Alice Smith",
             "+44 20 7946 0958",
+            "+44 (0)20 7946 0958",
         ):
             with self.subTest(personal_value=personal_value, phase="direct"):
                 with self.assertRaisesRegex(
@@ -1830,8 +1831,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "job id: abcdef12",
             "attempt id: abcdef12",
             "The response embeds ```secret_code``` inline.",
+            "The response embeds ```secret_code inline.",
             "Inspect host: build-node-7 before continuing.",
             "Inspect identifier abcdefabcdefabcdefabcdef before continuing.",
+            "Inspect identifier 01890f3e-7b12-7cc2-bf79-123456789abc.",
             f"Inspect identifier {'a' * 65}.",
         )
         for value in values:

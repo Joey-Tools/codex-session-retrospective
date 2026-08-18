@@ -806,7 +806,11 @@ class AuditedResultContractTests(unittest.TestCase):
     def test_audit_redacts_grouped_and_compact_international_phone_numbers(
         self,
     ) -> None:
-        for phone in ("+44 20 7946 0958", "+442079460958"):
+        for phone in (
+            "+44 20 7946 0958",
+            "+44 (0)20 7946 0958",
+            "+442079460958",
+        ):
             with self.subTest(phone=phone):
                 source = f"Call {phone} before continuing."
                 findings = scan_for_leaks({"summary": source})
@@ -866,12 +870,22 @@ class AuditedResultContractTests(unittest.TestCase):
                 "[REDACTED_CODE]",
             ),
             (
+                "The response embeds ```secret_code inline.",
+                "code",
+                "[REDACTED_CODE]",
+            ),
+            (
                 "Inspect host: build-node-7 before continuing.",
                 "internal_host",
                 "[REDACTED_INTERNAL_HOST]",
             ),
             (
                 "Inspect identifier abcdefabcdefabcdefabcdef before continuing.",
+                "raw_id",
+                "[REDACTED_RAW_ID]",
+            ),
+            (
+                "Inspect identifier 01890f3e-7b12-7cc2-bf79-123456789abc.",
                 "raw_id",
                 "[REDACTED_RAW_ID]",
             ),

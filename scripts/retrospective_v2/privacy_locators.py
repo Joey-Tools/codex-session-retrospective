@@ -40,10 +40,8 @@ EMAIL_RE = re.compile(
 )
 PHONE_RE = re.compile(
     r"(?<![A-Za-z0-9])(?:"
-    r"\+(?:(?:\(\d{1,4}\)|\d{1,4})[ .-]){2,5}"
-    r"(?:\(\d{2,4}\)|\d{2,4})|"
-    r"\+\d{7,15}|"
-    r"(?:\+\d{1,3}[ .-]?)?(?:\(\d{3}\)|\d{3})"
+    r"\+[0-9() .-]{5,40}[0-9]|"
+    r"(?:\(\d{3}\)|\d{3})"
     r"[ .-]?\d{3}[ .-]?\d{4}"
     r")(?![A-Za-z0-9])",
     re.ASCII,
@@ -85,7 +83,7 @@ PATH_LOCATOR_PATTERNS = (
 )
 UUID_RE = re.compile(
     r"(?<![A-Za-z0-9])"
-    r"[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
     r"(?![A-Za-z0-9])",
     re.ASCII | re.IGNORECASE,
 )
@@ -100,7 +98,7 @@ RAW_ID_LABEL_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 RAW_IDENTIFIER_PATTERNS = (UUID_RE, LONG_HEX_ID_RE, RAW_ID_LABEL_RE)
-CODE_FENCE_RE = re.compile(r"```[\s\S]*?```")
+CODE_FENCE_RE = re.compile(r"```[\s\S]*?(?:```|\Z)")
 IPV4_CANDIDATE_RE = re.compile(
     r"(?<![0-9A-Za-z.])"
     r"(?P<address>(?:[0-9]{1,3}\.){3}[0-9]{1,3})"

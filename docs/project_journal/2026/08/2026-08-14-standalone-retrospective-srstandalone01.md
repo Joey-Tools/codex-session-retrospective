@@ -1253,6 +1253,21 @@ superseded_by:
   increase. No production code changed after that run; the exact inventory was
   updated without relaxing its 9,475 ceiling, and the complete module-boundary
   suite then passed 19/19 in 2.125 seconds, closing the sole failed test ID.
+- GitHub Codex then identified three remaining shared-policy gaps on signed
+  head `3ff3eaca`: international numbers with a domestic trunk marker such as
+  `+44 (0)...`, an unmatched opening code fence, and UUID forms outside
+  versions 1 through 5. That head's local processor and hosted run were stopped
+  as stale; the independent workspace postvalidated clean before removal. The
+  shared policy now treats a bounded leading-plus candidate with 7 through 15
+  digits as a phone number, consumes an opening code fence through its closing
+  fence or end of text, and rejects every canonical hexadecimal UUID shape.
+  Exact scanner/redactor and retained-validator regressions cover all three
+  findings without changing the independent enforcement points. Four focused
+  regressions pass 4/4 in 0.401 seconds; the complete affected result-contract,
+  retained-export, and episode suites pass 167/167 in 13.939 seconds; module
+  boundaries pass 19/19 in 2.183 seconds; and the CI, Skill, and bootstrap
+  contracts pass 24/24 in 5.235 seconds. Ruff lint and formatting, project
+  journal validation, and `git diff --check` are clean.
 
 ## Follow-up Work
 
