@@ -1373,7 +1373,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             replaced.source_root_commitment,
         )
 
-    def test_remote_to_local_route_downgrade_fails_before_source_open(self) -> None:
+    def test_remote_to_local_registry_downgrade_fails_before_source_open(self) -> None:
         helper = self.root / "downgraded-route-helper.py"
         helper.write_text(
             "HOSTS = {\n"
@@ -1438,7 +1438,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             ) as relay,
             self.assertRaisesRegex(
                 transport.TransportValidationError,
-                "cannot use a local helper route",
+                "snapshot does not define the requested host",
             ),
         ):
             transport_source._run_private_transport_worker(bound)

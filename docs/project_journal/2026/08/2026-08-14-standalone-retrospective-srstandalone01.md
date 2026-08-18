@@ -1108,6 +1108,22 @@ superseded_by:
   The bootstrap module passes 7/7, CI contracts pass 12/12 under the exact real
   Python 3.13.12 executable, Ruff checks pass, and the new complete inventory
   contains 1,722 unique tests partitioned as 413, 460, 456, and 393.
+- The next fresh-context Codex processor found two transport-authority gaps in
+  the authenticated helper inventory. A helper could declare an alternate
+  local label or root that the local scheduler would ignore, and executable
+  code after the static `HOSTS` literal could mutate or alias that registry
+  before the authenticated snapshot ran. The inventory now admits only the
+  scheduler's exact `local` / `~/.codex` binding. Static helper use is closed
+  to membership checks and two-level string-field reads; method mutation,
+  unbound mutators, and container or row aliases fail before a run freezes the
+  helper commitment.
+- The inventory regressions pass 7/7, module boundaries pass 19/19, and CI
+  contracts pass 12/12. The final Python 3.13.12 inventory contains 1,724
+  unique tests partitioned exactly once: shard 0 passes 414/414 in 1,460.457
+  seconds, shard 1 passes 461/461 in 1,128.260 seconds, shard 2 passes 455/455
+  in 1,258.546 seconds, and shard 3 passes 394/394 in 1,177.375 seconds. Every
+  runner exits zero with `OK`, and the combined failure and traceback scan is
+  empty.
 
 ## Follow-up Work
 

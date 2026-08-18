@@ -97,6 +97,8 @@ class CanonicalHost:
             raise HostInventoryError("canonical host role is invalid")
         _normalized_root(self.codex_root, role=self.role)
         if self.role == "local":
+            if self.host != "local" or self.codex_root != "~/.codex":
+                raise HostInventoryError("local host binding is unsupported")
             if self.transport_target is not None:
                 raise HostInventoryError("local host cannot have a transport target")
         else:
@@ -353,6 +355,11 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
         raise HostInventoryError(
             "remote helper must define exactly one top-level HOSTS"
         )
+    parents = {
+        id(child): parent
+        for parent in ast.walk(tree)
+        for child in ast.iter_child_nodes(parent)
+    }
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.Name)
@@ -361,14 +368,43 @@ def parse_authenticated_helper_hosts(source: bytes) -> HostInventory:
             and node is not definition_target
         ):
             raise HostInventoryError("remote helper HOSTS is reassigned")
-        if isinstance(node, (ast.Attribute, ast.Subscript)) and isinstance(
-            node.ctx, (ast.Store, ast.Del)
-        ):
+        if isinstance(node, (ast.Attribute, ast.Subscript)):
             root: ast.expr = node
             while isinstance(root, (ast.Attribute, ast.Subscript)):
                 root = root.value
-            if isinstance(root, ast.Name) and root.id == "HOSTS":
+            if (
+                isinstance(root, ast.Name)
+                and root.id == "HOSTS"
+                and (
+                    isinstance(node, ast.Attribute)
+                    or not isinstance(node.ctx, ast.Load)
+                )
+            ):
                 raise HostInventoryError("remote helper HOSTS is mutated")
+        if (
+            isinstance(node, ast.Name)
+            and node.id == "HOSTS"
+            and isinstance(node.ctx, ast.Load)
+        ):
+            parent = parents[id(node)]
+            membership = isinstance(parent, ast.Compare) and any(
+                item is node and isinstance(parent.ops[index], (ast.In, ast.NotIn))
+                for index, item in enumerate(parent.comparators)
+            )
+            row = (
+                parent
+                if isinstance(parent, ast.Subscript) and parent.value is node
+                else None
+            )
+            field = parents.get(id(row)) if row is not None else None
+            if not membership and not (
+                isinstance(field, ast.Subscript)
+                and field.value is row
+                and isinstance(field.ctx, ast.Load)
+            ):
+                raise HostInventoryError(
+                    "remote helper HOSTS escapes its static inventory"
+                )
     raw = _host_literal(assignments[0])
     rows: dict[str, CanonicalHost] = {}
     labels: dict[str, str] = {}

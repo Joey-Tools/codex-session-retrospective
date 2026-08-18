@@ -346,7 +346,7 @@ TRANSPORT_LINE_INVENTORY = {
     "transport_capture.py": 1_024,
     "transport_contracts.py": 1_100,
     "transport_discovery.py": 240,
-    "transport_host_inventory.py": 435,
+    "transport_host_inventory.py": 471,
     "transport_paths.py": 100,
     "transport_program.py": 389,
     "transport_program_components.py": 207,
@@ -358,7 +358,7 @@ TRANSPORT_LINE_INVENTORY = {
     "transport_source.py": 1_937,
     "transport_worker.py": 21,
 }
-TRANSPORT_AGGREGATE_LINE_LIMIT = 8_450
+TRANSPORT_AGGREGATE_LINE_LIMIT = 8_500
 
 BOUNDED_MODULE_LINES = {
     "executable_authority.py": 350,
@@ -438,7 +438,7 @@ BOUNDED_MODULE_LINES = {
     "transport_capture.py": 1_050,
     "transport_contracts.py": 1_125,
     "transport_discovery.py": 240,
-    "transport_host_inventory.py": 450,
+    "transport_host_inventory.py": 500,
     "transport_paths.py": 100,
     "transport_program.py": 450,
     "transport_program_components.py": 225,
@@ -1189,7 +1189,7 @@ spec.loader.exec_module(module)
         }
         self.assertEqual(TRANSPORT_MODULES, set(TRANSPORT_LINE_INVENTORY))
         self.assertEqual(TRANSPORT_LINE_INVENTORY, observed)
-        self.assertEqual(8_416, sum(observed.values()))
+        self.assertEqual(8_452, sum(observed.values()))
         self.assertLessEqual(
             sum(observed.values()),
             TRANSPORT_AGGREGATE_LINE_LIMIT,
@@ -1238,7 +1238,7 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_418, branch_total)
+        self.assertEqual(9_433, branch_total)
         self.assertLessEqual(branch_total, 9_450)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
