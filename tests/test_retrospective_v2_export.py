@@ -1773,6 +1773,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "020 7946 0958",
             "(020) 7946 0958",
             "02079460958",
+            "Call 6123 4567 before continuing.",
+            "Phone: 61234567 before continuing.",
+            "Phone:  61234567 before continuing.",
+            "Phone : 61234567 before continuing.",
         ):
             with self.subTest(personal_value=personal_value, phase="direct"):
                 with self.assertRaisesRegex(

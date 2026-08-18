@@ -40,6 +40,7 @@ _ROLLOUT_NAME_TIMESTAMP_RE = re.compile(
     r"(?=-|\.jsonl(?:$|[?#]))"
 )
 _ROLLOUT_RECORD_REF_RE = re.compile(r"^record-v2:([0-9a-f]{64}):([0-9a-f]{64})$")
+_MISSING_EVENT_TIME = object()
 
 
 class CatalogValidationError(ValueError):
@@ -248,21 +249,22 @@ def event_time_from_record(
     """Return canonical source event time without consulting filesystem mtime.
 
     ``mtime`` is accepted to make the non-fallback contract explicit to source
-    adapters. Archive or path movement must not change event semantics.
+    adapters. Archive or path movement must not change event semantics. A
+    present but invalid source time blocks the stable locator fallback.
     """
 
     del mtime
     payload = record.get("payload")
     payload_mapping = payload if isinstance(payload, Mapping) else {}
     for key in ("timestamp", "updated_at", "time", "created_at", "ts"):
-        value = record.get(key)
-        if value is None:
-            value = payload_mapping.get(key)
+        value = record.get(key, payload_mapping.get(key, _MISSING_EVENT_TIME))
+        if value is _MISSING_EVENT_TIME:
+            continue
         if isinstance(value, (str, dt.datetime)):
             try:
                 return canonical_utc_timestamp(value, f"record.{key}")
             except CatalogValidationError:
-                continue
+                return None
         if (
             key == "ts"
             and isinstance(value, (int, float))
@@ -272,8 +274,9 @@ def event_time_from_record(
             try:
                 parsed = dt.datetime.fromtimestamp(float(value), tz=dt.timezone.utc)
             except (OverflowError, OSError, ValueError):
-                continue
+                return None
             return canonical_utc_timestamp(parsed, "record.ts")
+        return None
     if stable_event_time is not None:
         return canonical_utc_timestamp(stable_event_time, "stable_event_time")
     return None

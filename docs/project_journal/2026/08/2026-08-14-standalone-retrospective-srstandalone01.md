@@ -1308,6 +1308,31 @@ superseded_by:
   inventory remains 9,475/9,475 without raising the ceiling; Ruff lint and
   formatting, the official Skill validator, project-journal validation, the
   generated bootstrap manifest check, and `git diff --check` are clean.
+- Signed head `dfd83c2e` became stale when GitHub Codex rebound two unresolved
+  current-range P1 findings: valid 7-9 digit domestic phone numbers could pass
+  both privacy defenses, and a malformed explicit source timestamp could fall
+  back to the rollout filename. Its fresh local processor was stopped without
+  accepting partial output, the workspace postvalidated clean before removal,
+  and the hosted run was cancelled as non-counting.
+- Short domestic numbers are now recognized only under a closed phone-context
+  label with bounded flexible horizontal whitespace; bare short numbers, dates,
+  versions, and overlong labels remain negative cases. Credential, personal,
+  and source-overlap redaction now preserve their priorities across label-only,
+  separator-only, complete-source, and credential-context substitutions for
+  both original prompts and tool output. A malformed present source-time field
+  blocks stable locator fallback and produces `source_event_time_unavailable`;
+  a genuinely missing field may still use the stable rollout filename. One
+  four-shard run was stopped as non-counting after a precommit audit found the
+  composition gaps; all exact shard processes were interrupted once and proved
+  absent before edits. The final bounded read-only re-audit reports
+  `No findings.` Focused evidence across the fix sequence passes result privacy 21/21,
+  result/episode behavior 79/79, retained export 70/70, catalog 30/30, source
+  transport 123/123, module boundaries 19/19 with the unchanged 9,475/9,475
+  branch inventory, and CI/Skill/bootstrap contracts 24/24. Ruff lint and
+  formatting are clean. The final frozen code-and-test tree passes all 1,747
+  tests: shard 0 passes 418/418 in 1,576.025 seconds, shard 1 passes 470/470 in
+  1,253.496 seconds, shard 2 passes 459/459 in 1,361.142 seconds, and shard 3
+  passes 400/400 in 1,271.926 seconds.
 
 ## Follow-up Work
 

@@ -145,6 +145,12 @@ class CatalogTests(unittest.TestCase):
                 mtime=1_751_328_000.0,
             )
         )
+        self.assertIsNone(
+            catalog.event_time_from_record(
+                {"timestamp": "not-a-date"},
+                stable_event_time="2026-07-01T02:03:04Z",
+            )
+        )
 
     def test_rollout_filename_date_beats_archive_directory_date(self) -> None:
         active = "sessions/2025/12/31/rollout-2026-07-01T02-03-04-stable-session.jsonl"

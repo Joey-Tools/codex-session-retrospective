@@ -11,6 +11,7 @@ from collections import Counter
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 import copy
+from functools import reduce
 import hashlib
 from itertools import chain, islice
 import json
@@ -820,19 +821,34 @@ def _post_redact_text(
     source_overlap_exempt: bool,
 ) -> str:
     redacted = privacy_locators.redact_private_key_blocks(text)
+    personal_identifier_patterns = tuple(
+        filter(
+            None,
+            map(
+                _literal_redaction_pattern,
+                privacy_locators.personal_identifier_values(redacted),
+            ),
+        )
+    )
     for (
         _category,
         pattern,
         replacement,
     ) in privacy_locators.CREDENTIAL_REDACTION_PATTERNS:
         redacted = pattern.sub(replacement, redacted)
+    # Source-overlap markers must never split an already identified personal value.
+    redacted = privacy_locators.redact_personal_identifiers(redacted)
+    redacted = reduce(
+        lambda current, pattern: pattern.sub("[REDACTED_PERSONAL_IDENTIFIER]", current),
+        personal_identifier_patterns,
+        redacted,
+    )
     if not source_overlap_exempt:
         for pattern in original_prompt_patterns:
             redacted = pattern.sub("[REDACTED_ORIGINAL_PROMPT]", redacted)
         for pattern in tool_output_patterns:
             redacted = pattern.sub("[REDACTED_TOOL_OUTPUT]", redacted)
     redacted = privacy_locators.SCP_STYLE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
-    redacted = privacy_locators.redact_personal_identifiers(redacted)
     redacted = privacy_locators.URI_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     redacted = privacy_locators.BARE_PRIVATE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     redacted = privacy_locators.LABELED_INTERNAL_HOST_RE.sub(
@@ -864,12 +880,22 @@ def post_redact(
     )
     original_prompt_patterns = tuple(
         pattern
-        for value in _expanded_source_overlap_candidates(original_prompts)
+        for value in chain.from_iterable(
+            map(
+                privacy_locators.personal_identifier_redaction_variants,
+                _expanded_source_overlap_candidates(original_prompts),
+            )
+        )
         if (pattern := _literal_redaction_pattern(value)) is not None
     )
     tool_output_patterns = tuple(
         pattern
-        for value in _expanded_source_overlap_candidates(tool_outputs)
+        for value in chain.from_iterable(
+            map(
+                privacy_locators.personal_identifier_redaction_variants,
+                _expanded_source_overlap_candidates(tool_outputs),
+            )
+        )
         if (pattern := _literal_redaction_pattern(value)) is not None
     )
     allowed_values = _privacy_reference_values(allowed_reference_values)

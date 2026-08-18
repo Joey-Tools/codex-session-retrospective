@@ -834,11 +834,37 @@ class AuditedResultContractTests(unittest.TestCase):
 
         for safe in (
             "Release 2026-08-18 uses Python 3.13.12 and build 123456.",
+            "Build 61234567 remains an unlabeled numeric identifier.",
             "Bounds +12 34 56 and +1234-5678-9012-3456-7890 stay numeric labels.",
             "Order 1234567890123456 remains an overlong numeric label.",
         ):
             with self.subTest(safe=safe):
                 self.assertEqual(scan_for_leaks({"summary": safe}), ())
+
+    def test_audit_redacts_short_domestic_numbers_in_phone_context(self) -> None:
+        for source in (
+            "Call 6123 4567 before continuing.",
+            "Phone: 61234567 before continuing.",
+            "Phone:  61234567 before continuing.",
+            "Phone : 61234567 before continuing.",
+            "Tel: (612) 3456 before continuing.",
+        ):
+            with self.subTest(source=source):
+                findings = scan_for_leaks({"summary": source})
+                self.assertEqual(
+                    {finding.category for finding in findings},
+                    {"personal_identifier"},
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertIn(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
 
     def test_audit_redacts_the_complete_labeled_personal_value(self) -> None:
         source = "Observed employee name: Alice Smith before continuing."

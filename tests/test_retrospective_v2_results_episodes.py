@@ -798,6 +798,84 @@ class ResultValidationTests(unittest.TestCase):
                 original_prompts=expanded_sources,
             )
 
+    def test_source_overlap_cannot_remove_short_phone_context(self) -> None:
+        for source, source_kwargs, source_marker in (
+            (
+                "Phone:",
+                {"original_prompts": ("Phone:",)},
+                "[REDACTED_ORIGINAL_PROMPT]",
+            ),
+            (
+                "Phone :",
+                {"tool_outputs": ("Phone :",)},
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
+        ):
+            with self.subTest(source=source):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = (
+                    f"{source}  61234567 before continuing."
+                )
+
+                result = validate_extractor_result(value, ALL_REFS, **source_kwargs)
+                text = result["turns"][0]["generalized_working_text"]
+
+                self.assertIn(source_marker, text)
+                self.assertIn("[REDACTED_PERSONAL_IDENTIFIER]", text)
+                self.assertNotIn("61234567", text)
+                self.assertEqual((), scan_for_leaks(result, **source_kwargs))
+
+        for source_kwargs in (
+            {"original_prompts": ("-",)},
+            {"tool_outputs": ("-",)},
+        ):
+            with self.subTest(source_kwargs=source_kwargs):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = (
+                    "Phone: 6123-4567 before continuing."
+                )
+
+                result = validate_extractor_result(value, ALL_REFS, **source_kwargs)
+                text = result["turns"][0]["generalized_working_text"]
+
+                self.assertIn("[REDACTED_PERSONAL_IDENTIFIER]", text)
+                self.assertNotIn("6123", text)
+                self.assertNotIn("4567", text)
+                self.assertEqual((), scan_for_leaks(result, **source_kwargs))
+
+        complete_source = "Phone: 61234567 before continuing."
+        for source_kwargs, expected in (
+            (
+                {"original_prompts": (complete_source,)},
+                "[REDACTED_ORIGINAL_PROMPT]",
+            ),
+            (
+                {"tool_outputs": (complete_source,)},
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
+        ):
+            with self.subTest(source_kwargs=source_kwargs):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = complete_source
+
+                result = validate_extractor_result(value, ALL_REFS, **source_kwargs)
+                text = result["turns"][0]["generalized_working_text"]
+
+                self.assertEqual(expected, text)
+                self.assertEqual((), scan_for_leaks(result, **source_kwargs))
+
+        credential_source = "password: Phone: 61234567 before continuing."
+        value = extractor_result()
+        value["turns"][0]["generalized_working_text"] = credential_source
+
+        result = validate_extractor_result(value, ALL_REFS)
+        text = result["turns"][0]["generalized_working_text"]
+
+        self.assertIn("[REDACTED_CREDENTIAL]", text)
+        self.assertIn("[REDACTED_PERSONAL_IDENTIFIER]", text)
+        self.assertNotIn("61234567", text)
+        self.assertEqual((), scan_for_leaks(result))
+
     def test_result_complexity_is_bounded_before_privacy_processing(self) -> None:
         value = extractor_result()
         value["turns"][0]["generalized_working_text"] = "x" * (

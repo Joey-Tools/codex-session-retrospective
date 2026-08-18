@@ -5339,6 +5339,44 @@ class SourceTransportProtocolTests(unittest.TestCase):
             active_cell["manifest"]["enumeration_gap"]["reason"],
         )
 
+    def test_invalid_record_time_does_not_fall_back_to_rollout_filename(self) -> None:
+        session_id = "invalid-time"
+        timestamp = "2026-07-06T12:34:56Z"
+        self.codex_root.joinpath("session_index.jsonl").write_text(
+            json.dumps({"id": session_id, "timestamp": timestamp}) + "\n",
+            encoding="ascii",
+        )
+        self.codex_root.joinpath("history.jsonl").write_text(
+            json.dumps({"session_id": session_id, "timestamp": timestamp}) + "\n",
+            encoding="ascii",
+        )
+        active = self.codex_root / "sessions/2026/07/06"
+        active.mkdir(mode=0o700, parents=True)
+        active.joinpath("rollout-2026-07-06T12-34-56-invalid-time.jsonl").write_text(
+            json.dumps(
+                {
+                    "payload": {"content": "invalid time", "role": "user"},
+                    "session_id": session_id,
+                    "timestamp": "not-a-date",
+                    "type": "response_item",
+                }
+            )
+            + "\n",
+            encoding="ascii",
+        )
+
+        state = self._complete_native_sources(
+            "invalid-rollout-time",
+            window_start="2026-07-06T12:30:00Z",
+            window_end="2026-07-06T12:40:00Z",
+        )
+        active_cell = state["source"]["cells"]["local"]["active_rollout"]
+        self.assertEqual("gap", active_cell["status"])
+        self.assertEqual(
+            "source_event_time_unavailable",
+            active_cell["manifest"]["enumeration_gap"]["reason"],
+        )
+
     def test_session_mode_rejects_a_validly_signed_mismatched_record(self) -> None:
         target = str(
             self.identity.derive_session_ref(

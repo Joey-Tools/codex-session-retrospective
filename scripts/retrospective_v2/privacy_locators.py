@@ -39,14 +39,24 @@ EMAIL_RE = re.compile(
     r"(?![a-z0-9-])",
     re.ASCII | re.IGNORECASE,
 )
-PHONE_RE = re.compile(
-    r"(?:"
-    r"(?<![A-Za-z0-9])\+[0-9() .-]{5,40}[0-9](?![A-Za-z0-9])|"
-    r"(?<![A-Za-z0-9_-])[0-9(][0-9() .-]{8,40}[0-9]"
-    r"(?![A-Za-z0-9_-])"
-    r")",
+INTERNATIONAL_PHONE_RE = re.compile(
+    r"(?<![A-Za-z0-9])\+[0-9() .-]{5,40}[0-9](?![A-Za-z0-9])",
     re.ASCII,
 )
+PHONE_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])[0-9(][0-9() .-]{8,40}[0-9]"
+    r"(?![A-Za-z0-9_-])",
+    re.ASCII,
+)
+CONTEXTUAL_SHORT_PHONE_RE = re.compile(
+    r"\b(?:call|phone|tel|telephone|mobile|contact)"
+    r"(?:[ \t]*:[ \t]*|[ \t]+)"
+    r"(?P<phone>(?![0-9]{4}-[0-9]{2}-[0-9]{2}(?![0-9]))"
+    r"[0-9(][0-9() .-]{5,40}[0-9](?![A-Za-z0-9_-]))",
+    re.ASCII | re.IGNORECASE,
+)
+PHONE_PATTERNS = (INTERNATIONAL_PHONE_RE, PHONE_RE, CONTEXTUAL_SHORT_PHONE_RE)
+PERSONAL_IDENTIFIER_GROUPS = {CONTEXTUAL_SHORT_PHONE_RE: "phone"}
 _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     r"\b(?:account|customer|employee|person|user)[_ -]?(?:id|name)"
 )
@@ -545,14 +555,23 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
     """Yield deterministic merged spans for supported personal identifiers."""
 
     candidates: list[tuple[int, int]] = []
-    for pattern in (EMAIL_RE, PHONE_RE, LABELED_PERSONAL_ID_RE):
+    for pattern in (
+        EMAIL_RE,
+        INTERNATIONAL_PHONE_RE,
+        PHONE_RE,
+        CONTEXTUAL_SHORT_PHONE_RE,
+        LABELED_PERSONAL_ID_RE,
+    ):
         for match in pattern.finditer(value):
-            if pattern is PHONE_RE:
-                digit_count = sum(character.isdigit() for character in match.group())
-                minimum_digit_count = 7 if match.group().startswith("+") else 10
+            group = PERSONAL_IDENTIFIER_GROUPS.get(pattern, 0)
+            if pattern in PHONE_PATTERNS:
+                digit_count = sum(
+                    character.isdigit() for character in match.group(group)
+                )
+                minimum_digit_count = 10 if pattern is PHONE_RE else 7
                 if not minimum_digit_count <= digit_count <= 15:
                     continue
-            candidates.append((match.start(), match.end()))
+            candidates.append((match.start(group), match.end(group)))
     candidates.sort(key=lambda span: (span[0], span[1]))
     if not candidates:
         return
@@ -568,6 +587,14 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
 
 def contains_personal_identifier(value: str) -> bool:
     return next(personal_identifier_spans(value), None) is not None
+
+
+def personal_identifier_values(value: str) -> Iterator[str]:
+    return map(lambda span: value[slice(*span)], personal_identifier_spans(value))
+
+
+def personal_identifier_redaction_variants(value: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys((value, redact_personal_identifiers(value))))
 
 
 def redact_personal_identifiers(value: str) -> str:
