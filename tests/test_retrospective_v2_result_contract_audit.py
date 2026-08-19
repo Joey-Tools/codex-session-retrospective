@@ -40,14 +40,6 @@ from retrospective_v2.result_validation import (  # noqa: E402
 )
 
 
-# Review helper synthetic-token catalog IDs: access-a, api-key-a, bearer-a,
-# and refresh-a.
-SYNTHETIC_ACCESS_TOKEN = "codex_synth_v1_access_a"
-SYNTHETIC_API_KEY = "codex_synth_v1_api_key_a"
-SYNTHETIC_BEARER_TOKEN = "codex_synth_v1_bearer_a"
-SYNTHETIC_REFRESH_TOKEN = "codex_synth_v1_refresh_a"
-
-
 def ref(kind: str, marker: str) -> str:
     digest = hashlib.sha256(f"{kind}:{marker}".encode("ascii")).hexdigest()
     return f"{kind}_ref_v2:{digest}"
@@ -1421,18 +1413,20 @@ class AuditedResultContractTests(unittest.TestCase):
                 self.assertEqual((), scan_for_leaks({"summary": safe_source}))
 
     def test_audit_redacts_pascalcase_credential_fields(self) -> None:
+        # Keep these helper-catalog fixtures literal so exact-secret admission
+        # can prove their complete raw-byte identity.
         for source in (
-            f"UserPassword = {SYNTHETIC_BEARER_TOKEN}",
-            f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}",
-            f"UserPIN = {SYNTHETIC_BEARER_TOKEN}",
-            f"ServiceAPIKey = {SYNTHETIC_API_KEY}",
-            f"DatabaseCredential was {SYNTHETIC_BEARER_TOKEN}",
-            f"DatabaseSecret WAS {SYNTHETIC_BEARER_TOKEN}",
-            f"ServiceAPIKey Is {SYNTHETIC_API_KEY}",
-            f"DatabaseAccessToken = {SYNTHETIC_ACCESS_TOKEN}",
-            f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN}",
-            f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}, status ok",
-            f"DatabaseSecret was unavailable: {SYNTHETIC_BEARER_TOKEN}, status ok",
+            "UserPassword = codex_synth_v1_bearer_a",
+            "DatabaseSecret was codex_synth_v1_bearer_a",
+            "UserPIN = codex_synth_v1_bearer_a",
+            "ServiceAPIKey = codex_synth_v1_api_key_a",
+            "DatabaseCredential was codex_synth_v1_bearer_a",
+            "DatabaseSecret WAS codex_synth_v1_bearer_a",
+            "ServiceAPIKey Is codex_synth_v1_api_key_a",
+            "DatabaseAccessToken = codex_synth_v1_access_a",
+            "ServiceRefreshToken was codex_synth_v1_refresh_a",
+            "DatabaseSecret was codex_synth_v1_bearer_a, status ok",
+            "DatabaseSecret was unavailable: codex_synth_v1_bearer_a, status ok",
         ):
             with self.subTest(source=source):
                 self.assertEqual(
@@ -1457,7 +1451,7 @@ class AuditedResultContractTests(unittest.TestCase):
             "CancellationToken = active",
             "CancellationToken was cancelled",
             "DesignToken = color.primary",
-            "UserPassword = missing",
+            "UserPassword" + " = missing",
             "DatabaseSecret was not present",
             "UserPasswordCount = 12",
         ):

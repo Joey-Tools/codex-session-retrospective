@@ -1624,19 +1624,26 @@ superseded_by:
   closure-only audit reports `No findings.` Focused Python 3.13 contracts pass
   24/24, 83/83, 71/71, 19/19, 33/33, and 5/5; the exact engine branch inventory
   is 9,488.
-- Exact-secret admission on signed head `edcc5f03` was inconclusive after the
-  privacy regressions introduced new non-catalog credential-shaped fixture
-  values. Only those new fixtures were replaced with the review helper's
-  role-specific synthetic-token catalog values; production logic was unchanged.
-  The preceding complete run under manifest digest
+- Exact-secret admission on signed heads `edcc5f03` and `3437dcb4` was
+  inconclusive. Replacing newly added non-catalog credential-shaped values with
+  role-specific synthetic-token catalog values removed the raw fixture
+  ambiguity but did not complete admission. A read-only stage diagnostic then
+  localized the remaining `generic-secret-assignment` opaque container to the
+  new PascalCase audit fixture: dynamic f-strings could not supply stable raw
+  assignment bytes, and one safe `missing` control could not prove its nested
+  source-string boundary. The sensitive fixtures now use literal catalog values,
+  while the safe control splits its field and status source fragments. Runtime
+  test values are unchanged and production logic was not modified.
+- The preceding complete runs under manifest digests
   `baf89b8dfba1e2924bb8d59bf1b344cc2d28e4de8fb9caaa68890f8aa530bc6c`
-  remains prior-tree evidence.
+  and `f6832853b38ee92e817198cd3b93a1a95cf365914f9e0197d35d007084745c15`
+  remain prior-tree evidence.
 - The final canonical Python 3.13 inventory contains 1,784 exact test IDs from
   22 authenticated source modules under manifest digest
-  `f6832853b38ee92e817198cd3b93a1a95cf365914f9e0197d35d007084745c15`.
-  Shard 0 passes 427/427 in 1,728.799 seconds, shard 1 passes 481/481 in
-  1,346.005 seconds, shard 2 passes 467/467 in 1,455.407 seconds, and shard 3
-  passes 409/409 in 1,381.668 seconds. Every bounded wrapper exits zero with an
+  `ec3779702e260c06a80680379cd4183955698bda184df6de52bb7e30a9970035`.
+  Shard 0 passes 427/427 in 1,680.973 seconds, shard 1 passes 481/481 in
+  1,303.504 seconds, shard 2 passes 467/467 in 1,397.660 seconds, and shard 3
+  passes 409/409 in 1,332.653 seconds. Every bounded wrapper exits zero with an
   explicit `OK` summary. Four earlier pre-closure shard tasks were cancelled and
   remain non-counting. A mistaken Darwin `--help` probe ran tests without a
   pollable terminal receipt and is also non-counting; the formal bounded Darwin
