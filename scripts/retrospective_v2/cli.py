@@ -14,6 +14,7 @@ import math
 import os
 from pathlib import Path
 import re
+import secrets
 import sys
 from typing import Any, NoReturn, Optional
 
@@ -41,6 +42,7 @@ EXPORT_DESCRIPTOR_NAME = export_cli_api.EXPORT_DESCRIPTOR_NAME
 LEGACY_EXPORT_DESCRIPTOR_NAME = export_cli_api.LEGACY_EXPORT_DESCRIPTOR_NAME
 PUBLICATION_JOURNAL_NAME = "publication-transaction-v2.json"
 MAX_AGENT_RESULT_BYTES = result_validation_api.MAX_RESULT_BYTES
+MAX_AGENT_RESULT_REJECTION_HASH_BYTES = 1024 * 1024
 MAX_AGENT_RESULT_JSON_DEPTH = result_validation_api.MAX_RESULT_DEPTH
 MAX_DESCRIPTOR_BYTES = 64 * 1024
 MAX_DIAGNOSTIC_BYTES = 256
@@ -1181,16 +1183,24 @@ def command_accept_agent_result(args: argparse.Namespace) -> CommandResult:
             require_owner_only=True,
         )
     except safe_io.ReadLimitExceeded:
+        payload_digest_exact = True
+        try:
+            payload_digest = safe_io.hash_file_bounded(
+                result_path,
+                max_bytes=MAX_AGENT_RESULT_REJECTION_HASH_BYTES,
+                require_owner_only=True,
+            )
+        except safe_io.ReadLimitExceeded:
+            payload_digest = secrets.token_hex(32)
+            payload_digest_exact = False
         result = orchestrator_api.reject_agent_result_payload(
             _absolute_path(args.run_dir),
             args.job_ref,
             args.attempt_ref,
             claim_ref=args.claim_ref,
             result_ref=args.result_ref,
-            payload_digest=safe_io.fingerprint_file_bounded(
-                result_path,
-                require_owner_only=True,
-            ),
+            payload_digest=payload_digest,
+            payload_digest_exact=payload_digest_exact,
             reason="result_too_large",
             identity_path=_command_identity_path(args),
             require_existing_identity=True,

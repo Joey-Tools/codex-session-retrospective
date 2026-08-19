@@ -2434,13 +2434,14 @@ def _read_bounded_descriptor_pass(
     return total, digest.digest()
 
 
-def read_bounded_bytes_at(
+def _read_verified_bounded_file_at(
     directory_fd: int,
     name: str,
     *,
     display_path: Path,
     max_bytes: int,
     require_owner_only: bool = True,
+    consume: Callable[[bytes], None],
 ) -> bytes:
     if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 0:
         raise ValueError("max_bytes must be a non-negative integer")
@@ -2464,12 +2465,11 @@ def read_bounded_bytes_at(
                 "file exceeds byte limit "
                 f"({before.st_size} > {max_bytes}): {display_path}"
             )
-        chunks: list[bytes] = []
         total, first_digest = _read_bounded_descriptor_pass(
             descriptor,
             max_bytes=max_bytes,
             display_path=display_path,
-            consume=chunks.append,
+            consume=consume,
         )
         after_first_read = os.fstat(descriptor)
         _validate_bounded_read_policy(
@@ -2528,9 +2528,29 @@ def read_bounded_bytes_at(
             or not hmac.compare_digest(first_digest, verification_digest)
         ):
             raise UnsafePathError(f"file content changed while reading: {display_path}")
-        return b"".join(chunks)
+        return first_digest
     finally:
         os.close(descriptor)
+
+
+def read_bounded_bytes_at(
+    directory_fd: int,
+    name: str,
+    *,
+    display_path: Path,
+    max_bytes: int,
+    require_owner_only: bool = True,
+) -> bytes:
+    chunks: list[bytes] = []
+    _read_verified_bounded_file_at(
+        directory_fd,
+        name,
+        display_path=display_path,
+        max_bytes=max_bytes,
+        require_owner_only=require_owner_only,
+        consume=chunks.append,
+    )
+    return b"".join(chunks)
 
 
 def read_bounded_bytes(
@@ -2552,68 +2572,25 @@ def read_bounded_bytes(
         os.close(directory_fd)
 
 
-def fingerprint_file_bounded(
+def hash_file_bounded(
     path: str | os.PathLike[str],
     *,
-    sample_bytes: int = 64 * 1024,
+    max_bytes: int,
     require_owner_only: bool = True,
 ) -> str:
-    """Return a stable content-free fingerprint with bounded memory and I/O."""
+    """Stream and authenticate one complete file under an exact I/O ceiling."""
 
-    if (
-        not isinstance(sample_bytes, int)
-        or isinstance(sample_bytes, bool)
-        or sample_bytes < 1
-    ):
-        raise ValueError("sample_bytes must be a positive integer")
     normalized, directory_fd = _open_parent_directory(path, create_parents=False)
     try:
-        descriptor = open_checked_file_at(
+        digest = _read_verified_bounded_file_at(
             directory_fd,
             normalized.name,
             display_path=normalized,
+            max_bytes=max_bytes,
             require_owner_only=require_owner_only,
+            consume=lambda _chunk: None,
         )
-        try:
-            before = os.fstat(descriptor)
-            if require_owner_only:
-                _validate_owner_only_acl(descriptor, normalized)
-            prefix = os.pread(descriptor, min(sample_bytes, before.st_size), 0)
-            suffix_offset = max(0, before.st_size - sample_bytes)
-            suffix = os.pread(
-                descriptor,
-                min(sample_bytes, before.st_size),
-                suffix_offset,
-            )
-            after = os.fstat(descriptor)
-            if require_owner_only:
-                _validate_owner_only_acl(descriptor, normalized)
-            before_identity = (
-                before.st_dev,
-                before.st_ino,
-                before.st_size,
-                before.st_mtime_ns,
-            )
-            after_identity = (
-                after.st_dev,
-                after.st_ino,
-                after.st_size,
-                after.st_mtime_ns,
-            )
-            if before_identity != after_identity:
-                raise UnsafePathError(
-                    f"file changed while fingerprinting: {normalized}"
-                )
-            digest = hashlib.sha256()
-            digest.update(b"bounded-file-fingerprint-v2\0")
-            digest.update(str(before.st_size).encode("ascii"))
-            digest.update(b"\0")
-            digest.update(prefix)
-            digest.update(b"\0")
-            digest.update(suffix)
-            return digest.hexdigest()
-        finally:
-            os.close(descriptor)
+        return digest.hex()
     finally:
         os.close(directory_fd)
 

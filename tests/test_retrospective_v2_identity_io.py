@@ -800,6 +800,32 @@ class SafeIoTests(unittest.TestCase):
         with self.assertRaises(ReadLimitExceeded):
             read_bounded_jsonl(records, max_bytes=128, max_line_bytes=4)
 
+    def test_bounded_file_hash_covers_the_complete_payload(self) -> None:
+        prefix = b"p" * (64 * 1024)
+        suffix = b"s" * (64 * 1024)
+        first_payload = prefix + b"a" * (64 * 1024) + suffix
+        second_payload = prefix + b"b" * (64 * 1024) + suffix
+        first = self.root / "first-result.json"
+        second = self.root / "second-result.json"
+        for path, payload in ((first, first_payload), (second, second_payload)):
+            path.write_bytes(payload)
+            os.chmod(path, 0o600)
+
+        first_digest = safe_io.hash_file_bounded(
+            first,
+            max_bytes=len(first_payload),
+        )
+        second_digest = safe_io.hash_file_bounded(
+            second,
+            max_bytes=len(second_payload),
+        )
+
+        self.assertEqual(hashlib.sha256(first_payload).hexdigest(), first_digest)
+        self.assertEqual(hashlib.sha256(second_payload).hexdigest(), second_digest)
+        self.assertNotEqual(first_digest, second_digest)
+        with self.assertRaises(ReadLimitExceeded):
+            safe_io.hash_file_bounded(first, max_bytes=len(first_payload) - 1)
+
     def test_jsonl_rejects_blank_and_malformed_records(self) -> None:
         blank = self.root / "blank.jsonl"
         atomic_write_bytes(blank, b"{}\n\n{}\n")

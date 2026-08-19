@@ -109,9 +109,7 @@ def doctor(
 
     try:
         python_runtime = source_transport.source_transport_python_runtime_readiness(
-            expected_executable=(
-                None if shadow else authority.installed_runtime_python_path()
-            )
+            expected_executable=authority.installed_runtime_python_path()
         )
         version = python_runtime["version"]
         record(
@@ -531,15 +529,14 @@ def start_run(
     require_existing_identity: bool = False,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    if kwargs.get("shadow") is not True:
-        try:
-            source_transport.source_transport_python_runtime_readiness(
-                expected_executable=authority.installed_runtime_python_path()
-            )
-        except (OSError, source_transport.TransportValidationError) as error:
-            raise InvalidInputError(
-                "production coordinator Python runtime does not match the fixed install"
-            ) from error
+    try:
+        source_transport.source_transport_python_runtime_readiness(
+            expected_executable=authority.installed_runtime_python_path()
+        )
+    except (OSError, source_transport.TransportValidationError) as error:
+        raise InvalidInputError(
+            "coordinator Python runtime does not match the fixed install"
+        ) from error
     return RetrospectiveOrchestrator(
         run_dir,
         identity_path=identity_path,
@@ -708,6 +705,7 @@ def reject_agent_result_payload(
     claim_ref: str,
     result_ref: str,
     payload_digest: str,
+    payload_digest_exact: bool = True,
     reason: str,
     identity_path: str | os.PathLike[str] | None = None,
     require_existing_identity: bool = False,
@@ -722,6 +720,7 @@ def reject_agent_result_payload(
         claim_ref=claim_ref,
         result_ref=result_ref,
         payload_digest=payload_digest,
+        payload_digest_exact=payload_digest_exact,
         reason=reason,
     )
 

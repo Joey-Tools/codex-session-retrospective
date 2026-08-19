@@ -1548,6 +1548,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
         claim_ref: str,
         result_ref: str,
         payload_digest: str,
+        payload_digest_exact: bool = True,
         reason: str,
     ) -> dict[str, Any]:
         self._state.ensure_retention_active()
@@ -1571,11 +1572,17 @@ class SourceCoordinationOperations(OrchestratorComponent):
         )
         if _SHA256_RE.fullmatch(payload_digest) is None:
             raise InvalidInputError("agent payload digest is invalid")
+        if not isinstance(payload_digest_exact, bool):
+            raise InvalidInputError("agent payload digest authority is invalid")
         if reason not in result_validation.AGENT_RESULT_REJECTION_REASONS:
             raise InvalidInputError("agent payload rejection reason is invalid")
         action_key = f"accept_agent_result:{normalized_attempt_ref}"
-        action_binding = {
-            "schema": "agent_result_payload_rejection_action_v2",
+        action_binding: dict[str, Any] = {
+            "schema": (
+                "agent_result_payload_rejection_action_v2"
+                if payload_digest_exact
+                else "agent_result_payload_rejection_action_v3"
+            ),
             "attempt_ref": normalized_attempt_ref,
             "claim_ref": normalized_claim_ref,
             "job_ref": normalized_job_ref,
@@ -1583,6 +1590,8 @@ class SourceCoordinationOperations(OrchestratorComponent):
             "result_digest": payload_digest,
             "result_ref": normalized_result_ref,
         }
+        if not payload_digest_exact:
+            action_binding["result_digest_exact"] = False
         action_digest = content_digest(action_binding)
 
         def mutate(state: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
@@ -1591,6 +1600,10 @@ class SourceCoordinationOperations(OrchestratorComponent):
             original_state = copy.deepcopy(state)
             replay = self._check_replay(state, action_key, action_digest)
             if replay:
+                if not payload_digest_exact:
+                    raise RunConflictError(
+                        "non-exact agent payload rejection cannot be replayed"
+                    )
                 return self._finalize_agent_result_replay(
                     state,
                     original_state,
@@ -1647,6 +1660,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
             {
                 "action": "accept-agent-result",
                 "changed": transaction.changed,
+                "result_digest_exact": payload_digest_exact,
                 **transaction.value,
             }
         )

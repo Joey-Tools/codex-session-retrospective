@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-18
+updated: 2026-08-19
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -1437,6 +1437,28 @@ superseded_by:
   in 1,649.349 seconds, shard 1 passes 471/471 in 1,321.413 seconds, shard 2
   passes 459/459 in 1,429.073 seconds, and shard 3 passes 400/400 in 1,332.867
   seconds.
+- Signed checkpoint `5c57a90c` became stale when its fresh whole-range Codex
+  processor found three release blockers: the shared personal-data taxonomy
+  omitted client, tenant, and organization names plus possessive name labels
+  and common government/payment/account identifiers; shadow mode bypassed the
+  fixed installed coordinator Python; and oversized rejected-result identity
+  sampled only the first and last 64 KiB of a payload.
+- The shared scanner/redactor, source-overlap extraction, retained validator,
+  and report validator now use one closed expanded personal-data taxonomy,
+  including quoted structured values. Shadow and production `doctor`/`start`
+  both authenticate the fixed installed Python. Rejected payloads up to 1 MiB
+  use the complete verified SHA-256 and the replayable v2 action; larger
+  payloads use an explicit content-free v3 observation with
+  `result_digest_exact: false` and cannot replay as an identity match.
+- The exact reviewer-fix regressions pass 8/8. Complete affected modules pass
+  102/102, 116/116, and 212/212; Darwin security contracts pass 10/10; CI and
+  Skill contracts pass 17/17. The engine branch inventory decreases from 9,475
+  to the new exact 9,472 ceiling. Ruff 0.13.2 lint and changed-file formatting,
+  the generated bootstrap manifest, official Skill validator, project-journal
+  validator, and `git diff --check` are clean. The final Python 3.13 tree passes
+  all 1,752 tests exactly once: shard 0 passes 421/421 in 1,710.706 seconds,
+  shard 1 passes 471/471 in 1,366.345 seconds, shard 2 passes 460/460 in
+  1,485.831 seconds, and shard 3 passes 400/400 in 1,391.701 seconds.
 
 ## Follow-up Work
 

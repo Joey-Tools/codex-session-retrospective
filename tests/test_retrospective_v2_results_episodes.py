@@ -809,6 +809,26 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "client name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Customer's full name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "tenant name: Example Tenant",
+                "Example Tenant was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "organization name: Example Organization",
+                "Example Organization was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "- Full name: Alice Smith",
                 "Alice Smith was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
@@ -831,6 +851,26 @@ class ResultValidationTests(unittest.TestCase):
             (
                 "{'fullName': 'Alice \\'Ace\\' Smith'}",
                 "Alice 'Ace' Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                '{"ssn": "000-00-0000"}',
+                "000-00-0000 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "passport number: X0000000",
+                "X0000000 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "credit card: 4111 1111 1111 1111",
+                "4111 1111 1111 1111 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "bank account number: 00012345",
+                "00012345 was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (

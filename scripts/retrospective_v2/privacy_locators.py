@@ -59,17 +59,45 @@ CONTEXTUAL_SHORT_PHONE_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 PHONE_PATTERNS = (INTERNATIONAL_PHONE_RE, PHONE_RE, CONTEXTUAL_SHORT_PHONE_RE)
+_PERSONAL_SUBJECT_PATTERN_TEXT = (
+    r"(?:account|client|customer|employee|organization|person|tenant|user)"
+)
+_PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
+_LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
+    r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"
+    r"national[_ -]?(?:insurance|identity)(?:[_ -]?(?:number|no|id))?|"
+    r"(?:tax(?:payer)?[_ -]?(?:identification|id))(?:[_ -]?(?:number|no))?|"
+    r"passport(?:[_ -]?(?:number|no|id))?|"
+    r"driver(?:['\u2019]s)?[_ -]?licen[cs]e(?:[_ -]?(?:number|no|id))?|"
+    r"(?:credit|debit|payment)[_ -]?card(?:[_ -]?(?:number|no))?|"
+    r"card[_ -]?(?:number|no)|"
+    r"(?:bank[_ -]?)?account[_ -]?(?:number|no)|"
+    r"routing[_ -]?(?:number|no)|iban|"
+    r"(?-i:(?:socialSecurityNumber|nationalInsuranceNumber|nationalId|taxId|"
+    r"passport(?:Number|Id)|driversLicenseNumber|creditCard(?:Number)?|"
+    r"debitCard(?:Number)?|paymentCard(?:Number)?|cardNumber|"
+    r"bankAccountNumber|accountNumber|routingNumber)))"
+)
 _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
-    r"\b(?:(?:account|customer|employee|person|user)[_ -]?"
+    r"\b(?:"
+    + _PERSONAL_SUBJECT_PATTERN_TEXT
+    + _PERSONAL_POSSESSIVE_PATTERN_TEXT
+    + r"[_ -]?"
     r"(?:id|(?:(?:first|full|last)[_ -]+)?name)|"
-    r"(?-i:(?:account|customer|employee|person|user)"
+    r"(?-i:(?:account|client|customer|employee|organization|person|tenant|user)"
     r"(?:Id|Name|(?:First|Full|Last)Name))|"
-    r"(?:billing|customer|employee|home|mailing|person|postal|residential|"
-    r"shipping|user)[_ -]?address)"
+    r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
+    r"shipping|tenant|user)[_ -]?address|"
+    + _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT
+    + r")"
 )
 LABELED_PERSONAL_VALUE_RE = re.compile(
-    _LABELED_PERSONAL_FIELD_PATTERN_TEXT
-    + r"\s*(?:=|:)\s*(?!\[REDACTED)(?P<value>[^\r\n]+)",
+    r"['\"]?"
+    + _LABELED_PERSONAL_FIELD_PATTERN_TEXT
+    + r"['\"]?[ \t]*(?:=|:)[ \t]*(?!\[REDACTED)(?:"
+    r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])+)"|'
+    r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])+)'|"
+    r"(?P<value>[^\r\n]+))",
     re.ASCII | re.IGNORECASE,
 )
 LABELED_PERSONAL_ID_RE = LABELED_PERSONAL_VALUE_RE
@@ -83,8 +111,8 @@ BARE_LABELED_NAME_VALUE_RE = re.compile(
     + _BARE_LABELED_NAME_FIELD_PATTERN_TEXT
     + r"['\"]?[ \t]*(?:=|:)[ \t]*"
     r"(?!\[REDACTED)(?:"
-    r'"(?P<bare_double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])+)"|'
-    r"'(?P<bare_single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])+)'|"
+    r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])+)"|'
+    r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])+)'|"
     r"(?P<value>[^\r\n]+)))",
     re.ASCII | re.IGNORECASE,
 )
@@ -568,22 +596,22 @@ def _normalized_sensitive_value(value: str) -> str:
 def _normalized_sensitive_labeled_value(match: re.Match[str]) -> str:
     for group in (
         "value",
-        "bare_double_quoted_value",
-        "bare_single_quoted_value",
+        "double_quoted_value",
+        "single_quoted_value",
     ):
         try:
             candidate = match.group(group)
         except IndexError:
             continue
         if candidate is not None:
-            if group == "bare_double_quoted_value":
+            if group == "double_quoted_value":
                 try:
                     decoded = json.loads('"' + candidate + '"')
                 except json.JSONDecodeError:
                     decoded = candidate
                 if isinstance(decoded, str):
                     candidate = decoded
-            elif group == "bare_single_quoted_value":
+            elif group == "single_quoted_value":
                 candidate = re.sub(r"\\(['\\])", r"\1", candidate)
             return _normalized_sensitive_value(candidate)
     raise ValueError("sensitive labeled value match omitted its value")

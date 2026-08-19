@@ -872,6 +872,12 @@ class AuditedResultContractTests(unittest.TestCase):
         for source in (
             "Observed employee name: Alice Smith before continuing.",
             "Observed customer full name: Alice Smith before continuing.",
+            "Observed client's full name: Alice Smith before continuing.",
+            "Observed Customer's full name: Alice Smith before continuing.",
+            "Observed Customer\u2019s full name: Alice Smith before continuing.",
+            "Observed client name: Alice Smith before continuing.",
+            "Observed tenant name: Example Tenant before continuing.",
+            "Observed organization name: Example Organization before continuing.",
             "Observed employee full name: Bob before continuing.",
             "Observed user first name: Alice before continuing.",
             "Observed user last name: Smith before continuing.",
@@ -880,6 +886,7 @@ class AuditedResultContractTests(unittest.TestCase):
             "Observed userLastName: Smith before continuing.",
             "Observed billing address: 123 Main Street before continuing.",
             "Observed customer address: 123 Main Street before continuing.",
+            "Observed client address: 123 Main Street before continuing.",
             "Observed employee address: 123 Main Street before continuing.",
             "Observed home address: 123 Main Street before continuing.",
             "Observed mailing address: 123 Main Street before continuing.",
@@ -887,7 +894,20 @@ class AuditedResultContractTests(unittest.TestCase):
             "Observed postal address: 123 Main Street before continuing.",
             "Observed residential address: 123 Main Street before continuing.",
             "Observed shipping address: 123 Main Street before continuing.",
+            "Observed tenant address: 123 Main Street before continuing.",
             "Observed user address: 123 Main Street before continuing.",
+            "Observed SSN: 000-00-0000 before continuing.",
+            "Observed social security number: 000-00-0000 before continuing.",
+            "Observed national insurance number: QQ 00 00 00 C before continuing.",
+            "Observed tax ID: 00-0000000 before continuing.",
+            "Observed passport number: X0000000 before continuing.",
+            "Observed driver's license number: X0000000 before continuing.",
+            "Observed credit card: 4111 1111 1111 1111 before continuing.",
+            "Observed payment card number: 4111 1111 1111 1111 before continuing.",
+            "Observed bank account number: 00012345 before continuing.",
+            "Observed account number: 00012345 before continuing.",
+            "Observed routing number: 000000000 before continuing.",
+            "Observed IBAN: GB00 TEST 0000 0000 0000 00 before continuing.",
         ):
             with self.subTest(source=source):
                 self.assertEqual(
@@ -974,6 +994,18 @@ class AuditedResultContractTests(unittest.TestCase):
                 "{'fullName': 'Alice \\'Ace\\' Smith'}",
                 "{[REDACTED_PERSONAL_IDENTIFIER]}",
             ),
+            (
+                '{"clientName": "Alice Smith"}',
+                "{[REDACTED_PERSONAL_IDENTIFIER]}",
+            ),
+            (
+                '{"ssn": "000-00-0000"}',
+                "{[REDACTED_PERSONAL_IDENTIFIER]}",
+            ),
+            (
+                '{"creditCardNumber": "4111 1111 1111 1111"}',
+                "{[REDACTED_PERSONAL_IDENTIFIER]}",
+            ),
         ):
             with self.subTest(structured_source=source):
                 value = extractor_result()
@@ -993,6 +1025,11 @@ class AuditedResultContractTests(unittest.TestCase):
             "Inspect memory  full name: stack frame.",
             "Inspect memory\tfull name: stack frame.",
             "Inspect memory-full name: stack frame.",
+            "The client name matcher passed.",
+            "The organization name policy passed.",
+            "Passport status: unavailable.",
+            "Credit card support is unavailable.",
+            "The account number of failures is three.",
             "Inspect pin=GPIO17 before continuing.",
             "Run with --pin requests==2.32.5.",
             "The pin is bent.",

@@ -3049,6 +3049,19 @@ class CliContractTests(unittest.TestCase):
                 self.assertEqual(reason, rejected.result["reason"])
 
                 state = coordinator.load_state()
+                if case == "result_too_large":
+                    action = state["actions"][
+                        f"accept_agent_result:{first['active_attempt_ref']}"
+                    ]
+                    self.assertEqual(
+                        hashlib.sha256(payload).hexdigest(),
+                        action["binding"]["result_digest"],
+                    )
+                    self.assertEqual(
+                        "agent_result_payload_rejection_action_v2",
+                        action["binding"]["schema"],
+                    )
+                    self.assertNotIn("result_digest_exact", action["binding"])
                 task = next(
                     job
                     for job in state["jobs"].values()
@@ -3066,6 +3079,54 @@ class CliContractTests(unittest.TestCase):
                 self.assertNotEqual(
                     first["active_attempt_ref"], retry["active_attempt_ref"]
                 )
+
+    def test_extreme_agent_result_uses_nonexact_nonreplayable_observation(
+        self,
+    ) -> None:
+        result_path = self.root / "extreme-agent-result.json"
+        result_path.write_bytes(b"x" * (cli.MAX_AGENT_RESULT_REJECTION_HASH_BYTES + 1))
+        os.chmod(result_path, 0o600)
+        observation_digest = "c" * 64
+        with (
+            mock.patch.object(
+                cli.orchestrator_api,
+                "resolve_agent_result_sink",
+                return_value={"output_sink": str(result_path)},
+            ),
+            mock.patch.object(
+                cli.orchestrator_api,
+                "reject_agent_result_payload",
+                return_value={"outcome": "retryable"},
+            ) as reject,
+            mock.patch.object(
+                cli.secrets,
+                "token_hex",
+                return_value=observation_digest,
+            ),
+        ):
+            result = self.parse_dispatch(
+                "accept-agent-result",
+                "--identity-path",
+                str(self.identity_path),
+                "--require-existing-identity",
+                "--run-dir",
+                str(self.run_dir),
+                "--job-ref",
+                "job_ref_v2:" + "a" * 64,
+                "--attempt-ref",
+                "attempt_ref_v2:" + "b" * 64,
+                "--claim-ref",
+                "claim_ref_v2:" + "c" * 64,
+                "--result-ref",
+                "result_ref_v2:" + "d" * 64,
+                "--result",
+                str(result_path),
+            )
+
+        self.assertTrue(result.ok, result)
+        self.assertEqual(observation_digest, reject.call_args.kwargs["payload_digest"])
+        self.assertFalse(reject.call_args.kwargs["payload_digest_exact"])
+        self.assertEqual("result_too_large", reject.call_args.kwargs["reason"])
 
     def test_nonfinite_agent_output_retries_once_then_records_gap(self) -> None:
         coordinator = self.real_coordinator(

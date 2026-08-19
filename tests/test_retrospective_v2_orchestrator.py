@@ -1831,20 +1831,52 @@ class OrchestratorTests(unittest.TestCase):
             ):
                 self.start_daily("unsafe-python-runtime")
 
-        with (
-            mock.patch.object(
-                authority,
-                "installed_runtime_python_path",
-                return_value=self.root / "different-python",
-            ),
-            self.assertRaisesRegex(InvalidInputError, "fixed install"),
-        ):
-            orchestrator_module.start_run(
-                self.root / "fixed-runtime-mismatch",
+        installed = self.root / "installed-python"
+        with mock.patch.object(
+            transport,
+            "source_transport_python_runtime_readiness",
+            return_value={
+                "authority_sha256": "sha256:" + "a" * 64,
+                "version": (3, 13, 0),
+            },
+        ) as runtime_readiness:
+            doctor(
                 identity_path=self.identity_path,
                 require_existing_identity=True,
-                shadow=False,
+                provenance=execution_provenance(),
+                shadow=True,
+                history_repo=self.root / "history",
+                history_target_ref="refs/heads/main",
+                publisher_gpg_program=TEST_PUBLISHER_GPG,
+                publisher_probe=lambda: {
+                    "fingerprint": PUBLISHER_FINGERPRINT,
+                    "ready": True,
+                },
             )
+        self.assertEqual(
+            runtime_readiness.call_args_list,
+            [
+                mock.call(expected_executable=Path(sys.executable).resolve()),
+                mock.call(),
+            ],
+        )
+
+        for shadow in (False, True):
+            with (
+                self.subTest(shadow=shadow),
+                mock.patch.object(
+                    authority,
+                    "installed_runtime_python_path",
+                    return_value=installed,
+                ),
+                self.assertRaisesRegex(InvalidInputError, "fixed install"),
+            ):
+                orchestrator_module.start_run(
+                    self.root / f"fixed-runtime-mismatch-{shadow}",
+                    identity_path=self.identity_path,
+                    require_existing_identity=True,
+                    shadow=shadow,
+                )
 
     def test_execution_configuration_changes_run_job_and_trend_identity(self) -> None:
         first_config = execution_provenance(model="gpt-5.6-sol")
@@ -4881,6 +4913,60 @@ class OrchestratorTests(unittest.TestCase):
                 result_ref=claimed["result_ref"],
                 payload_digest=payload_digest,
                 reason="malformed_json",
+            )
+
+    def test_nonexact_agent_result_rejection_is_explicit_and_nonreplayable(
+        self,
+    ) -> None:
+        coordinator = self.activity_run("nonexact-agent-result-rejection")
+        job = coordinator.status()["runnable_jobs"][0]
+        claimed = coordinator.claim_agent_job(
+            job["job_ref"],
+            job["active_attempt_ref"],
+            typed_ref(RefType.LEASE, "nonexact-result-dispatcher"),
+        )
+        payload_digest = "b" * 64
+
+        rejected = coordinator.reject_agent_result_payload(
+            job["job_ref"],
+            job["active_attempt_ref"],
+            claim_ref=claimed["claim_ref"],
+            result_ref=claimed["result_ref"],
+            payload_digest=payload_digest,
+            payload_digest_exact=False,
+            reason="result_too_large",
+        )
+
+        self.assertEqual("retryable", rejected["outcome"])
+        self.assertFalse(rejected["result_digest_exact"])
+        action = coordinator.load_state()["actions"][
+            f"accept_agent_result:{job['active_attempt_ref']}"
+        ]
+        self.assertEqual(
+            {
+                "schema": "agent_result_payload_rejection_action_v3",
+                "attempt_ref": job["active_attempt_ref"],
+                "claim_ref": claimed["claim_ref"],
+                "job_ref": job["job_ref"],
+                "rejection_reason": "result_too_large",
+                "result_digest": payload_digest,
+                "result_digest_exact": False,
+                "result_ref": claimed["result_ref"],
+            },
+            action["binding"],
+        )
+        with self.assertRaisesRegex(
+            RunConflictError,
+            "non-exact agent payload rejection cannot be replayed",
+        ):
+            coordinator.reject_agent_result_payload(
+                job["job_ref"],
+                job["active_attempt_ref"],
+                claim_ref=claimed["claim_ref"],
+                result_ref=claimed["result_ref"],
+                payload_digest=payload_digest,
+                payload_digest_exact=False,
+                reason="result_too_large",
             )
 
     def test_expired_retention_rejects_every_agent_raw_entrypoint(self) -> None:

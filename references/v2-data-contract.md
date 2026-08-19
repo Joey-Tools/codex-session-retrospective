@@ -221,11 +221,17 @@ source acceptance.
   replay that makes no state change needs no new reserve; replay-time migration
   of a legacy inline job manifest does and is blocked before that migration can
   consume the terminal reserve.
-- A rejected-result action uses the closed
-  `agent_result_payload_rejection_action_v2` binding. Its identity commits the
-  exact job, attempt, claim, result reference, payload digest, and allowlisted
-  rejection reason. An exact replay is idempotent; reusing the same attempt and
-  payload with a different legal reason is a conflict and cannot mutate state.
+- A rejected-result action whose complete payload fits the 1 MiB rejection-hash
+  ceiling uses the closed `agent_result_payload_rejection_action_v2` binding.
+  Its identity commits the exact job, attempt, claim, result reference, complete
+  payload SHA-256, and allowlisted rejection reason. An exact replay is
+  idempotent; reusing the same attempt and payload with a different legal reason
+  is a conflict and cannot mutate state. A payload beyond that ceiling is not
+  sampled: the coordinator records a fresh content-free observation token in the
+  closed `agent_result_payload_rejection_action_v3` binding together with
+  `result_digest_exact: false`. That non-exact disposition is deliberately
+  non-replayable, so a repeated command conflicts instead of treating two
+  unknown payload middles as identical.
 - Accepted agent results live in canonical owner-only sidecars under
   `agent-sinks/results`. The checkpoint stores only a closed descriptor that
   binds the task reference, canonical result hash, byte count, SHA-256 content
