@@ -537,7 +537,6 @@ class ResultValidationTests(unittest.TestCase):
                 original_prompts=candidates,
             ),
         )
-
         embedded = extractor_result()
         embedded["turns"][0]["generalized_working_text"] = "Acme rollout failed"
         validated = validate_extractor_result(
@@ -755,6 +754,41 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
+                "DatabaseSecret was purple",
+                "purple was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
+                "DatabaseSecret WAS purple.",
+                "purple was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
+                "DatabaseSecret was winter123, status ok",
+                "winter123 was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
+                "DatabaseSecret was unavailable: winter123, status ok",
+                "winter123 was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
+                "ServiceRefreshToken was purple before continuing.",
+                "purple was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
+                "ServiceRefreshToken was purple in production.",
+                "purple was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
+                "ServiceRefreshToken was purple, while production was active.",
+                "purple was rejected",
+                "[REDACTED_ORIGINAL_PROMPT] was rejected",
+            ),
+            (
                 "employee name: Alice Smith",
                 "Alice Smith was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
@@ -777,6 +811,71 @@ class ResultValidationTests(unittest.TestCase):
             (
                 "The employee DOB set to 1990-01-02",
                 "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Full name is Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Full name is Smith, John",
+                "John was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "**Full name is Alice Smith**",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "**Full name is Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "First name was Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Last name set to Smith",
+                "Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address was 123 Main Street",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "__Address was 123 Main Street__",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "__Address was 123 Main Street",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "__Address was 123 Main Street, state: CA, zip: 94105__",
+                "94105 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address is present at 123 Main Street",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Full name is unavailable for Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Full name is unavailable: Alice Smith",
+                "Alice Smith was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
@@ -907,6 +1006,21 @@ class ResultValidationTests(unittest.TestCase):
             (
                 "Payment sent to GB82 WEST 1234 5698 7654 32 before continuing.",
                 "GB82 WEST 1234 5698 7654 32 was referenced",
+                "[REDACTED_PERSONAL_IDENTIFIER] was referenced",
+            ),
+            (
+                "Payment sent to gb82 west 1234 5698 7654 32 before continuing.",
+                "gb82 west 1234 5698 7654 32 was referenced",
+                "[REDACTED_PERSONAL_IDENTIFIER] was referenced",
+            ),
+            (
+                "Payment sent to Gb82 WeSt 1234 5698 7654 32 before continuing.",
+                "Gb82 WeSt 1234 5698 7654 32 was referenced",
+                "[REDACTED_PERSONAL_IDENTIFIER] was referenced",
+            ),
+            (
+                "Payment sent to KZ86 125K ZT50 0410 0100 then continued.",
+                "KZ86 125K ZT50 0410 0100 was referenced",
                 "[REDACTED_PERSONAL_IDENTIFIER] was referenced",
             ),
             (
@@ -1237,6 +1351,20 @@ class ResultValidationTests(unittest.TestCase):
             "Phone number: 12345",
             "Phone number: 2026-08-18",
             "Phone number: 1234567890123456",
+            "Full name is required",
+            "First name was missing",
+            "Last name is unavailable",
+            "Address is unavailable",
+            "Address was 0x1000",
+            "Full name is [REDACTED_PERSONAL_IDENTIFIER]",
+            "CancellationToken = active",
+            "CancellationToken was cancelled",
+            "DesignToken = color.primary",
+            "UserPassword = missing",
+            "DatabaseSecret was not present",
+            "UserPasswordCount = 12",
+            "Payment sent to gb91 test 1234 5678 before continuing.",
+            "Payment sent to zz86 test 1234 5678 90 before continuing.",
         ):
             with self.subTest(safe_source=safe_source):
                 self.assertEqual(
@@ -1260,6 +1388,66 @@ class ResultValidationTests(unittest.TestCase):
             tuple(
                 result_validation_module.privacy_locators.sensitive_labeled_values(
                     "Payment used 4111 1111 1111 1111 before continuing."
+                )
+            ),
+        )
+        self.assertEqual(
+            ("purple",),
+            tuple(
+                result_validation_module.privacy_locators.sensitive_labeled_values(
+                    "DatabaseSecret was purple"
+                )
+            ),
+        )
+        self.assertIn(
+            "John",
+            tuple(
+                result_validation_module.privacy_locators.sensitive_labeled_values(
+                    "Full name is Smith, John"
+                )
+            ),
+        )
+        name_with_status_values = tuple(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                "Full name is Smith, John, status ok"
+            )
+        )
+        self.assertIn("John", name_with_status_values)
+        self.assertNotIn("status ok", name_with_status_values)
+        markdown_name_with_status_values = tuple(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                "**Full name is Smith, John, status ok**"
+            )
+        )
+        self.assertIn("John", markdown_name_with_status_values)
+        self.assertNotIn("status ok", markdown_name_with_status_values)
+        markdown_address_with_status_values = tuple(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                "__Address was 123 Main Street, status ok__"
+            )
+        )
+        self.assertIn("123 Main Street", markdown_address_with_status_values)
+        self.assertNotIn("status ok", markdown_address_with_status_values)
+        self.assertEqual(
+            (),
+            scan_for_leaks(
+                {"text": "status ok"},
+                original_prompts=("Full name is Smith, John, status ok",),
+            ),
+        )
+        self.assertEqual(
+            ("GB82 WEST 1234 5698 7654 32",),
+            tuple(
+                result_validation_module.privacy_locators.sensitive_labeled_values(
+                    "Payment sent to GB82 WEST 1234 5698 7654 32."
+                )
+            ),
+        )
+        self.assertEqual(
+            ("KZ86 125K ZT50 0410 0100",),
+            tuple(
+                result_validation_module.privacy_locators.sensitive_labeled_values(
+                    "Payment sent to KZ86 125K ZT50 0410 0100 then continued."
                 )
             ),
         )
@@ -1743,6 +1931,66 @@ class ResultValidationTests(unittest.TestCase):
             (
                 f"refreshToken={SYNTHETIC_REFRESH_TOKEN}",
                 (SYNTHETIC_REFRESH_TOKEN,),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "UserPassword = winter123",
+                ("winter123",),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "DatabaseSecret was purple",
+                ("purple",),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "UserPIN = 8392",
+                ("8392",),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "ServiceAPIKey = purple",
+                ("purple",),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "DatabaseCredential was winter123",
+                ("winter123",),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "DatabaseSecret WAS purple.",
+                ("purple",),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "DatabaseSecret was winter123, status ok",
+                ("winter123", "status ok"),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "DatabaseSecret was unavailable: winter123, status ok",
+                ("winter123", "status ok"),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "DatabaseAccessToken = winter123",
+                ("winter123",),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "ServiceRefreshToken was purple",
+                ("purple",),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "ServiceRefreshToken was purple in production.",
+                ("purple", "production"),
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "ServiceRefreshToken was purple, while production was active.",
+                ("purple", "production"),
                 "[REDACTED_CREDENTIAL]",
             ),
             (

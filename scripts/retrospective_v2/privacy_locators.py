@@ -84,11 +84,123 @@ BARE_IBAN_RE = re.compile(
     r"(?![A-Za-z0-9])",
     re.ASCII | re.IGNORECASE,
 )
+# SWIFT IBAN Registry Release 102 (June 2026).
+# https://www.swift.com/sites/default/files/files/iban_registry.pdf
+_IBAN_LENGTH_BY_COUNTRY = {
+    "AD": 24,
+    "AE": 23,
+    "AL": 28,
+    "AT": 20,
+    "AZ": 28,
+    "BA": 20,
+    "BE": 16,
+    "BG": 22,
+    "BH": 22,
+    "BI": 27,
+    "BR": 29,
+    "BY": 28,
+    "CH": 21,
+    "CR": 22,
+    "CY": 28,
+    "CZ": 24,
+    "DE": 22,
+    "DJ": 27,
+    "DK": 18,
+    "DO": 28,
+    "EE": 20,
+    "EG": 29,
+    "ES": 24,
+    "FI": 18,
+    "FK": 18,
+    "FO": 18,
+    "FR": 27,
+    "GB": 22,
+    "GE": 22,
+    "GI": 23,
+    "GL": 18,
+    "GR": 27,
+    "GT": 28,
+    "HN": 28,
+    "HR": 21,
+    "HU": 28,
+    "IE": 22,
+    "IL": 23,
+    "IQ": 23,
+    "IS": 26,
+    "IT": 27,
+    "JO": 30,
+    "KW": 30,
+    "KZ": 20,
+    "LB": 28,
+    "LC": 32,
+    "LI": 21,
+    "LT": 20,
+    "LU": 20,
+    "LV": 21,
+    "LY": 25,
+    "MC": 27,
+    "MD": 24,
+    "ME": 22,
+    "MK": 19,
+    "MN": 20,
+    "MR": 27,
+    "MT": 31,
+    "MU": 30,
+    "NI": 28,
+    "NL": 18,
+    "NO": 15,
+    "OM": 23,
+    "PK": 24,
+    "PL": 28,
+    "PS": 29,
+    "PT": 25,
+    "QA": 29,
+    "RO": 24,
+    "RS": 22,
+    "RU": 33,
+    "SA": 24,
+    "SC": 31,
+    "SD": 18,
+    "SE": 24,
+    "SI": 19,
+    "SK": 24,
+    "SM": 27,
+    "SO": 23,
+    "ST": 25,
+    "SV": 28,
+    "TL": 23,
+    "TN": 24,
+    "TR": 26,
+    "UA": 29,
+    "VA": 22,
+    "VG": 24,
+    "XK": 20,
+    "YE": 30,
+}
+
+
+def _grouped_iban_country_pattern(country: str, length: int) -> str:
+    full_groups, final_group_length = divmod(length - 4, 4)
+    final_group = (
+        rf"[ \t]+[A-Z0-9]{{{final_group_length}}}" if final_group_length else ""
+    )
+    return (
+        country
+        + r"[0-9]{2}"
+        + rf"(?:[ \t]+[A-Z0-9]{{4}}){{{full_groups}}}"
+        + final_group
+    )
+
+
+_GROUPED_IBAN_PATTERN_TEXT = "|".join(
+    _grouped_iban_country_pattern(country, length)
+    for country, length in _IBAN_LENGTH_BY_COUNTRY.items()
+)
 BARE_GROUPED_IBAN_RE = re.compile(
-    r"(?<![A-Za-z0-9])(?P<personal>[A-Z]{2}[0-9]{2}"
-    r"(?:[ \t]+[A-Z0-9]{4}){2,7}(?:[ \t]+[A-Z0-9]{1,4})?)"
-    r"(?![A-Za-z0-9])",
-    re.ASCII,
+    r"(?<![A-Za-z0-9])(?P<personal>(?:"
+    + _GROUPED_IBAN_PATTERN_TEXT
+    + r"))(?![A-Za-z0-9])",
+    re.ASCII | re.IGNORECASE,
 )
 _LUHN_DOUBLED_DIGITS = (0, 2, 4, 6, 8, 1, 3, 5, 7, 9)
 _PERSONAL_SUBJECT_PATTERN_TEXT = (
@@ -243,40 +355,72 @@ _REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT = r"\[REDACTED(?:_[A-Z0-9]+)*\]"
 _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT = (
     r"[ \t]*(?:"
     r'\\"(?P<escaped_double_quoted_value>[^\r\n]*?)\\"'
-    r"(?P<escaped_double_trailing_value>[^\r\n,}\]]*+)|"
+    r"(?P<escaped_double_trailing_value>[^\r\n,)}\]]*+)|"
     r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])++)"'
-    r"(?P<double_trailing_value>[^\r\n,}\]]*+)|"
+    r"(?P<double_trailing_value>[^\r\n,)}\]]*+)|"
     r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])++)'"
-    r"(?P<single_trailing_value>[^\r\n,}\]]*+)|"
+    r"(?P<single_trailing_value>[^\r\n,)}\]]*+)|"
     r"(?P<value>(?:"
     + _REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT
-    + r"[^\r\n,}]*+|[^\r\n,}\]]++)))"
+    + r"(?:\([^()\r\n]*\)|[^\r\n,)}\]])*+|"
+    r"(?:\([^()\r\n]*\)|[^\r\n,)}\]])++)))"
 )
 _ADDRESS_COMPONENT_FIELD_PATTERN_TEXT = (
     r"(?:apt|apartment|unit|suite|city|state|province|region|county|country|"
     r"address[_ -]+line[_ -]*[2-9]|post(?:al)?[_ -]+code|postcode|"
     r"zip(?:[_ -]+code)?)\b"
 )
+_NAME_TRAILING_METADATA_PATTERN_TEXT = (
+    r"(?:note|notes|state|status|verification|verified)\b"
+)
+_ADDRESS_TRAILING_METADATA_PATTERN_TEXT = (
+    r"(?:note|notes|status|verification|verified)\b"
+)
 _ADDRESS_UNQUOTED_VALUE_UNIT_PATTERN_TEXT = (
+    r"(?!,[ \t]*" + _ADDRESS_TRAILING_METADATA_PATTERN_TEXT + r")"
     r"(?!,[ \t]*['\"]?(?!"
     + _ADDRESS_COMPONENT_FIELD_PATTERN_TEXT
     + r"['\"]?[ \t]*(?:=|:))[A-Za-z_][A-Za-z0-9_ -]{0,63}['\"]?"
-    r"[ \t]*(?:=|:))[^\r\n}\]]"
+    r"[ \t]*(?:=|:))(?:\([^()\r\n]*\)|[^\r\n)}\]])"
 )
 _ADDRESS_VALUE_CAPTURE_PATTERN_TEXT = (
     r"[ \t]*(?:"
     r'\\"(?P<escaped_double_quoted_value>[^\r\n]*?)\\"'
-    r"(?P<escaped_double_trailing_value>[^\r\n,}\]]*+)|"
+    r"(?P<escaped_double_trailing_value>[^\r\n,)}\]]*+)|"
     r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])++)"'
-    r"(?P<double_trailing_value>[^\r\n,}\]]*+)|"
+    r"(?P<double_trailing_value>[^\r\n,)}\]]*+)|"
     r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])++)'"
-    r"(?P<single_trailing_value>[^\r\n,}\]]*+)|"
+    r"(?P<single_trailing_value>[^\r\n,)}\]]*+)|"
     r"(?P<value>(?:"
     + _REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT
     + r"(?:"
     + _ADDRESS_UNQUOTED_VALUE_UNIT_PATTERN_TEXT
     + r")*+|(?:"
     + _ADDRESS_UNQUOTED_VALUE_UNIT_PATTERN_TEXT
+    + r")++)))"
+)
+_NAME_COMPONENT_FIELD_PATTERN_TEXT = r"[A-Za-z_][A-Za-z0-9_ -]{0,63}"
+_NAME_UNQUOTED_VALUE_UNIT_PATTERN_TEXT = (
+    r"(?!,[ \t]*(?:['\"]?"
+    + _NAME_COMPONENT_FIELD_PATTERN_TEXT
+    + r"['\"]?[ \t]*(?:=|:)|"
+    + _NAME_TRAILING_METADATA_PATTERN_TEXT
+    + r"))(?:\([^()\r\n]*\)|[^\r\n)}\]])"
+)
+_NAME_VALUE_CAPTURE_PATTERN_TEXT = (
+    r"[ \t]*(?:"
+    r'\\"(?P<escaped_double_quoted_value>[^\r\n]*?)\\"'
+    r"(?P<escaped_double_trailing_value>[^\r\n,)}\]]*+)|"
+    r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])++)"'
+    r"(?P<double_trailing_value>[^\r\n,)}\]]*+)|"
+    r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])++)'"
+    r"(?P<single_trailing_value>[^\r\n,)}\]]*+)|"
+    r"(?P<value>(?:"
+    + _REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT
+    + r"(?:"
+    + _NAME_UNQUOTED_VALUE_UNIT_PATTERN_TEXT
+    + r")*+|(?:"
+    + _NAME_UNQUOTED_VALUE_UNIT_PATTERN_TEXT
     + r")++)))"
 )
 LABELED_PERSONAL_VALUE_RE = re.compile(
@@ -305,7 +449,7 @@ BARE_LABELED_NAME_VALUE_RE = re.compile(
         _BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
         markdown_group="bare_name_markdown",
     )
-    + _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT
+    + _NAME_VALUE_CAPTURE_PATTERN_TEXT
     + r")",
     re.ASCII | re.IGNORECASE,
 )
@@ -321,13 +465,118 @@ BARE_LABELED_ADDRESS_VALUE_RE = re.compile(
     + r")",
     re.ASCII | re.IGNORECASE,
 )
+NARRATIVE_BARE_LABELED_NAME_VALUE_RE = re.compile(
+    r"(?<![A-Za-z0-9_*])"
+    r"(?P<personal>"
+    + _narrative_labeled_field_assignment_pattern(_BARE_LABELED_NAME_FIELD_PATTERN_TEXT)
+    + _NAME_VALUE_CAPTURE_PATTERN_TEXT
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
+NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE = re.compile(
+    r"(?<![A-Za-z0-9_*])"
+    r"(?P<personal>"
+    + _narrative_labeled_field_assignment_pattern(
+        _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT
+    )
+    + _ADDRESS_VALUE_CAPTURE_PATTERN_TEXT
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
+
+
+def _markdown_narrative_bare_value_unit(
+    *, markdown_group: str, metadata_pattern: str
+) -> str:
+    return (
+        r"(?:\([^()\r\n]*\)|(?!(?P="
+        + markdown_group
+        + r")|,[ \t]*"
+        + metadata_pattern
+        + r")[^\r\n(])"
+    )
+
+
+def _markdown_complete_narrative_bare_value_pattern(
+    field_pattern: str, *, markdown_group: str, metadata_pattern: str
+) -> str:
+    value_unit = _markdown_narrative_bare_value_unit(
+        markdown_group=markdown_group,
+        metadata_pattern=metadata_pattern,
+    )
+    return (
+        rf"(?P<{markdown_group}>\*\*|__|\*|_)[ \t]*"
+        r"(?P<personal>"
+        + field_pattern.removeprefix(r"\b")
+        + r"[ \t]+(?:is|was|set[ \t]+to)\b[ \t]*(?P<value>"
+        + value_unit
+        + r"*+))"
+        r"(?:[ \t]*,[ \t]*"
+        + metadata_pattern
+        + r"[^\r\n]*?)?[ \t]*(?P="
+        + markdown_group
+        + r")"
+    )
+
+
+def _malformed_markdown_narrative_bare_value_pattern(
+    field_pattern: str, *, markdown_group: str, metadata_pattern: str
+) -> str:
+    value_unit = _markdown_narrative_bare_value_unit(
+        markdown_group=markdown_group,
+        metadata_pattern=metadata_pattern,
+    )
+    return (
+        rf"(?P<personal>(?P<{markdown_group}>\*\*|__|\*|_)[ \t]*"
+        + field_pattern.removeprefix(r"\b")
+        + r"[ \t]+(?:is|was|set[ \t]+to)\b[ \t]*(?P<value>"
+        + value_unit
+        + r"*+)"
+        r"(?:[ \t]*,[ \t]*"
+        + metadata_pattern
+        + r"[^\r\n]*+)?(?P<malformed_trailing_value>[^\r\n]*+))"
+    )
+
+
+MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_NAME_VALUE_RE = re.compile(
+    _markdown_complete_narrative_bare_value_pattern(
+        _BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
+        markdown_group="complete_narrative_bare_name_markdown",
+        metadata_pattern=_NAME_TRAILING_METADATA_PATTERN_TEXT,
+    ),
+    re.ASCII | re.IGNORECASE,
+)
+MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE = re.compile(
+    _markdown_complete_narrative_bare_value_pattern(
+        _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT,
+        markdown_group="complete_narrative_bare_address_markdown",
+        metadata_pattern=_ADDRESS_TRAILING_METADATA_PATTERN_TEXT,
+    ),
+    re.ASCII | re.IGNORECASE,
+)
+MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_NAME_VALUE_RE = re.compile(
+    _malformed_markdown_narrative_bare_value_pattern(
+        _BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
+        markdown_group="malformed_narrative_bare_name_markdown",
+        metadata_pattern=_NAME_TRAILING_METADATA_PATTERN_TEXT,
+    ),
+    re.ASCII | re.IGNORECASE,
+)
+MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE = re.compile(
+    _malformed_markdown_narrative_bare_value_pattern(
+        _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT,
+        markdown_group="malformed_narrative_bare_address_markdown",
+        metadata_pattern=_ADDRESS_TRAILING_METADATA_PATTERN_TEXT,
+    ),
+    re.ASCII | re.IGNORECASE,
+)
 MARKDOWN_BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?P<personal>"
     + _markdown_labeled_field_assignment_pattern(
         _BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
         markdown_group="markdown_bare_name_markdown",
     )
-    + _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT
+    + _NAME_VALUE_CAPTURE_PATTERN_TEXT
     + r")",
     re.ASCII | re.IGNORECASE,
 )
@@ -372,14 +621,31 @@ _CANONICAL_REDACTED_VALUE_RE = re.compile(r"\A" + _REDACTED_VALUE_PATTERN_TEXT +
 _REDACTED_PLACEHOLDER_SHAPE_RE = re.compile(_REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT)
 _ADDRESS_LABELED_VALUE_PATTERNS = (
     BARE_LABELED_ADDRESS_VALUE_RE,
+    NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE,
+    MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE,
+    MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE,
+)
+_NAME_LABELED_VALUE_PATTERNS = (
+    BARE_LABELED_NAME_VALUE_RE,
+    NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
+    MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE,
 )
 PERSONAL_LABELED_VALUE_PATTERNS = (
     LABELED_PERSONAL_VALUE_RE,
     NARRATIVE_LABELED_PERSONAL_VALUE_RE,
     BARE_LABELED_NAME_VALUE_RE,
     BARE_LABELED_ADDRESS_VALUE_RE,
+    NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
+    NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE,
+    MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE,
+    MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
+    MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE,
     MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE,
@@ -388,7 +654,8 @@ PERSONAL_LABELED_VALUE_PATTERNS = (
 )
 _NON_ADDRESS_PERSONAL_LABELED_VALUE_PATTERNS = tuple(
     filter(
-        lambda pattern: pattern not in _ADDRESS_LABELED_VALUE_PATTERNS,
+        lambda pattern: pattern
+        not in _ADDRESS_LABELED_VALUE_PATTERNS + _NAME_LABELED_VALUE_PATTERNS,
         PERSONAL_LABELED_VALUE_PATTERNS,
     )
 )
@@ -400,6 +667,12 @@ PERSONAL_IDENTIFIER_GROUPS = {
     BARE_GROUPED_IBAN_RE: "personal",
     BARE_LABELED_NAME_VALUE_RE: "personal",
     BARE_LABELED_ADDRESS_VALUE_RE: "personal",
+    NARRATIVE_BARE_LABELED_NAME_VALUE_RE: "personal",
+    NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
+    MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_NAME_VALUE_RE: "personal",
+    MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
+    MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_NAME_VALUE_RE: "personal",
+    MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE: "personal",
     MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE: "personal",
@@ -648,19 +921,78 @@ _CREDENTIAL_FIELD_PATTERN_TEXT = (
     + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
     + r"['\"]?"
 )
-_CAMEL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
-    r"(?:(?<![\w-])|(?<=[._-]))['\"]?"
-    r"(?-i:(?=[A-Za-z0-9]{1,64}['\"]?"
-    + _CREDENTIAL_INLINE_SPACE_ATOMIC_PATTERN_TEXT
-    + r"(?:=|:))[a-z][A-Za-z0-9]*"
-    r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|ApiKey|AccessKey|"
-    r"PrivateKey))['\"]?"
+_LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
+    r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|ApiKey|AccessKey|PrivateKey)"
+)
+_PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
+    r"(?:Credential|Secret|Password|Passphrase|Passcode|PIN|Pin|APIKey|ApiKey|"
+    r"AccessKey|PrivateKey|"
+    r"(?:Access|API|Api|Auth|Authorization|Client|Refresh|ID|Id|Session|"
+    r"CSRF|Csrf|XSRF|Xsrf)Token)"
+)
+
+
+def _compact_case_credential_field_pattern(
+    *, initial_pattern: str, suffix_pattern: str, connector_pattern: str
+) -> str:
+    return (
+        r"(?:(?<![\w-])|(?<=[._-]))['\"]?"
+        r"(?=[A-Za-z0-9]{1,64}['\"]?"
+        + _CREDENTIAL_INLINE_SPACE_ATOMIC_PATTERN_TEXT
+        + connector_pattern
+        + r")"
+        + r"(?-i:"
+        + initial_pattern
+        + r"[A-Za-z0-9]*"
+        + suffix_pattern
+        + r")['\"]?"
+    )
+
+
+_LOWER_CAMEL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
+    _compact_case_credential_field_pattern(
+        initial_pattern=r"[a-z]",
+        suffix_pattern=_LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT,
+        connector_pattern=r"(?:=|:)",
+    )
+)
+_PASCAL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
+    _compact_case_credential_field_pattern(
+        initial_pattern=r"[A-Z]",
+        suffix_pattern=_PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT,
+        connector_pattern=r"(?:=|:)",
+    )
+)
+_LOWER_CAMEL_CASE_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT = (
+    _compact_case_credential_field_pattern(
+        initial_pattern=r"[a-z]",
+        suffix_pattern=_LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT,
+        connector_pattern=r"(?:is\b|was\b|set[ \t]++to\b)",
+    )
+)
+_PASCAL_CASE_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT = (
+    _compact_case_credential_field_pattern(
+        initial_pattern=r"[A-Z]",
+        suffix_pattern=_PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT,
+        connector_pattern=r"(?:is\b|was\b|set[ \t]++to\b)",
+    )
 )
 _CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
     r"(?:"
     + _CREDENTIAL_FIELD_PATTERN_TEXT
     + r"|"
-    + _CAMEL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT
+    + _LOWER_CAMEL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT
+    + r"|"
+    + _PASCAL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT
+    + r")"
+)
+_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT = (
+    r"(?:"
+    + _CREDENTIAL_FIELD_PATTERN_TEXT
+    + r"|"
+    + _LOWER_CAMEL_CASE_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT
+    + r"|"
+    + _PASCAL_CASE_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT
     + r")"
 )
 _AUTH_SCHEME_PATTERN_TEXT = (
@@ -675,6 +1007,16 @@ _CREDENTIAL_LABELED_VALUE_RE = re.compile(
     + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
     + r"(?P<value>"
     + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT
+    + r")",
+    re.IGNORECASE,
+)
+_CREDENTIAL_NARRATIVE_VALUE_RE = re.compile(
+    _CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT
+    + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+    + r"(?:\bis\b|\bwas\b|\bset\s++to\b)"
+    + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+    + r"(?P<value>"
+    + _CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT
     + r")",
     re.IGNORECASE,
 )
@@ -782,15 +1124,7 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     ),
     (
         "credential",
-        re.compile(
-            r"\b"
-            + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
-            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
-            + r"(?:\bis\b|\bwas\b|\bset\s++to\b)"
-            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
-            + _CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT,
-            re.IGNORECASE,
-        ),
+        _CREDENTIAL_NARRATIVE_VALUE_RE,
         "[REDACTED_CREDENTIAL]",
     ),
 )
@@ -958,6 +1292,11 @@ def _normalized_personal_trailing_value(match: re.Match[str]) -> str:
     return _normalized_personal_sensitive_value(candidate)
 
 
+def _normalized_malformed_markdown_trailing_value(match: re.Match[str]) -> str:
+    candidate = match.groupdict().get("malformed_trailing_value") or ""
+    return _normalized_personal_sensitive_value(candidate)
+
+
 _SAFE_REDACTED_VALUE_RE = re.compile(
     r"\A" + _REDACTED_VALUE_PATTERN_TEXT + r"[)\]}>]*\Z"
 )
@@ -972,6 +1311,28 @@ _PERSONAL_OUTER_SQUARE_WRAPPER_RE = re.compile(
 _PERSONAL_NARRATIVE_SUFFIX_RE = re.compile(
     r"[ \t]++(?:after|before|during|until|when|while)\b[^\r\n]*+\Z",
     re.IGNORECASE,
+)
+_CREDENTIAL_NARRATIVE_CONTEXT_SUFFIX_RE = re.compile(
+    _SAFE_CREDENTIAL_NARRATIVE_CONTINUATION_PATTERN_TEXT + r"\Z",
+    re.ASCII | re.IGNORECASE,
+)
+_CREDENTIAL_NARRATIVE_METADATA_SUFFIX_RE = re.compile(
+    r"[ \t]*,[ \t]*" + _NAME_TRAILING_METADATA_PATTERN_TEXT + r"[^\r\n]*+\Z",
+    re.ASCII | re.IGNORECASE,
+)
+_PERSONAL_STATUS_VALUE_SUFFIX_RE = re.compile(
+    r"\A(?:"
+    + _SAFE_CREDENTIAL_NARRATIVE_STATUS_PATTERN_TEXT
+    + r")(?:[ \t]+(?:at|by|for|from|in|on|to|with)\b[ \t]+|"
+    r"[ \t]*(?:=|:|-)[ \t]*)(?P<value>.+)\Z",
+    re.ASCII | re.IGNORECASE,
+)
+_SAFE_PERSONAL_NARRATIVE_VALUE_RE = re.compile(
+    r"\A(?:"
+    + _SAFE_CREDENTIAL_NARRATIVE_STATUS_PATTERN_TEXT
+    + _SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT
+    + r")\Z",
+    re.ASCII | re.IGNORECASE,
 )
 _MEMORY_ADDRESS_VALUE_RE = re.compile(r"\A0x[0-9a-f]+\Z", re.ASCII | re.IGNORECASE)
 _ADDRESS_COMPONENT_SEPARATOR_RE = re.compile(r"[ \t]*,[ \t]*")
@@ -993,11 +1354,54 @@ def _personal_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
         "",
         _REDACTED_PREFIX_VALUE_RE.sub(r"\g<value>", core),
     )
+    malformed_trailing = _normalized_malformed_markdown_trailing_value(match)
+    status_value_match = _PERSONAL_STATUS_VALUE_SUFFIX_RE.fullmatch(unredacted_core)
+    status_value = (
+        _normalized_personal_sensitive_value(status_value_match.group("value"))
+        if status_value_match is not None
+        else ""
+    )
     return (
         unredacted_core,
         narrative_prefix,
         quoted_redacted_trailing,
         unquoted_redacted_trailing,
+        malformed_trailing,
+        status_value,
+    )
+
+
+def _credential_narrative_sensitive_overlap_values(
+    match: re.Match[str],
+) -> tuple[str, ...]:
+    values = tuple(
+        dict.fromkeys(filter(None, _personal_sensitive_overlap_values(match)))
+    )
+    for _round in range(3):
+        derivatives = chain.from_iterable(
+            map(_credential_narrative_value_derivatives, values)
+        )
+        values = tuple(dict.fromkeys(filter(None, chain(values, derivatives))))
+    return values
+
+
+def _credential_narrative_value_derivatives(value: str) -> tuple[str, ...]:
+    status_match = _PERSONAL_STATUS_VALUE_SUFFIX_RE.fullmatch(value)
+    status_value = (
+        _normalized_personal_sensitive_value(status_match.group("value"))
+        if status_match is not None
+        else ""
+    )
+    context_prefix = _normalized_personal_sensitive_value(
+        _CREDENTIAL_NARRATIVE_CONTEXT_SUFFIX_RE.sub("", value)
+    )
+    metadata_prefix = _normalized_personal_sensitive_value(
+        _CREDENTIAL_NARRATIVE_METADATA_SUFFIX_RE.sub("", value)
+    )
+    return tuple(
+        candidate
+        for candidate in (status_value, context_prefix, metadata_prefix)
+        if candidate and candidate != value
     )
 
 
@@ -1024,16 +1428,59 @@ def _address_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
     return values + components + normalized_components
 
 
+def _name_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
+    values = _personal_sensitive_overlap_values(match)
+    components = tuple(
+        filter(
+            None,
+            map(
+                _normalized_personal_sensitive_value,
+                chain.from_iterable(map(_ADDRESS_COMPONENT_SEPARATOR_RE.split, values)),
+            ),
+        )
+    )
+    return values + components
+
+
+def _contains_nonstatus_personal_value(values: Iterable[str]) -> bool:
+    return any(
+        value and _SAFE_PERSONAL_NARRATIVE_VALUE_RE.fullmatch(value) is None
+        for value in values
+    )
+
+
 def _personal_match_contains_sensitive_value(match: re.Match[str]) -> bool:
-    return any(_personal_sensitive_overlap_values(match))
+    return _contains_nonstatus_personal_value(_personal_sensitive_overlap_values(match))
 
 
 def _address_match_contains_sensitive_value(match: re.Match[str]) -> bool:
     components = tuple(
         map(_normalized_address_component_value, _address_component_values(match))
     )
+    if not _contains_nonstatus_personal_value(components):
+        return False
     memory_addresses = all(map(_MEMORY_ADDRESS_VALUE_RE.fullmatch, components))
     return (bool(components), memory_addresses) == (True, False)
+
+
+def _malformed_markdown_name_match_contains_sensitive_value(
+    match: re.Match[str],
+) -> bool:
+    complete = MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_NAME_VALUE_RE.match(
+        match.string,
+        match.start(),
+    )
+    return complete is None and _personal_match_contains_sensitive_value(match)
+
+
+def _malformed_markdown_address_match_contains_sensitive_value(
+    match: re.Match[str],
+) -> bool:
+    complete = MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE.match(
+        match.string,
+        match.start(),
+    )
+    return complete is None and _address_match_contains_sensitive_value(match)
 
 
 def _payment_card_match_is_valid(match: re.Match[str]) -> bool:
@@ -1047,6 +1494,8 @@ def _payment_card_match_is_valid(match: re.Match[str]) -> bool:
 
 def _iban_match_is_valid(match: re.Match[str]) -> bool:
     candidate = match.group("personal").replace(" ", "").replace("\t", "").upper()
+    if _IBAN_LENGTH_BY_COUNTRY.get(candidate[:2]) != len(candidate):
+        return False
     remainder = 0
     for character in candidate[4:] + candidate[:4]:
         encoded = (
@@ -1068,6 +1517,12 @@ _PERSONAL_MATCH_FILTERS = {
     **dict.fromkeys(
         _ADDRESS_LABELED_VALUE_PATTERNS,
         _address_match_contains_sensitive_value,
+    ),
+    MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_NAME_VALUE_RE: (
+        _malformed_markdown_name_match_contains_sensitive_value
+    ),
+    MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE: (
+        _malformed_markdown_address_match_contains_sensitive_value
     ),
     BARE_PAYMENT_CARD_RE: _payment_card_match_is_valid,
     BARE_IBAN_RE: _iban_match_is_valid,
@@ -1095,9 +1550,15 @@ def _normalized_sensitive_overlap_value(value: str) -> str:
 def sensitive_labeled_values(value: str) -> Iterator[str]:
     """Yield closed-taxonomy field and bare-number values for overlap checks."""
 
-    credential_values = map(
+    credential_assignment_values = map(
         _normalized_generic_sensitive_labeled_value,
         _CREDENTIAL_LABELED_VALUE_RE.finditer(value),
+    )
+    credential_narrative_values = chain.from_iterable(
+        map(
+            _credential_narrative_sensitive_overlap_values,
+            _CREDENTIAL_NARRATIVE_VALUE_RE.finditer(value),
+        )
     )
     personal_matches = chain.from_iterable(
         map(
@@ -1108,6 +1569,13 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
     personal_values = chain.from_iterable(
         map(_personal_sensitive_overlap_values, personal_matches)
     )
+    name_matches = chain.from_iterable(
+        map(
+            lambda pattern: _filtered_personal_matches(pattern, value),
+            _NAME_LABELED_VALUE_PATTERNS,
+        )
+    )
+    name_values = chain.from_iterable(map(_name_sensitive_overlap_values, name_matches))
     address_matches = chain.from_iterable(
         map(
             lambda pattern: _filtered_personal_matches(pattern, value),
@@ -1139,8 +1607,10 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
         ),
     )
     normalized = chain(
-        credential_values,
+        credential_assignment_values,
+        credential_narrative_values,
         personal_values,
+        name_values,
         contextual_phone_values,
         bare_sensitive_number_values,
     )

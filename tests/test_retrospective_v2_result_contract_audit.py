@@ -1128,6 +1128,110 @@ class AuditedResultContractTests(unittest.TestCase):
                 "The employee DOB set to 1990-01-02",
                 "The [REDACTED_PERSONAL_IDENTIFIER]",
             ),
+            ("Full name is Alice Smith", "[REDACTED_PERSONAL_IDENTIFIER]"),
+            ("Full name is Smith, John", "[REDACTED_PERSONAL_IDENTIFIER]"),
+            (
+                "Full name is Smith, John, status ok",
+                "[REDACTED_PERSONAL_IDENTIFIER], status ok",
+            ),
+            ("First name was Alice", "[REDACTED_PERSONAL_IDENTIFIER]"),
+            ("Last name set to Smith", "[REDACTED_PERSONAL_IDENTIFIER]"),
+            (
+                "Address was 123 Main Street",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "- Full name is Alice Smith",
+                "- [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Observed: Full name is Alice Smith",
+                "Observed: [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Recorded Full name is Alice Smith",
+                "Recorded [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Recorded Address was 123 Main Street",
+                "Recorded [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "(Full name is Alice Smith)",
+                "([REDACTED_PERSONAL_IDENTIFIER])",
+            ),
+            (
+                "Full name is Alice (Ace) Smith",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Full name is Alice Smith**",
+                "**[REDACTED_PERSONAL_IDENTIFIER]**",
+            ),
+            (
+                "*Full name is Alice Smith*",
+                "*[REDACTED_PERSONAL_IDENTIFIER]*",
+            ),
+            (
+                "**Full name is Smith, John, status ok**",
+                "**[REDACTED_PERSONAL_IDENTIFIER], status ok**",
+            ),
+            (
+                "**Full name is Alice (alias, status pending) Smith**",
+                "**[REDACTED_PERSONAL_IDENTIFIER]**",
+            ),
+            (
+                "__Address was 123 Main Street__",
+                "__[REDACTED_PERSONAL_IDENTIFIER]__",
+            ),
+            (
+                "_Address was 123 Main Street_",
+                "_[REDACTED_PERSONAL_IDENTIFIER]_",
+            ),
+            (
+                "__Address was 123 Main Street, status ok__",
+                "__[REDACTED_PERSONAL_IDENTIFIER], status ok__",
+            ),
+            (
+                "__Address was 123 Main Street, state: CA, zip: 94105__",
+                "__[REDACTED_PERSONAL_IDENTIFIER]__",
+            ),
+            (
+                "Address is present at 123 Main Street",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Full name is unavailable for Alice Smith",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Full name is unavailable: Alice Smith",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Full name is Alice Smith",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Full name is required** then Full name is Alice Smith",
+                "**Full name is required** then [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Full name is Alice (Ace Smith**",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Full name is (Alice Smith",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "__Address was 123 Main Street",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Full name is " + "(alias)" * 512,
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
             (
                 "The phone number is 6123 4567",
                 "The phone number is [REDACTED_PERSONAL_IDENTIFIER]",
@@ -1139,6 +1243,18 @@ class AuditedResultContractTests(unittest.TestCase):
             (
                 "Payment sent to GB82 WEST 1234 5698 7654 32 before continuing.",
                 "Payment sent to [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+            ),
+            (
+                "Payment sent to gb82 west 1234 5698 7654 32 before continuing.",
+                "Payment sent to [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+            ),
+            (
+                "Payment sent to Gb82 WeSt 1234 5698 7654 32 before continuing.",
+                "Payment sent to [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+            ),
+            (
+                "Payment sent to KZ86 125K ZT50 0410 0100 then continued.",
+                "Payment sent to [REDACTED_PERSONAL_IDENTIFIER] then continued.",
             ),
         ):
             with self.subTest(narrative_source=source):
@@ -1241,6 +1357,15 @@ class AuditedResultContractTests(unittest.TestCase):
             "Passport status: unavailable.",
             "Credit card support is unavailable.",
             "The account number of failures is three.",
+            "Full name is required.",
+            "First name was missing.",
+            "Last name is unavailable.",
+            "Address is unavailable.",
+            "**Full name is required, status ok",
+            "__Address is unavailable, status ok",
+            "Recorded Address is unavailable, status ok",
+            "Address was 0x1000.",
+            "Full name is [REDACTED_PERSONAL_IDENTIFIER].",
             "Payment sent to DE88370400440532013000 before continuing.",
             "Payment sent to XDE89370400440532013000 before continuing.",
             "Payment sent to DE893704004405 before continuing.",
@@ -1286,6 +1411,52 @@ class AuditedResultContractTests(unittest.TestCase):
         ):
             with self.subTest(safe_source=safe_source):
                 self.assertEqual((), scan_for_leaks({"summary": safe_source}))
+
+    def test_audit_redacts_pascalcase_credential_fields(self) -> None:
+        for source in (
+            "UserPassword = winter123",
+            "DatabaseSecret was purple",
+            "UserPIN = 8392",
+            "ServiceAPIKey = purple",
+            "DatabaseCredential was winter123",
+            "DatabaseSecret WAS purple",
+            "ServiceAPIKey Is purple",
+            "DatabaseAccessToken = winter123",
+            "ServiceRefreshToken was purple",
+            "DatabaseSecret was winter123, status ok",
+            "DatabaseSecret was unavailable: winter123, status ok",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(
+                    {"credential"},
+                    {
+                        finding.category
+                        for finding in scan_for_leaks({"summary": source})
+                    },
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    "[REDACTED_CREDENTIAL]",
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
+
+        for safe_source in (
+            "CancellationToken = active",
+            "CancellationToken was cancelled",
+            "DesignToken = color.primary",
+            "UserPassword = missing",
+            "DatabaseSecret was not present",
+            "UserPasswordCount = 12",
+        ):
+            with self.subTest(safe_source=safe_source):
+                self.assertFalse(
+                    privacy_locators.contains_credential_material(safe_source)
+                )
 
     def test_audit_shared_sensitive_text_policy_covers_retained_gaps(self) -> None:
         cases = (

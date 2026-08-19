@@ -1602,6 +1602,38 @@ superseded_by:
   blocker made their tree stale. The Darwin/skip precommit audit reports
   `No findings.`; two bounded privacy-audit transports ended inconclusive, and
   no partial output from either was accepted as review evidence.
+- Signed head `de95998a` became stale when its fresh whole-range Codex processor
+  found three retained-privacy blockers: closed credential-field matching did
+  not cover PascalCase forms, bare `Full`/`First`/`Last name` and `Address`
+  narratives could bypass field detection, and grouped IBAN recognition was
+  uppercase-only. The independent workspace postvalidated clean and was safely
+  removed after the terminal findings were recorded.
+- The shared scanner, redactor, source-overlap index, retained assembly, retained
+  reread, and report validator now use one closed PascalCase credential taxonomy;
+  bounded narrative value derivation; bare name/address assignment and narrative
+  forms; and compact or canonically grouped, case-insensitive, country-length and
+  mod-97-valid IBAN recognition. The country-length table was independently
+  compared with all 89 records in the official SWIFT IBAN Registry Release 102
+  (June 2026), rather than inferred from examples.
+- Two bounded precommit privacy audits closed status-plus-value, punctuation,
+  wrapper, comma-separated name, Markdown, malformed-Markdown, metadata, and
+  source-overlap edge cases. Complete and malformed Markdown preserve distinct
+  span semantics; unbalanced tails participate in sensitivity decisions; pure
+  `required`/`missing`/`unavailable` status metadata remains nonsensitive; and
+  single- or double-marker emphasis cannot hide a labeled value. The final
+  closure-only audit reports `No findings.` Focused Python 3.13 contracts pass
+  24/24, 83/83, 71/71, 19/19, 33/33, and 5/5; the exact engine branch inventory
+  is 9,488.
+- The final canonical Python 3.13 inventory contains 1,784 exact test IDs from
+  22 authenticated source modules under manifest digest
+  `baf89b8dfba1e2924bb8d59bf1b344cc2d28e4de8fb9caaa68890f8aa530bc6c`.
+  Shard 0 passes 427/427 in 1,770.730 seconds, shard 1 passes 481/481 in
+  1,400.660 seconds, shard 2 passes 467/467 in 1,501.513 seconds, and shard 3
+  passes 409/409 in 1,427.748 seconds. Every bounded wrapper exits zero with an
+  explicit `OK` summary. Four earlier pre-closure shard tasks were cancelled and
+  remain non-counting. A mistaken Darwin `--help` probe ran tests without a
+  pollable terminal receipt and is also non-counting; the formal bounded Darwin
+  gate separately passes 11/11 in 77.519 seconds with exit zero.
 
 ## Follow-up Work
 
