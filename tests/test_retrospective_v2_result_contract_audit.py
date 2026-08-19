@@ -1117,6 +1117,51 @@ class AuditedResultContractTests(unittest.TestCase):
 
         for source, expected in (
             (
+                "The customer's name is Alice Smith",
+                "The [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "The customer address was 123 Main Street",
+                "The [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "The employee DOB set to 1990-01-02",
+                "The [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "The phone number is 6123 4567",
+                "The phone number is [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Payment sent to DE89370400440532013000 before continuing.",
+                "Payment sent to [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+            ),
+            (
+                "Payment sent to GB82 WEST 1234 5698 7654 32 before continuing.",
+                "Payment sent to [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+            ),
+        ):
+            with self.subTest(narrative_source=source):
+                self.assertEqual(
+                    {"personal_identifier"},
+                    {
+                        finding.category
+                        for finding in scan_for_leaks({"summary": source})
+                    },
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    expected,
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
+
+        for source, expected in (
+            (
                 "- Full name: Alice Smith",
                 "- [REDACTED_PERSONAL_IDENTIFIER]",
             ),
@@ -1196,6 +1241,10 @@ class AuditedResultContractTests(unittest.TestCase):
             "Passport status: unavailable.",
             "Credit card support is unavailable.",
             "The account number of failures is three.",
+            "Payment sent to DE88370400440532013000 before continuing.",
+            "Payment sent to XDE89370400440532013000 before continuing.",
+            "Payment sent to DE893704004405 before continuing.",
+            "Payment sent to GB81 WEST 1234 5698 7654 32 before continuing.",
             "Inspect pin=GPIO17 before continuing.",
             "Run with --pin requests==2.32.5.",
             "The pin is bent.",

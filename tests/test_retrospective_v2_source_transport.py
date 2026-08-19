@@ -4912,6 +4912,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual("no_activity", frames[-1]["status"])
         self.assertTrue(frames[-1]["complete"])
 
+    @darwin_security_test
     def test_source_identity_ignores_non_policy_flags(self) -> None:
         hidden = getattr(stat, "UF_HIDDEN", 0)
         immutable = getattr(stat, "UF_IMMUTABLE", 0)

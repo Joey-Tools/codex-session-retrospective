@@ -765,6 +765,21 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "The customer's name is Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "The customer address was 123 Main Street",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "The employee DOB set to 1990-01-02",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "**Customer name:** Alice Smith",
                 "Alice Smith was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
@@ -883,6 +898,16 @@ class ResultValidationTests(unittest.TestCase):
                 "bank account number: 00012345",
                 "00012345 was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Payment sent to DE89370400440532013000 before continuing.",
+                "DE89370400440532013000 was referenced",
+                "[REDACTED_PERSONAL_IDENTIFIER] was referenced",
+            ),
+            (
+                "Payment sent to GB82 WEST 1234 5698 7654 32 before continuing.",
+                "GB82 WEST 1234 5698 7654 32 was referenced",
+                "[REDACTED_PERSONAL_IDENTIFIER] was referenced",
             ),
             (
                 "customer address: 123 Main Street",

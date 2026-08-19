@@ -160,7 +160,7 @@ class CiContractTests(unittest.TestCase):
             run_darwin_security_tests.EXPECTED_DARWIN_SECURITY_TEST_IDS,
             observed,
         )
-        self.assertEqual(10, len(selected))
+        self.assertEqual(11, len(selected))
         with (
             mock.patch.object(
                 run_darwin_security_tests,
@@ -182,6 +182,11 @@ class CiContractTests(unittest.TestCase):
             for node in ast.walk(tree):
                 if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
+                carries_darwin_marker = any(
+                    isinstance(decorator, ast.Name)
+                    and decorator.id == "darwin_security_test"
+                    for decorator in node.decorator_list
+                )
                 for decorator in node.decorator_list:
                     if (
                         isinstance(decorator, ast.Call)
@@ -195,23 +200,34 @@ class CiContractTests(unittest.TestCase):
                         )
                     ):
                         direct_platform_skips.append(f"{path.name}:{node.lineno}")
+                for call in filter(
+                    lambda part: isinstance(part, ast.Call), ast.walk(node)
+                ):
+                    if (
+                        isinstance(call.func, ast.Attribute)
+                        and isinstance(call.func.value, ast.Name)
+                        and call.func.value.id == "self"
+                        and call.func.attr == "skipTest"
+                        and not carries_darwin_marker
+                    ):
+                        direct_platform_skips.append(f"{path.name}:{call.lineno}")
 
         self.assertEqual([], direct_platform_skips)
 
     def test_darwin_security_result_rejects_skips_and_partial_execution(self) -> None:
         result = unittest.TestResult()
-        result.testsRun = 10
+        result.testsRun = 11
         self.assertTrue(
-            run_darwin_security_tests.result_is_complete(result, expected_count=10)
+            run_darwin_security_tests.result_is_complete(result, expected_count=11)
         )
 
         result.skipped.append((self, "missing dependency"))
         self.assertFalse(
-            run_darwin_security_tests.result_is_complete(result, expected_count=10)
+            run_darwin_security_tests.result_is_complete(result, expected_count=11)
         )
         result.skipped.clear()
         self.assertFalse(
-            run_darwin_security_tests.result_is_complete(result, expected_count=11)
+            run_darwin_security_tests.result_is_complete(result, expected_count=12)
         )
 
     def test_darwin_security_runner_rejects_hidden_generator_results(self) -> None:

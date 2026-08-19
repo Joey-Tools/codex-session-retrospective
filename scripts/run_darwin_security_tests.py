@@ -37,6 +37,8 @@ EXPECTED_DARWIN_SECURITY_TEST_IDS = (
     "test_program_hash_rejects_extended_acl_and_late_acl_drift",
     "tests.test_retrospective_v2_source_transport.SourceTransportProtocolTests."
     "test_remote_helper_launch_rejects_snapshot_extended_acl",
+    "tests.test_retrospective_v2_source_transport.SourceTransportProtocolTests."
+    "test_source_identity_ignores_non_policy_flags",
     "tests.test_session_retrospective.SessionRetrospectiveTests."
     "test_history_git_rejects_extended_acl_repository",
     "tests.test_session_retrospective_v2_cli.CliContractTests."

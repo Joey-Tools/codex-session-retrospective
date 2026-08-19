@@ -1785,6 +1785,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "lastName: Smith",
             "client name: Alice Smith",
             "Customer's full name: Alice Smith",
+            "The customer's name is Alice Smith",
+            "The customer address was 123 Main Street",
+            "The employee DOB set to 1990-01-02",
             "tenant name: Example Tenant",
             "organization name: Example Organization",
             "- Full name: Alice Smith",
@@ -1807,6 +1810,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "account number: 00012345",
             "routing number: 000000000",
             "IBAN: GB00 TEST 0000 0000 0000 00",
+            "Payment sent to DE89370400440532013000 before continuing",
+            "Payment sent to GB82 WEST 1234 5698 7654 32 before continuing",
             "+44 20 7946 0958",
             "+44 (0)20 7946 0958",
             "020 7946 0958",
@@ -1818,6 +1823,7 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Phone : 61234567 before continuing.",
             "Phone number: 6123 4567 before continuing.",
             "Telephone number: 6123 4567 before continuing.",
+            "The phone number is 6123 4567",
             'Phone: "1234567890123" before continuing.',
             "**Phone:** 1234567890123 before continuing.",
             "**Phone: 1234567890123**",
@@ -1925,6 +1931,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Order 1234567890123 remains a numeric identifier",
             "Order 12345678901234 remains a numeric identifier",
             "Order 123456789012345 remains a numeric identifier",
+            "Payment sent to DE88370400440532013000 before continuing",
+            "Payment sent to XDE89370400440532013000 before continuing",
+            "Payment sent to DE893704004405 before continuing",
+            "Payment sent to GB81 WEST 1234 5698 7654 32 before continuing",
         ):
             with self.subTest(safe_value=safe_value, phase="direct"):
                 reporting_module.validate_retained_value({"cause": safe_value})

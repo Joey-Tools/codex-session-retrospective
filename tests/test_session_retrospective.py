@@ -47762,10 +47762,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
             finally:
                 os.chmod(rollout, 0o600)
 
-        if '"kind":"error"' not in result.stdout:
-            self.skipTest(
-                "chmod(0) did not make the rollout unreadable in this environment"
-            )
+        self.assertIn('"kind":"error"', result.stdout)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('"error":"rollout unreadable"', result.stdout)
         self.assertIn(
@@ -47805,10 +47802,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
             finally:
                 os.chmod(date_dir, 0o700)
 
-        if '"error":"session directory unreadable"' not in result.stdout:
-            self.skipTest(
-                "chmod(0) did not make the session directory unreadable in this environment"
-            )
+        self.assertIn('"error":"session directory unreadable"', result.stdout)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('"kind":"error"', result.stdout)
         self.assertIn('"error":"session directory unreadable"', result.stdout)

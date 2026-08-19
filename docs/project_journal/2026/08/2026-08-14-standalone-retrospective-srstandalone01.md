@@ -1562,6 +1562,46 @@ superseded_by:
   `01a018e0-08f3-7f72-b36f-6b830fa22f39`). Every task exits zero with an
   explicit `OK` terminal summary. The independent Darwin security inventory
   passes 10/10 in 65.332 seconds.
+- Signed head `d547cd53` became stale after the fresh local Codex processor found
+  that narrative field assignments such as `customer's name is ...` bypassed
+  the shared privacy locator and that one filesystem-flags test could skip in
+  an ordinary shard. Current-head GitHub Codex independently found that valid
+  unlabeled compact IBANs also bypassed the scanner, redactor, and retained
+  validator. The replacement implementation adds closed `is`, `was`, and
+  `set to` narrative connectors, compact and canonically grouped IBAN matching
+  with mod-97 validation, and shared coverage across scanning, overlap
+  extraction, post-redaction, retained assembly, and retained reread.
+- The flags case is now an explicit Darwin security test. The canonical Darwin
+  inventory contains 11 exact IDs, and the CI contract rejects ordinary
+  `self.skipTest` calls or platform decorators outside that marked inventory.
+  Two older chmod-dependent v1 assertions now fail closed instead of silently
+  skipping. The final Darwin run passes 11/11 in 66.290 seconds; privacy and
+  retained-result modules pass 23/23, 83/83, and 71/71; CI contracts pass
+  33/33; module boundaries pass 19/19 with an exact branch inventory of 9,475;
+  and the public skill contract passes 5/5.
+- The final Python 3.13 test inventory remains 1,783 exact IDs from 22 source
+  modules under manifest digest
+  `b51cd66848c5172fe4487b003582aca5337055936bd222b4f60e88b953152119`.
+  Source-only shard 0 passes 426/426 in 1,759.406 seconds (task
+  `01a0194d-8506-7013-8e51-de8e9c0a7c1c`), shard 1 passes 481/481 in
+  1,371.744 seconds (task `01a0194b-bbb3-7a31-a051-bd4078d4bcd6`), shard 2
+  passes 467/467 in 1,475.423 seconds (task
+  `01a0194b-cbce-7112-9699-aa78d6092b01`), and shard 3 passes 409/409 in
+  1,657.454 seconds (task `01a0192c-b166-74e0-b211-3a9eb63cc1f1`). Every
+  counted shard exits zero with a complete, untruncated `OK` summary.
+- The first final-manifest shard 0-2 executions are retained as non-counting
+  environment evidence: ignored bytecode caches created by earlier focused
+  commands predated those tasks, so the source-authority and bootstrap tests
+  correctly rejected import substitutes. The exact caches were removed, the
+  source-only invariant remained stable, and the three complete shard reruns
+  above passed without expectation changes. Four still-earlier pre-final
+  tasks (`01a01916-0e3d-7d91-9b4c-247d37d8c9c8`,
+  `01a01916-0e3d-7d91-9b4c-24890d21a939`,
+  `01a01915-fc1a-7710-9fb6-233eaa89e89e`, and
+  `01a01916-0629-7f71-a36b-3cb84b16f9b1`) were cancelled once the IBAN
+  blocker made their tree stale. The Darwin/skip precommit audit reports
+  `No findings.`; two bounded privacy-audit transports ended inconclusive, and
+  no partial output from either was accepted as review evidence.
 
 ## Follow-up Work
 

@@ -79,6 +79,17 @@ BARE_PAYMENT_CARD_RE = re.compile(
     r"(?![A-Za-z0-9])(?![ -][0-9])",
     re.ASCII,
 )
+BARE_IBAN_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?P<personal>[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30})"
+    r"(?![A-Za-z0-9])",
+    re.ASCII | re.IGNORECASE,
+)
+BARE_GROUPED_IBAN_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?P<personal>[A-Z]{2}[0-9]{2}"
+    r"(?:[ \t]+[A-Z0-9]{4}){2,7}(?:[ \t]+[A-Z0-9]{1,4})?)"
+    r"(?![A-Za-z0-9])",
+    re.ASCII,
+)
 _LUHN_DOUBLED_DIGITS = (0, 2, 4, 6, 8, 1, 3, 5, 7, 9)
 _PERSONAL_SUBJECT_PATTERN_TEXT = (
     r"(?:account|client|customer|employee|organization|person|tenant|user)"
@@ -172,11 +183,22 @@ def _labeled_field_assignment_pattern(
     )
 
 
+def _narrative_labeled_field_assignment_pattern(field_pattern: str) -> str:
+    return r"['\"]?" + field_pattern + r"['\"]?[ \t]+(?:is|was|set[ \t]+to)\b"
+
+
 LABELED_PHONE_VALUE_RE = re.compile(
     _labeled_field_assignment_pattern(
         _PHONE_FIELD_PATTERN_TEXT,
         markdown_group="phone_markdown",
     )
+    + r"[ \t]*(?P<phone_quote>['\"]?)(?P<phone>"
+    + _SHORT_PHONE_VALUE_PATTERN_TEXT
+    + r")(?P=phone_quote)",
+    re.ASCII | re.IGNORECASE,
+)
+NARRATIVE_LABELED_PHONE_VALUE_RE = re.compile(
+    _narrative_labeled_field_assignment_pattern(_PHONE_FIELD_PATTERN_TEXT)
     + r"[ \t]*(?P<phone_quote>['\"]?)(?P<phone>"
     + _SHORT_PHONE_VALUE_PATTERN_TEXT
     + r")(?P=phone_quote)",
@@ -194,6 +216,7 @@ MARKDOWN_COMPLETE_PHONE_VALUE_RE = re.compile(
 CONTEXTUAL_PHONE_PATTERNS = (
     CONTEXTUAL_SHORT_PHONE_RE,
     LABELED_PHONE_VALUE_RE,
+    NARRATIVE_LABELED_PHONE_VALUE_RE,
     MARKDOWN_COMPLETE_PHONE_VALUE_RE,
 )
 PHONE_PATTERNS = (
@@ -265,6 +288,11 @@ LABELED_PERSONAL_VALUE_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 LABELED_PERSONAL_ID_RE = LABELED_PERSONAL_VALUE_RE
+NARRATIVE_LABELED_PERSONAL_VALUE_RE = re.compile(
+    _narrative_labeled_field_assignment_pattern(_LABELED_PERSONAL_FIELD_PATTERN_TEXT)
+    + _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT,
+    re.ASCII | re.IGNORECASE,
+)
 _BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
     r"\b(?:(?:first|full|last)[_ -]+name|(?-i:(?:first|full|last)Name))"
 )
@@ -349,6 +377,7 @@ _ADDRESS_LABELED_VALUE_PATTERNS = (
 )
 PERSONAL_LABELED_VALUE_PATTERNS = (
     LABELED_PERSONAL_VALUE_RE,
+    NARRATIVE_LABELED_PERSONAL_VALUE_RE,
     BARE_LABELED_NAME_VALUE_RE,
     BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE,
@@ -367,6 +396,8 @@ PERSONAL_IDENTIFIER_GROUPS = {
     **dict.fromkeys(CONTEXTUAL_PHONE_PATTERNS, "phone"),
     BARE_STANDARD_SSN_RE: "personal",
     BARE_PAYMENT_CARD_RE: "personal",
+    BARE_IBAN_RE: "personal",
+    BARE_GROUPED_IBAN_RE: "personal",
     BARE_LABELED_NAME_VALUE_RE: "personal",
     BARE_LABELED_ADDRESS_VALUE_RE: "personal",
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE: "personal",
@@ -1014,6 +1045,17 @@ def _payment_card_match_is_valid(match: re.Match[str]) -> bool:
     return (checksum % 10, len(set(digits)) > 1) == (0, True)
 
 
+def _iban_match_is_valid(match: re.Match[str]) -> bool:
+    candidate = match.group("personal").replace(" ", "").replace("\t", "").upper()
+    remainder = 0
+    for character in candidate[4:] + candidate[:4]:
+        encoded = (
+            str(ord(character) - ord("A") + 10) if character.isalpha() else character
+        )
+        remainder = int(f"{remainder}{encoded}") % 97
+    return remainder == 1
+
+
 def _retain_every_match(_match: re.Match[str]) -> bool:
     return True
 
@@ -1028,6 +1070,8 @@ _PERSONAL_MATCH_FILTERS = {
         _address_match_contains_sensitive_value,
     ),
     BARE_PAYMENT_CARD_RE: _payment_card_match_is_valid,
+    BARE_IBAN_RE: _iban_match_is_valid,
+    BARE_GROUPED_IBAN_RE: _iban_match_is_valid,
 }
 
 
@@ -1090,6 +1134,8 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
         chain(
             BARE_STANDARD_SSN_RE.finditer(value),
             _filtered_personal_matches(BARE_PAYMENT_CARD_RE, value),
+            _filtered_personal_matches(BARE_IBAN_RE, value),
+            _filtered_personal_matches(BARE_GROUPED_IBAN_RE, value),
         ),
     )
     normalized = chain(
@@ -1173,6 +1219,8 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
         *PHONE_PATTERNS,
         BARE_STANDARD_SSN_RE,
         BARE_PAYMENT_CARD_RE,
+        BARE_IBAN_RE,
+        BARE_GROUPED_IBAN_RE,
         *PERSONAL_LABELED_VALUE_PATTERNS,
     ):
         for match in _filtered_personal_matches(pattern, value):
