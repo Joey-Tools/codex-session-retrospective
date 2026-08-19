@@ -17,7 +17,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from . import authority, executable_authority, reporting, safe_io
+from . import authority, executable_authority, gpg_status, reporting, safe_io
 from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
 from .identity import IdentityKey
 from .run_state_authority import validate_run_source_authority
@@ -462,14 +462,14 @@ def _run_publisher_listing(
     try:
         with executable_authority.executable_invocation(gpg_authority):
             result = _run_bounded_subprocess(
-                [
+                gpg_status.no_options_argv(
                     gpg_authority.path,
                     "--homedir",
                     str(subprocess_home),
                     "--batch",
                     "--with-colons",
                     argument,
-                ],
+                ),
                 environment=environment,
                 cwd_descriptor=descriptor,
                 timeout_seconds=timeout_seconds,

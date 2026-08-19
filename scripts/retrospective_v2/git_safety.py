@@ -25,6 +25,8 @@ HISTORY_TOPOLOGY_CONFIG_ARGUMENTS = (
     "-c",
     "core.commitGraph=false",
     "-c",
+    "core.fsmonitor=false",
+    "-c",
     "core.multiPackIndex=false",
 )
 _HISTORY_TARGET_REF_RE = re.compile(

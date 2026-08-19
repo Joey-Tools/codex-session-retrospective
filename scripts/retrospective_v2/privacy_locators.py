@@ -211,7 +211,9 @@ _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT = (
     r"organization|Organization|person|Person|tenant|Tenant|user|User)"
 )
 _PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
-_PERSONAL_NAME_OR_ID_FIELD_PATTERN_TEXT = r"(?:id|(?:(?:first|full|last)[_ -]+)?name)"
+_PERSONAL_NAME_OR_ID_FIELD_PATTERN_TEXT = (
+    r"(?:id|(?:(?:first|full|last|middle)[_ -]+)?name)"
+)
 _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
     r"(?:dob|date[_ -]+of[_ -]+birth|(?-i:(?:dateOfBirth|DateOfBirth)))"
 )
@@ -242,7 +244,7 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + r")|"
     r"(?-i:"
     + _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT
-    + r"(?:Id|Name|(?:First|Full|Last)Name|Address|DOB|Dob|DateOfBirth))|"
+    + r"(?:Id|Name|(?:First|Full|Last|Middle)Name|Address|DOB|Dob|DateOfBirth))|"
     r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
     r"shipping|tenant|user)[_ -]?address|"
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
@@ -438,7 +440,8 @@ NARRATIVE_LABELED_PERSONAL_VALUE_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 _BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
-    r"\b(?:(?:first|full|last)[_ -]+name|(?-i:(?:first|full|last)Name))"
+    r"\b(?:(?:first|full|last|middle)[_ -]+name|"
+    r"(?-i:(?:first|full|last|middle|First|Full|Last|Middle)Name))"
 )
 _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT = r"\baddress"
 BARE_LABELED_NAME_VALUE_RE = re.compile(

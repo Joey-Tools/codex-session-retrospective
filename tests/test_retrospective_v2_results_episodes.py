@@ -1242,6 +1242,11 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "Employee middle name: Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "password: ßx",
                 "SSX was used",
                 "[REDACTED_ORIGINAL_PROMPT] was used",
@@ -1357,6 +1362,8 @@ class ResultValidationTests(unittest.TestCase):
             "Full name is required",
             "First name was missing",
             "Last name is unavailable",
+            "Middle name is required",
+            "Middle name was missing",
             "Address is unavailable",
             "Address was 0x1000",
             "Full name is [REDACTED_PERSONAL_IDENTIFIER]",
@@ -1493,6 +1500,21 @@ class ResultValidationTests(unittest.TestCase):
                 "Observed **Full name: Alice**"
             ),
         )
+        for middle_name in (
+            "Employee middle name: Alice",
+            "Employee middle_name: Alice",
+            "Employee middle-name: Alice",
+            "employeeMiddleName: Alice",
+            "middleName: Alice",
+            "MiddleName: Alice",
+        ):
+            with self.subTest(middle_name=middle_name):
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result_validation_module.privacy_locators.redact_personal_identifiers(
+                        middle_name
+                    ),
+                )
         for safe_pin_text in (
             "Inspect pin=GPIO17 before continuing.",
             "Run with --pin requests==2.32.5.",

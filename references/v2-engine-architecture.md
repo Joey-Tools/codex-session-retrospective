@@ -261,6 +261,17 @@ publication phase supplies and rechecks that exact path/digest. `finalize` has
 no caller-selected signer override. Timestamp-only changes are benign because
 they are not part of the protected authority receipt.
 
+Keyring inventory, sign/verify canaries, Git signing, and Git verification all
+place `--no-options` before every other GPG argument. Git reaches GPG only
+through the fixed executable `scripts/retrospective_v2_gpg_no_options`; the
+launcher bytes, executable identity, and access policy are authenticated around
+each signing or verification subprocess, while the selected GPG executable is
+passed through one closed environment key. A dedicated `GNUPGHOME/gpg.conf`
+therefore cannot redirect output, run helpers, or alter signing and verification
+behavior. Repository Git calls also force `core.fsmonitor=false` together with
+the existing commit-graph and multi-pack-index controls, so a repository-local
+fsmonitor hook cannot execute during publication or history validation.
+
 Source-program, descriptor-bound Git, and remote-helper Python bootstraps all
 inherit the coordinator's fixed owner-controlled copied runtime. `doctor` and
 `start` authenticate that runtime's exact executable path objects, bytes, and

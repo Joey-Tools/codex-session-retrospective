@@ -1648,6 +1648,39 @@ superseded_by:
   remain non-counting. A mistaken Darwin `--help` probe ran tests without a
   pollable terminal receipt and is also non-counting; the formal bounded Darwin
   gate separately passes 11/11 in 77.519 seconds with exit zero.
+- Signed head `54b4dca3` became stale when current-head GitHub Codex found three
+  release blockers: middle-name labels were absent from the shared personal-data
+  taxonomy, publication Git calls inherited repository FSMonitor hooks, and an
+  attacker-controlled `gpg.conf` could redirect GnuPG writes before publication
+  or verification. The shared scanner, redactor, source-overlap index, retained
+  assembly, retained reread, and report validator now recognize closed
+  middle-name field forms. Every publication Git topology call forces
+  `core.fsmonitor=false`. GnuPG listing, canary, signing, and verification now
+  use a fixed source-authenticated launcher that inserts `--no-options`, while
+  binding and revalidating both the launcher and selected real GnuPG executable.
+- The new adversarial regressions prove a malicious repository FSMonitor cannot
+  execute, malicious GnuPG configuration cannot create its redirected marker,
+  repository-local GPG program overrides cannot replace the bound launcher, and
+  middle-name values are rejected across scan, overlap, redaction, retained, and
+  report layers while ordinary status prose remains safe. One exact five-test
+  publication run ended without a recoverable terminal receipt after its parent
+  response stream disconnected and is non-counting; the same pollable argv then
+  passed 5/5 in 279.504 seconds. Focused module/skill/publication contracts pass
+  63/63, CI contracts pass 33/33, and the generated bootstrap manifest,
+  `actionlint`, Ruff 0.13.2 lint/format, shell syntax and ShellCheck, the official
+  OpenAI Skill validator, project-journal validation, and `git diff --check`
+  pass. Validation used an owner-only copied Python 3.13.12 runtime because the
+  ambient Homebrew Cellar ancestor was group-writable and therefore correctly
+  rejected by executable-authority checks.
+- The final current-tree Python 3.13 inventory contains 1,787 exact test IDs
+  from 22 authenticated source modules under manifest digest
+  `438fff1a0e4adaec52138122f0a7369e35b461af3fedbf6c0cbad672f62719cb`.
+  The sequential closed run passes every test exactly once: shard 0 passes
+  427/427 in 1,606.764 seconds, shard 1 passes 484/484 in 1,375.495 seconds,
+  shard 2 passes 467/467 in 1,330.983 seconds, and shard 3 passes 409/409 in
+  1,281.917 seconds. Every shard exits zero with an explicit `OK` terminal
+  summary. The independent Darwin security inventory passes 11/11 in 75.705
+  seconds.
 
 ## Follow-up Work
 

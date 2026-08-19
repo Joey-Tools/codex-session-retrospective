@@ -558,7 +558,7 @@ def publisher_sign_verify_canary(
             )
             with executable_authority.executable_invocation(gpg_authority):
                 signed = _run_bounded_publisher_canary_process(
-                    [
+                    gpg_status.no_options_argv(
                         gpg_authority.path,
                         "--homedir",
                         str(home),
@@ -570,14 +570,14 @@ def publisher_sign_verify_canary(
                         "--output",
                         str(signature),
                         str(payload),
-                    ],
+                    ),
                     environment=environment,
                 )
             if signed.returncode != 0 or not signature.is_file():
                 return False
             with executable_authority.executable_invocation(gpg_authority):
                 verified = _run_bounded_publisher_canary_process(
-                    [
+                    gpg_status.no_options_argv(
                         gpg_authority.path,
                         "--homedir",
                         str(home),
@@ -587,7 +587,7 @@ def publisher_sign_verify_canary(
                         "--verify",
                         str(signature),
                         str(payload),
-                    ],
+                    ),
                     environment=environment,
                 )
     except (

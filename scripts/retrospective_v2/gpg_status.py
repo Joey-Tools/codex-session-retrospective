@@ -1,11 +1,58 @@
-"""Strict parsing for GPG status records shared by publication probes."""
+"""Strict GPG invocation and status policy shared by publication probes."""
 
 from __future__ import annotations
 
+import hashlib
+import os
+from pathlib import Path
 import re
+
+from . import executable_authority
 
 
 _FINGERPRINT_RE = re.compile(r"[0-9A-F]{40}\Z")
+GPG_PROGRAM_ENV = "CODEX_SESSION_RETROSPECTIVE_GPG_PROGRAM"
+_NO_OPTIONS_LAUNCHER = (
+    b"#!/bin/sh\n"
+    b"set -eu\n"
+    b': "${CODEX_SESSION_RETROSPECTIVE_GPG_PROGRAM:?}"\n'
+    b'exec "$CODEX_SESSION_RETROSPECTIVE_GPG_PROGRAM" --no-options "$@"\n'
+)
+_NO_OPTIONS_LAUNCHER_SHA256 = hashlib.sha256(_NO_OPTIONS_LAUNCHER).hexdigest()
+_NO_OPTIONS_LAUNCHER_PATH = (
+    Path(__file__).resolve().parents[1] / "retrospective_v2_gpg_no_options"
+)
+
+
+def no_options_argv(program: str, *arguments: str) -> tuple[str, ...]:
+    """Put GPG's default-option suppression before every other argument."""
+
+    return (program, "--no-options", *arguments)
+
+
+def authority_program(
+    authority: executable_authority.ExecutableAuthority | None,
+) -> str:
+    return "/usr/bin/false" if authority is None else authority.path
+
+
+def no_options_launcher_authority() -> executable_authority.ExecutableAuthority:
+    """Authenticate the installed fixed launcher that inserts ``--no-options``."""
+
+    launcher = _NO_OPTIONS_LAUNCHER_PATH
+    authority = executable_authority.resolve_executable(
+        launcher,
+        label="GPG no-options launcher",
+    )
+    if (
+        authority.path != os.path.realpath(launcher)
+        or authority.size != len(_NO_OPTIONS_LAUNCHER)
+        or authority.sha256 != _NO_OPTIONS_LAUNCHER_SHA256
+    ):
+        raise executable_authority.ExecutableAuthorityError(
+            "GPG no-options launcher authority is invalid"
+        )
+    return authority
 
 
 def validsig_primary_fingerprints(status: bytes) -> list[str]:

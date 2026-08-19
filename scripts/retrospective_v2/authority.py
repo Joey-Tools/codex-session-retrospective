@@ -27,6 +27,7 @@ from . import (
     episode_review,
     executable_authority,
     git_safety,
+    gpg_status,
     history_graph,
     reporting,
     safe_io,
@@ -831,15 +832,26 @@ class _GitRepository:
                 "history executable authority is not trusted"
             ) from exc
         self.git = self._git_executable_authority.path
-        self.gpg = (
-            "/usr/bin/false"
-            if self._gpg_executable_authority is None
-            else self._gpg_executable_authority.path
-        )
+        self.gpg = gpg_status.authority_program(self._gpg_executable_authority)
         self.gnupg_home = gnupg_home.expanduser().absolute()
+        try:
+            self._gpg_no_options_launcher_authority = (
+                None
+                if self._gpg_executable_authority is None
+                else gpg_status.no_options_launcher_authority()
+            )
+        except executable_authority.ExecutableAuthorityError as exc:
+            raise HistoryValidationError(
+                "history GPG no-options launcher is not trusted"
+            ) from exc
+        self._git_gpg_program = gpg_status.authority_program(
+            self._gpg_no_options_launcher_authority
+        )
         self.env = git_safety.history_git_environment(
             home=str(Path.home()), gnupg_home=str(self.gnupg_home)
         )
+        if self._gpg_executable_authority is not None:
+            self.env[gpg_status.GPG_PROGRAM_ENV] = self.gpg
         self._repository_admission = git_safety.admit_history_repository(
             self.path,
             lambda args: self.run(*args, check=False),
@@ -864,9 +876,9 @@ class _GitRepository:
             "-c",
             "gpg.format=openpgp",
             "-c",
-            f"gpg.program={self.gpg}",
+            f"gpg.program={self._git_gpg_program}",
             "-c",
-            f"gpg.openpgp.program={self.gpg}",
+            f"gpg.openpgp.program={self._git_gpg_program}",
             *args,
         )
         executable_authorities = [self._git_executable_authority]
@@ -877,6 +889,12 @@ class _GitRepository:
                     "history signature verification lacks GPG authority"
                 )
             executable_authorities.append(gpg_authority)
+            launcher_authority = self._gpg_no_options_launcher_authority
+            if launcher_authority is None:
+                raise HistoryValidationError(
+                    "history signature verification lacks a GPG launcher"
+                )
+            executable_authorities.append(launcher_authority)
         try:
             with executable_authority.executable_invocation(*executable_authorities):
                 with git_safety.history_repository_git_invocation(

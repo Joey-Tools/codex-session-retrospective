@@ -8,7 +8,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 from typing import Any
-from . import authority, executable_authority, git_safety
+from . import authority, executable_authority, git_safety, gpg_status
 from .checkpoints import canonical_json_bytes
 from .identity import IdentityKey
 
@@ -448,7 +448,15 @@ class LocalGitCommitOperations:
             arguments.extend(("-c", f"gpg.format={self._signing_format}"))
             if self._signing_key is not None:
                 arguments.extend(("-c", f"user.signingkey={self._signing_key}"))
-            arguments.extend(("-c", f"gpg.program={self._signing_program}"))
+            arguments.extend(
+                (
+                    "-c",
+                    "gpg.program=" + self._gpg_no_options_launcher_authority.path,
+                    "-c",
+                    "gpg.openpgp.program="
+                    + self._gpg_no_options_launcher_authority.path,
+                )
+            )
         arguments.extend(args)
         environment = _strict_subprocess_environment(
             home=self._gnupg_home or self._repo
@@ -456,6 +464,7 @@ class LocalGitCommitOperations:
         environment.update(git_safety.local_only_git_environment())
         if signing and self._gnupg_home is not None:
             environment["GNUPGHOME"] = str(self._gnupg_home)
+            environment[gpg_status.GPG_PROGRAM_ENV] = self._signing_program
         if extra_env:
             unsupported = set(extra_env) - _HELPER_GIT_ENV_KEYS
             if unsupported:
@@ -471,7 +480,12 @@ class LocalGitCommitOperations:
         try:
             executable_authorities = [self._git_executable_authority]
             if signing:
-                executable_authorities.append(self._signing_executable_authority)
+                executable_authorities.extend(
+                    (
+                        self._signing_executable_authority,
+                        self._gpg_no_options_launcher_authority,
+                    )
+                )
             with executable_authority.executable_invocation(*executable_authorities):
                 with git_safety.repository_git_invocation(
                     getattr(self, "_git_repository_admission", None),

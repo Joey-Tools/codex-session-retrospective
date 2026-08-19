@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import stat
 import unittest
 
 
@@ -80,9 +81,15 @@ class SkillContractTests(unittest.TestCase):
             "session_retrospective_v2_export.py",
             "session_retrospective_v2_export_records.py",
             "session_retrospective_v2_transcript.py",
+            "retrospective_v2_gpg_no_options",
         ):
             with self.subTest(name=name):
                 self.assertTrue((ROOT / "scripts" / name).is_file())
+        launcher_mode = stat.S_IMODE(
+            (ROOT / "scripts" / "retrospective_v2_gpg_no_options").stat().st_mode
+        )
+        self.assertEqual(0, launcher_mode & 0o022)
+        self.assertNotEqual(0, launcher_mode & stat.S_IXUSR)
 
 
 if __name__ == "__main__":

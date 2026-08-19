@@ -39,7 +39,9 @@ from retrospective_v2 import (  # noqa: E402
     executable_authority,
     finalize as finalize_module,
     git_safety,
+    gpg_status,
     orchestrator as orchestrator_module,
+    orchestrator_support,
     publication_abort_authority,
     publication_abort_replay,
     publication_git_commits,
@@ -125,6 +127,16 @@ def run_command(
 
 
 class PublicationInvariantUnitTests(unittest.TestCase):
+    def test_gpg_no_options_launcher_is_fixed_and_executable(self) -> None:
+        launcher = gpg_status.no_options_launcher_authority()
+
+        self.assertEqual(
+            hashlib.sha256(gpg_status._NO_OPTIONS_LAUNCHER).hexdigest(),
+            launcher.sha256,
+        )
+        self.assertEqual(0, launcher.executable.mode & 0o022)
+        self.assertNotEqual(0, launcher.executable.mode & 0o100)
+
     def test_abort_replay_response_uses_lifecycle_authority(self) -> None:
         def mark_finalized(*_args, **_kwargs):
             return {
@@ -862,6 +874,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             def replace_restore_and_list(command, **kwargs):
                 nonlocal calls
                 calls += 1
+                self.assertEqual("--no-options", command[1])
                 descriptor_path = command[command.index("--homedir") + 1]
                 self.assertEqual(
                     descriptor_path,
@@ -2172,6 +2185,77 @@ class DurablePublicationTests(unittest.TestCase):
         self.assertEqual(RunStage.COMPLETE.value, completed["stage"])
         self.assertFalse((coordinator.run_dir / "raw-inputs").exists())
         self.assertIsNotNone(completed["publication"]["cleanup_receipt"])
+
+    def test_gpg_configuration_cannot_redirect_publication_or_verification(
+        self,
+    ) -> None:
+        config = self.gnupg_home / "gpg.conf"
+        marker = self.root / "gpg-default-options-marker"
+        config.write_text(f"logger-file {marker}\n", encoding="ascii")
+        try:
+            run_command(
+                [
+                    self.gpg,
+                    "--homedir",
+                    str(self.gnupg_home),
+                    "--batch",
+                    "--list-secret-keys",
+                ]
+            )
+            self.assertTrue(marker.exists())
+            marker.unlink()
+
+            publication_support.validate_publisher_keyring(
+                gnupg_home=self.gnupg_home,
+                fingerprint=self.fingerprint,
+                expected_uid=DEFAULT_PUBLISHER_UID,
+                gpg_program=self.gpg,
+            )
+            with mock.patch.object(
+                orchestrator_support,
+                "PUBLISHER_FINGERPRINT",
+                self.fingerprint,
+            ):
+                self.assertTrue(
+                    orchestrator_support.publisher_sign_verify_canary(
+                        gnupg_home=self.gnupg_home,
+                        fingerprint=self.fingerprint,
+                        gpg_program=self.gpg,
+                    )
+                )
+            coordinator, bundle = self.build_exportable_run("gpg-no-options")
+            self.publish(self.transaction(coordinator, bundle))
+            self.load_history()
+            self.assertFalse(marker.exists())
+        finally:
+            config.unlink(missing_ok=True)
+            marker.unlink(missing_ok=True)
+
+    def test_repository_fsmonitor_cannot_run_during_publication(self) -> None:
+        marker = self.root / "fsmonitor-invoked"
+        hook = self.root / "fsmonitor-hook"
+        hook.write_text(
+            "#!/bin/sh\n"
+            f"/usr/bin/touch {shlex.quote(str(marker))}\n"
+            'printf \'%s\\n\' \'{"version":2,"lastUpdateToken":"0","files":[]}\'\n',
+            encoding="ascii",
+        )
+        hook.chmod(0o700)
+        run_command(
+            ["git", "config", "--local", "core.fsmonitor", str(hook)],
+            cwd=self.repo,
+        )
+        try:
+            adapter = self.publication_adapter()
+            coordinator, bundle = self.build_exportable_run("fsmonitor-disabled")
+            self.publish(self.transaction(coordinator, bundle, adapter=adapter))
+            self.load_history()
+            self.assertFalse(marker.exists())
+        finally:
+            run_command(
+                ["git", "config", "--local", "--unset-all", "core.fsmonitor"],
+                cwd=self.repo,
+            )
 
     def test_history_verification_ignores_repo_configured_gpg_program(self) -> None:
         coordinator, bundle = self.build_exportable_run("untrusted-gpg-config")
@@ -4384,6 +4468,7 @@ class DurablePublicationTests(unittest.TestCase):
             self.assertTrue(calls)
             for argv, environment in calls:
                 self.assertIn("core.commitGraph=false", argv)
+                self.assertIn("core.fsmonitor=false", argv)
                 self.assertIn("core.multiPackIndex=false", argv)
                 self.assertIn("core.askPass=/usr/bin/false", argv)
                 self.assertIn("credential.helper=", argv)
@@ -4394,7 +4479,7 @@ class DurablePublicationTests(unittest.TestCase):
                 self.assertEqual("0", environment["GIT_TERMINAL_PROMPT"])
 
     def test_history_git_commands_override_repository_topology_caches(self) -> None:
-        for key in ("core.commitGraph", "core.multiPackIndex"):
+        for key in ("core.commitGraph", "core.fsmonitor", "core.multiPackIndex"):
             run_command(["git", "config", "--local", key, "true"], cwd=self.repo)
         try:
             repository = authority._GitRepository(
@@ -4404,14 +4489,14 @@ class DurablePublicationTests(unittest.TestCase):
                 gpg_program=self.gpg,
             )
             publisher = self.publication_adapter()
-            for key in ("core.commitGraph", "core.multiPackIndex"):
+            for key in ("core.commitGraph", "core.fsmonitor", "core.multiPackIndex"):
                 with self.subTest(reader="authority", key=key):
                     self.assertEqual("false", repository.text("config", "--bool", key))
                 with self.subTest(reader="publisher", key=key):
                     value = publisher._git(("config", "--bool", key)).stdout
                     self.assertEqual(b"false", value.strip())
         finally:
-            for key in ("core.commitGraph", "core.multiPackIndex"):
+            for key in ("core.commitGraph", "core.fsmonitor", "core.multiPackIndex"):
                 run_command(
                     ["git", "config", "--local", "--unset-all", key], cwd=self.repo
                 )

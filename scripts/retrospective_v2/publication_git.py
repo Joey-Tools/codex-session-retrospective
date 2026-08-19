@@ -7,7 +7,7 @@ import fcntl
 import os
 from pathlib import Path
 from typing import Any
-from . import executable_authority, export as retained_export, git_safety
+from . import executable_authority, export as retained_export, git_safety, gpg_status
 
 from .publication_support import (
     AppendOnlyViolation,
@@ -165,6 +165,14 @@ class LocalGitPublicationAdapter(
 
         self._validate_repo()
         self._validate_signing_identity()
+        try:
+            self._gpg_no_options_launcher_authority = (
+                gpg_status.no_options_launcher_authority()
+            )
+        except executable_authority.ExecutableAuthorityError as exc:
+            raise LocalGitPublicationError(
+                "GPG no-options launcher is not trusted"
+            ) from exc
         self._initialize_owner_only_state(
             policy_generation=policy_generation,
             key_generation=key_generation,

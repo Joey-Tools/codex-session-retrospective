@@ -41,6 +41,12 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                 import time
 
                 arguments = sys.argv[1:]
+                if arguments[:1] != ["--no-options"]:
+                    Path({str(self.gpg_sentinel)!r}).write_text(
+                        "default options were not suppressed", encoding="utf-8"
+                    )
+                    raise SystemExit(96)
+                arguments = arguments[1:]
                 phase = "sign" if "--detach-sign" in arguments else "verify"
                 mode = Path({str(self.gpg_mode)!r}).read_text(encoding="ascii").strip()
                 limit = {orchestrator_support._PUBLISHER_CANARY_STREAM_LIMIT_BYTES}
@@ -241,6 +247,7 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             orchestrator_support._run_bounded_publisher_canary_process(
                 [
                     str(self.gpg_program),
+                    "--no-options",
                     "--detach-sign",
                     "--output",
                     str(signature),
