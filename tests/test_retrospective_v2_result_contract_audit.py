@@ -11,6 +11,7 @@ import unittest
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+from retrospective_v2 import privacy_locators  # noqa: E402
 from retrospective_v2.episode_review import (  # noqa: E402
     construct_episodes,
     create_episode_revision,
@@ -850,6 +851,14 @@ class AuditedResultContractTests(unittest.TestCase):
             "Phone number: 6123 4567 before continuing.",
             "Telephone number: 6123 4567 before continuing.",
             "Tel: (612) 3456 before continuing.",
+            "Phone: 1234567890123 before continuing.",
+            'Phone: "1234567890123" before continuing.',
+            "**Phone:** 1234567890123 before continuing.",
+            "**Phone: 1234567890123**",
+            '{"phone":"1234567890123"}',
+            "phoneNumber: 1234567890123 before continuing.",
+            "**Phone no:** 1234567890123 before continuing.",
+            '{"contact_phone":"1234567890123"}',
         ):
             with self.subTest(source=source):
                 findings = scan_for_leaks({"summary": source})
@@ -867,6 +876,127 @@ class AuditedResultContractTests(unittest.TestCase):
                     validated["turns"][0]["generalized_working_text"],
                 )
                 self.assertEqual(scan_for_leaks(validated), ())
+
+    def test_audit_redacts_bare_address_ssn_and_luhn_card_values(self) -> None:
+        for source, expected in (
+            (
+                "Address: 123 Main Street",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Address: Alice Smith, 123 Main Street",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Observed: Address: 123 Main Street, City: London, "
+                "Postal Code: SW1A 1AA",
+                "Observed: [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                'Observed: Address: 123 Main Street, City: "London"',
+                "Observed: [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Observed: Address: 123 Main Street",
+                "Observed: [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                '{"address": "123 Main Street"}',
+                "{[REDACTED_PERSONAL_IDENTIFIER]}",
+            ),
+            (
+                "**Address:** 123 Main Street",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Address: 123 Main Street**",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Identifier 123-45-6789 was referenced.",
+                "Identifier [REDACTED_PERSONAL_IDENTIFIER] was referenced.",
+            ),
+            (
+                "Payment used 4111 1111 1111 1111 before continuing.",
+                "Payment used [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+            ),
+            (
+                "Payment used 4012888888881881 before continuing.",
+                "Payment used [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+            ),
+            (
+                "Payment used 4000-0000-0000-0000-006 before continuing.",
+                "Payment used [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+            ),
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(
+                    {"personal_identifier"},
+                    {
+                        finding.category
+                        for finding in scan_for_leaks({"summary": source})
+                    },
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                validated = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    expected,
+                    validated["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(validated), ())
+
+        for safe_source in (
+            "Inspect memory address: 0x1000.",
+            "The address matcher passed.",
+            "Address: 0x1000",
+            '{"address": "0x1000"}',
+            "Address: 0x1000, status: active",
+            "Address: 0x1000, 0x2000",
+            'Address: 0x1000, City: "0x2000"',
+            '{"address": "0x1000, 0x2000"}',
+            "Address: [REDACTED_PERSONAL_IDENTIFIER], status: active",
+            "Address: [REDACTED_PERSONAL_IDENTIFIER]",
+            "Identifier 000-00-0000 was referenced.",
+            "Identifier 666-45-6789 was referenced.",
+            "Identifier 900-45-6789 was referenced.",
+            "Identifier 123-00-6789 was referenced.",
+            "Identifier 123-45-0000 was referenced.",
+            "Identifier x123-45-6789 was referenced.",
+            "Identifier 123-45-6789x was referenced.",
+            "Payment used 4111 1111 1111 1112 before continuing.",
+            "Payment used 4111 1111 1111 1111 1111 before continuing.",
+            "Payment used x4111 1111 1111 1111 before continuing.",
+            "Payment used 4111 1111 1111 1111x before continuing.",
+            "Payment used 9 4111 1111 1111 1111 before continuing.",
+            "Payment used 4111 1111 1111 1111 9 before continuing.",
+            "Payment used 40000000000000000002 before continuing.",
+            "Order 1234567890123 remains a numeric identifier.",
+            "Order 12345678901234 remains a numeric identifier.",
+            "Order 123456789012345 remains a numeric identifier.",
+        ):
+            with self.subTest(safe_source=safe_source):
+                self.assertEqual((), scan_for_leaks({"summary": safe_source}))
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = safe_source
+                validated = validate_extractor_result(value, ALL_REFS)
+                self.assertEqual(
+                    safe_source,
+                    validated["turns"][0]["generalized_working_text"],
+                )
+
+        for ssn_boundary in (
+            "0123-45-6789",
+            "123-45-67890",
+            "1-123-45-6789",
+            "123-45-6789-0",
+        ):
+            with self.subTest(ssn_boundary=ssn_boundary):
+                self.assertIsNone(
+                    privacy_locators.BARE_STANDARD_SSN_RE.search(ssn_boundary)
+                )
 
     def test_audit_redacts_the_complete_labeled_personal_value(self) -> None:
         for source in (

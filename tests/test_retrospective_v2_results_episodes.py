@@ -877,7 +877,7 @@ class ResultValidationTests(unittest.TestCase):
             (
                 "credit card: 4111 1111 1111 1111",
                 "4111 1111 1111 1111 was referenced",
-                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+                "[REDACTED_PERSONAL_IDENTIFIER] was referenced",
             ),
             (
                 "bank account number: 00012345",
@@ -887,6 +887,51 @@ class ResultValidationTests(unittest.TestCase):
             (
                 "customer address: 123 Main Street",
                 "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address: 123 Main Street",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address: Alice Smith, 123 Main Street",
+                "Alice Smith, 123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address: Alice Smith, 123 Main Street",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address: Alice Smith, 123 Main Street",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address: 123 Main Street, City: London, Postal Code: SW1A 1AA",
+                "London was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address: 123 Main Street, City: London, Postal Code: SW1A 1AA",
+                "SW1A 1AA was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                'Address: 123 Main Street, City: "London"',
+                "London was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address: 123 Main Street, Apt: 4B",
+                "4B was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Address: 123 Main Street, Unit: 5",
+                "5 was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
@@ -1074,10 +1119,28 @@ class ResultValidationTests(unittest.TestCase):
                 "6123 4567 was used",
                 "[REDACTED_ORIGINAL_PROMPT] was used",
             ),
+            (
+                'Phone: "1234567890123"',
+                "1234567890123 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
+            (
+                "phoneNumber: 1234567890123",
+                "1234567890123 was used",
+                "[REDACTED_ORIGINAL_PROMPT] was used",
+            ),
         )
         for source, output, expected in cases:
             with self.subTest(source=source):
-                self.assertEqual((), scan_for_leaks({"text": output}))
+                direct_categories = {
+                    finding.category for finding in scan_for_leaks({"text": output})
+                }
+                self.assertEqual(
+                    {"personal_identifier"}
+                    if "[REDACTED_PERSONAL_IDENTIFIER]" in expected
+                    else set(),
+                    direct_categories,
+                )
                 findings = scan_for_leaks(
                     {"text": output},
                     original_prompts=(source,),
@@ -1140,6 +1203,12 @@ class ResultValidationTests(unittest.TestCase):
             "DOB: [REDACTED_PERSONAL_IDENTIFIER]]",
             r"DOB: \"[REDACTED_PERSONAL_IDENTIFIER]\"",
             "DOB: [REDACTED_PERSONAL_IDENTIFIER]" + " " * 32_768 + "!",
+            "Address: [REDACTED_PERSONAL_IDENTIFIER]",
+            "Address: 0x1000",
+            "Address: 0x1000, status: active",
+            "Address: 0x1000, 0x2000",
+            'Address: 0x1000, City: "0x2000"',
+            "Address: [REDACTED_PERSONAL_IDENTIFIER], status: active",
             "Phone number: 12345",
             "Phone number: 2026-08-18",
             "Phone number: 1234567890123456",
@@ -1153,6 +1222,22 @@ class ResultValidationTests(unittest.TestCase):
                         )
                     ),
                 )
+        self.assertEqual(
+            ("123-45-6789",),
+            tuple(
+                result_validation_module.privacy_locators.sensitive_labeled_values(
+                    "Identifier 123-45-6789 was referenced."
+                )
+            ),
+        )
+        self.assertEqual(
+            ("4111 1111 1111 1111",),
+            tuple(
+                result_validation_module.privacy_locators.sensitive_labeled_values(
+                    "Payment used 4111 1111 1111 1111 before continuing."
+                )
+            ),
+        )
         self.assertEqual(
             (),
             scan_for_leaks(

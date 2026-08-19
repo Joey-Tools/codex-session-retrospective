@@ -1525,6 +1525,43 @@ superseded_by:
   random-fixture executions all returned the exact expected
   `invalid_state/run_transition_invalid` machine result. No production or test
   expectation was weakened.
+- Signed head `5cbe2a6e` became stale when current-head GitHub Codex found three
+  retained-privacy blockers: a field-boundary bare `Address` value, an
+  unlabeled standard SSN, and an unlabeled payment-card number could bypass the
+  shared personal-data locator. The in-flight local Codex processor was
+  interrupted without accepting partial output, its independent workspace
+  postvalidated clean, and its exact task root was removed. The obsolete hosted
+  run was cancelled before further testing.
+- The shared scanner, post-redactor, source-overlap index, retained assembly,
+  retained reread, and report validator now recognize field-boundary physical
+  addresses, bounded standard SSNs, and 13-19 digit Luhn-valid payment-card
+  numbers. Address handling preserves ordinary postal commas and known
+  `City`, `Postal Code`, `Apt`, and `Unit` continuations, stops before unrelated
+  `, field:` boundaries, extracts complete and component overlap values, and
+  excludes single or multi-component `0x` memory addresses. Explicit phone
+  fields cover quoted, Markdown, JSON, camel-case, `no`, and compound contact
+  aliases while unlabeled phone candidates remain independently bounded.
+- The bounded precommit privacy audit found and closed comma truncation,
+  memory-address false positives, phone/card substring overlap, missing
+  left/right boundaries, explicit phone aliases, address continuation fields,
+  quoted component normalization, and one- or two-character apartment/unit
+  overlap. The final closure-only re-audit reports `No findings.` The final
+  affected Python 3.13 modules pass 23/23, 83/83, 71/71, and 19/19; the exact
+  engine branch inventory is 9,473 under the unchanged 9,475 ceiling.
+- The final canonical Python 3.13 inventory contains 1,783 test IDs from 22
+  authenticated source modules under manifest digest
+  `cf72ad014462d540a3788d1de50ab00bb7f502ed1299ab7e519b7a913f4a1444`.
+  Two shard tasks accidentally started against the pre-final manifest were
+  cancelled once and are explicitly non-counting. The sequential final run
+  passes every current-tree test exactly once: shard 0 passes 426/426 in
+  1,577.065 seconds (task `01a0189c-11b8-78d1-ab62-a51038a5904c`), shard 1
+  passes 481/481 in 1,225.093 seconds (task
+  `01a018b6-0b70-7703-96fc-6f6816ceb719`), shard 2 passes 467/467 in
+  1,344.018 seconds (task `01a018ca-f7ec-7763-9403-fa4bf837f005`), and shard
+  3 passes 409/409 in 1,224.751 seconds (task
+  `01a018e0-08f3-7f72-b36f-6b830fa22f39`). Every task exits zero with an
+  explicit `OK` terminal summary. The independent Darwin security inventory
+  passes 10/10 in 65.332 seconds.
 
 ## Follow-up Work
 

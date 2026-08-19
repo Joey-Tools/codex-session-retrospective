@@ -46,19 +46,40 @@ INTERNATIONAL_PHONE_RE = re.compile(
     re.ASCII,
 )
 PHONE_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])[0-9(][0-9() .-]{8,40}[0-9]"
-    r"(?![A-Za-z0-9_-])",
+    r"(?<![A-Za-z0-9_-])(?<![0-9][() .-])"
+    r"[0-9(][0-9() .-]{8,40}[0-9]"
+    r"(?![A-Za-z0-9_-])(?![() .-][0-9])",
     re.ASCII,
 )
+_PHONE_FIELD_PATTERN_TEXT = (
+    r"\b(?:(?:call|phone|tel|telephone|mobile)"
+    r"(?:[ _-]?(?:number|no))?|contact(?:[ _-]?(?:phone|number|no))?)"
+)
+_SHORT_PHONE_VALUE_PATTERN_TEXT = (
+    r"(?![0-9]{4}-[0-9]{2}-[0-9]{2}(?![0-9]))"
+    r"[0-9(][0-9() .-]{5,40}[0-9](?![A-Za-z0-9_-])"
+)
 CONTEXTUAL_SHORT_PHONE_RE = re.compile(
-    r"\b(?:call|phone|tel|telephone|mobile|contact)"
-    r"(?:[ _-]+number)?"
-    r"(?:[ \t]*:[ \t]*|[ \t]+)"
-    r"(?P<phone>(?![0-9]{4}-[0-9]{2}-[0-9]{2}(?![0-9]))"
-    r"[0-9(][0-9() .-]{5,40}[0-9](?![A-Za-z0-9_-]))",
+    _PHONE_FIELD_PATTERN_TEXT
+    + r"[ \t]+(?P<phone>"
+    + _SHORT_PHONE_VALUE_PATTERN_TEXT
+    + r")",
     re.ASCII | re.IGNORECASE,
 )
-PHONE_PATTERNS = (INTERNATIONAL_PHONE_RE, PHONE_RE, CONTEXTUAL_SHORT_PHONE_RE)
+BARE_STANDARD_SSN_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?<![0-9]-)(?P<personal>"
+    r"(?!(?:000|666|9[0-9]{2})-[0-9]{2}-[0-9]{4})"
+    r"(?![0-9]{3}-00-[0-9]{4})(?![0-9]{3}-[0-9]{2}-0000)"
+    r"[0-9]{3}-[0-9]{2}-[0-9]{4})(?![A-Za-z0-9])(?!-[0-9])",
+    re.ASCII,
+)
+BARE_PAYMENT_CARD_RE = re.compile(
+    r"(?<![A-Za-z0-9])(?<![0-9][ -])"
+    r"(?P<personal>[0-9](?:[ -]?[0-9]){12,18})"
+    r"(?![A-Za-z0-9])(?![ -][0-9])",
+    re.ASCII,
+)
+_LUHN_DOUBLED_DIGITS = (0, 2, 4, 6, 8, 1, 3, 5, 7, 9)
 _PERSONAL_SUBJECT_PATTERN_TEXT = (
     r"(?:account|client|customer|employee|organization|person|tenant|user)"
 )
@@ -151,6 +172,42 @@ def _labeled_field_assignment_pattern(
     )
 
 
+LABELED_PHONE_VALUE_RE = re.compile(
+    _labeled_field_assignment_pattern(
+        _PHONE_FIELD_PATTERN_TEXT,
+        markdown_group="phone_markdown",
+    )
+    + r"[ \t]*(?P<phone_quote>['\"]?)(?P<phone>"
+    + _SHORT_PHONE_VALUE_PATTERN_TEXT
+    + r")(?P=phone_quote)",
+    re.ASCII | re.IGNORECASE,
+)
+MARKDOWN_COMPLETE_PHONE_VALUE_RE = re.compile(
+    r"(?P<phone_complete_markdown>\*\*|__)[ \t]*"
+    + _PHONE_FIELD_PATTERN_TEXT.removeprefix(r"\b")
+    + r"[ \t]*(?:=|:)[ \t]*"
+    r"(?P<phone_complete_quote>['\"]?)(?P<phone>"
+    + _SHORT_PHONE_VALUE_PATTERN_TEXT
+    + r")(?P=phone_complete_quote)[ \t]*(?P=phone_complete_markdown)",
+    re.ASCII | re.IGNORECASE,
+)
+CONTEXTUAL_PHONE_PATTERNS = (
+    CONTEXTUAL_SHORT_PHONE_RE,
+    LABELED_PHONE_VALUE_RE,
+    MARKDOWN_COMPLETE_PHONE_VALUE_RE,
+)
+PHONE_PATTERNS = (
+    INTERNATIONAL_PHONE_RE,
+    PHONE_RE,
+    *CONTEXTUAL_PHONE_PATTERNS,
+)
+PHONE_DIGIT_COUNT_BOUNDS = {
+    INTERNATIONAL_PHONE_RE: (7, 15),
+    PHONE_RE: (10, 12),
+    **dict.fromkeys(CONTEXTUAL_PHONE_PATTERNS, (7, 15)),
+}
+
+
 _REDACTED_VALUE_NAME_PATTERN_TEXT = (
     r"(?:REDACTED_CODE|REDACTED_CREDENTIAL|REDACTED_EMAIL|"
     r"REDACTED_IDENTIFIER|REDACTED_INTERNAL_ADDRESS|REDACTED_INTERNAL_HOST|"
@@ -172,6 +229,33 @@ _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT = (
     + _REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT
     + r"[^\r\n,}]*+|[^\r\n,}\]]++)))"
 )
+_ADDRESS_COMPONENT_FIELD_PATTERN_TEXT = (
+    r"(?:apt|apartment|unit|suite|city|state|province|region|county|country|"
+    r"address[_ -]+line[_ -]*[2-9]|post(?:al)?[_ -]+code|postcode|"
+    r"zip(?:[_ -]+code)?)\b"
+)
+_ADDRESS_UNQUOTED_VALUE_UNIT_PATTERN_TEXT = (
+    r"(?!,[ \t]*['\"]?(?!"
+    + _ADDRESS_COMPONENT_FIELD_PATTERN_TEXT
+    + r"['\"]?[ \t]*(?:=|:))[A-Za-z_][A-Za-z0-9_ -]{0,63}['\"]?"
+    r"[ \t]*(?:=|:))[^\r\n}\]]"
+)
+_ADDRESS_VALUE_CAPTURE_PATTERN_TEXT = (
+    r"[ \t]*(?:"
+    r'\\"(?P<escaped_double_quoted_value>[^\r\n]*?)\\"'
+    r"(?P<escaped_double_trailing_value>[^\r\n,}\]]*+)|"
+    r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])++)"'
+    r"(?P<double_trailing_value>[^\r\n,}\]]*+)|"
+    r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])++)'"
+    r"(?P<single_trailing_value>[^\r\n,}\]]*+)|"
+    r"(?P<value>(?:"
+    + _REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT
+    + r"(?:"
+    + _ADDRESS_UNQUOTED_VALUE_UNIT_PATTERN_TEXT
+    + r")*+|(?:"
+    + _ADDRESS_UNQUOTED_VALUE_UNIT_PATTERN_TEXT
+    + r")++)))"
+)
 LABELED_PERSONAL_VALUE_RE = re.compile(
     _labeled_field_assignment_pattern(
         _LABELED_PERSONAL_FIELD_PATTERN_TEXT,
@@ -184,6 +268,7 @@ LABELED_PERSONAL_ID_RE = LABELED_PERSONAL_VALUE_RE
 _BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
     r"\b(?:(?:first|full|last)[_ -]+name|(?-i:(?:first|full|last)Name))"
 )
+_BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT = r"\baddress"
 BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?:(?:\A|(?<=[\r\n]))[ \t]*(?:[-*+>][ \t]+)?|"
     r"(?<=[.!?;:,([{'\"])[ \t]*)"
@@ -196,6 +281,18 @@ BARE_LABELED_NAME_VALUE_RE = re.compile(
     + r")",
     re.ASCII | re.IGNORECASE,
 )
+BARE_LABELED_ADDRESS_VALUE_RE = re.compile(
+    r"(?:(?:\A|(?<=[\r\n]))[ \t]*(?:[-*+>][ \t]+)?|"
+    r"(?<=[.!?;:,([{'\"])[ \t]*)"
+    r"(?P<personal>"
+    + _labeled_field_assignment_pattern(
+        _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT,
+        markdown_group="bare_address_markdown",
+    )
+    + _ADDRESS_VALUE_CAPTURE_PATTERN_TEXT
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
 MARKDOWN_BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?P<personal>"
     + _markdown_labeled_field_assignment_pattern(
@@ -203,6 +300,16 @@ MARKDOWN_BARE_LABELED_NAME_VALUE_RE = re.compile(
         markdown_group="markdown_bare_name_markdown",
     )
     + _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
+MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE = re.compile(
+    r"(?P<personal>"
+    + _markdown_labeled_field_assignment_pattern(
+        _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT,
+        markdown_group="markdown_bare_address_markdown",
+    )
+    + _ADDRESS_VALUE_CAPTURE_PATTERN_TEXT
     + r")",
     re.ASCII | re.IGNORECASE,
 )
@@ -224,21 +331,49 @@ MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE = re.compile(
     + r")",
     re.ASCII | re.IGNORECASE,
 )
+MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE = re.compile(
+    r"(?P<personal>"
+    + _markdown_complete_labeled_value_pattern(
+        _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT,
+        markdown_group="complete_bare_address_markdown",
+    )
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
 _CANONICAL_REDACTED_VALUE_RE = re.compile(r"\A" + _REDACTED_VALUE_PATTERN_TEXT + r"\Z")
 _REDACTED_PLACEHOLDER_SHAPE_RE = re.compile(_REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT)
+_ADDRESS_LABELED_VALUE_PATTERNS = (
+    BARE_LABELED_ADDRESS_VALUE_RE,
+    MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE,
+    MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE,
+)
 PERSONAL_LABELED_VALUE_PATTERNS = (
     LABELED_PERSONAL_VALUE_RE,
     BARE_LABELED_NAME_VALUE_RE,
+    BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE,
     MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE,
+)
+_NON_ADDRESS_PERSONAL_LABELED_VALUE_PATTERNS = tuple(
+    filter(
+        lambda pattern: pattern not in _ADDRESS_LABELED_VALUE_PATTERNS,
+        PERSONAL_LABELED_VALUE_PATTERNS,
+    )
 )
 PERSONAL_IDENTIFIER_GROUPS = {
-    CONTEXTUAL_SHORT_PHONE_RE: "phone",
+    **dict.fromkeys(CONTEXTUAL_PHONE_PATTERNS, "phone"),
+    BARE_STANDARD_SSN_RE: "personal",
+    BARE_PAYMENT_CARD_RE: "personal",
     BARE_LABELED_NAME_VALUE_RE: "personal",
+    BARE_LABELED_ADDRESS_VALUE_RE: "personal",
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE: "personal",
+    MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE: "personal",
+    MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
 }
 LABELED_INTERNAL_HOST_RE = re.compile(
     r"\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
@@ -807,6 +942,14 @@ _PERSONAL_NARRATIVE_SUFFIX_RE = re.compile(
     r"[ \t]++(?:after|before|during|until|when|while)\b[^\r\n]*+\Z",
     re.IGNORECASE,
 )
+_MEMORY_ADDRESS_VALUE_RE = re.compile(r"\A0x[0-9a-f]+\Z", re.ASCII | re.IGNORECASE)
+_ADDRESS_COMPONENT_SEPARATOR_RE = re.compile(r"[ \t]*,[ \t]*")
+_ADDRESS_COMPONENT_ASSIGNMENT_RE = re.compile(
+    r"\A[ \t]*['\"]?"
+    + _ADDRESS_COMPONENT_FIELD_PATTERN_TEXT
+    + r"['\"]?[ \t]*(?:=|:)[ \t]*(?P<value>.+)\Z",
+    re.ASCII | re.IGNORECASE,
+)
 
 
 def _personal_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
@@ -827,8 +970,48 @@ def _personal_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
     )
 
 
+def _address_component_values(match: re.Match[str]) -> tuple[str, ...]:
+    values = _personal_sensitive_overlap_values(match)
+    return tuple(
+        filter(
+            None,
+            chain.from_iterable(map(_ADDRESS_COMPONENT_SEPARATOR_RE.split, values)),
+        )
+    )
+
+
+def _normalized_address_component_value(value: str) -> str:
+    return _normalized_personal_sensitive_value(
+        _ADDRESS_COMPONENT_ASSIGNMENT_RE.sub(r"\g<value>", value)
+    )
+
+
+def _address_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
+    values = _personal_sensitive_overlap_values(match)
+    components = _address_component_values(match)
+    normalized_components = tuple(map(_normalized_address_component_value, components))
+    return values + components + normalized_components
+
+
 def _personal_match_contains_sensitive_value(match: re.Match[str]) -> bool:
     return any(_personal_sensitive_overlap_values(match))
+
+
+def _address_match_contains_sensitive_value(match: re.Match[str]) -> bool:
+    components = tuple(
+        map(_normalized_address_component_value, _address_component_values(match))
+    )
+    memory_addresses = all(map(_MEMORY_ADDRESS_VALUE_RE.fullmatch, components))
+    return (bool(components), memory_addresses) == (True, False)
+
+
+def _payment_card_match_is_valid(match: re.Match[str]) -> bool:
+    digits = tuple(map(int, filter(str.isdigit, match.group("personal"))))
+    parity = len(digits) % 2
+    checksum = sum(map(_LUHN_DOUBLED_DIGITS.__getitem__, digits[parity::2])) + sum(
+        digits[1 - parity :: 2]
+    )
+    return (checksum % 10, len(set(digits)) > 1) == (0, True)
 
 
 def _retain_every_match(_match: re.Match[str]) -> bool:
@@ -836,9 +1019,25 @@ def _retain_every_match(_match: re.Match[str]) -> bool:
 
 
 _PERSONAL_MATCH_FILTERS = {
-    pattern: _personal_match_contains_sensitive_value
-    for pattern in PERSONAL_LABELED_VALUE_PATTERNS
+    **dict.fromkeys(
+        PERSONAL_LABELED_VALUE_PATTERNS,
+        _personal_match_contains_sensitive_value,
+    ),
+    **dict.fromkeys(
+        _ADDRESS_LABELED_VALUE_PATTERNS,
+        _address_match_contains_sensitive_value,
+    ),
+    BARE_PAYMENT_CARD_RE: _payment_card_match_is_valid,
 }
+
+
+def _filtered_personal_matches(
+    pattern: re.Pattern[str], value: str
+) -> Iterator[re.Match[str]]:
+    return filter(
+        _PERSONAL_MATCH_FILTERS.get(pattern, _retain_every_match),
+        pattern.finditer(value),
+    )
 
 
 def _normalized_contextual_phone_value(match: re.Match[str]) -> str:
@@ -850,33 +1049,64 @@ def _normalized_sensitive_overlap_value(value: str) -> str:
 
 
 def sensitive_labeled_values(value: str) -> Iterator[str]:
-    """Yield closed-taxonomy field values that need standalone overlap checks."""
+    """Yield closed-taxonomy field and bare-number values for overlap checks."""
 
     credential_values = map(
         _normalized_generic_sensitive_labeled_value,
         _CREDENTIAL_LABELED_VALUE_RE.finditer(value),
     )
     personal_matches = chain.from_iterable(
-        map(lambda pattern: pattern.finditer(value), PERSONAL_LABELED_VALUE_PATTERNS)
+        map(
+            lambda pattern: _filtered_personal_matches(pattern, value),
+            _NON_ADDRESS_PERSONAL_LABELED_VALUE_PATTERNS,
+        )
     )
     personal_values = chain.from_iterable(
         map(_personal_sensitive_overlap_values, personal_matches)
+    )
+    address_matches = chain.from_iterable(
+        map(
+            lambda pattern: _filtered_personal_matches(pattern, value),
+            _ADDRESS_LABELED_VALUE_PATTERNS,
+        )
+    )
+    address_values = chain.from_iterable(
+        map(_address_sensitive_overlap_values, address_matches)
     )
     contextual_phone_values = filter(
         lambda candidate: 7 <= sum(map(str.isdigit, candidate)) <= 15,
         map(
             _normalized_contextual_phone_value,
-            CONTEXTUAL_SHORT_PHONE_RE.finditer(value),
+            chain.from_iterable(
+                map(
+                    lambda pattern: pattern.finditer(value),
+                    CONTEXTUAL_PHONE_PATTERNS,
+                )
+            ),
+        ),
+    )
+    bare_sensitive_number_values = map(
+        lambda match: match.group("personal"),
+        chain(
+            BARE_STANDARD_SSN_RE.finditer(value),
+            _filtered_personal_matches(BARE_PAYMENT_CARD_RE, value),
         ),
     )
     normalized = chain(
         credential_values,
         personal_values,
         contextual_phone_values,
+        bare_sensitive_number_values,
     )
-    return filter(
-        lambda candidate: len(_normalized_sensitive_overlap_value(candidate)) >= 3,
-        normalized,
+    return chain(
+        filter(
+            lambda candidate: len(_normalized_sensitive_overlap_value(candidate)) >= 3,
+            normalized,
+        ),
+        filter(
+            lambda candidate: bool(_normalized_sensitive_overlap_value(candidate)),
+            address_values,
+        ),
     )
 
 
@@ -922,9 +1152,9 @@ def expand_sensitive_labeled_values(
     short_values = filter(
         lambda item: (
             item[1],
-            len(_normalized_sensitive_overlap_value(item[0])),
+            len(_normalized_sensitive_overlap_value(item[0])) in (1, 2, 3),
         )
-        == (True, 3),
+        == (True, True),
         tagged,
     )
     normalized_short_values = map(
@@ -940,22 +1170,21 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
     candidates: list[tuple[int, int]] = []
     for pattern in (
         EMAIL_RE,
-        INTERNATIONAL_PHONE_RE,
-        PHONE_RE,
-        CONTEXTUAL_SHORT_PHONE_RE,
+        *PHONE_PATTERNS,
+        BARE_STANDARD_SSN_RE,
+        BARE_PAYMENT_CARD_RE,
         *PERSONAL_LABELED_VALUE_PATTERNS,
     ):
-        for match in filter(
-            _PERSONAL_MATCH_FILTERS.get(pattern, _retain_every_match),
-            pattern.finditer(value),
-        ):
+        for match in _filtered_personal_matches(pattern, value):
             group = PERSONAL_IDENTIFIER_GROUPS.get(pattern, 0)
             if pattern in PHONE_PATTERNS:
                 digit_count = sum(
                     character.isdigit() for character in match.group(group)
                 )
-                minimum_digit_count = 10 if pattern is PHONE_RE else 7
-                if not minimum_digit_count <= digit_count <= 15:
+                minimum_digit_count, maximum_digit_count = PHONE_DIGIT_COUNT_BOUNDS[
+                    pattern
+                ]
+                if not minimum_digit_count <= digit_count <= maximum_digit_count:
                     continue
             candidates.append((match.start(group), match.end(group)))
     candidates.sort(key=lambda span: (span[0], span[1]))
