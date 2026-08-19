@@ -14,7 +14,7 @@ import stat
 import sys
 import tempfile
 import time
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence, cast
 
 try:
     from .contracts import (
@@ -75,6 +75,14 @@ class InvalidJsonError(ValueError):
 
 PathSecurityError = UnsafePathError
 BoundedReadError = ReadLimitExceeded
+
+
+@dataclass(frozen=True, slots=True)
+class BoundedFileObservation:
+    byte_count: int
+    payload: bytes | None
+    payload_digest: str
+    payload_digest_exact: bool
 
 
 @dataclass(slots=True)
@@ -2399,6 +2407,25 @@ def _bounded_read_identity(st: os.stat_result) -> tuple[int, ...]:
     )
 
 
+def _bounded_read_access_policy(st: os.stat_result) -> tuple[int, ...]:
+    return (
+        int(st.st_uid),
+        int(st.st_gid),
+        int(stat.S_IMODE(st.st_mode)),
+        int(st.st_nlink),
+    )
+
+
+def _bounded_read_protected_stat_properties(
+    st: os.stat_result,
+) -> tuple[tuple[int, ...], int, tuple[int, ...]]:
+    return (
+        _bounded_read_identity(st),
+        int(st.st_size),
+        _bounded_read_access_policy(st),
+    )
+
+
 def _validate_bounded_read_policy(
     st: os.stat_result,
     display_path: Path,
@@ -2409,6 +2436,67 @@ def _validate_bounded_read_policy(
         _validate_file_stat(st, display_path)
     elif not stat.S_ISREG(st.st_mode):
         raise UnsafePathError(f"expected a regular file: {display_path}")
+
+
+def _bounded_read_acl_policy(
+    descriptor: int,
+    display_path: Path,
+    *,
+    require_owner_only: bool,
+) -> bytes:
+    if require_owner_only:
+        _validate_owner_only_acl(descriptor, display_path)
+    return descriptor_acl_policy_bytes(descriptor)
+
+
+def _revalidate_bounded_file_at(
+    descriptor: int,
+    directory_fd: int,
+    name: str,
+    *,
+    display_path: Path,
+    expected: os.stat_result,
+    expected_acl_policy: bytes,
+    require_owner_only: bool,
+) -> None:
+    """Revalidate identity, size, stat policy, and descriptor ACL policy."""
+
+    observed = os.fstat(descriptor)
+    _validate_bounded_read_policy(
+        observed,
+        display_path,
+        require_owner_only=require_owner_only,
+    )
+    observed_acl_policy = _bounded_read_acl_policy(
+        descriptor,
+        display_path,
+        require_owner_only=require_owner_only,
+    )
+    try:
+        named = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    except FileNotFoundError as exc:
+        raise UnsafePathError(
+            f"file identity changed while observing: {display_path}"
+        ) from exc
+    _validate_bounded_read_policy(
+        named,
+        display_path,
+        require_owner_only=require_owner_only,
+    )
+    expected_stat_properties = _bounded_read_protected_stat_properties(expected)
+    if (
+        expected_stat_properties,
+        expected_stat_properties,
+        expected_acl_policy,
+    ) != (
+        _bounded_read_protected_stat_properties(observed),
+        _bounded_read_protected_stat_properties(named),
+        observed_acl_policy,
+    ):
+        raise UnsafePathError(
+            "file identity, size, or access policy changed while reading: "
+            f"{display_path}"
+        )
 
 
 def _read_bounded_descriptor_pass(
@@ -2434,17 +2522,63 @@ def _read_bounded_descriptor_pass(
     return total, digest.digest()
 
 
+def _discard_bounded_chunk(_chunk: bytes) -> None:
+    return None
+
+
+def _validate_bounded_read_limit(value: int, *, label: str) -> None:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+
+
+def _close_bounded_read_descriptor(descriptor: int, *, label: str) -> None:
+    primary = sys.exception()
+    try:
+        os.close(descriptor)
+    except OSError as error:
+        if primary is not None:
+            primary.add_note(f"{label}: {type(error).__name__}")
+        else:
+            raise
+
+
+def _raise_bounded_read_limit(
+    byte_count: int,
+    max_bytes: int,
+    display_path: Path,
+) -> BoundedFileObservation:
+    raise ReadLimitExceeded(
+        f"file exceeds byte limit ({byte_count} > {max_bytes}): {display_path}"
+    )
+
+
+def _nonexact_bounded_file_observation(
+    byte_count: int,
+    _max_bytes: int,
+    _display_path: Path,
+) -> BoundedFileObservation:
+    return BoundedFileObservation(
+        byte_count=byte_count,
+        payload=None,
+        payload_digest=secrets.token_hex(32),
+        payload_digest_exact=False,
+    )
+
+
 def _read_verified_bounded_file_at(
     directory_fd: int,
     name: str,
     *,
     display_path: Path,
-    max_bytes: int,
+    max_payload_bytes: int,
+    max_digest_bytes: int,
     require_owner_only: bool = True,
-    consume: Callable[[bytes], None],
-) -> bytes:
-    if not isinstance(max_bytes, int) or isinstance(max_bytes, bool) or max_bytes < 0:
-        raise ValueError("max_bytes must be a non-negative integer")
+    on_oversize: Callable[[int, int, Path], BoundedFileObservation],
+) -> BoundedFileObservation:
+    _validate_bounded_read_limit(max_payload_bytes, label="max_payload_bytes")
+    _validate_bounded_read_limit(max_digest_bytes, label="max_digest_bytes")
+    if max_payload_bytes > max_digest_bytes:
+        raise ValueError("max_payload_bytes must not exceed max_digest_bytes")
     descriptor = open_checked_file_at(
         directory_fd,
         name,
@@ -2458,79 +2592,85 @@ def _read_verified_bounded_file_at(
             display_path,
             require_owner_only=require_owner_only,
         )
-        if require_owner_only:
-            _validate_owner_only_acl(descriptor, display_path)
-        if before.st_size > max_bytes:
-            raise ReadLimitExceeded(
-                "file exceeds byte limit "
-                f"({before.st_size} > {max_bytes}): {display_path}"
-            )
-        total, first_digest = _read_bounded_descriptor_pass(
+        before_acl_policy = _bounded_read_acl_policy(
             descriptor,
-            max_bytes=max_bytes,
-            display_path=display_path,
-            consume=consume,
-        )
-        after_first_read = os.fstat(descriptor)
-        _validate_bounded_read_policy(
-            after_first_read,
             display_path,
             require_owner_only=require_owner_only,
         )
-        if require_owner_only:
-            _validate_owner_only_acl(descriptor, display_path)
-        if (
-            _bounded_read_identity(before) != _bounded_read_identity(after_first_read)
-            or total != before.st_size
-            or after_first_read.st_size != before.st_size
-        ):
+        if before.st_size > max_digest_bytes:
+            _revalidate_bounded_file_at(
+                descriptor,
+                directory_fd,
+                name,
+                display_path=display_path,
+                expected=before,
+                expected_acl_policy=before_acl_policy,
+                require_owner_only=require_owner_only,
+            )
+            return on_oversize(
+                int(before.st_size),
+                max_digest_bytes,
+                display_path,
+            )
+        retain_payload = before.st_size <= max_payload_bytes
+        chunks: list[bytes] = []
+        consume = _discard_bounded_chunk
+        if retain_payload:
+            consume = chunks.append
+        total, first_digest = _read_bounded_descriptor_pass(
+            descriptor,
+            max_bytes=max_digest_bytes,
+            display_path=display_path,
+            consume=consume,
+        )
+        _revalidate_bounded_file_at(
+            descriptor,
+            directory_fd,
+            name,
+            display_path=display_path,
+            expected=before,
+            expected_acl_policy=before_acl_policy,
+            require_owner_only=require_owner_only,
+        )
+        if total != before.st_size:
             raise UnsafePathError(f"file changed while reading: {display_path}")
 
         os.lseek(descriptor, 0, os.SEEK_SET)
         verified_total, verification_digest = _read_bounded_descriptor_pass(
             descriptor,
-            max_bytes=max_bytes,
+            max_bytes=max_digest_bytes,
             display_path=display_path,
             consume=lambda _chunk: None,
         )
-        after_verification = os.fstat(descriptor)
-        _validate_bounded_read_policy(
-            after_verification,
-            display_path,
+        _revalidate_bounded_file_at(
+            descriptor,
+            directory_fd,
+            name,
+            display_path=display_path,
+            expected=before,
+            expected_acl_policy=before_acl_policy,
             require_owner_only=require_owner_only,
         )
-        if require_owner_only:
-            _validate_owner_only_acl(descriptor, display_path)
-        try:
-            path_after_verification = os.stat(
-                name,
-                dir_fd=directory_fd,
-                follow_symlinks=False,
-            )
-        except FileNotFoundError as exc:
-            raise UnsafePathError(
-                f"file identity changed while reading: {display_path}"
-            ) from exc
-        _validate_bounded_read_policy(
-            path_after_verification,
-            display_path,
-            require_owner_only=require_owner_only,
+        content_digest_matches = hmac.compare_digest(
+            first_digest,
+            verification_digest,
         )
-        if require_owner_only:
-            _validate_owner_only_acl(descriptor, display_path)
-        if (
-            _bounded_read_identity(before) != _bounded_read_identity(after_verification)
-            or _bounded_read_identity(before)
-            != _bounded_read_identity(path_after_verification)
-            or verified_total != before.st_size
-            or after_verification.st_size != before.st_size
-            or path_after_verification.st_size != before.st_size
-            or not hmac.compare_digest(first_digest, verification_digest)
-        ):
+        if (verified_total, content_digest_matches) != (before.st_size, True):
             raise UnsafePathError(f"file content changed while reading: {display_path}")
-        return first_digest
+        payload = None
+        if retain_payload:
+            payload = b"".join(chunks)
+        return BoundedFileObservation(
+            byte_count=total,
+            payload=payload,
+            payload_digest=first_digest.hex(),
+            payload_digest_exact=True,
+        )
     finally:
-        os.close(descriptor)
+        _close_bounded_read_descriptor(
+            descriptor,
+            label="bounded-read file descriptor close failed",
+        )
 
 
 def read_bounded_bytes_at(
@@ -2541,16 +2681,16 @@ def read_bounded_bytes_at(
     max_bytes: int,
     require_owner_only: bool = True,
 ) -> bytes:
-    chunks: list[bytes] = []
-    _read_verified_bounded_file_at(
+    observation = _read_verified_bounded_file_at(
         directory_fd,
         name,
         display_path=display_path,
-        max_bytes=max_bytes,
+        max_payload_bytes=max_bytes,
+        max_digest_bytes=max_bytes,
         require_owner_only=require_owner_only,
-        consume=chunks.append,
+        on_oversize=_raise_bounded_read_limit,
     )
-    return b"".join(chunks)
+    return cast(bytes, observation.payload)
 
 
 def read_bounded_bytes(
@@ -2569,7 +2709,36 @@ def read_bounded_bytes(
             require_owner_only=require_owner_only,
         )
     finally:
-        os.close(directory_fd)
+        _close_bounded_read_descriptor(
+            directory_fd,
+            label="bounded-read parent descriptor close failed",
+        )
+
+
+def _observe_file_bounded(
+    path: str | os.PathLike[str],
+    *,
+    max_payload_bytes: int,
+    max_digest_bytes: int,
+    require_owner_only: bool,
+    on_oversize: Callable[[int, int, Path], BoundedFileObservation],
+) -> BoundedFileObservation:
+    normalized, directory_fd = _open_parent_directory(path, create_parents=False)
+    try:
+        return _read_verified_bounded_file_at(
+            directory_fd,
+            normalized.name,
+            display_path=normalized,
+            max_payload_bytes=max_payload_bytes,
+            max_digest_bytes=max_digest_bytes,
+            require_owner_only=require_owner_only,
+            on_oversize=on_oversize,
+        )
+    finally:
+        _close_bounded_read_descriptor(
+            directory_fd,
+            label="bounded-read parent descriptor close failed",
+        )
 
 
 def hash_file_bounded(
@@ -2580,19 +2749,35 @@ def hash_file_bounded(
 ) -> str:
     """Stream and authenticate one complete file under an exact I/O ceiling."""
 
-    normalized, directory_fd = _open_parent_directory(path, create_parents=False)
-    try:
-        digest = _read_verified_bounded_file_at(
-            directory_fd,
-            normalized.name,
-            display_path=normalized,
-            max_bytes=max_bytes,
-            require_owner_only=require_owner_only,
-            consume=lambda _chunk: None,
-        )
-        return digest.hex()
-    finally:
-        os.close(directory_fd)
+    return _observe_file_bounded(
+        path,
+        max_payload_bytes=0,
+        max_digest_bytes=max_bytes,
+        require_owner_only=require_owner_only,
+        on_oversize=_raise_bounded_read_limit,
+    ).payload_digest
+
+
+def observe_file_bounded(
+    path: str | os.PathLike[str],
+    *,
+    max_payload_bytes: int,
+    max_digest_bytes: int,
+    require_owner_only: bool = True,
+) -> BoundedFileObservation:
+    """Observe identity, size, stat policy, descriptor ACL, and bounded content.
+
+    Timestamp-only changes are not mutation evidence. Named-path evidence comes
+    only from ``stat``; ACL evidence remains bound to the opened descriptor.
+    """
+
+    return _observe_file_bounded(
+        path,
+        max_payload_bytes=max_payload_bytes,
+        max_digest_bytes=max_digest_bytes,
+        require_owner_only=require_owner_only,
+        on_oversize=_nonexact_bounded_file_observation,
+    )
 
 
 def decode_json_bytes(data: bytes, *, label: str) -> Any:

@@ -62,7 +62,15 @@ PHONE_PATTERNS = (INTERNATIONAL_PHONE_RE, PHONE_RE, CONTEXTUAL_SHORT_PHONE_RE)
 _PERSONAL_SUBJECT_PATTERN_TEXT = (
     r"(?:account|client|customer|employee|organization|person|tenant|user)"
 )
+_PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT = (
+    r"(?:account|Account|client|Client|customer|Customer|employee|Employee|"
+    r"organization|Organization|person|Person|tenant|Tenant|user|User)"
+)
 _PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
+_PERSONAL_NAME_OR_ID_FIELD_PATTERN_TEXT = r"(?:id|(?:(?:first|full|last)[_ -]+)?name)"
+_PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
+    r"(?:dob|date[_ -]+of[_ -]+birth|(?-i:(?:dateOfBirth|DateOfBirth)))"
+)
 _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"
     r"national[_ -]?(?:insurance|identity)(?:[_ -]?(?:number|no|id))?|"
@@ -83,21 +91,93 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + _PERSONAL_SUBJECT_PATTERN_TEXT
     + _PERSONAL_POSSESSIVE_PATTERN_TEXT
     + r"[_ -]?"
-    r"(?:id|(?:(?:first|full|last)[_ -]+)?name)|"
-    r"(?-i:(?:account|client|customer|employee|organization|person|tenant|user)"
-    r"(?:Id|Name|(?:First|Full|Last)Name))|"
+    r"(?:"
+    + _PERSONAL_NAME_OR_ID_FIELD_PATTERN_TEXT
+    + r"|address|"
+    + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
+    + r")|"
+    r"(?-i:"
+    + _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT
+    + r"(?:Id|Name|(?:First|Full|Last)Name|Address|DOB|Dob|DateOfBirth))|"
     r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
     r"shipping|tenant|user)[_ -]?address|"
+    + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
+    + r"|"
     + _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT
     + r")"
 )
+
+
+def _markdown_labeled_field_assignment_pattern(
+    field_pattern: str, *, markdown_group: str
+) -> str:
+    markdown_field_pattern = field_pattern.removeprefix(r"\b")
+    markdown_reference = rf"(?P={markdown_group})"
+    return (
+        rf"(?P<{markdown_group}>\*\*|__)[ \t]*"
+        + markdown_field_pattern
+        + r"(?:[ \t]*(?:=|:)[ \t]*"
+        + markdown_reference
+        + r"|[ \t]*"
+        + markdown_reference
+        + r"[ \t]*(?:=|:))"
+    )
+
+
+def _markdown_complete_labeled_value_pattern(
+    field_pattern: str, *, markdown_group: str
+) -> str:
+    markdown_field_pattern = field_pattern.removeprefix(r"\b")
+    return (
+        rf"(?P<{markdown_group}>\*\*|__)[ \t]*"
+        + markdown_field_pattern
+        + r"[ \t]*(?:=|:)[ \t]*(?P<value>[^\r\n]*?)[ \t]*"
+        + rf"(?P={markdown_group})"
+    )
+
+
+def _labeled_field_assignment_pattern(
+    field_pattern: str, *, markdown_group: str
+) -> str:
+    return (
+        r"(?:"
+        + _markdown_labeled_field_assignment_pattern(
+            field_pattern,
+            markdown_group=markdown_group,
+        )
+        + r"|['\"]?"
+        + field_pattern
+        + r"['\"]?[ \t]*(?:=|:))"
+    )
+
+
+_REDACTED_VALUE_NAME_PATTERN_TEXT = (
+    r"(?:REDACTED_CODE|REDACTED_CREDENTIAL|REDACTED_EMAIL|"
+    r"REDACTED_IDENTIFIER|REDACTED_INTERNAL_ADDRESS|REDACTED_INTERNAL_HOST|"
+    r"REDACTED_IP_ADDRESS|REDACTED_ORIGINAL_PROMPT|REDACTED_PATH|"
+    r"REDACTED_PERSONAL_IDENTIFIER|REDACTED_PRIVATE_KEY|REDACTED_RAW_ID|"
+    r"REDACTED_SECRET|REDACTED_TOOL_OUTPUT|REDACTED_URL|REDACTED)"
+)
+_REDACTED_VALUE_PATTERN_TEXT = r"\[" + _REDACTED_VALUE_NAME_PATTERN_TEXT + r"\]"
+_REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT = r"\[REDACTED(?:_[A-Z0-9]+)*\]"
+_PERSONAL_VALUE_CAPTURE_PATTERN_TEXT = (
+    r"[ \t]*(?:"
+    r'\\"(?P<escaped_double_quoted_value>[^\r\n]*?)\\"'
+    r"(?P<escaped_double_trailing_value>[^\r\n,}\]]*+)|"
+    r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])++)"'
+    r"(?P<double_trailing_value>[^\r\n,}\]]*+)|"
+    r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])++)'"
+    r"(?P<single_trailing_value>[^\r\n,}\]]*+)|"
+    r"(?P<value>(?:"
+    + _REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT
+    + r"[^\r\n,}]*+|[^\r\n,}\]]++)))"
+)
 LABELED_PERSONAL_VALUE_RE = re.compile(
-    r"['\"]?"
-    + _LABELED_PERSONAL_FIELD_PATTERN_TEXT
-    + r"['\"]?[ \t]*(?:=|:)[ \t]*(?!\[REDACTED)(?:"
-    r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])+)"|'
-    r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])+)'|"
-    r"(?P<value>[^\r\n]+))",
+    _labeled_field_assignment_pattern(
+        _LABELED_PERSONAL_FIELD_PATTERN_TEXT,
+        markdown_group="personal_markdown",
+    )
+    + _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT,
     re.ASCII | re.IGNORECASE,
 )
 LABELED_PERSONAL_ID_RE = LABELED_PERSONAL_VALUE_RE
@@ -107,18 +187,58 @@ _BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
 BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?:(?:\A|(?<=[\r\n]))[ \t]*(?:[-*+>][ \t]+)?|"
     r"(?<=[.!?;:,([{'\"])[ \t]*)"
-    r"(?P<personal>['\"]?"
-    + _BARE_LABELED_NAME_FIELD_PATTERN_TEXT
-    + r"['\"]?[ \t]*(?:=|:)[ \t]*"
-    r"(?!\[REDACTED)(?:"
-    r'"(?P<double_quoted_value>(?:\\[^\r\n]|[^"\\\r\n])+)"|'
-    r"'(?P<single_quoted_value>(?:\\[^\r\n]|[^'\\\r\n])+)'|"
-    r"(?P<value>[^\r\n]+)))",
+    r"(?P<personal>"
+    + _labeled_field_assignment_pattern(
+        _BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
+        markdown_group="bare_name_markdown",
+    )
+    + _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT
+    + r")",
     re.ASCII | re.IGNORECASE,
+)
+MARKDOWN_BARE_LABELED_NAME_VALUE_RE = re.compile(
+    r"(?P<personal>"
+    + _markdown_labeled_field_assignment_pattern(
+        _BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
+        markdown_group="markdown_bare_name_markdown",
+    )
+    + _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
+MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE = re.compile(
+    r"(?P<personal>"
+    + _markdown_complete_labeled_value_pattern(
+        _LABELED_PERSONAL_FIELD_PATTERN_TEXT,
+        markdown_group="complete_personal_markdown",
+    )
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
+MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE = re.compile(
+    r"(?P<personal>"
+    + _markdown_complete_labeled_value_pattern(
+        _BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
+        markdown_group="complete_bare_name_markdown",
+    )
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
+_CANONICAL_REDACTED_VALUE_RE = re.compile(r"\A" + _REDACTED_VALUE_PATTERN_TEXT + r"\Z")
+_REDACTED_PLACEHOLDER_SHAPE_RE = re.compile(_REDACTED_PLACEHOLDER_SHAPE_PATTERN_TEXT)
+PERSONAL_LABELED_VALUE_PATTERNS = (
+    LABELED_PERSONAL_VALUE_RE,
+    BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE,
+    MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE,
 )
 PERSONAL_IDENTIFIER_GROUPS = {
     CONTEXTUAL_SHORT_PHONE_RE: "phone",
     BARE_LABELED_NAME_VALUE_RE: "personal",
+    MARKDOWN_BARE_LABELED_NAME_VALUE_RE: "personal",
+    MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE: "personal",
+    MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE: "personal",
 }
 LABELED_INTERNAL_HOST_RE = re.compile(
     r"\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
@@ -589,15 +709,43 @@ def contains_credential_material(value: str) -> bool:
     )
 
 
+def is_canonical_redacted_value(value: str) -> bool:
+    """Return whether value is exactly one supported retained placeholder."""
+
+    return _CANONICAL_REDACTED_VALUE_RE.fullmatch(value) is not None
+
+
+def noncanonical_redacted_placeholder_spans(
+    value: str,
+) -> Iterator[tuple[int, int]]:
+    """Yield placeholder-shaped spans outside the closed retained vocabulary."""
+
+    return (
+        match.span()
+        for match in _REDACTED_PLACEHOLDER_SHAPE_RE.finditer(value)
+        if not is_canonical_redacted_value(match.group(0))
+    )
+
+
 def _normalized_sensitive_value(value: str) -> str:
     return " ".join(value.strip().strip("'\"").strip().split())
 
 
-def _normalized_sensitive_labeled_value(match: re.Match[str]) -> str:
+def _normalized_personal_sensitive_value(value: str) -> str:
+    wrapper_characters = " \t'\"`*_(){}<>\u2018\u2019\u201c\u201d"
+    candidate = re.sub(r"\\(['\"\\])", r"\1", value).strip()
+    candidate = candidate.rstrip(".,;!?").strip(wrapper_characters)
+    candidate = _PERSONAL_OUTER_SQUARE_WRAPPER_RE.sub(r"\g<value>", candidate)
+    candidate = candidate.rstrip(".,;!?").strip(wrapper_characters)
+    return " ".join(candidate.split())
+
+
+def _decoded_sensitive_labeled_value(match: re.Match[str]) -> str:
     for group in (
         "value",
         "double_quoted_value",
         "single_quoted_value",
+        "escaped_double_quoted_value",
     ):
         try:
             candidate = match.group(group)
@@ -613,8 +761,84 @@ def _normalized_sensitive_labeled_value(match: re.Match[str]) -> str:
                     candidate = decoded
             elif group == "single_quoted_value":
                 candidate = re.sub(r"\\(['\\])", r"\1", candidate)
-            return _normalized_sensitive_value(candidate)
+            return candidate
     raise ValueError("sensitive labeled value match omitted its value")
+
+
+def _normalized_generic_sensitive_labeled_value(match: re.Match[str]) -> str:
+    return _normalized_sensitive_value(_decoded_sensitive_labeled_value(match))
+
+
+def _normalized_personal_labeled_value(match: re.Match[str]) -> str:
+    return _normalized_personal_sensitive_value(_decoded_sensitive_labeled_value(match))
+
+
+def _normalized_personal_trailing_value(match: re.Match[str]) -> str:
+    group_values = match.groupdict()
+    candidate = next(
+        filter(
+            lambda value: value is not None,
+            map(
+                group_values.get,
+                (
+                    "double_trailing_value",
+                    "single_trailing_value",
+                    "escaped_double_trailing_value",
+                ),
+            ),
+        ),
+        "",
+    )
+    return _normalized_personal_sensitive_value(candidate)
+
+
+_SAFE_REDACTED_VALUE_RE = re.compile(
+    r"\A" + _REDACTED_VALUE_PATTERN_TEXT + r"[)\]}>]*\Z"
+)
+_REDACTED_PREFIX_VALUE_RE = re.compile(
+    r"\A"
+    + _REDACTED_VALUE_PATTERN_TEXT
+    + r"[)\]}>`*_'\"\u2019\u201d]*+[ \t]*+(?P<value>.+)\Z"
+)
+_PERSONAL_OUTER_SQUARE_WRAPPER_RE = re.compile(
+    r"\A\[(?!REDACTED(?:_[A-Z0-9]+)*\])(?P<value>[^\r\n]*)\]\Z"
+)
+_PERSONAL_NARRATIVE_SUFFIX_RE = re.compile(
+    r"[ \t]++(?:after|before|during|until|when|while)\b[^\r\n]*+\Z",
+    re.IGNORECASE,
+)
+
+
+def _personal_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
+    core = _normalized_personal_labeled_value(match)
+    unredacted_core = _SAFE_REDACTED_VALUE_RE.sub("", core)
+    narrative_prefix = _PERSONAL_NARRATIVE_SUFFIX_RE.sub("", unredacted_core)
+    trailing = _normalized_personal_trailing_value(match)
+    quoted_redacted_trailing = _SAFE_REDACTED_VALUE_RE.sub(trailing, core)
+    unquoted_redacted_trailing = _SAFE_REDACTED_VALUE_RE.sub(
+        "",
+        _REDACTED_PREFIX_VALUE_RE.sub(r"\g<value>", core),
+    )
+    return (
+        unredacted_core,
+        narrative_prefix,
+        quoted_redacted_trailing,
+        unquoted_redacted_trailing,
+    )
+
+
+def _personal_match_contains_sensitive_value(match: re.Match[str]) -> bool:
+    return any(_personal_sensitive_overlap_values(match))
+
+
+def _retain_every_match(_match: re.Match[str]) -> bool:
+    return True
+
+
+_PERSONAL_MATCH_FILTERS = {
+    pattern: _personal_match_contains_sensitive_value
+    for pattern in PERSONAL_LABELED_VALUE_PATTERNS
+}
 
 
 def _normalized_contextual_phone_value(match: re.Match[str]) -> str:
@@ -628,15 +852,15 @@ def _normalized_sensitive_overlap_value(value: str) -> str:
 def sensitive_labeled_values(value: str) -> Iterator[str]:
     """Yield closed-taxonomy field values that need standalone overlap checks."""
 
-    matches = chain.from_iterable(
-        map(
-            lambda pattern: pattern.finditer(value),
-            (
-                _CREDENTIAL_LABELED_VALUE_RE,
-                LABELED_PERSONAL_VALUE_RE,
-                BARE_LABELED_NAME_VALUE_RE,
-            ),
-        )
+    credential_values = map(
+        _normalized_generic_sensitive_labeled_value,
+        _CREDENTIAL_LABELED_VALUE_RE.finditer(value),
+    )
+    personal_matches = chain.from_iterable(
+        map(lambda pattern: pattern.finditer(value), PERSONAL_LABELED_VALUE_PATTERNS)
+    )
+    personal_values = chain.from_iterable(
+        map(_personal_sensitive_overlap_values, personal_matches)
     )
     contextual_phone_values = filter(
         lambda candidate: 7 <= sum(map(str.isdigit, candidate)) <= 15,
@@ -646,7 +870,8 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
         ),
     )
     normalized = chain(
-        map(_normalized_sensitive_labeled_value, matches),
+        credential_values,
+        personal_values,
         contextual_phone_values,
     )
     return filter(
@@ -664,6 +889,25 @@ def _tagged_sensitive_expansion(value: str) -> Iterator[tuple[str, bool]]:
     return chain(((value, False),), labeled)
 
 
+def _retain_unseen_tagged_expansion(
+    item: tuple[str, bool], seen: set[tuple[str, bool]]
+) -> bool:
+    if item in seen:
+        return False
+    seen.add(item)
+    return True
+
+
+def _unique_tagged_sensitive_expansions(
+    values: Iterable[str],
+) -> Iterator[tuple[str, bool]]:
+    seen: set[tuple[str, bool]] = set()
+    return filter(
+        lambda item: _retain_unseen_tagged_expansion(item, seen),
+        chain.from_iterable(map(_tagged_sensitive_expansion, values)),
+    )
+
+
 def expand_sensitive_labeled_values(
     values: Iterable[str], *, maximum_items: int
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -671,7 +915,7 @@ def expand_sensitive_labeled_values(
 
     tagged = tuple(
         islice(
-            chain.from_iterable(map(_tagged_sensitive_expansion, values)),
+            _unique_tagged_sensitive_expansions(values),
             maximum_items + 1,
         )
     )
@@ -699,10 +943,12 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
         INTERNATIONAL_PHONE_RE,
         PHONE_RE,
         CONTEXTUAL_SHORT_PHONE_RE,
-        LABELED_PERSONAL_ID_RE,
-        BARE_LABELED_NAME_VALUE_RE,
+        *PERSONAL_LABELED_VALUE_PATTERNS,
     ):
-        for match in pattern.finditer(value):
+        for match in filter(
+            _PERSONAL_MATCH_FILTERS.get(pattern, _retain_every_match),
+            pattern.finditer(value),
+        ):
             group = PERSONAL_IDENTIFIER_GROUPS.get(pattern, 0)
             if pattern in PHONE_PATTERNS:
                 digit_count = sum(

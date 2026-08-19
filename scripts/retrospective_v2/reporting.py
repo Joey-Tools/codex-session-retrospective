@@ -731,10 +731,11 @@ def _validate_safe_string(value: str, *, path: str) -> None:
             privacy_locators.contains_personal_identifier(value),
             privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
             privacy_locators.contains_path_locator(value),
+            next(privacy_locators.noncanonical_redacted_placeholder_spans(value), None),
         )
     ):
         raise RetainedPrivacyError(
-            f"{path} contains a URL, personal identifier, IP address, or local path"
+            f"{path} contains a URL, personal identifier, IP address, local path, or noncanonical placeholder"
         )
     if not _SAFE_TOKEN_RE.fullmatch(value):
         raise RetainedPrivacyError(
@@ -763,10 +764,11 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
             privacy_locators.contains_personal_identifier(value),
             privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
             privacy_locators.contains_path_locator(value),
+            next(privacy_locators.noncanonical_redacted_placeholder_spans(value), None),
         )
     ):
         raise RetainedPrivacyError(
-            f"{path} contains a URL, personal identifier, IP address, or local path"
+            f"{path} contains a URL, personal identifier, IP address, local path, or noncanonical placeholder"
         )
     if (
         _SOURCE_TEXT_MARKER_RE.search(value)

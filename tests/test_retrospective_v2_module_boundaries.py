@@ -24,6 +24,9 @@ EXPORT_CLI_BINDING = SCRIPTS / "session_retrospective_v2_export_binding.py"
 EXPORT_CLI_LEGACY = SCRIPTS / "session_retrospective_v2_export_legacy.py"
 TRANSCRIPT_ADAPTER = SCRIPTS / "session_retrospective_v2_transcript.py"
 TEST_SHARD_RUNNER = SCRIPTS / "run_test_shard.py"
+TEST_INVENTORY = SCRIPTS / "test_inventory.py"
+TEST_INVENTORY_LOADER = SCRIPTS / "test_inventory_loader.py"
+TEST_INVENTORY_SOURCE = SCRIPTS / "test_inventory_source.py"
 sys.path.insert(0, str(SCRIPTS))
 
 from retrospective_v2 import (  # noqa: E402
@@ -1143,6 +1146,18 @@ spec.loader.exec_module(module)
             120,
         )
         self.assertLessEqual(
+            len(TEST_INVENTORY.read_text(encoding="utf-8").splitlines()),
+            530,
+        )
+        self.assertLessEqual(
+            len(TEST_INVENTORY_LOADER.read_text(encoding="utf-8").splitlines()),
+            140,
+        )
+        self.assertLessEqual(
+            len(TEST_INVENTORY_SOURCE.read_text(encoding="utf-8").splitlines()),
+            120,
+        )
+        self.assertLessEqual(
             len(EXPORT_CLI_SUPPORT.read_text(encoding="utf-8").splitlines()),
             250,
         )
@@ -1238,8 +1253,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_472, branch_total)
-        self.assertLessEqual(branch_total, 9_472)
+        self.assertEqual(9_474, branch_total)
+        self.assertLessEqual(branch_total, 9_475)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

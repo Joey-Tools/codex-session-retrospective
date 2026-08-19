@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 import copy
 import hashlib
 from itertools import chain
@@ -764,6 +765,16 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "**Customer name:** Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Observed **Full name:** Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "employee full name: Bob",
                 "Bob was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
@@ -876,6 +887,91 @@ class ResultValidationTests(unittest.TestCase):
             (
                 "customer address: 123 Main Street",
                 "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Customer's address: 123 Main Street",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Customer's address: 123 Main Street before continuing.",
+                "123 Main Street was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "date of birth: 1990-01-02",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "DOB: 1990-01-02",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "DOB: 1990-01-02 before continuing.",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "DOB: 1990-01-02, status verified",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                r'DOB: "\u0031\u0039\u0039\u0030-\u0030\u0031-\u0030\u0032"',
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "DateOfBirth: 1990-01-02.",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "CustomerDateOfBirth: `1990-01-02`",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "**DOB: 1990-01-02**",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Observed **Full name: Alice**",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "DOB: \u20181990-01-02\u2019",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "DOB: [REDACTED_PERSONAL_IDENTIFIER] 1990-01-02",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                'DOB: "[REDACTED_PERSONAL_IDENTIFIER]" 1990-01-02',
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "**DOB: [REDACTED_PERSONAL_IDENTIFIER]** 1990-01-02",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Customer name: [REDACTED_PERSONAL_IDENTIFIER] 张三丰",
+                "张三丰 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                '{"ssn": 123456789, "status":"ok"}',
+                "123456789 was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
@@ -1033,6 +1129,17 @@ class ResultValidationTests(unittest.TestCase):
         for safe_source in (
             "status: winter123",
             "password: missing",
+            "Customer's address book: shared",
+            "DOB status: unavailable",
+            "date of birth policy: enabled",
+            "**Customer status:** Alice Smith",
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER]",
+            'DOB: "[REDACTED_PERSONAL_IDENTIFIER]"',
+            "**DOB:** [REDACTED_PERSONAL_IDENTIFIER]",
+            "(DOB: [REDACTED_PERSONAL_IDENTIFIER])",
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER]]",
+            r"DOB: \"[REDACTED_PERSONAL_IDENTIFIER]\"",
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER]" + " " * 32_768 + "!",
             "Phone number: 12345",
             "Phone number: 2026-08-18",
             "Phone number: 1234567890123456",
@@ -1056,6 +1163,34 @@ class ResultValidationTests(unittest.TestCase):
         self.assertEqual(
             (),
             scan_for_leaks({"text": "Pin the dependency version before continuing."}),
+        )
+        overlap_sources = tuple(
+            f"customer name: Person{index:03d}" for index in range(103)
+        )
+        self.assertEqual(
+            (),
+            scan_for_leaks({"text": "safe"}, original_prompts=overlap_sources),
+        )
+        self.assertEqual(
+            {"unredactable_secret"},
+            {
+                finding.category
+                for finding in scan_for_leaks(
+                    {"text": "[REDACTED_PERSONAL_IDENTIFIER_ALICE_SMITH]"}
+                )
+            },
+        )
+        self.assertEqual(
+            '{[REDACTED_PERSONAL_IDENTIFIER], "status":"ok"}',
+            result_validation_module.privacy_locators.redact_personal_identifiers(
+                '{"ssn": 123456789, "status":"ok"}'
+            ),
+        )
+        self.assertEqual(
+            "Observed [REDACTED_PERSONAL_IDENTIFIER]",
+            result_validation_module.privacy_locators.redact_personal_identifiers(
+                "Observed **Full name: Alice**"
+            ),
         )
         for safe_pin_text in (
             "Inspect pin=GPIO17 before continuing.",
@@ -1104,6 +1239,55 @@ class ResultValidationTests(unittest.TestCase):
                 {"safe": "bounded"},
                 original_prompts=expanded_sources,
             )
+
+    def test_placeholder_suffix_overlap_needs_no_separator(self) -> None:
+        for source, output in (
+            (
+                "Full name: [REDACTED_PERSONAL_IDENTIFIER]Alice Smith",
+                "Alice Smith was retained",
+            ),
+            (
+                "Full name: [REDACTED_PERSONAL_IDENTIFIER]王小明",
+                "王小明 was retained",
+            ),
+        ):
+            with self.subTest(source=source):
+                categories = {
+                    finding.category
+                    for finding in scan_for_leaks(
+                        {"text": output}, original_prompts=(source,)
+                    )
+                }
+                self.assertIn("original_prompt", categories)
+
+    def test_noncanonical_placeholder_is_rejected_inside_retained_text(self) -> None:
+        findings = scan_for_leaks(
+            {"text": "Observed [REDACTED_PERSONAL_IDENTIFIER_ALICE] safely"}
+        )
+
+        self.assertEqual(
+            {"unredactable_secret"}, {finding.category for finding in findings}
+        )
+        self.assertEqual(
+            (), scan_for_leaks({"text": "Observed [REDACTED_PERSONAL_IDENTIFIER]"})
+        )
+
+    def test_sensitive_expansion_stops_consuming_at_the_requested_bound(self) -> None:
+        consumed: list[str] = []
+
+        def sources() -> Iterator[str]:
+            for value in ("Full name: Alice Smith", "Full name: Bob Jones"):
+                consumed.append(value)
+                yield value
+
+        expanded, _short = (
+            result_validation_module.privacy_locators.expand_sensitive_labeled_values(
+                sources(), maximum_items=1
+            )
+        )
+
+        self.assertEqual(("Full name: Alice Smith", "Alice Smith"), expanded)
+        self.assertEqual(["Full name: Alice Smith"], consumed)
 
     def test_source_overlap_cannot_remove_short_phone_context(self) -> None:
         for source, source_kwargs, source_marker in (

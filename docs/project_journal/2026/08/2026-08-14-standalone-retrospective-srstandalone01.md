@@ -1459,6 +1459,72 @@ superseded_by:
   all 1,752 tests exactly once: shard 0 passes 421/421 in 1,710.706 seconds,
   shard 1 passes 471/471 in 1,366.345 seconds, shard 2 passes 460/460 in
   1,485.831 seconds, and shard 3 passes 400/400 in 1,391.701 seconds.
+- Signed head `77f37b13` became stale when its fresh whole-range Codex processor
+  found three release blockers: the personal-data grammar omitted date of birth,
+  possessive address, and Markdown label forms; oversized result classification
+  closed and reopened the result between classification and hashing; and each CI
+  shard independently discovered its own test inventory without a shared proof
+  that every source and test ID was represented.
+- The shared privacy grammar now recognizes closed DOB/date-of-birth, possessive
+  address, and paired Markdown label forms across scanner/redactor,
+  source-overlap, retained validation, and report validation. Canonical
+  placeholders from the exact known set remain accepted only when no additional
+  value follows. JSON-escaped quoted values, unquoted narrative prefixes, and
+  trailing ASCII or Unicode data after a placeholder are independently decoded
+  and extracted for source-overlap checks. Punctuation, quote, backtick,
+  Markdown, escaped quote, structural, and smart-quote wrappers normalize to the
+  same value without making ordinary address-book, status, policy, or
+  pure-placeholder prose sensitive. The prior redacted-prefix lookahead was
+  removed rather than retained as an unbounded backtracking path.
+- Agent-result classification now binds one owner-only no-follow descriptor.
+  Payload-sized and digest-sized files are read twice and compared on that
+  descriptor while identity, size, stat access policy, and descriptor ACL policy
+  are revalidated against the bound name. Files above the digest ceiling are not
+  content-read and receive an explicit nonexact, nonreplayable observation after
+  the same structural revalidation. Close failures preserve a prior safety error
+  as primary evidence and fail independently only after an otherwise successful
+  observation. The exact engine branch inventory is 9,473 under the unchanged
+  historical ceiling of 9,475.
+- CI now generates one bounded canonical manifest containing the complete sorted
+  test-ID inventory and an independent `tests/**/test_*.py` path/module/SHA-256
+  content inventory, transports it to every shard, and requires exact equality
+  before selection. A closed loader enumerates real module and class
+  dictionaries, rejects `load_tests`, module `__getattr__`/`__dir__`, custom
+  module types, custom test metaclasses, wrapped async/generator methods,
+  `runTest` fallback, and imported external test cases, and never delegates
+  discovery to those hooks. Runtime instrumentation rejects non-`None` method
+  results in ordinary shards and the separate Darwin security runner. One
+  captured `(test_id, test)` ordering governs both verification and sharding;
+  skipped, expected-failure, unexpected-success, partial, missing-source,
+  changed-source, or replaced-ID execution cannot pass. The documented local
+  loop clears stale manifests, fails immediately before shard execution, and
+  still aggregates every shard result once execution begins.
+- Final precommit privacy audits additionally closed embedded noncanonical
+  placeholders, no-separator ASCII and CJK personal-value suffixes, eager
+  overlap-source expansion, and a retained-validator parity gap. The agent
+  result scanner and retained artifact assembly/reread validator now consume the
+  same closed placeholder vocabulary. Final test-inventory audits closed
+  wrapper-chain, `runTest`, non-`None` result, and Darwin-runner bypasses without
+  broadening accepted test semantics.
+- The final canonical Python 3.13 inventory contains 1,782 test IDs and 22
+  authenticated source modules under manifest digest
+  `78d630e684d7eafa44f10b8cea7db732d71844b7f4cd10e4eb7ae1c9d1856e80`.
+  On the frozen implementation tree, shard 0 passes 426/426 in 1,949.531
+  seconds, shard 1 passes 481/481 in 1,200.589 seconds, shard 2 passes 467/467
+  in 1,695.955 seconds, and shard 3 passes 408/408 in 1,606.716 seconds. The
+  separate Darwin security runner passes 10/10 in 99.030 seconds; affected
+  module groups pass 134/134 and 176/176; final privacy and test-inventory
+  precommit audits both report `No findings.`
+- One earlier parallel execution of the same final manifest reported an
+  isolated `INVALID_INPUT` instead of the expected interrupted-export
+  `INVALID_STATE` in
+  `test_export_retry_rejects_a_different_destination_before_staging`. It is
+  retained as non-counting transient evidence rather than silently treated as
+  success. The exact test passed in isolation, its eight-test adjacent order
+  passed, the complete 481-test shard order passed, and 12 additional fresh
+  random-fixture executions all returned the exact expected
+  `invalid_state/run_transition_invalid` machine result. No production or test
+  expectation was weakened.
 
 ## Follow-up Work
 

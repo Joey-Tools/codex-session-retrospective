@@ -7,14 +7,12 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass, is_dataclass
 import datetime as dt
 from enum import IntEnum
-import hashlib
 import hmac
 import json
 import math
 import os
 from pathlib import Path
 import re
-import secrets
 import sys
 from typing import Any, NoReturn, Optional
 
@@ -1176,38 +1174,28 @@ def command_accept_agent_result(args: argparse.Namespace) -> CommandResult:
         require_existing_identity=True,
     )
     result_path = _absolute_path(sink["output_sink"])
-    try:
-        payload = safe_io.read_bounded_bytes(
-            result_path,
-            max_bytes=MAX_AGENT_RESULT_BYTES,
-            require_owner_only=True,
-        )
-    except safe_io.ReadLimitExceeded:
-        payload_digest_exact = True
-        try:
-            payload_digest = safe_io.hash_file_bounded(
-                result_path,
-                max_bytes=MAX_AGENT_RESULT_REJECTION_HASH_BYTES,
-                require_owner_only=True,
-            )
-        except safe_io.ReadLimitExceeded:
-            payload_digest = secrets.token_hex(32)
-            payload_digest_exact = False
+    observation = safe_io.observe_file_bounded(
+        result_path,
+        max_payload_bytes=MAX_AGENT_RESULT_BYTES,
+        max_digest_bytes=MAX_AGENT_RESULT_REJECTION_HASH_BYTES,
+        require_owner_only=True,
+    )
+    if observation.payload is None:
         result = orchestrator_api.reject_agent_result_payload(
             _absolute_path(args.run_dir),
             args.job_ref,
             args.attempt_ref,
             claim_ref=args.claim_ref,
             result_ref=args.result_ref,
-            payload_digest=payload_digest,
-            payload_digest_exact=payload_digest_exact,
+            payload_digest=observation.payload_digest,
+            payload_digest_exact=observation.payload_digest_exact,
             reason="result_too_large",
             identity_path=_command_identity_path(args),
             require_existing_identity=True,
         )
         return CommandResult.success("accept-agent-result", _mapping_result(result))
     try:
-        result_manifest = _decode_bound_agent_result(payload)
+        result_manifest = _decode_bound_agent_result(observation.payload)
     except _BoundAgentResultDecodeError as error:
         result = orchestrator_api.reject_agent_result_payload(
             _absolute_path(args.run_dir),
@@ -1215,7 +1203,7 @@ def command_accept_agent_result(args: argparse.Namespace) -> CommandResult:
             args.attempt_ref,
             claim_ref=args.claim_ref,
             result_ref=args.result_ref,
-            payload_digest=hashlib.sha256(payload).hexdigest(),
+            payload_digest=observation.payload_digest,
             reason=error.reason,
             identity_path=_command_identity_path(args),
             require_existing_identity=True,

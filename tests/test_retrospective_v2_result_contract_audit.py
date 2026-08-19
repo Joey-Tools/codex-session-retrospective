@@ -886,6 +886,8 @@ class AuditedResultContractTests(unittest.TestCase):
             "Observed userLastName: Smith before continuing.",
             "Observed billing address: 123 Main Street before continuing.",
             "Observed customer address: 123 Main Street before continuing.",
+            "Observed Customer's address: 123 Main Street before continuing.",
+            "Observed Customer\u2019s address: 123 Main Street before continuing.",
             "Observed client address: 123 Main Street before continuing.",
             "Observed employee address: 123 Main Street before continuing.",
             "Observed home address: 123 Main Street before continuing.",
@@ -896,6 +898,17 @@ class AuditedResultContractTests(unittest.TestCase):
             "Observed shipping address: 123 Main Street before continuing.",
             "Observed tenant address: 123 Main Street before continuing.",
             "Observed user address: 123 Main Street before continuing.",
+            "Observed date of birth: 1990-01-02 before continuing.",
+            "Observed DOB: 1990-01-02 before continuing.",
+            "Observed customer's DOB: 1990-01-02 before continuing.",
+            "Observed customerDateOfBirth: 1990-01-02 before continuing.",
+            "Observed CustomerDateOfBirth: 1990-01-02 before continuing.",
+            "Observed DateOfBirth: 1990-01-02 before continuing.",
+            "Observed DOB: [REDACTED_PERSONAL_IDENTIFIER] 1990-01-02.",
+            'Observed DOB: "[REDACTED_PERSONAL_IDENTIFIER]" 1990-01-02.',
+            "Observed DOB: [REDACTED_PERSONAL_IDENTIFIER_19900102].",
+            "Observed **Customer name:** Alice Smith before continuing.",
+            "Observed **Full name:** Alice before continuing.",
             "Observed SSN: 000-00-0000 before continuing.",
             "Observed social security number: 000-00-0000 before continuing.",
             "Observed national insurance number: QQ 00 00 00 C before continuing.",
@@ -910,8 +923,11 @@ class AuditedResultContractTests(unittest.TestCase):
             "Observed IBAN: GB00 TEST 0000 0000 0000 00 before continuing.",
         ):
             with self.subTest(source=source):
+                expected_categories = {"personal_identifier"}
+                if source == ("Observed DOB: [REDACTED_PERSONAL_IDENTIFIER_19900102]."):
+                    expected_categories.add("unredactable_secret")
                 self.assertEqual(
-                    {"personal_identifier"},
+                    expected_categories,
                     {
                         finding.category
                         for finding in scan_for_leaks({"summary": source})
@@ -995,6 +1011,14 @@ class AuditedResultContractTests(unittest.TestCase):
                 "{[REDACTED_PERSONAL_IDENTIFIER]}",
             ),
             (
+                "**Customer name:** Alice Smith",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "__DOB:__ 1990-01-02",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 '{"clientName": "Alice Smith"}',
                 "{[REDACTED_PERSONAL_IDENTIFIER]}",
             ),
@@ -1027,6 +1051,18 @@ class AuditedResultContractTests(unittest.TestCase):
             "Inspect memory-full name: stack frame.",
             "The client name matcher passed.",
             "The organization name policy passed.",
+            "Customer's address book: shared.",
+            "The customer address matcher passed.",
+            "DOB status: unavailable.",
+            "The date of birth policy passed.",
+            "**Customer status:** active.",
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER]",
+            'DOB: "[REDACTED_PERSONAL_IDENTIFIER]"',
+            "**DOB:** [REDACTED_PERSONAL_IDENTIFIER]",
+            "(DOB: [REDACTED_PERSONAL_IDENTIFIER])",
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER]]",
+            r"DOB: \"[REDACTED_PERSONAL_IDENTIFIER]\"",
+            '{"DOB":"[REDACTED_PERSONAL_IDENTIFIER]","status":"ok"}',
             "Passport status: unavailable.",
             "Credit card support is unavailable.",
             "The account number of failures is three.",

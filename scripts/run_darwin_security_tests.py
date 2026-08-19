@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from ci_runtime import CiRuntimeError, require_owner_controlled_python  # noqa: E402
+from test_inventory_loader import ClosedTestLoader  # noqa: E402
 from tests.darwin_security import DARWIN_SECURITY_ATTRIBUTE  # noqa: E402
 
 
@@ -56,7 +57,7 @@ def _flatten(suite: unittest.TestSuite) -> list[unittest.TestCase]:
 def discover_darwin_security_tests() -> list[unittest.TestCase]:
     """Return the exact discovered inventory carrying the shared marker."""
 
-    discovered = unittest.defaultTestLoader.discover(str(TEST_ROOT))
+    discovered = ClosedTestLoader().discover(str(TEST_ROOT))
     selected = [
         test
         for test in _flatten(discovered)

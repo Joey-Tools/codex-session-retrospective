@@ -1818,6 +1818,7 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Telephone number: 6123 4567 before continuing.",
             "billing address: 123 Main Street",
             "customer address: 123 Main Street",
+            "Customer's address: 123 Main Street",
             "employee address: 123 Main Street",
             "home address: 123 Main Street",
             "mailing address: 123 Main Street",
@@ -1826,6 +1827,15 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "residential address: 123 Main Street",
             "shipping address: 123 Main Street",
             "user address: 123 Main Street",
+            "date of birth: 1990-01-02",
+            "DOB: 1990-01-02",
+            "customerDateOfBirth: 1990-01-02",
+            "CustomerDateOfBirth: 1990-01-02",
+            "DateOfBirth: 1990-01-02",
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER] 1990-01-02",
+            'DOB: "[REDACTED_PERSONAL_IDENTIFIER]" 1990-01-02',
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER_19900102]",
+            "**Customer name:** Alice Smith",
         ):
             with self.subTest(personal_value=personal_value, phase="direct"):
                 with self.assertRaisesRegex(
@@ -1868,6 +1878,53 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 refresh_bundle_digest(tampered)
                 with self.assertRaisesRegex(RetainedPrivacyError, "forbidden locator"):
                     validate_retained_artifacts(tampered)
+
+        for safe_value in (
+            "Customer's address book: shared",
+            "The customer address matcher passed.",
+            "DOB status: unavailable",
+            "The date of birth policy passed.",
+            "**Customer status:** active",
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER]",
+            'DOB: "[REDACTED_PERSONAL_IDENTIFIER]"',
+            "**DOB:** [REDACTED_PERSONAL_IDENTIFIER]",
+            "(DOB: [REDACTED_PERSONAL_IDENTIFIER])",
+            "DOB: [REDACTED_PERSONAL_IDENTIFIER]]",
+            r"DOB: \"[REDACTED_PERSONAL_IDENTIFIER]\"",
+        ):
+            with self.subTest(safe_value=safe_value, phase="direct"):
+                reporting_module.validate_retained_value({"cause": safe_value})
+
+            with self.subTest(safe_value=safe_value, phase="assembled"):
+                safe_review = review_data()
+                safe_review["turn_findings"][1]["cause"] = safe_value
+                validate_retained_artifacts(
+                    assemble_retained_artifacts(run_state(), safe_review)
+                )
+
+    def test_retained_validation_rejects_noncanonical_placeholders(self) -> None:
+        value = "Observed [REDACTED_PERSONAL_IDENTIFIER_ALICE_SMITH] safely"
+        with self.assertRaisesRegex(RetainedPrivacyError, "noncanonical placeholder"):
+            reporting_module.validate_retained_value({"cause": value})
+
+        reviews = review_data()
+        reviews["turn_findings"][1]["cause"] = value
+        with self.assertRaisesRegex(RetainedPrivacyError, "noncanonical placeholder"):
+            assemble_retained_artifacts(run_state(), reviews)
+
+        artifacts = assemble_retained_artifacts(run_state(), review_data())
+        tampered = dict(artifacts)
+        rows = [
+            json.loads(line) for line in tampered["turn_findings.jsonl"].splitlines()
+        ]
+        high_impact = next(row for row in rows if row["disposition"] == "high_impact")
+        high_impact["cause"] = value
+        tampered["turn_findings.jsonl"] = b"".join(
+            canonical_json_bytes(row) for row in rows
+        )
+        refresh_bundle_digest(tampered)
+        with self.assertRaisesRegex(RetainedPrivacyError, "noncanonical placeholder"):
+            validate_retained_artifacts(tampered)
 
     def test_retained_validation_rejects_shared_sensitive_text_families(
         self,

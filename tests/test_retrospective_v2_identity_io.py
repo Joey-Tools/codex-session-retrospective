@@ -826,6 +826,182 @@ class SafeIoTests(unittest.TestCase):
         with self.assertRaises(ReadLimitExceeded):
             safe_io.hash_file_bounded(first, max_bytes=len(first_payload) - 1)
 
+    def test_bounded_file_observation_uses_one_descriptor_for_all_tiers(
+        self,
+    ) -> None:
+        max_payload_bytes = 64 * 1024
+        max_digest_bytes = 1024 * 1024
+        token = "d" * 64
+        cases = (
+            ("payload", b'{"value":"small"}', True, True),
+            ("digest", b"m" * (max_payload_bytes + 1), False, True),
+            ("token", b"x" * (max_digest_bytes + 1), False, False),
+        )
+        real_read = os.read
+        for label, payload, retains_payload, digest_exact in cases:
+            with self.subTest(label=label):
+                target = self.root / f"observation-{label}.json"
+                target.write_bytes(payload)
+                os.chmod(target, 0o600)
+                with (
+                    mock.patch.object(
+                        safe_io,
+                        "open_checked_file_at",
+                        wraps=safe_io.open_checked_file_at,
+                    ) as checked_open,
+                    mock.patch.object(
+                        safe_io.os,
+                        "read",
+                        side_effect=real_read,
+                    ) as observed_read,
+                    mock.patch.object(
+                        safe_io.secrets,
+                        "token_hex",
+                        return_value=token,
+                    ),
+                ):
+                    observation = safe_io.observe_file_bounded(
+                        target,
+                        max_payload_bytes=max_payload_bytes,
+                        max_digest_bytes=max_digest_bytes,
+                    )
+
+                checked_open.assert_called_once()
+                self.assertEqual(len(payload), observation.byte_count)
+                self.assertEqual(digest_exact, observation.payload_digest_exact)
+                self.assertEqual(
+                    payload if retains_payload else None,
+                    observation.payload,
+                )
+                self.assertEqual(
+                    hashlib.sha256(payload).hexdigest() if digest_exact else token,
+                    observation.payload_digest,
+                )
+                if digest_exact:
+                    self.assertGreater(observed_read.call_count, 0)
+                else:
+                    observed_read.assert_not_called()
+
+    def test_extreme_file_observation_revalidates_without_reading_content(
+        self,
+    ) -> None:
+        max_payload_bytes = 64 * 1024
+        max_digest_bytes = 1024 * 1024
+        payload = b"x" * (max_digest_bytes + 1)
+        real_revalidate = safe_io._revalidate_bounded_file_at
+        real_read = os.read
+
+        for mutation in ("replacement", "truncation", "growth", "policy"):
+            with self.subTest(mutation=mutation):
+                target = self.root / f"extreme-{mutation}.json"
+                target.write_bytes(payload)
+                os.chmod(target, 0o600)
+                mutated = False
+
+                def mutate_then_revalidate(*args, **kwargs):
+                    nonlocal mutated
+                    if kwargs.get("display_path") != target or mutated:
+                        return real_revalidate(*args, **kwargs)
+                    mutated = True
+                    if mutation == "replacement":
+                        replacement = self.root / "extreme-replacement-next.json"
+                        replacement.write_bytes(payload)
+                        os.chmod(replacement, 0o600)
+                        os.replace(replacement, target)
+                    elif mutation == "truncation":
+                        os.truncate(target, len(payload) - 1)
+                    elif mutation == "growth":
+                        with target.open("ab") as stream:
+                            stream.write(b"g")
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                    else:
+                        os.chmod(target, 0o640)
+                    return real_revalidate(*args, **kwargs)
+
+                try:
+                    with (
+                        mock.patch.object(
+                            safe_io,
+                            "_revalidate_bounded_file_at",
+                            side_effect=mutate_then_revalidate,
+                        ),
+                        mock.patch.object(
+                            safe_io.os,
+                            "read",
+                            side_effect=real_read,
+                        ) as observed_read,
+                        self.assertRaises(UnsafePathError),
+                    ):
+                        safe_io.observe_file_bounded(
+                            target,
+                            max_payload_bytes=max_payload_bytes,
+                            max_digest_bytes=max_digest_bytes,
+                        )
+                    observed_read.assert_not_called()
+                finally:
+                    if target.exists():
+                        os.chmod(target, 0o600)
+
+    def test_bounded_file_observation_preserves_primary_over_close_failure(
+        self,
+    ) -> None:
+        target = self.root / "observation-close.json"
+        target.write_bytes(b"{}")
+        os.chmod(target, 0o600)
+        real_open = safe_io.open_checked_file_at
+        real_close = os.close
+
+        for primary_failure in (False, True):
+            with self.subTest(primary_failure=primary_failure):
+                opened_descriptor: int | None = None
+
+                def capture_open(*args, **kwargs):
+                    nonlocal opened_descriptor
+                    opened_descriptor = real_open(*args, **kwargs)
+                    return opened_descriptor
+
+                def close_then_fail(descriptor: int) -> None:
+                    real_close(descriptor)
+                    if descriptor == opened_descriptor:
+                        raise OSError("synthetic close failure")
+
+                revalidate = mock.DEFAULT
+                if primary_failure:
+                    revalidate = mock.Mock(
+                        side_effect=UnsafePathError("synthetic primary failure")
+                    )
+                with (
+                    mock.patch.object(
+                        safe_io,
+                        "open_checked_file_at",
+                        side_effect=capture_open,
+                    ),
+                    mock.patch.object(safe_io.os, "close", side_effect=close_then_fail),
+                    mock.patch.object(
+                        safe_io,
+                        "_revalidate_bounded_file_at",
+                        revalidate,
+                    ),
+                ):
+                    expected = UnsafePathError if primary_failure else OSError
+                    with self.assertRaises(expected) as raised:
+                        safe_io.observe_file_bounded(
+                            target,
+                            max_payload_bytes=64,
+                            max_digest_bytes=128,
+                        )
+
+                if primary_failure:
+                    self.assertEqual(
+                        "synthetic primary failure",
+                        str(raised.exception),
+                    )
+                    self.assertIn(
+                        "bounded-read file descriptor close failed: OSError",
+                        getattr(raised.exception, "__notes__", ()),
+                    )
+
     def test_jsonl_rejects_blank_and_malformed_records(self) -> None:
         blank = self.root / "blank.jsonl"
         atomic_write_bytes(blank, b"{}\n\n{}\n")

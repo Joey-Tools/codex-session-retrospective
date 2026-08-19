@@ -440,6 +440,14 @@ class CliContractTests(unittest.TestCase):
             },
             set(subparsers.choices),
         )
+        self.assertEqual(
+            "retrospective_v2.cli",
+            cli.command_accept_agent_result.__module__,
+        )
+        self.assertIs(
+            cli.command_accept_agent_result,
+            cli.COMMANDS["accept-agent-result"],
+        )
         for removed in (
             "bootstrap",
             "campaign-abort",
@@ -3089,6 +3097,11 @@ class CliContractTests(unittest.TestCase):
         observation_digest = "c" * 64
         with (
             mock.patch.object(
+                safe_io,
+                "observe_file_bounded",
+                wraps=safe_io.observe_file_bounded,
+            ) as observe,
+            mock.patch.object(
                 cli.orchestrator_api,
                 "resolve_agent_result_sink",
                 return_value={"output_sink": str(result_path)},
@@ -3099,7 +3112,7 @@ class CliContractTests(unittest.TestCase):
                 return_value={"outcome": "retryable"},
             ) as reject,
             mock.patch.object(
-                cli.secrets,
+                safe_io.secrets,
                 "token_hex",
                 return_value=observation_digest,
             ),
@@ -3124,9 +3137,164 @@ class CliContractTests(unittest.TestCase):
             )
 
         self.assertTrue(result.ok, result)
+        observe.assert_called_once()
         self.assertEqual(observation_digest, reject.call_args.kwargs["payload_digest"])
         self.assertFalse(reject.call_args.kwargs["payload_digest_exact"])
         self.assertEqual("result_too_large", reject.call_args.kwargs["reason"])
+
+    def test_oversized_agent_result_uses_exact_v2_observation(self) -> None:
+        result_path = self.root / "oversized-agent-result.json"
+        payload = b"x" * (cli.MAX_AGENT_RESULT_BYTES + 1)
+        result_path.write_bytes(payload)
+        os.chmod(result_path, 0o600)
+        with (
+            mock.patch.object(
+                cli.orchestrator_api,
+                "resolve_agent_result_sink",
+                return_value={"output_sink": str(result_path)},
+            ),
+            mock.patch.object(
+                cli.orchestrator_api,
+                "reject_agent_result_payload",
+                return_value={"outcome": "retryable"},
+            ) as reject,
+            mock.patch.object(
+                safe_io.secrets,
+                "token_hex",
+                side_effect=AssertionError("exact observation must not use a token"),
+            ),
+        ):
+            result = self.parse_dispatch(
+                "accept-agent-result",
+                "--identity-path",
+                str(self.identity_path),
+                "--require-existing-identity",
+                "--run-dir",
+                str(self.run_dir),
+                "--job-ref",
+                "job_ref_v2:" + "a" * 64,
+                "--attempt-ref",
+                "attempt_ref_v2:" + "b" * 64,
+                "--claim-ref",
+                "claim_ref_v2:" + "c" * 64,
+                "--result-ref",
+                "result_ref_v2:" + "d" * 64,
+                "--result",
+                str(result_path),
+            )
+
+        self.assertTrue(result.ok, result)
+        self.assertEqual(
+            hashlib.sha256(payload).hexdigest(),
+            reject.call_args.kwargs["payload_digest"],
+        )
+        self.assertTrue(reject.call_args.kwargs["payload_digest_exact"])
+        self.assertEqual("result_too_large", reject.call_args.kwargs["reason"])
+
+    def test_agent_result_observation_races_do_not_consume_attempt(self) -> None:
+        run_dir = self.root / "agent-observation-races"
+        coordinator = self.real_coordinator(run_dir, activity=True)
+        runnable = coordinator.status()["runnable_jobs"][0]
+        dispatcher_ref = str(
+            self.identity.derive_ref(
+                RefType.LEASE,
+                {"attempt_ref": runnable["active_attempt_ref"]},
+            )
+        )
+        claimed = self.parse_dispatch(
+            "status",
+            "--identity-path",
+            str(self.identity_path),
+            "--require-existing-identity",
+            "--run-dir",
+            str(run_dir),
+            "--claim-job-ref",
+            runnable["job_ref"],
+            "--claim-attempt-ref",
+            runnable["active_attempt_ref"],
+            "--dispatcher-ref",
+            dispatcher_ref,
+        )
+        self.assertTrue(claimed.ok, claimed)
+        result_path = Path(claimed.result["output_sink"])
+        payload = b"x" * (cli.MAX_AGENT_RESULT_REJECTION_HASH_BYTES + 1)
+        action_key = f"accept_agent_result:{runnable['active_attempt_ref']}"
+        real_revalidate = safe_io._revalidate_bounded_file_at
+
+        for mutation in ("replacement", "truncation", "growth", "policy"):
+            with self.subTest(mutation=mutation):
+                result_path.write_bytes(payload)
+                os.chmod(result_path, 0o600)
+                mutated = False
+
+                def mutate_then_revalidate(*args, **kwargs):
+                    nonlocal mutated
+                    if kwargs.get("display_path") != result_path or mutated:
+                        return real_revalidate(*args, **kwargs)
+                    mutated = True
+                    if mutation == "replacement":
+                        replacement = result_path.with_name(
+                            result_path.name + ".replacement"
+                        )
+                        replacement.write_bytes(payload)
+                        os.chmod(replacement, 0o600)
+                        os.replace(replacement, result_path)
+                    elif mutation == "truncation":
+                        os.truncate(result_path, len(payload) - 1)
+                    elif mutation == "growth":
+                        with result_path.open("ab") as stream:
+                            stream.write(b"g")
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                    else:
+                        os.chmod(result_path, 0o640)
+                    return real_revalidate(*args, **kwargs)
+
+                try:
+                    with mock.patch.object(
+                        safe_io,
+                        "_revalidate_bounded_file_at",
+                        side_effect=mutate_then_revalidate,
+                    ):
+                        rejected = self.parse_dispatch(
+                            "accept-agent-result",
+                            "--identity-path",
+                            str(self.identity_path),
+                            "--require-existing-identity",
+                            "--run-dir",
+                            str(run_dir),
+                            "--job-ref",
+                            runnable["job_ref"],
+                            "--attempt-ref",
+                            runnable["active_attempt_ref"],
+                            "--claim-ref",
+                            claimed.result["claim_ref"],
+                            "--result-ref",
+                            claimed.result["result_ref"],
+                            "--result",
+                            str(result_path),
+                        )
+                finally:
+                    if result_path.exists():
+                        os.chmod(result_path, 0o600)
+
+                self.assertFalse(rejected.ok, rejected)
+                self.assertIsNotNone(rejected.error)
+                self.assertEqual("unsafe_path", rejected.error.reason_code)
+                state = coordinator.load_state()
+                task = next(
+                    job
+                    for job in state["jobs"].values()
+                    if job.get("category") == "agent"
+                )
+                attempt = task["attempts"][0]
+                self.assertEqual(
+                    runnable["active_attempt_ref"],
+                    task["active_attempt_ref"],
+                )
+                self.assertEqual("claimed", attempt["dispatch_state"])
+                self.assertEqual("open", attempt["sink_state"])
+                self.assertNotIn(action_key, state["actions"])
 
     def test_nonfinite_agent_output_retries_once_then_records_gap(self) -> None:
         coordinator = self.real_coordinator(

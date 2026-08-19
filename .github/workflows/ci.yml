@@ -26,8 +26,22 @@ jobs:
         run: |
           python3 -I -B -S -m venv --copies "$RUNNER_TEMP/codex-python"
           chmod 0755 "$RUNNER_TEMP/codex-python/bin/python3"
-          "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S -m unittest discover \
-            -s tests -p test_ci_contract.py
+          "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S tests/test_ci_contract.py
+      - name: Build canonical test inventory
+        run: |
+          mkdir -p "$RUNNER_TEMP/test-inventory"
+          "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S scripts/test_inventory.py \
+            --manifest "$RUNNER_TEMP/test-inventory/test-manifest.json" \
+            --digest "$RUNNER_TEMP/test-inventory/test-manifest.sha256"
+      - name: Upload canonical test inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-test-inventory-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/test-inventory/test-manifest.json
+            ${{ runner.temp }}/test-inventory/test-manifest.sha256
+          if-no-files-found: error
+          retention-days: 1
   test-shard:
     needs: contract
     runs-on: ubuntu-latest
@@ -45,10 +59,17 @@ jobs:
         run: |
           python3 -I -B -S -m venv --copies "$RUNNER_TEMP/codex-python"
           chmod 0755 "$RUNNER_TEMP/codex-python/bin/python3"
+      - name: Download canonical test inventory
+        uses: actions/download-artifact@v4
+        with:
+          name: canonical-test-inventory-${{ github.sha }}
+          path: ${{ runner.temp }}/test-inventory
       - name: Run test shard
         run: |
           "$RUNNER_TEMP/codex-python/bin/python3" -I -B -S scripts/run_test_shard.py \
-            --shard-index "${{ matrix.shard }}" --shard-count 4
+            --shard-index "${{ matrix.shard }}" --shard-count 4 \
+            --manifest "$RUNNER_TEMP/test-inventory/test-manifest.json" \
+            --digest "$RUNNER_TEMP/test-inventory/test-manifest.sha256"
 
   darwin-security:
     needs: contract

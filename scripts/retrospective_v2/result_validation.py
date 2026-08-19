@@ -392,7 +392,6 @@ def agent_result_contract(result_schema: str) -> dict[str, Any]:
 _OPAQUE_REF_RE = re.compile(r"^[a-z][a-z0-9_]*_ref_v2:[0-9a-f]{64}$")
 _SCHEMA_RE = re.compile(r"^[a-z][a-z0-9_]*_v2$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_REDACTION_PLACEHOLDER_RE = re.compile(r"^\[REDACTED_[A-Z_]+\]$")
 
 _INTERNAL_HOST_RE = re.compile(
     r"(?i)(?:localhost|(?:10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
@@ -636,7 +635,7 @@ def _build_source_overlap_index(candidates: Sequence[str]) -> _SourceOverlapInde
     expanded, sensitive_short_tokens = _expand_source_overlap(candidates)
     for candidate in expanded:
         normalized_candidate = _normalized_overlap_text(candidate)
-        if not normalized_candidate or _REDACTION_PLACEHOLDER_RE.fullmatch(
+        if not normalized_candidate or privacy_locators.is_canonical_redacted_value(
             candidate.strip()
         ):
             continue
@@ -752,9 +751,11 @@ def scan_for_leaks(
     allowed_values = _privacy_reference_values(allowed_reference_values)
     findings: set[LeakFinding] = set()
     for parts, text in _walk_strings(value):
-        if not text or _REDACTION_PLACEHOLDER_RE.fullmatch(text.strip()):
-            continue
         path = _display_path(parts)
+        for (
+            placeholder_span
+        ) in privacy_locators.noncanonical_redacted_placeholder_spans(text):
+            findings.add(LeakFinding("unredactable_secret", path, *placeholder_span))
         reference_field = _is_valid_reference_value(parts, text)
         overlap_exempt = reference_field and text in allowed_values
         for (

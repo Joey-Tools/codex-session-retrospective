@@ -45,19 +45,38 @@ policy are committed into each run and reused without a `finalize` override.
 Run the repository contract first, then the complete Python 3.13 suite:
 
 ```bash
+set -e
 python3.13 -I -B -S -m venv --copies .codex-tmp/python
 chmod 0755 .codex-tmp/python/bin/python3
-.codex-tmp/python/bin/python3 -I -B -S -m unittest discover \
-  -s tests -p test_ci_contract.py
+.codex-tmp/python/bin/python3 -I -B -S tests/test_ci_contract.py
+mkdir -p .codex-tmp/test-inventory
+rm -f .codex-tmp/test-inventory/test-manifest.json \
+  .codex-tmp/test-inventory/test-manifest.sha256
+.codex-tmp/python/bin/python3 -I -B -S scripts/test_inventory.py \
+  --manifest .codex-tmp/test-inventory/test-manifest.json \
+  --digest .codex-tmp/test-inventory/test-manifest.sha256
+shard_failed=0
 for shard in 0 1 2 3; do
   .codex-tmp/python/bin/python3 -I -B -S scripts/run_test_shard.py \
-    --shard-index "$shard" --shard-count 4
+    --shard-index "$shard" --shard-count 4 \
+    --manifest .codex-tmp/test-inventory/test-manifest.json \
+    --digest .codex-tmp/test-inventory/test-manifest.sha256 || shard_failed=1
 done
+test "$shard_failed" -eq 0
 ```
 
 The tests are intentionally standard-library-only. CI creates owner-controlled
-Python 3.13 virtual environments, disables bytecode writes, and runs four
-stable, disjoint test-ID shards under explicit job timeouts.
+Python 3.13 virtual environments, disables bytecode writes, and discovers one
+bounded canonical test manifest in the contract job. The manifest binds both
+test IDs and an independent `tests/**/test_*.py` path, module, and SHA-256
+content inventory. Discovery rejects dynamic hooks, unsupported async or
+generator methods hidden behind wrapper chains, `runTest` fallback, imported
+external test cases, and any source change across module import. Runtime
+instrumentation rejects any non-`None` test-method result; both ordinary shards
+and the separate Darwin security runner use that same closed loader. Each of the
+four stable, disjoint test-ID shards independently rediscovers and exactly
+verifies both inventories before selecting tests, then rejects partial or
+skipped execution, all under explicit job timeouts.
 
 ## Migration State
 
