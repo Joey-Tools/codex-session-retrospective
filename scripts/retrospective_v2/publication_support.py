@@ -6,7 +6,6 @@ import hashlib
 import os
 import re
 import selectors
-import signal
 import stat
 import subprocess
 import sys
@@ -329,8 +328,8 @@ def _run_bounded_subprocess(
     input_view = memoryview(input_bytes or b"")
     input_offset = 0
     deadline = time.monotonic() + float(timeout_seconds)
-    process_group_id = process.pid if os.name == "posix" else None
-    process_group_cleanup_attempted = False
+    signal_retirement = process_lifecycle.GroupSignalRetirement()
+    active_error: BaseException | None = None
 
     def close_stream(stream: Any) -> None:
         try:
@@ -342,32 +341,23 @@ def _run_bounded_subprocess(
         except OSError:
             pass
 
-    def kill_process() -> None:
-        nonlocal process_group_cleanup_attempted
-        if process_group_cleanup_attempted:
-            return
-        process_group_cleanup_attempted = True
-        if process_group_id is not None:
-            try:
-                os.killpg(process_group_id, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            except OSError:
-                pass
-        elif process.poll() is None:
-            try:
-                process.kill()
-            except OSError:
-                pass
-        if process_group_id is not None:
-            try:
-                process.kill()
-            except OSError:
-                pass
-        try:
-            process.wait(timeout=1)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+    def close_process_group(child: subprocess.Popen[bytes]) -> int:
+        return process_lifecycle.close_process_group(
+            child,
+            signal_retirement=signal_retirement,
+            timeout_seconds=1,
+            error_type=LocalGitPublicationError,
+            label="subprocess",
+            termination_message="subprocess did not terminate",
+        )
+
+    def reap_process(child: subprocess.Popen[bytes]) -> int:
+        return process_lifecycle.reap_after_termination(
+            child,
+            timeout_seconds=1,
+            error_type=LocalGitPublicationError,
+            error_message="subprocess did not terminate",
+        )
 
     try:
         for stream, target in (
@@ -386,7 +376,6 @@ def _run_bounded_subprocess(
         while selector.get_map():
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                kill_process()
                 raise LocalGitPublicationError("subprocess exceeded its deadline")
             try:
                 events = selector.select(min(remaining, 0.1))
@@ -419,7 +408,6 @@ def _run_bounded_subprocess(
                     continue
                 assert isinstance(target, bytearray)
                 if len(stdout) + len(stderr) + len(chunk) > max_output_bytes:
-                    kill_process()
                     raise LocalGitPublicationError(
                         "subprocess exceeded its output limit"
                     )
@@ -427,7 +415,6 @@ def _run_bounded_subprocess(
 
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            kill_process()
             raise LocalGitPublicationError("subprocess exceeded its deadline")
         process_lifecycle.wait_for_unreaped_exit(
             process,
@@ -438,25 +425,29 @@ def _run_bounded_subprocess(
         )
         # Close the task-owned group while the unreaped leader still pins its
         # PID/PGID. Reaping first would open a process-group reuse race.
-        kill_process()
-        try:
-            return_code = process.wait(timeout=remaining)
-        except subprocess.TimeoutExpired as exc:
-            kill_process()
-            raise LocalGitPublicationError("subprocess exceeded its deadline") from exc
+        return_code = close_process_group(process)
         return subprocess.CompletedProcess(
             args=list(command),
             returncode=return_code,
             stdout=bytes(stdout),
             stderr=bytes(stderr),
         )
+    except BaseException as exc:
+        active_error = exc
+        raise
     finally:
         try:
             for stream in (process.stdin, process.stdout, process.stderr):
                 if stream is not None:
                     close_stream(stream)
             selector.close()
-            kill_process()
+            process_lifecycle.finish_cleanup(
+                process,
+                signal_retired=signal_retirement.retired,
+                terminate_and_reap=close_process_group,
+                reap_only=reap_process,
+                active_error=active_error,
+            )
         finally:
             if python_authority is not None:
                 executable_authority.revalidate_executable(python_authority)

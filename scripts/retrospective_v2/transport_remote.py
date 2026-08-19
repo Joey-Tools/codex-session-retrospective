@@ -6,13 +6,11 @@ import argparse
 import base64
 import binascii
 import codecs
-import errno
 import hmac
 import os
 import pathlib
 import pwd
 import selectors
-import signal
 import subprocess
 import sys
 import tempfile
@@ -80,10 +78,6 @@ class RemoteTransportAuthenticationError(TransportValidationError):
 
 class RemoteTransportExecutionError(RuntimeError):
     """Raised when authenticated helper code violates its execution contract."""
-
-
-class _RemoteProcessGroupSignalDenied(RuntimeError):
-    """The pinned group exists, but the kernel found no signalable member."""
 
 
 def remote_host_context_helper_path() -> pathlib.Path:
@@ -319,24 +313,6 @@ def _relay_valid_utf8(output: Any) -> None:
     sys.stdout.flush()
 
 
-def _terminate_remote_process_group(process: subprocess.Popen[bytes]) -> None:
-    try:
-        if os.name == "posix":
-            os.killpg(process.pid, signal.SIGKILL)
-        else:
-            process.kill()
-    except OSError as error:
-        if error.errno == errno.ESRCH:
-            return
-        if error.errno == errno.EPERM:
-            raise _RemoteProcessGroupSignalDenied(
-                "remote-host-context process group signal was denied"
-            ) from error
-        raise RuntimeError(
-            "remote-host-context process group could not be signaled"
-        ) from error
-
-
 def _reap_remote_process_group(process: subprocess.Popen[bytes]) -> int:
     return process_lifecycle.reap_after_termination(
         process,
@@ -349,28 +325,16 @@ def _reap_remote_process_group(process: subprocess.Popen[bytes]) -> int:
 def _close_remote_process_group(
     process: subprocess.Popen[bytes],
     *,
-    retire_group_signal: Callable[[], None],
+    signal_retirement: process_lifecycle.GroupSignalRetirement,
 ) -> int:
-    try:
-        _terminate_remote_process_group(process)
-    except _RemoteProcessGroupSignalDenied as signal_error:
-        return_code = _reap_remote_process_group(process)
-        # Reaping releases the PID/PGID fence. Retire signal authority before
-        # proving absence so no later cleanup path can target a reused group.
-        retire_group_signal()
-        try:
-            os.killpg(process.pid, 0)
-        except OSError as probe_error:
-            if probe_error.errno == errno.ESRCH:
-                return return_code
-            raise RuntimeError(
-                "remote-host-context process group closure is unproven"
-            ) from signal_error
-        raise RuntimeError(
-            "remote-host-context process group closure is unproven"
-        ) from signal_error
-    retire_group_signal()
-    return _reap_remote_process_group(process)
+    return process_lifecycle.close_process_group(
+        process,
+        signal_retirement=signal_retirement,
+        timeout_seconds=5,
+        error_type=RuntimeError,
+        label="remote-host-context",
+        termination_message="remote-host-context transport did not terminate",
+    )
 
 
 def _filter_remote_output(stream_filter: Any, chunk: bytes | None = None) -> bytes:
@@ -478,7 +442,7 @@ def _relay_remote_host_context_command(
             # its PID/PGID. Reaping first would open a reuse race.
             return_code = _close_remote_process_group(
                 process,
-                retire_group_signal=signal_retirement.retire,
+                signal_retirement=signal_retirement,
             )
             if return_code == REMOTE_HELPER_EXIT_AUTHENTICATION:
                 raise RemoteTransportAuthenticationError(
@@ -529,7 +493,7 @@ def _relay_remote_host_context_command(
             signal_retired=signal_retirement.retired,
             terminate_and_reap=lambda child: _close_remote_process_group(
                 child,
-                retire_group_signal=signal_retirement.retire,
+                signal_retirement=signal_retirement,
             ),
             reap_only=_reap_remote_process_group,
             active_error=active_error,

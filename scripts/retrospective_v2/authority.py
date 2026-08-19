@@ -13,7 +13,6 @@ import os
 from pathlib import Path
 import re
 import selectors
-import signal
 import stat
 import subprocess
 import time
@@ -685,28 +684,26 @@ def _run_bounded(
     errors = bytearray()
     input_offset = 0
     deadline = time.monotonic() + timeout_seconds
-    process_group_id = process.pid
-    process_group_cleanup_attempted = False
+    signal_retirement = process_lifecycle.GroupSignalRetirement()
+    active_error: BaseException | None = None
 
-    def terminate_process_group() -> None:
-        nonlocal process_group_cleanup_attempted
-        if process_group_cleanup_attempted:
-            return
-        process_group_cleanup_attempted = True
-        try:
-            os.killpg(process_group_id, signal.SIGKILL)
-        except ProcessLookupError:
-            pass
-        except OSError:
-            pass
-        try:
-            process.kill()
-        except OSError:
-            pass
-        try:
-            process.wait(timeout=1)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
+    def close_process_group(child: subprocess.Popen[bytes]) -> int:
+        return process_lifecycle.close_process_group(
+            child,
+            signal_retirement=signal_retirement,
+            timeout_seconds=1,
+            error_type=HistoryValidationError,
+            label="history command",
+            termination_message="history command did not terminate",
+        )
+
+    def reap_process(child: subprocess.Popen[bytes]) -> int:
+        return process_lifecycle.reap_after_termination(
+            child,
+            timeout_seconds=1,
+            error_type=HistoryValidationError,
+            error_message="history command did not terminate",
+        )
 
     try:
         for stream, target in ((process.stdout, output), (process.stderr, errors)):
@@ -764,14 +761,17 @@ def _run_bounded(
             status_message="history command leader status could not be observed",
         )
         # Close the group while the unreaped leader still pins its PID/PGID.
-        terminate_process_group()
+        return_code = close_process_group(process)
         return subprocess.CompletedProcess(
-            argv, process.wait(timeout=remaining), bytes(output), bytes(errors)
+            argv, return_code, bytes(output), bytes(errors)
         )
     except (BufferError, TimeoutError, subprocess.TimeoutExpired) as exc:
-        terminate_process_group()
         reason = "output limit" if isinstance(exc, BufferError) else "deadline"
-        raise HistoryValidationError(f"history command exceeded its {reason}") from exc
+        active_error = HistoryValidationError(f"history command exceeded its {reason}")
+        raise active_error from exc
+    except BaseException as exc:
+        active_error = exc
+        raise
     finally:
         selector.close()
         for stream in (process.stdin, process.stdout, process.stderr):
@@ -781,7 +781,13 @@ def _run_bounded(
                 stream.close()
             except OSError:
                 pass
-        terminate_process_group()
+        process_lifecycle.finish_cleanup(
+            process,
+            signal_retired=signal_retirement.retired,
+            terminate_and_reap=close_process_group,
+            reap_only=reap_process,
+            active_error=active_error,
+        )
 
 
 def run_bounded_history_command(

@@ -1801,6 +1801,37 @@ superseded_by:
   the generated bootstrap manifest, the isolated official OpenAI Skill
   validator, project-journal validation, source-tree bytecode exclusion, and
   `git diff --check` pass on the same implementation tree.
+- Signed head `a795c781` became stale when its fresh whole-range Codex processor
+  found that publication and retained-history subprocess owners swallowed
+  process-group signal and reap failures. That could report a successful
+  operation while task-owned descendants remained alive. The exact 63-commit,
+  62-parent-edge reviewer workspace used graph digest
+  `b7eebd56861d0430b5406be1eb14540c26258b2215ee46b40f3f31df310bcda7`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`;
+  it postvalidated clean, retained unchanged trusted-bundle digests, and was
+  safely removed after the terminal finding.
+- Remote relay, publication, and retained-history commands now use the same
+  strict process-group closure owner. Only `ESRCH` proves ordinary absence;
+  every other signal or reap failure is explicit. On Darwin, a zombie-only
+  `EPERM` result is accepted only after the leader is reaped and a
+  non-signaling group-absence probe succeeds. Signal authority retires before
+  any potentially reaping operation, so cleanup cannot target a reused PGID.
+  Four exact closure regressions pass 4/4 in 0.201 seconds, the complete source
+  transport module passes 128/128 in 42.760 seconds, module boundaries pass
+  19/19, and the Darwin security inventory passes 14/14 in 78.609 seconds.
+  Direct non-isolated unittest invocations and one intentionally stopped
+  publication-only probe are non-counting invocation-shape diagnostics.
+- The superseding Python 3.13 inventory contains 1,804 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `5923d8ba54aa14b32ff1de980f1c9ac1f0350e8de5dbc1de5e219cdd73c3cdf6`.
+  Shard 0 passes 431/431 in 1,709.522 seconds, shard 1 passes 486/486 in
+  1,474.314 seconds, shard 2 passes 474/474 in 1,446.785 seconds, and shard 3
+  passes 413/413 in 1,367.375 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary. CI contracts pass 33/33 and the public Skill contract
+  passes 5/5; Ruff 0.13.2 lint and formatting, both workflows under
+  `actionlint`, the generated bootstrap manifest, the official OpenAI Skill
+  validator, and `git diff --check` pass on the same implementation tree.
 
 ## Follow-up Work
 

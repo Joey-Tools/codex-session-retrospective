@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import errno
 import os
+import signal
 import subprocess
 import time
 from typing import Callable
@@ -59,6 +61,8 @@ def reap_after_termination(
 
     try:
         return process.wait(timeout=timeout_seconds)
+    except OSError as error:
+        raise error_type(error_message) from error
     except subprocess.TimeoutExpired:
         try:
             process.kill()
@@ -66,8 +70,56 @@ def reap_after_termination(
             pass
         try:
             return process.wait(timeout=timeout_seconds)
-        except subprocess.TimeoutExpired as error:
+        except (OSError, subprocess.TimeoutExpired) as error:
             raise error_type(error_message) from error
+
+
+def close_process_group(
+    process: subprocess.Popen[bytes],
+    *,
+    signal_retirement: GroupSignalRetirement,
+    timeout_seconds: float,
+    error_type: type[RuntimeError],
+    label: str,
+    termination_message: str,
+) -> int:
+    """Signal a pinned task group, reap its leader, and prove denied closure."""
+
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGKILL)
+        else:
+            process.kill()
+    except OSError as signal_error:
+        if signal_error.errno == errno.ESRCH:
+            pass
+        elif os.name == "posix" and signal_error.errno == errno.EPERM:
+            signal_retirement.retire()
+            return_code = reap_after_termination(
+                process,
+                timeout_seconds=timeout_seconds,
+                error_type=error_type,
+                error_message=termination_message,
+            )
+            try:
+                os.killpg(process.pid, 0)
+            except OSError as probe_error:
+                if probe_error.errno == errno.ESRCH:
+                    return return_code
+            raise error_type(
+                f"{label} process group closure is unproven"
+            ) from signal_error
+        else:
+            raise error_type(
+                f"{label} process group could not be signaled"
+            ) from signal_error
+    signal_retirement.retire()
+    return reap_after_termination(
+        process,
+        timeout_seconds=timeout_seconds,
+        error_type=error_type,
+        error_message=termination_message,
+    )
 
 
 def finish_cleanup(

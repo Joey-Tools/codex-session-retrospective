@@ -155,13 +155,16 @@ therefore produces `source_changed_during_scan`. Timestamp-only churn is benign,
 while content, identity, or access-policy drift remains an explicit
 source-stability gap.
 
-The remote relay keeps its leader unreaped until post-output work is terminal.
-It signals the task-owned process group while the PID/PGID is still pinned and
-retires signal authority before reaping. Darwin may return `EPERM` when the
-unreaped zombie is the group's only remaining member; that case is accepted
-only after reaping and a non-signaling group-absence probe. A still-present or
-unverifiable group is an explicit cleanup failure, and no later cleanup path may
-signal the now-reusable PGID.
+The remote relay and publication/history subprocess owners keep their leaders
+unreaped until post-output work is terminal. They share one strict closure
+owner, signal each task-owned process group while the PID/PGID is still pinned,
+and retire signal authority before any operation that may reap. `ESRCH` is the
+only ordinary signal absence; every other signal failure is explicit. Darwin
+may return `EPERM` when the unreaped zombie is the group's only remaining
+member; that case is accepted only after reaping and a non-signaling
+group-absence probe. A still-present or unverifiable group or an incomplete
+leader reap is an explicit cleanup failure, and no later cleanup path may signal
+the now-reusable PGID.
 
 Source scheduling prepares the transport-program snapshot, remote-helper
 snapshot, and bound empty output together with the candidate checkpoint. Exact

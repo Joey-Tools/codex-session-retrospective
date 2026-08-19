@@ -3074,7 +3074,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         reap_calls = 0
         reap_process = transport_remote.process_lifecycle.reap_after_termination
 
-        def observe_termination(_process) -> None:
+        def observe_termination(process_group_id: int, selected_signal: int) -> None:
             nonlocal terminations
             terminations += 1
 
@@ -3088,8 +3088,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         with (
             mock.patch.object(
-                transport_remote,
-                "_terminate_remote_process_group",
+                transport_remote.process_lifecycle.os,
+                "killpg",
                 side_effect=observe_termination,
             ),
             mock.patch.object(
@@ -3137,7 +3137,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         with (
             mock.patch.object(
-                transport_remote.os,
+                transport_remote.process_lifecycle.os,
                 "killpg",
                 side_effect=fail_first_group_signal,
             ),

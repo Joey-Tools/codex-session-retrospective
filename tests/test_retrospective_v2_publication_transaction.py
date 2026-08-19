@@ -6,12 +6,14 @@ import copy
 from contextlib import nullcontext
 from dataclasses import replace
 import datetime as dt
+import errno
 import hashlib
 import json
 import os
 from pathlib import Path
 import shlex
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -1139,6 +1141,93 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             )
             self.assertEqual(0, authority_result.returncode)
             assert_child_closed(authority_detached_pid)
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_bounded_subprocesses_surface_group_signal_failures(self) -> None:
+        real_killpg = os.killpg
+
+        for runner, error_type, arguments in (
+            (
+                publication_support._run_bounded_subprocess,
+                publication_support.LocalGitPublicationError,
+                {"environment": dict(os.environ)},
+            ),
+            (
+                authority._run_bounded,
+                authority.HistoryValidationError,
+                {"env": dict(os.environ)},
+            ),
+        ):
+            with self.subTest(error_type=error_type.__name__):
+                attempted_signals: list[int] = []
+
+                def fail_once(process_group_id: int, selected_signal: int) -> None:
+                    attempted_signals.append(selected_signal)
+                    if len(attempted_signals) == 1:
+                        raise OSError(errno.EIO, "simulated group signal failure")
+                    real_killpg(process_group_id, selected_signal)
+
+                with (
+                    mock.patch.object(
+                        publication_support.process_lifecycle.os,
+                        "killpg",
+                        side_effect=fail_once,
+                    ),
+                    self.assertRaisesRegex(error_type, "could not be signaled"),
+                ):
+                    runner(
+                        [sys.executable, "-I", "-B", "-S", "-c", "pass"],
+                        timeout_seconds=2,
+                        max_output_bytes=1024,
+                        **arguments,
+                    )
+                self.assertEqual(
+                    [signal.SIGKILL, signal.SIGKILL], attempted_signals[:2]
+                )
+                self.assertIn(attempted_signals[2:], ([], [0]))
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_bounded_subprocesses_surface_reap_timeouts(self) -> None:
+        real_reap = publication_support.process_lifecycle.reap_after_termination
+
+        for runner, error_type, arguments in (
+            (
+                publication_support._run_bounded_subprocess,
+                publication_support.LocalGitPublicationError,
+                {"environment": dict(os.environ)},
+            ),
+            (
+                authority._run_bounded,
+                authority.HistoryValidationError,
+                {"env": dict(os.environ)},
+            ),
+        ):
+            with self.subTest(error_type=error_type.__name__):
+                reap_calls = 0
+
+                def time_out_once(*args, **kwargs):
+                    nonlocal reap_calls
+                    reap_calls += 1
+                    if reap_calls == 1:
+                        timeout = subprocess.TimeoutExpired(args[0].args, 1)
+                        raise kwargs["error_type"](kwargs["error_message"]) from timeout
+                    return real_reap(*args, **kwargs)
+
+                with (
+                    mock.patch.object(
+                        publication_support.process_lifecycle,
+                        "reap_after_termination",
+                        side_effect=time_out_once,
+                    ),
+                    self.assertRaisesRegex(error_type, "did not terminate"),
+                ):
+                    runner(
+                        [sys.executable, "-I", "-B", "-S", "-c", "pass"],
+                        timeout_seconds=2,
+                        max_output_bytes=1024,
+                        **arguments,
+                    )
+                self.assertEqual(2, reap_calls)
 
     def test_bounded_subprocesses_wait_for_leader_after_output_eof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
