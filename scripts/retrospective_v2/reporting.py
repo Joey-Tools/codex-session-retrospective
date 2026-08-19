@@ -710,10 +710,12 @@ def _validate_safe_string(value: str, *, path: str) -> None:
         raise RetainedPrivacyError(f"{path} contains non-ASCII retained text")
     if len(value) > 256:
         raise RetainedPrivacyError(f"{path} exceeds the retained scalar length limit")
-    if "\n" in value or "\r" in value or "\t" in value:
-        raise RetainedPrivacyError(f"{path} contains multiline or tab-delimited text")
     if privacy_locators.contains_credential_material(value):
         raise RetainedPrivacyError(f"{path} contains credential-shaped material")
+    if privacy_locators.contains_forbidden_invisible_character(value):
+        raise RetainedPrivacyError(
+            f"{path} contains a control or Unicode default-ignorable character"
+        )
     bare_fqdn = privacy_locators.BARE_FQDN_RE.search(value)
     if (
         bare_fqdn is not None
@@ -750,10 +752,12 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
         raise RetainedPrivacyError(f"{path} contains non-ASCII retained text")
     if len(value) > 2048:
         raise RetainedPrivacyError(f"{path} exceeds the reviewed text limit")
-    if any(character in value for character in "\r\n\t"):
-        raise RetainedPrivacyError(f"{path} contains multiline reviewed text")
     if privacy_locators.contains_credential_material(value):
         raise RetainedPrivacyError(f"{path} contains credential-shaped material")
+    if privacy_locators.contains_forbidden_invisible_character(value):
+        raise RetainedPrivacyError(
+            f"{path} contains a control or Unicode default-ignorable character"
+        )
     if any(
         (
             privacy_locators.URI_LOCATOR_RE.search(value),

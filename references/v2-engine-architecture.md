@@ -66,7 +66,10 @@ control-field classification, prose normalization, bounded overlap windows, and
 short source-token matching. `privacy_locators.py` owns working-zone bare-host
 and effective IPv4/IPv6 detection. Working-zone redaction, retained safe
 strings, reviewed prose, and final report validation consume that same locator
-policy. Protocol locators accept every syntactically legal scheme length and
+policy. It also owns the closed control/default-ignorable character policy used
+by agent-envelope validation, source-overlap normalization, retained safe
+strings, reviewed prose, and final report validation. Protocol locators accept
+every syntactically legal scheme length and
 rely on the result field's existing character ceiling rather than a privacy-only
 scheme cap. Their shared left boundary excludes every legal ASCII scheme
 character and every Unicode alphanumeric character instead of relying on a

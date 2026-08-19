@@ -553,17 +553,13 @@ def _display_path(parts: tuple[str | int, ...]) -> str:
     return path
 
 
-def _normalized_overlap_text(value: str) -> str:
-    return " ".join(value.split()).casefold()
-
-
 def source_overlap_query_chars(*values: Any) -> int:
     """Return the longest normalized result string needed for source windows."""
 
     maximum = 1
     for value in values:
         for _path_parts, text in _walk_strings(value):
-            maximum = max(maximum, len(_normalized_overlap_text(text)))
+            maximum = max(maximum, len(privacy_locators.normalize_overlap_text(text)))
     return maximum
 
 
@@ -634,7 +630,7 @@ def _build_source_overlap_index(candidates: Sequence[str]) -> _SourceOverlapInde
     window_hashes: set[int] = set()
     expanded, sensitive_short_tokens = _expand_source_overlap(candidates)
     for candidate in expanded:
-        normalized_candidate = _normalized_overlap_text(candidate)
+        normalized_candidate = privacy_locators.normalize_overlap_text(candidate)
         if not normalized_candidate or privacy_locators.is_canonical_redacted_value(
             candidate.strip()
         ):
@@ -662,7 +658,7 @@ def _source_overlap(
     text: str,
     index: _SourceOverlapIndex,
 ) -> tuple[int, int] | None:
-    normalized_text = _normalized_overlap_text(text)
+    normalized_text = privacy_locators.normalize_overlap_text(text)
     if source_overlap.contains_short_token(
         index.candidates,
         normalized_text,
@@ -823,7 +819,7 @@ def _post_redact_text(
     redacted = privacy_locators.redact_private_key_blocks(text)
     personal_identifier_patterns = source_overlap.normalized_redaction_patterns(
         map(
-            _normalized_overlap_text,
+            privacy_locators.normalize_overlap_text,
             privacy_locators.personal_identifier_values(redacted),
         )
     )
@@ -1107,6 +1103,8 @@ def validate_result_envelope(value: Any) -> None:
             for key, item in child.items():
                 if not isinstance(key, str) or len(key) > MAX_RESULT_KEY_CHARS:
                     raise _error(path, "contains an invalid field name")
+                if privacy_locators.contains_forbidden_invisible_character(key):
+                    raise _error(path, "contains a forbidden invisible field name")
                 total_string_chars += len(key)
                 stack.append((item, depth + 1, _path(path, key)))
         elif isinstance(child, list):
@@ -1123,6 +1121,8 @@ def validate_result_envelope(value: Any) -> None:
                     path,
                     f"must be at most {MAX_RESULT_STRING_CHARS} characters",
                 )
+            if privacy_locators.has_hidden_model_character(child):
+                raise _error(path, "must not contain a forbidden invisible character")
             total_string_chars += len(child)
         elif child is None or isinstance(child, (bool, int)):
             pass
@@ -1414,6 +1414,7 @@ def _privacy_prepare(
     validate_result_envelope(result)
     source = _require_mapping(result, path="$")
     _reject_forbidden_keys(source)
+    source = privacy_locators.normalize_model_result_strings(source)
     allowed_reference_values = _privacy_reference_values(*allowed_reference_groups)
     sanitized = post_redact(
         source,

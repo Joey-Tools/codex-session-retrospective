@@ -397,6 +397,12 @@ host and cwd values, typed references, digests, and commitments always remain
 source candidates. Every other decoded string value, including long
 escaped values and surrogate pairs, is case-folded, whitespace-normalized, and
 split into overlapping bounded windows; no long prose value is skipped. The
+overlap normalizer canonicalizes whitespace controls and removes non-whitespace
+C0, DEL/C1, and Unicode default-ignorable codepoints before matching, so a
+retained hidden character cannot hide a source excerpt. Agent-result strings
+canonicalize whitespace controls before redaction and persist only the
+normalized value; non-whitespace controls and default-ignorable characters,
+plus every such field-name character, fail at the envelope boundary. The
 normalizer accumulates one-character parser emissions in fixed-size chunks and
 keeps the active window in a bounded deque rather than repeatedly copying a
 growing string. The
@@ -594,7 +600,8 @@ review-result hash, reviewer, and attempt lineage. High-impact turn rows retain
 the validated `problem_statement`, `cause`, `rewritten_prompt`,
 `expected_effect`, `confidence`, and opaque evidence references. These four
 reviewed text fields are the only retained prose exception and remain subject to
-ASCII, length, locator, and credential scans. The bundle never contains raw or
+ASCII, length, locator, credential, control-character, and Unicode
+default-ignorable scans. The bundle never contains raw or
 quoted original prompts, excerpts, tool output, source paths, raw IDs, internal
 URLs, bare FQDNs, secrets, credentials, customer data, personal data, or
 proprietary code.

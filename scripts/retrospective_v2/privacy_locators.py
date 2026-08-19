@@ -4,10 +4,60 @@ from __future__ import annotations
 
 import ipaddress
 import json
+from collections.abc import Mapping
 from itertools import chain, islice
 from operator import itemgetter
 import re
-from typing import Iterable, Iterator
+from typing import Any, Iterable, Iterator
+
+
+_FORBIDDEN_INVISIBLE_RE = re.compile(
+    r"[\x00-\x1F\x7F-\x9F\u00AD\u034F\u061C\u115F-\u1160"
+    r"\u17B4-\u17B5\u180B-\u180F\u200B-\u200F\u202A-\u202E"
+    r"\u2060-\u206F\u3164\uFE00-\uFE0F\uFEFF\uFFA0\uFFF0-\uFFF8"
+    r"\U0001BCA0-\U0001BCAF\U0001D173-\U0001D17A"
+    r"\U000E0000-\U000E0FFF]"
+)
+
+
+def is_forbidden_invisible_character(character: str) -> bool:
+    """Return whether one character is a control or default-ignorable codepoint."""
+
+    return _FORBIDDEN_INVISIBLE_RE.fullmatch(character) is not None
+
+
+def contains_forbidden_invisible_character(value: str) -> bool:
+    """Return whether text contains a hidden character forbidden in model output."""
+
+    return _FORBIDDEN_INVISIBLE_RE.search(value) is not None
+
+
+def has_hidden_model_character(value: str) -> bool:
+    """Return whether normalized model text retains a forbidden character."""
+
+    return contains_forbidden_invisible_character(" ".join(value.split()))
+
+
+def normalize_overlap_text(value: str) -> str:
+    """Normalize source comparison text without retaining invisible codepoints."""
+
+    return _FORBIDDEN_INVISIBLE_RE.sub("", " ".join(value.split())).casefold()
+
+
+def normalize_model_result_strings(value: Any) -> Any:
+    """Return a result tree whose string values use canonical single-line spacing."""
+
+    match value:
+        case str():
+            return " ".join(value.split())
+        case Mapping():
+            return {
+                key: normalize_model_result_strings(item) for key, item in value.items()
+            }
+        case list():
+            return [normalize_model_result_strings(item) for item in value]
+        case _:
+            return value
 
 
 BARE_PRIVATE_LOCATOR_RE = re.compile(

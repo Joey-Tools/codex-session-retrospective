@@ -557,6 +557,46 @@ def refresh_bundle_digest(artifacts: dict[str, bytes]) -> None:
 
 
 class RetrospectiveV2ReportingTests(unittest.TestCase):
+    def test_retained_bundle_rejects_hidden_characters(self) -> None:
+        hidden_characters = (
+            "\x00",
+            "\x08",
+            "\x1b",
+            "\x7f",
+            "\u034f",
+            "\u200b",
+            "\ufe0f",
+            "\U000e0100",
+        )
+        for hidden in hidden_characters:
+            with self.subTest(hidden=ascii(hidden), phase="direct"):
+                with self.assertRaises(RetainedPrivacyError):
+                    reporting_module.validate_retained_value(
+                        {"cause": f"Reviewed{hidden} summary"}
+                    )
+
+        reviews = review_data()
+        reviews["turn_findings"][1]["cause"] = "Reviewed\u200b summary"
+        with self.assertRaises(RetainedPrivacyError):
+            assemble_retained_artifacts(run_state(), reviews)
+
+        artifacts = assemble_retained_artifacts(run_state(), review_data())
+        tampered = dict(artifacts)
+        rows = [
+            json.loads(line) for line in tampered["turn_findings.jsonl"].splitlines()
+        ]
+        high_impact = next(row for row in rows if row["disposition"] == "high_impact")
+        high_impact["cause"] = "Reviewed\x00 summary"
+        tampered["turn_findings.jsonl"] = b"".join(
+            canonical_json_bytes(row) for row in rows
+        )
+        refresh_bundle_digest(tampered)
+        with self.assertRaisesRegex(
+            RetainedPrivacyError,
+            "control or Unicode default-ignorable",
+        ):
+            validate_retained_artifacts(tampered)
+
     def test_reporting_remains_directly_loadable_under_isolated_python(self) -> None:
         completed = subprocess.run(
             (

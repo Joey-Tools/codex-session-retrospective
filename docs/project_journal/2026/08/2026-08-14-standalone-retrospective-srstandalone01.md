@@ -1681,6 +1681,46 @@ superseded_by:
   1,281.917 seconds. Every shard exits zero with an explicit `OK` terminal
   summary. The independent Darwin security inventory passes 11/11 in 75.705
   seconds.
+- Signed head `b65cea58` became stale when its fresh whole-range Codex processor
+  found that invisible control and Unicode default-ignorable characters could
+  be inserted into model prose to evade source-overlap matching and could then
+  survive into retained prose. The reviewer workspace was independently
+  materialized and validated from trusted private release `f9e596f4`; its
+  manifest, skill, and guard digests remained unchanged after review, the
+  workspace postvalidated clean, and its task root was safely removed.
+- The shared privacy owner now defines a closed C0, DEL/C1, and Unicode
+  default-ignorable policy. Model-result keys reject every listed character;
+  string values canonicalize whitespace controls before redaction and reject
+  all remaining hidden characters. Source-overlap comparison applies the same
+  whitespace canonicalization and removes the remaining hidden characters on
+  both source and result sides, while retained safe strings, reviewed prose,
+  bundle assembly, and bundle reread validation fail closed if any such
+  character remains. The data and architecture contracts document the same
+  boundary.
+- The first 181-test affected-module run is non-counting: rejecting all control
+  characters before redaction broke canonical multiline model output and ended
+  with 12 errors and 2 failures. The corrected design normalizes whitespace
+  controls before redaction while rejecting non-whitespace controls and
+  default-ignorables. Exact old/new regressions then pass 9/9 in 21.096 seconds;
+  affected result, export, and audit modules pass 181/181 in 81.902 seconds;
+  module boundaries pass 19/19 in 1.866 seconds with an exact branch inventory
+  of 9,498 under the unchanged 9,500 ceiling; CI contracts pass 33/33; and the
+  public skill contract passes 5/5.
+- The final Python 3.13 inventory contains 1,790 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `2a958ce89869327bd60b6a7ca44730f13f11153a2afa6abf1639977c7f25cec7`.
+  Shard 0 passes 428/428 in 1,719.827 seconds, shard 1 passes 484/484 in
+  1,481.349 seconds, shard 2 passes 468/468 in 1,454.321 seconds, and shard 3
+  passes 410/410 in 1,376.131 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary, for exact aggregate coverage of 1,790/1,790. The
+  independent Darwin security inventory passes 11/11 in 68.430 seconds.
+- The generated bootstrap manifest, Ruff 0.13.2 lint and changed-file format
+  checks, both real workflows under `actionlint`, shell syntax and ShellCheck,
+  the isolated official OpenAI Skill validator, and `git diff --check` pass.
+  One actionlint invocation named a nonexistent workflow and one validator
+  invocation used a local environment without PyYAML; both are recorded as
+  non-counting command errors, and neither is substituted for the successful
+  authoritative rerun.
 
 ## Follow-up Work
 

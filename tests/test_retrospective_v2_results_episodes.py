@@ -353,6 +353,63 @@ def synthesis_result() -> dict:
 
 
 class ResultValidationTests(unittest.TestCase):
+    def test_result_envelope_rejects_hidden_characters(self) -> None:
+        hidden_characters = (
+            "\x00",
+            "\x1b",
+            "\x7f",
+            "\u034f",
+            "\u200b",
+            "\ufe0f",
+            "\U000e0100",
+        )
+        for hidden in hidden_characters:
+            with self.subTest(hidden=ascii(hidden), location="value"):
+                result = extractor_result()
+                result["turns"][0]["generalized_working_text"] = (
+                    f"Generalized{hidden}working text"
+                )
+                with self.assertRaisesRegex(
+                    ResultValidationError,
+                    "forbidden invisible character",
+                ):
+                    validate_extractor_result(result, ALL_REFS)
+
+            with self.subTest(hidden=ascii(hidden), location="key"):
+                with self.assertRaisesRegex(
+                    ResultValidationError,
+                    "forbidden invisible field name",
+                ):
+                    result_validation_module.validate_result_envelope(
+                        {f"safe{hidden}field": "value"}
+                    )
+
+        result = extractor_result()
+        result["turns"][0]["generalized_working_text"] = "Generalized\nworking\ttext"
+        validated = validate_extractor_result(result, ALL_REFS)
+        self.assertEqual(
+            "Generalized working text",
+            validated["turns"][0]["generalized_working_text"],
+        )
+
+    def test_source_overlap_ignores_hidden_character_insertions(self) -> None:
+        for hidden in ("\x00", "\x1b", "\u034f", "\u200b", "\ufe0f"):
+            with self.subTest(hidden=ascii(hidden), location="result"):
+                self.assertTrue(
+                    scan_for_leaks(
+                        {"text": f"private{hidden} project detail"},
+                        original_prompts=("private project detail",),
+                    )
+                )
+
+            with self.subTest(hidden=ascii(hidden), location="source"):
+                self.assertTrue(
+                    scan_for_leaks(
+                        {"text": "private project detail"},
+                        original_prompts=(f"private{hidden} project detail",),
+                    )
+                )
+
     def test_source_overlap_windows_preserve_normalized_boundaries(self) -> None:
         phrase = "cross window phrase"
         source = "AA  " + "x" * 10 + phrase.upper() + "y" * 20
