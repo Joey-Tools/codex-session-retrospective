@@ -336,3 +336,9 @@ results or diagnostics. Failure objects include an allowlisted `reason_code`,
 an allowlisted `recovery_action`, and `retryable`; raw exception text is never
 used as automation guidance. Unknown failures collapse to
 `unexpected_internal_failure` plus `escalate_internal_failure`.
+If a bounded subprocess has an active primary failure and its process-group
+cleanup also fails, the CLI instead emits the non-retryable
+`process_group_cleanup_incomplete` security result. Its bounded result preserves
+only the primary error code, reason code, and exit code; it never exposes raw
+exception or process output. Operators must repair or prove the retained trust
+boundary before retrying.

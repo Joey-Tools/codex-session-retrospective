@@ -44,6 +44,7 @@ from retrospective_v2 import (  # noqa: E402
     gpg_status,
     orchestrator as orchestrator_module,
     orchestrator_support,
+    process_lifecycle,
     publication_abort_authority,
     publication_abort_replay,
     publication_git_commits,
@@ -1228,6 +1229,34 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                         **arguments,
                     )
                 self.assertEqual(2, reap_calls)
+
+    def test_active_primary_records_persistent_group_cleanup_failure(self) -> None:
+        for signal_retired in (False, True):
+            with self.subTest(signal_retired=signal_retired):
+                primary = publication_support.LocalGitPublicationError(
+                    "simulated primary deadline"
+                )
+
+                def cleanup_failure(_process) -> int:
+                    raise publication_support.LocalGitPublicationError(
+                        "simulated persistent cleanup failure"
+                    )
+
+                process_lifecycle.finish_cleanup(
+                    mock.Mock(spec=subprocess.Popen),
+                    signal_retired=signal_retired,
+                    terminate_and_reap=cleanup_failure,
+                    reap_only=cleanup_failure,
+                    active_error=primary,
+                )
+
+                self.assertTrue(
+                    process_lifecycle.has_incomplete_process_group_cleanup(primary)
+                )
+                self.assertIn(
+                    "simulated persistent cleanup failure",
+                    getattr(primary, "__notes__", []),
+                )
 
     def test_bounded_subprocesses_wait_for_leader_after_output_eof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:

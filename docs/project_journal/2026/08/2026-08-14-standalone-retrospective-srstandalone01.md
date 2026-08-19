@@ -1832,6 +1832,46 @@ superseded_by:
   passes 5/5; Ruff 0.13.2 lint and formatting, both workflows under
   `actionlint`, the generated bootstrap manifest, the official OpenAI Skill
   validator, and `git diff --check` pass on the same implementation tree.
+- Signed head `17460d36` became stale when its fresh whole-range Codex processor
+  found two remaining process-closure reporting gaps. The publisher canary
+  treated terminal-leader `EPERM` as sufficient without proving that the
+  process group was absent, and an active primary error could hide a later
+  process-group cleanup failure because the machine-facing CLI ignored
+  exception notes. The exact 64-commit, 63-parent-edge reviewer workspace used
+  graph digest
+  `bd52b75567da9feb598b488078b1dce05335ebfbf7a75df4769558df20787adc`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`;
+  it postvalidated clean, retained unchanged trusted-bundle digests, and was
+  safely removed after the terminal findings.
+- The canary now delegates to the shared strict process-group closure owner.
+  A terminal-leader `EPERM` retires signal authority and reaps the leader, but
+  succeeds only when a subsequent non-signaling group probe proves `ESRCH`.
+  Persistent cleanup failure marks the exception chain with bounded structured
+  evidence. The CLI scans at most 16 cause/context links and emits the closed
+  `process_group_cleanup_incomplete` security result without exposing raw
+  exception details. Exact new regressions pass 3/3, the canary module passes
+  12/12 in 7.975 seconds, focused publication lifecycle tests pass 4/4 in
+  0.227 seconds, the CLI module passes 66/66 in 200.730 seconds, source
+  transport passes 128/128 in 41.387 seconds, module boundaries pass 19/19,
+  CI contracts pass 33/33, and the Darwin security inventory passes 14/14 in
+  83.524 seconds.
+- The final Python 3.13 inventory contains 1,807 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `699e55f6ab69eb097fb41cc5fe328abf93cd5f37089d675e9a32f37a6d735e00`.
+  Shard 0 passes 431/431 in 1,733.618 seconds, shard 1 passes 488/488 in
+  1,492.735 seconds, shard 2 passes 475/475 in 1,469.669 seconds, and shard 3
+  passes 413/413 in 1,370.200 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary, for exact aggregate coverage of 1,807/1,807. One
+  direct focused invocation used a non-isolated module-loading shape and is
+  non-counting; the isolated exact rerun supplied the counting evidence above.
+  Ruff 0.13.2 lint and changed-file formatting, both workflows under
+  `actionlint`, the generated bootstrap manifest, the isolated official OpenAI
+  Skill validator, project-journal validation, source-tree bytecode exclusion,
+  and `git diff --check` pass on the same implementation tree. One preceding
+  `actionlint` invocation named a nonexistent stale workflow path and is
+  non-counting; the exact current workflow invocation supplied the passing
+  evidence.
 
 ## Follow-up Work
 

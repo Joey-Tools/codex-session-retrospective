@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import selectors
-import signal
 import subprocess
 import tempfile
 import time
@@ -384,52 +383,33 @@ def _run_bounded_publisher_canary_process(
     stdout = bytearray()
     stderr = bytearray()
     deadline = time.monotonic() + timeout_seconds
-    process_group_id = process.pid if os.name == "posix" else None
-    process_group_signal_retired = False
+    signal_retirement = process_lifecycle.GroupSignalRetirement()
+    active_error: BaseException | None = None
 
     def close_process_group(
-        *, cleanup_deadline: float, leader_terminal: bool = False
+        child: subprocess.Popen[bytes], *, cleanup_deadline: float
     ) -> int:
-        nonlocal process_group_id, process_group_signal_retired
-        if not process_group_signal_retired:
-            if process_group_id is not None:
-                try:
-                    os.killpg(process_group_id, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                except PermissionError as error:
-                    if not leader_terminal:
-                        raise _PublisherCanaryProcessError(
-                            "publisher canary process group could not be terminated"
-                        ) from error
-                except OSError as error:
-                    raise _PublisherCanaryProcessError(
-                        "publisher canary process group could not be terminated"
-                    ) from error
-            else:
-                try:
-                    process.kill()
-                except ProcessLookupError:
-                    pass
-                except OSError as error:
-                    raise _PublisherCanaryProcessError(
-                        "publisher canary process could not be terminated"
-                    ) from error
-            process_group_id = None
-            process_group_signal_retired = True
-
         remaining = cleanup_deadline - time.monotonic()
         if remaining <= 0:
             raise _PublisherCanaryProcessError(
                 "publisher canary process group cleanup exceeded its deadline"
             )
-        try:
-            return_code = process.wait(timeout=remaining)
-        except (OSError, subprocess.TimeoutExpired) as error:
-            raise _PublisherCanaryProcessError(
-                "publisher canary leader could not be reaped"
-            ) from error
-        return return_code
+        return process_lifecycle.close_process_group(
+            child,
+            signal_retirement=signal_retirement,
+            timeout_seconds=remaining,
+            error_type=_PublisherCanaryProcessError,
+            label="publisher canary",
+            termination_message="publisher canary leader could not be reaped",
+        )
+
+    def reap_process_group(child: subprocess.Popen[bytes]) -> int:
+        return process_lifecycle.reap_after_termination(
+            child,
+            timeout_seconds=_PUBLISHER_CANARY_CLEANUP_SECONDS,
+            error_type=_PublisherCanaryProcessError,
+            error_message="publisher canary leader could not be reaped",
+        )
 
     try:
         for stream, target, limit in (
@@ -482,10 +462,7 @@ def _run_bounded_publisher_canary_process(
             deadline_message="publisher canary process exceeded its deadline",
             status_message="publisher canary leader status could not be observed",
         )
-        return_code = close_process_group(
-            cleanup_deadline=deadline,
-            leader_terminal=True,
-        )
+        return_code = close_process_group(process, cleanup_deadline=deadline)
         return subprocess.CompletedProcess(
             args=list(command),
             returncode=return_code,
@@ -493,20 +470,29 @@ def _run_bounded_publisher_canary_process(
             stderr=bytes(stderr),
         )
     except BaseException as error:
-        try:
-            close_process_group(
-                cleanup_deadline=(time.monotonic() + _PUBLISHER_CANARY_CLEANUP_SECONDS)
-            )
-        except BaseException as cleanup_error:
-            error.add_note(f"process group cleanup failed: {cleanup_error}")
+        active_error = error
         raise
     finally:
-        selector.close()
-        for stream in (process.stdout, process.stderr):
-            try:
-                stream.close()
-            except OSError:
-                pass
+        try:
+            selector.close()
+            for stream in (process.stdout, process.stderr):
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+        finally:
+            process_lifecycle.finish_cleanup(
+                process,
+                signal_retired=signal_retirement.retired,
+                terminate_and_reap=lambda child: close_process_group(
+                    child,
+                    cleanup_deadline=(
+                        time.monotonic() + _PUBLISHER_CANARY_CLEANUP_SECONDS
+                    ),
+                ),
+                reap_only=reap_process_group,
+                active_error=active_error,
+            )
 
 
 def publisher_sign_verify_canary(

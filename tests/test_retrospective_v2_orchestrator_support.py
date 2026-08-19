@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import errno
 import os
 from pathlib import Path
 import signal
@@ -349,6 +351,48 @@ class PublisherCanaryProcessTests(unittest.TestCase):
 
         self.assertEqual(1, kill_signals.count(signal.SIGKILL))
         self.assertEqual(2, wait_calls)
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_canary_eperm_requires_group_absence_after_reap(self) -> None:
+        for group_present in (False, True):
+            with self.subTest(group_present=group_present):
+                attempted_signals: list[int] = []
+
+                def deny_signal_then_probe(
+                    _process_group_id: int,
+                    selected_signal: int,
+                ) -> None:
+                    attempted_signals.append(selected_signal)
+                    if selected_signal == signal.SIGKILL:
+                        raise PermissionError(errno.EPERM, "simulated denial")
+                    self.assertEqual(0, selected_signal)
+                    if not group_present:
+                        raise ProcessLookupError(errno.ESRCH, "simulated absence")
+
+                context = (
+                    self.assertRaisesRegex(
+                        orchestrator_support._PublisherCanaryProcessError,
+                        "closure is unproven",
+                    )
+                    if group_present
+                    else contextlib.nullcontext()
+                )
+                with (
+                    mock.patch.object(
+                        orchestrator_support.process_lifecycle.os,
+                        "killpg",
+                        side_effect=deny_signal_then_probe,
+                    ),
+                    context,
+                ):
+                    result = orchestrator_support._run_bounded_publisher_canary_process(
+                        [sys.executable, "-I", "-B", "-S", "-c", "pass"],
+                        environment=dict(os.environ),
+                        timeout_seconds=2,
+                    )
+                    self.assertEqual(0, result.returncode)
+
+                self.assertEqual([signal.SIGKILL, 0], attempted_signals)
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
     def test_canary_timeout_closes_group_after_leader_exit(self) -> None:

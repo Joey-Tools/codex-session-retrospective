@@ -27,6 +27,7 @@ import session_retrospective_v2 as cli  # noqa: E402
 from retrospective_v2 import (  # noqa: E402
     authority,
     automation_cutover_files,
+    process_lifecycle,
     transport,
     transport_source,
 )
@@ -2782,6 +2783,46 @@ class CliContractTests(unittest.TestCase):
                 self.assertIn(reason_code, cli._REASON_CODE_ALLOWLIST)
                 self.assertIn(recovery_action, cli._RECOVERY_ACTION_ALLOWLIST)
                 self.assertNotIn(secret, json.dumps(payload, sort_keys=True))
+
+    def test_cli_surfaces_nested_process_group_cleanup_failure(self) -> None:
+        secret = "private process cleanup detail"
+        primary = cli.export_api.RetainedExportError(secret)
+
+        def cleanup_failure(_process) -> int:
+            raise RuntimeError(secret)
+
+        process_lifecycle.finish_cleanup(
+            mock.Mock(spec=subprocess.Popen),
+            signal_retired=False,
+            terminate_and_reap=cleanup_failure,
+            reap_only=cleanup_failure,
+            active_error=primary,
+        )
+        try:
+            raise cli.finalize_api.PublicationRejected(secret) from primary
+        except cli.finalize_api.PublicationRejected as wrapped:
+            result = cli._failure_from_exception("finalize", wrapped)
+
+        payload = result.to_json()
+        self.assertEqual(cli.ExitCode.SECURITY, result.exit_code)
+        self.assertEqual(
+            "process_group_cleanup_incomplete",
+            payload["error"]["code"],
+        )
+        self.assertEqual("repair_trust_boundary", payload["error"]["recovery_action"])
+        self.assertFalse(payload["error"]["retryable"])
+        self.assertEqual(
+            {
+                "primary_error": {
+                    "code": "invalid_state",
+                    "exit_code": int(cli.ExitCode.INVALID_STATE),
+                    "reason_code": "publication_rejected",
+                },
+                "process_group_cleanup": "incomplete",
+            },
+            payload["result"],
+        )
+        self.assertNotIn(secret, json.dumps(payload, sort_keys=True))
 
     def test_export_cli_uses_prior_period_for_real_trend_comparison(self) -> None:
         coordinator = self.real_coordinator(self.run_dir, activity=False)

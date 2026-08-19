@@ -10,6 +10,10 @@ import time
 from typing import Callable
 
 
+_CLEANUP_INCOMPLETE_ATTRIBUTE = "_retrospective_process_group_cleanup_incomplete"
+_CLEANUP_CAUSE_LIMIT = 16
+
+
 class GroupSignalRetirement:
     """Publish when reaping may make a saved process-group ID reusable."""
 
@@ -137,4 +141,20 @@ def finish_cleanup(
     except RuntimeError as cleanup_error:
         if active_error is None:
             raise
+        setattr(active_error, _CLEANUP_INCOMPLETE_ATTRIBUTE, True)
         active_error.add_note(str(cleanup_error))
+
+
+def has_incomplete_process_group_cleanup(error: BaseException) -> bool:
+    """Find a cleanup marker through a bounded exception-cause chain."""
+
+    current: BaseException | None = error
+    visited: set[int] = set()
+    for _ in range(_CLEANUP_CAUSE_LIMIT):
+        if current is None or id(current) in visited:
+            return False
+        visited.add(id(current))
+        if getattr(current, _CLEANUP_INCOMPLETE_ATTRIBUTE, False) is True:
+            return True
+        current = current.__cause__ or current.__context__
+    return False

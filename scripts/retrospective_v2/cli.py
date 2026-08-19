@@ -27,6 +27,7 @@ from retrospective_v2 import identity as identity_api  # noqa: E402
 from retrospective_v2 import orchestrator as orchestrator_api  # noqa: E402
 from retrospective_v2 import publication_abort_replay  # noqa: E402
 from retrospective_v2 import publication_cli_adapter  # noqa: E402
+from retrospective_v2 import process_lifecycle  # noqa: E402
 from retrospective_v2 import reporting as reporting_api  # noqa: E402
 from retrospective_v2 import result_validation as result_validation_api  # noqa: E402
 from retrospective_v2 import safe_io  # noqa: E402
@@ -67,6 +68,7 @@ _REASON_CODE_ALLOWLIST = frozenset(
     publication_attempt_mismatch publication_authority_invalid
     publication_authority_missing publication_failed publication_not_resumable
     publication_rejected publication_transition_invalid raw_path_outside_run_cache
+    process_group_cleanup_incomplete
     read_limit_exceeded readiness_failed retained_export_io_failed
     retained_inventory_invalid retained_payload_unavailable retained_privacy_failed
     run_input_invalid run_not_exportable run_not_started run_state_conflict
@@ -1843,7 +1845,7 @@ def _exception_reason_code(error: Exception) -> str:
     return "unexpected_internal_failure"
 
 
-def _failure_from_exception(command: str, error: Exception) -> CommandResult:
+def _primary_failure_from_exception(command: str, error: Exception) -> CommandResult:
     if isinstance(error, CliContractError):
         return CommandResult.failure(
             command,
@@ -1876,6 +1878,30 @@ def _failure_from_exception(command: str, error: Exception) -> CommandResult:
         code="internal_error",
         message="unexpected v2 command failure",
         reason_code="unexpected_internal_failure",
+    )
+
+
+def _failure_from_exception(command: str, error: Exception) -> CommandResult:
+    primary = _primary_failure_from_exception(command, error)
+    if not process_lifecycle.has_incomplete_process_group_cleanup(error):
+        return primary
+    assert primary.error is not None
+    return CommandResult.failure(
+        command,
+        exit_code=ExitCode.SECURITY,
+        code="process_group_cleanup_incomplete",
+        message="subprocess cleanup could not be proven complete",
+        reason_code="process_group_cleanup_incomplete",
+        recovery_action="repair_trust_boundary",
+        retryable=False,
+        result={
+            "primary_error": {
+                "code": primary.error.code,
+                "exit_code": int(primary.exit_code),
+                "reason_code": primary.error.reason_code,
+            },
+            "process_group_cleanup": "incomplete",
+        },
     )
 
 
