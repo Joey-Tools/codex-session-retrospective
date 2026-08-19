@@ -1721,6 +1721,43 @@ superseded_by:
   invocation used a local environment without PyYAML; both are recorded as
   non-counting command errors, and neither is substituted for the successful
   authoritative rerun.
+- Signed head `dfa49fc5` became stale when its fresh whole-range Codex processor
+  found that four bounded subprocess owners treated stdout/stderr EOF as process
+  exit. A child could close both output streams, continue a required side
+  effect, and be killed before that side effect completed. The affected owners
+  were publication Git/GPG commands, retained-history authority commands, the
+  publisher canary, and remote-host-context relay. The reviewer workspace was
+  independently materialized and validated, postvalidated clean after the
+  terminal finding, and safely removed.
+- The four owners now share one unreaped-leader lifecycle contract. After output
+  EOF they wait for terminal leader state under the original deadline while the
+  unreaped PID still fences PID/PGID reuse; only then do they terminate the
+  task-owned process group and reap the leader. The group-signal capability is
+  retired before reaping, so exception cleanup cannot signal or probe a reused
+  group identifier. Deterministic regressions cover post-EOF side effects,
+  deadline expiry, descendant cleanup, and interruption after reap. Canary
+  contracts pass 11/11 in 8.708 seconds, exact publication/authority regressions
+  pass 2/2, exact remote regressions pass 3/3, the complete source-transport
+  module passes 126/126 in 41.487 seconds, and module boundaries pass 19/19 with
+  an exact branch inventory of 9,491 under the 9,500 ceiling.
+- One earlier four-shard run and one sequential publication-module run were
+  intentionally interrupted after later lifecycle audits changed or superseded
+  their covered tree; both are non-counting. Focused invocations that bypassed
+  the isolated repository runner, plus one prior response-stream-disconnected
+  canary run without a recoverable terminal summary, are also non-counting and
+  are not substituted for the successful isolated reruns above.
+- The final Python 3.13 inventory contains 1,798 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `41f15e21f70ae9f83db186d23f8ecac5f3505baed50deec2ae22948c75fdf824`.
+  Shard 0 passes 430/430 in 1,650.747 seconds, shard 1 passes 485/485 in
+  1,409.432 seconds, shard 2 passes 472/472 in 1,382.241 seconds, and shard 3
+  passes 411/411 in 1,304.038 seconds. Every official shard exits zero with an
+  explicit `OK` terminal summary, for exact aggregate coverage of 1,798/1,798.
+  The independent Darwin security inventory passes 11/11 in 66.878 seconds.
+  CI and public-skill contracts pass 38/38; the generated bootstrap manifest,
+  Ruff lint and changed-file format checks, both workflows under `actionlint`,
+  the isolated official OpenAI Skill validator, project-journal validation,
+  and `git diff --check` pass.
 
 ## Follow-up Work
 

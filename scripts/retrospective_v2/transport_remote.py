@@ -19,7 +19,7 @@ import time
 from typing import Any, Callable, Mapping, Sequence
 
 try:
-    from . import safe_io
+    from . import process_lifecycle, safe_io
     from .transport_contracts import (
         RemoteTransportCapabilityError,
         TransportValidationError,
@@ -38,6 +38,7 @@ try:
         REMOTE_HOST_CONTEXT_SNAPSHOT_SCHEMA,
     )
 except (ImportError, ModuleNotFoundError):
+    import process_lifecycle  # type: ignore[no-redef]
     import safe_io  # type: ignore[no-redef]
     from transport_contracts import (  # type: ignore[no-redef]
         RemoteTransportCapabilityError,
@@ -325,21 +326,23 @@ def _terminate_remote_process_group(process: subprocess.Popen[bytes]) -> None:
             pass
 
 
-def _close_remote_process_group(process: subprocess.Popen[bytes]) -> int:
+def _reap_remote_process_group(process: subprocess.Popen[bytes]) -> int:
+    return process_lifecycle.reap_after_termination(
+        process,
+        timeout_seconds=5,
+        error_type=RuntimeError,
+        error_message="remote-host-context transport did not terminate",
+    )
+
+
+def _close_remote_process_group(
+    process: subprocess.Popen[bytes],
+    *,
+    retire_group_signal: Callable[[], None],
+) -> int:
     _terminate_remote_process_group(process)
-    try:
-        return process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        try:
-            process.kill()
-        except OSError:
-            pass
-        try:
-            return process.wait(timeout=5)
-        except subprocess.TimeoutExpired as exc:
-            raise RuntimeError(
-                "remote-host-context transport did not terminate"
-            ) from exc
+    retire_group_signal()
+    return _reap_remote_process_group(process)
 
 
 def _filter_remote_output(stream_filter: Any, chunk: bytes | None = None) -> bytes:
@@ -380,7 +383,7 @@ def _relay_remote_host_context_command(
             "remote-host-context transport unavailable"
         ) from exc
 
-    leader_reaped = False
+    signal_retirement = process_lifecycle.GroupSignalRetirement()
 
     selector = selectors.DefaultSelector()
     active_error: BaseException | None = None
@@ -436,10 +439,19 @@ def _relay_remote_host_context_command(
                 raise RemoteTransportUnavailableError(
                     "remote-host-context transport unavailable"
                 )
+            process_lifecycle.wait_for_unreaped_exit(
+                process,
+                deadline=deadline,
+                error_type=RemoteTransportUnavailableError,
+                deadline_message="remote-host-context transport unavailable",
+                status_message="remote-host-context transport unavailable",
+            )
             # Close the task-owned group while the unreaped leader still pins
             # its PID/PGID. Reaping first would open a reuse race.
-            return_code = _close_remote_process_group(process)
-            leader_reaped = True
+            return_code = _close_remote_process_group(
+                process,
+                retire_group_signal=signal_retirement.retire,
+            )
             if return_code == REMOTE_HELPER_EXIT_AUTHENTICATION:
                 raise RemoteTransportAuthenticationError(
                     "remote-host-context helper authentication failed"
@@ -484,10 +496,13 @@ def _relay_remote_host_context_command(
         selector.close()
         if process.stdout is not None:
             process.stdout.close()
-        if not leader_reaped:
-            try:
-                _close_remote_process_group(process)
-            except RuntimeError as cleanup_error:
-                if active_error is None:
-                    raise
-                active_error.add_note(str(cleanup_error))
+        process_lifecycle.finish_cleanup(
+            process,
+            signal_retired=signal_retirement.retired,
+            terminate_and_reap=lambda child: _close_remote_process_group(
+                child,
+                retire_group_signal=signal_retirement.retire,
+            ),
+            reap_only=_reap_remote_process_group,
+            active_error=active_error,
+        )

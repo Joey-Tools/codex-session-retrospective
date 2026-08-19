@@ -17,7 +17,14 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from . import authority, executable_authority, gpg_status, reporting, safe_io
+from . import (
+    authority,
+    executable_authority,
+    gpg_status,
+    process_lifecycle,
+    reporting,
+    safe_io,
+)
 from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
 from .identity import IdentityKey
 from .run_state_authority import validate_run_source_authority
@@ -422,6 +429,13 @@ def _run_bounded_subprocess(
         if remaining <= 0:
             kill_process()
             raise LocalGitPublicationError("subprocess exceeded its deadline")
+        process_lifecycle.wait_for_unreaped_exit(
+            process,
+            deadline=deadline,
+            error_type=LocalGitPublicationError,
+            deadline_message="subprocess exceeded its deadline",
+            status_message="subprocess leader status could not be observed",
+        )
         # Close the task-owned group while the unreaped leader still pins its
         # PID/PGID. Reaping first would open a process-group reuse race.
         kill_process()

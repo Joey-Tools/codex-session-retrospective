@@ -29,6 +29,7 @@ from . import (
     git_safety,
     gpg_status,
     history_graph,
+    process_lifecycle,
     reporting,
     safe_io,
 )
@@ -755,6 +756,13 @@ def _run_bounded(
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError
+        process_lifecycle.wait_for_unreaped_exit(
+            process,
+            deadline=deadline,
+            error_type=HistoryValidationError,
+            deadline_message="history command exceeded its deadline",
+            status_message="history command leader status could not be observed",
+        )
         # Close the group while the unreaped leader still pins its PID/PGID.
         terminate_process_group()
         return subprocess.CompletedProcess(

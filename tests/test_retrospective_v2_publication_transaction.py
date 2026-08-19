@@ -1140,6 +1140,154 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             self.assertEqual(0, authority_result.returncode)
             assert_child_closed(authority_detached_pid)
 
+    def test_bounded_subprocesses_wait_for_leader_after_output_eof(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            helper = root / "close-output-before-side-effect.py"
+            helper.write_text(
+                "import os, pathlib, sys, time\n"
+                "pathlib.Path(sys.argv[1]).write_text('ready', encoding='ascii')\n"
+                "os.close(1)\n"
+                "os.close(2)\n"
+                "while not pathlib.Path(sys.argv[2]).exists(): time.sleep(0.01)\n"
+                "pathlib.Path(sys.argv[3]).write_text('complete', encoding='ascii')\n",
+                encoding="ascii",
+            )
+            pending_releases: list[tuple[Path, Path]] = []
+            wait_for_exit = publication_support.process_lifecycle.wait_for_unreaped_exit
+
+            def release_after_wait_entry(*args, **kwargs) -> None:
+                ready, release = pending_releases.pop(0)
+                self.assertEqual("ready", ready.read_text(encoding="ascii"))
+                release.write_text("release", encoding="ascii")
+                wait_for_exit(*args, **kwargs)
+
+            publication_marker = root / "publication-complete"
+            publication_ready = root / "publication-ready"
+            publication_release = root / "publication-release"
+            authority_marker = root / "authority-complete"
+            authority_ready = root / "authority-ready"
+            authority_release = root / "authority-release"
+            pending_releases.extend(
+                (
+                    (publication_ready, publication_release),
+                    (authority_ready, authority_release),
+                )
+            )
+            with mock.patch.object(
+                publication_support.process_lifecycle,
+                "wait_for_unreaped_exit",
+                side_effect=release_after_wait_entry,
+            ):
+                publication_result = publication_support._run_bounded_subprocess(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-B",
+                        "-S",
+                        str(helper),
+                        str(publication_ready),
+                        str(publication_release),
+                        str(publication_marker),
+                    ],
+                    environment=dict(os.environ),
+                    timeout_seconds=2,
+                    max_output_bytes=1024,
+                )
+                authority_result = authority._run_bounded(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-B",
+                        "-S",
+                        str(helper),
+                        str(authority_ready),
+                        str(authority_release),
+                        str(authority_marker),
+                    ],
+                    env=dict(os.environ),
+                    timeout_seconds=2,
+                    max_output_bytes=1024,
+                )
+
+            self.assertEqual([], pending_releases)
+            self.assertEqual(0, publication_result.returncode)
+            self.assertEqual("complete", publication_marker.read_text(encoding="ascii"))
+            self.assertEqual(0, authority_result.returncode)
+            self.assertEqual("complete", authority_marker.read_text(encoding="ascii"))
+
+    def test_bounded_subprocess_post_eof_wait_obeys_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            helper = root / "close-output-and-stall.py"
+            helper.write_text(
+                "import os, pathlib, sys, time\n"
+                "pathlib.Path(sys.argv[1]).write_text(str(os.getpid()), encoding='ascii')\n"
+                "os.close(1)\n"
+                "os.close(2)\n"
+                "time.sleep(60)\n",
+                encoding="ascii",
+            )
+            wait_entries = 0
+            wait_for_exit = publication_support.process_lifecycle.wait_for_unreaped_exit
+
+            def expire_inside_wait(*args, **kwargs) -> None:
+                nonlocal wait_entries
+                wait_entries += 1
+                kwargs["deadline"] = time.monotonic() - 1
+                wait_for_exit(*args, **kwargs)
+
+            publication_pid = root / "publication.pid"
+            with (
+                mock.patch.object(
+                    publication_support.process_lifecycle,
+                    "wait_for_unreaped_exit",
+                    side_effect=expire_inside_wait,
+                ),
+                self.assertRaisesRegex(
+                    publication_support.LocalGitPublicationError,
+                    "deadline",
+                ),
+            ):
+                publication_support._run_bounded_subprocess(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-B",
+                        "-S",
+                        str(helper),
+                        str(publication_pid),
+                    ],
+                    environment=dict(os.environ),
+                    timeout_seconds=2,
+                    max_output_bytes=1024,
+                )
+
+            authority_pid = root / "authority.pid"
+            with (
+                mock.patch.object(
+                    publication_support.process_lifecycle,
+                    "wait_for_unreaped_exit",
+                    side_effect=expire_inside_wait,
+                ),
+                self.assertRaisesRegex(
+                    authority.HistoryValidationError,
+                    "deadline",
+                ),
+            ):
+                authority._run_bounded(
+                    [sys.executable, "-I", "-B", "-S", str(helper), str(authority_pid)],
+                    env=dict(os.environ),
+                    timeout_seconds=2,
+                    max_output_bytes=1024,
+                )
+
+            self.assertEqual(2, wait_entries)
+            for pid_path in (publication_pid, authority_pid):
+                pid = int(pid_path.read_text(encoding="ascii"))
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(pid, 0)
+
     def test_retained_export_lifecycle_is_injected_through_narrow_protocol(
         self,
     ) -> None:

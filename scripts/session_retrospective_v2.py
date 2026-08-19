@@ -139,6 +139,7 @@ else:
         "orchestrator_synthesis.py",
         "orchestrator_transport.py",
         "privacy_locators.py",
+        "process_lifecycle.py",
         "publication_abort_authority.py",
         "publication_abort_replay.py",
         "publication_claims.py",

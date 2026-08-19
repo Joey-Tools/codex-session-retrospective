@@ -227,6 +227,129 @@ class PublisherCanaryProcessTests(unittest.TestCase):
 
         self._assert_spawned_children_absent(2)
 
+    def test_canary_waits_for_leader_after_output_eof(self) -> None:
+        helper = self.root / "close-canary-output-before-side-effect.py"
+        ready = self.root / "canary-ready"
+        release = self.root / "canary-release"
+        marker = self.root / "canary-complete"
+        helper.write_text(
+            "import os, pathlib, sys, time\n"
+            "pathlib.Path(sys.argv[1]).write_text('ready', encoding='ascii')\n"
+            "os.close(1)\n"
+            "os.close(2)\n"
+            "while not pathlib.Path(sys.argv[2]).exists(): time.sleep(0.01)\n"
+            "pathlib.Path(sys.argv[3]).write_text('complete', encoding='ascii')\n",
+            encoding="ascii",
+        )
+        wait_for_exit = orchestrator_support.process_lifecycle.wait_for_unreaped_exit
+
+        def release_after_wait_entry(*args, **kwargs) -> None:
+            self.assertEqual("ready", ready.read_text(encoding="ascii"))
+            release.write_text("release", encoding="ascii")
+            wait_for_exit(*args, **kwargs)
+
+        with mock.patch.object(
+            orchestrator_support.process_lifecycle,
+            "wait_for_unreaped_exit",
+            side_effect=release_after_wait_entry,
+        ):
+            result = orchestrator_support._run_bounded_publisher_canary_process(
+                [
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-S",
+                    str(helper),
+                    str(ready),
+                    str(release),
+                    str(marker),
+                ],
+                environment=dict(os.environ),
+                timeout_seconds=2,
+            )
+
+        self.assertEqual(0, result.returncode)
+        self.assertEqual("complete", marker.read_text(encoding="ascii"))
+
+    def test_canary_post_eof_wait_obeys_deadline(self) -> None:
+        helper = self.root / "close-canary-output-and-stall.py"
+        pid_path = self.root / "canary-stall.pid"
+        helper.write_text(
+            "import os, pathlib, sys, time\n"
+            "pathlib.Path(sys.argv[1]).write_text(str(os.getpid()), encoding='ascii')\n"
+            "os.close(1)\n"
+            "os.close(2)\n"
+            "time.sleep(60)\n",
+            encoding="ascii",
+        )
+        wait_entries = 0
+        wait_for_exit = orchestrator_support.process_lifecycle.wait_for_unreaped_exit
+
+        def expire_inside_wait(*args, **kwargs) -> None:
+            nonlocal wait_entries
+            wait_entries += 1
+            kwargs["deadline"] = time.monotonic() - 1
+            wait_for_exit(*args, **kwargs)
+
+        with (
+            mock.patch.object(
+                orchestrator_support.process_lifecycle,
+                "wait_for_unreaped_exit",
+                side_effect=expire_inside_wait,
+            ),
+            self.assertRaisesRegex(
+                orchestrator_support._PublisherCanaryProcessError,
+                "deadline",
+            ),
+        ):
+            orchestrator_support._run_bounded_publisher_canary_process(
+                [sys.executable, "-I", "-B", "-S", str(helper), str(pid_path)],
+                environment=dict(os.environ),
+                timeout_seconds=2,
+            )
+
+        self.assertEqual(1, wait_entries)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(int(pid_path.read_text(encoding="ascii")), 0)
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_canary_does_not_resignal_group_after_leader_reap(self) -> None:
+        kill_signals: list[int] = []
+        wait_calls = 0
+        process_wait = subprocess.Popen.wait
+
+        def observe_group_signal(_process_group_id: int, selected_signal: int) -> None:
+            kill_signals.append(selected_signal)
+            if selected_signal == 0:
+                raise ProcessLookupError
+
+        def reap_then_interrupt(process, *args, **kwargs):
+            nonlocal wait_calls
+            result = process_wait(process, *args, **kwargs)
+            wait_calls += 1
+            if wait_calls == 1:
+                raise KeyboardInterrupt
+            return result
+
+        with (
+            mock.patch.object(os, "killpg", side_effect=observe_group_signal),
+            mock.patch.object(
+                subprocess.Popen,
+                "wait",
+                autospec=True,
+                side_effect=reap_then_interrupt,
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            orchestrator_support._run_bounded_publisher_canary_process(
+                [sys.executable, "-I", "-B", "-S", "-c", "pass"],
+                environment=dict(os.environ),
+                timeout_seconds=2,
+            )
+
+        self.assertEqual(1, kill_signals.count(signal.SIGKILL))
+        self.assertEqual(2, wait_calls)
+
     @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
     def test_canary_timeout_closes_group_after_leader_exit(self) -> None:
         self.gpg_mode.write_text("spawn_inherited_child", encoding="ascii")

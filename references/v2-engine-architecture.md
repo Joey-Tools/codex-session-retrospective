@@ -303,12 +303,12 @@ stability similarly compares only BSD immutable, append, nounlink, restricted,
 and datavault flags; `UF_HIDDEN` and other presentation flags are not access
 policy.
 
-The transport slice remains independently bounded after this hardening: 8,681
-physical lines across an 8,690-line aggregate limit. One exact 16-module
+The transport slice remains independently bounded after this hardening: 8,697
+physical lines across an 8,700-line aggregate limit. One exact 16-module
 inventory and its aggregate are enforced together, so omitting a transport
 module cannot create a false budget pass. The facade remains 266 lines;
 `transport_host_inventory.py` is 551/560 lines,
-`transport_remote.py` is 493/550 lines, the parent snapshot/legacy owner is
+`transport_remote.py` is 508/550 lines, the parent snapshot/legacy owner is
 175/200 lines, the executable bootstrap owner is 243/250 lines, and the source
 worker owner is 1,948/1,950 lines after adding the authenticated host/command
 contract and closed failure-class relay. Retrospective still contains no SSH
@@ -316,12 +316,12 @@ host table or transport implementation.
 
 The orchestrator foundation remains below its aggregate limit. The seven agent
 support modules remain below 1,100 lines; the complete result-schema owner is
-below 525, implementation authority remains below 350, and
-`orchestrator_jobs.py` remains below 525. The result validator is 3,893/3,900,
-hierarchical reduction is 2,387/2,500, and the dedicated synthesis-lineage
-owner is 213/225 after adding compact recursive commitments and
+503/525, implementation authority is 572/600, and `orchestrator_jobs.py` is
+526/530. The result validator is 3,900/3,900, hierarchical reduction is
+2,356/2,500, and the dedicated synthesis-lineage owner is 226/250 after adding
+compact recursive commitments and
 revision-level recurrence proof. The global branch proxy is exactly
-9,100/9,105 nodes. These gates keep complete
+9,491/9,500 nodes. These gates keep complete
 agent schemas, claim-size projection, source-byte provenance, semantic topic
 validation, and delegated remote transport in explicit owners instead of
 expanding the coordinator or reviving a second remote probe.

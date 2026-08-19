@@ -2982,6 +2982,129 @@ class SourceTransportProtocolTests(unittest.TestCase):
         else:
             self.fail(f"remote helper descendant survived: {child_pid}")
 
+    def test_remote_helper_waits_for_leader_after_output_eof(self) -> None:
+        helper = self.root / "remote-helper-close-output-before-side-effect.py"
+        ready = self.root / "remote-helper-ready"
+        release = self.root / "remote-helper-release"
+        marker = self.root / "remote-helper-complete"
+        helper.write_text(
+            "import os, pathlib, sys, time\n"
+            "pathlib.Path(sys.argv[1]).write_text('ready', encoding='ascii')\n"
+            "os.close(1)\n"
+            "os.close(2)\n"
+            "while not pathlib.Path(sys.argv[2]).exists(): time.sleep(0.01)\n"
+            "pathlib.Path(sys.argv[3]).write_text('complete', encoding='ascii')\n",
+            encoding="ascii",
+        )
+        wait_for_exit = transport_remote.process_lifecycle.wait_for_unreaped_exit
+
+        def release_after_wait_entry(*args, **kwargs) -> None:
+            self.assertEqual("ready", ready.read_text(encoding="ascii"))
+            release.write_text("release", encoding="ascii")
+            wait_for_exit(*args, **kwargs)
+
+        with mock.patch.object(
+            transport_remote.process_lifecycle,
+            "wait_for_unreaped_exit",
+            side_effect=release_after_wait_entry,
+        ):
+            transport._relay_remote_host_context_command(
+                (
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-S",
+                    str(helper),
+                    str(ready),
+                    str(release),
+                    str(marker),
+                ),
+                max_output_bytes=1024,
+            )
+
+        self.assertEqual("complete", marker.read_text(encoding="ascii"))
+
+    def test_remote_helper_post_eof_wait_obeys_deadline(self) -> None:
+        helper = self.root / "remote-helper-close-output-and-stall.py"
+        pid_path = self.root / "remote-helper-stall.pid"
+        helper.write_text(
+            "import os, pathlib, sys, time\n"
+            "pathlib.Path(sys.argv[1]).write_text(str(os.getpid()), encoding='ascii')\n"
+            "os.close(1)\n"
+            "os.close(2)\n"
+            "time.sleep(60)\n",
+            encoding="ascii",
+        )
+        wait_entries = 0
+        wait_for_exit = transport_remote.process_lifecycle.wait_for_unreaped_exit
+
+        def expire_inside_wait(*args, **kwargs) -> None:
+            nonlocal wait_entries
+            wait_entries += 1
+            kwargs["deadline"] = time.monotonic() - 1
+            wait_for_exit(*args, **kwargs)
+
+        with (
+            mock.patch.object(
+                transport_remote,
+                "REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS",
+                2,
+            ),
+            mock.patch.object(
+                transport_remote.process_lifecycle,
+                "wait_for_unreaped_exit",
+                side_effect=expire_inside_wait,
+            ),
+            self.assertRaisesRegex(RuntimeError, "transport unavailable"),
+        ):
+            transport._relay_remote_host_context_command(
+                (sys.executable, "-I", "-B", "-S", str(helper), str(pid_path)),
+                max_output_bytes=1024,
+            )
+
+        self.assertEqual(1, wait_entries)
+        with self.assertRaises(ProcessLookupError):
+            os.kill(int(pid_path.read_text(encoding="ascii")), 0)
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_remote_cleanup_does_not_resignal_after_reap_interrupt(self) -> None:
+        terminations = 0
+        reap_calls = 0
+        reap_process = transport_remote.process_lifecycle.reap_after_termination
+
+        def observe_termination(_process) -> None:
+            nonlocal terminations
+            terminations += 1
+
+        def reap_then_interrupt(*args, **kwargs):
+            nonlocal reap_calls
+            result = reap_process(*args, **kwargs)
+            reap_calls += 1
+            if reap_calls == 1:
+                raise KeyboardInterrupt
+            return result
+
+        with (
+            mock.patch.object(
+                transport_remote,
+                "_terminate_remote_process_group",
+                side_effect=observe_termination,
+            ),
+            mock.patch.object(
+                transport_remote.process_lifecycle,
+                "reap_after_termination",
+                side_effect=reap_then_interrupt,
+            ),
+            self.assertRaises(KeyboardInterrupt),
+        ):
+            transport._relay_remote_host_context_command(
+                (sys.executable, "-I", "-B", "-S", "-c", "print('{}')"),
+                max_output_bytes=1024,
+            )
+
+        self.assertEqual(1, terminations)
+        self.assertEqual(2, reap_calls)
+
     def test_line_reader_is_bounded_before_allocation(self) -> None:
         class GuardedStream(io.BytesIO):
             maximum_request = 0
