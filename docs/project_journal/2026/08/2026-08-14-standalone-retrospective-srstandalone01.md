@@ -1624,12 +1624,19 @@ superseded_by:
   closure-only audit reports `No findings.` Focused Python 3.13 contracts pass
   24/24, 83/83, 71/71, 19/19, 33/33, and 5/5; the exact engine branch inventory
   is 9,488.
+- Exact-secret admission on signed head `edcc5f03` was inconclusive after the
+  privacy regressions introduced new non-catalog credential-shaped fixture
+  values. Only those new fixtures were replaced with the review helper's
+  role-specific synthetic-token catalog values; production logic was unchanged.
+  The preceding complete run under manifest digest
+  `baf89b8dfba1e2924bb8d59bf1b344cc2d28e4de8fb9caaa68890f8aa530bc6c`
+  remains prior-tree evidence.
 - The final canonical Python 3.13 inventory contains 1,784 exact test IDs from
   22 authenticated source modules under manifest digest
-  `baf89b8dfba1e2924bb8d59bf1b344cc2d28e4de8fb9caaa68890f8aa530bc6c`.
-  Shard 0 passes 427/427 in 1,770.730 seconds, shard 1 passes 481/481 in
-  1,400.660 seconds, shard 2 passes 467/467 in 1,501.513 seconds, and shard 3
-  passes 409/409 in 1,427.748 seconds. Every bounded wrapper exits zero with an
+  `f6832853b38ee92e817198cd3b93a1a95cf365914f9e0197d35d007084745c15`.
+  Shard 0 passes 427/427 in 1,728.799 seconds, shard 1 passes 481/481 in
+  1,346.005 seconds, shard 2 passes 467/467 in 1,455.407 seconds, and shard 3
+  passes 409/409 in 1,381.668 seconds. Every bounded wrapper exits zero with an
   explicit `OK` summary. Four earlier pre-closure shard tasks were cancelled and
   remain non-counting. A mistaken Darwin `--help` probe ran tests without a
   pollable terminal receipt and is also non-counting; the formal bounded Darwin

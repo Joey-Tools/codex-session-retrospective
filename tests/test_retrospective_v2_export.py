@@ -61,8 +61,10 @@ def ref(kind: str, character: str) -> str:
 
 RUN_REF = ref("run", "a")
 CONFIGURATION_REF = ref("configuration", "b")
-# Review helper synthetic-token catalog IDs: access-a, bearer-a, and refresh-a.
+# Review helper synthetic-token catalog IDs: access-a, api-key-a, bearer-a,
+# and refresh-a.
 SYNTHETIC_ACCESS_TOKEN = "codex_synth_v1_access_a"
+SYNTHETIC_API_KEY = "codex_synth_v1_api_key_a"
 SYNTHETIC_BEARER_TOKEN = "codex_synth_v1_bearer_a"
 SYNTHETIC_REFRESH_TOKEN = "codex_synth_v1_refresh_a"
 EPISODE_ONE = ref("episode", "c")
@@ -2090,18 +2092,18 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "keyPassphrase: purple",
             "devicePasscode: 839201",
             "userPin: 8392",
-            "UserPassword = winter123",
-            "DatabaseSecret was purple",
-            "UserPIN = 8392",
-            "ServiceAPIKey = purple",
-            "DatabaseCredential was winter123",
-            "DatabaseSecret WAS purple",
-            "DatabaseSecret was winter123, status ok",
-            "DatabaseSecret was unavailable: winter123, status ok",
-            "DatabaseAccessToken = winter123",
-            "ServiceRefreshToken was purple",
-            "ServiceRefreshToken was purple in production",
-            "ServiceRefreshToken was purple, while production was active",
+            f"UserPassword = {SYNTHETIC_BEARER_TOKEN}",
+            f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}",
+            f"UserPIN = {SYNTHETIC_BEARER_TOKEN}",
+            f"ServiceAPIKey = {SYNTHETIC_API_KEY}",
+            f"DatabaseCredential was {SYNTHETIC_BEARER_TOKEN}",
+            f"DatabaseSecret WAS {SYNTHETIC_BEARER_TOKEN}",
+            f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}, status ok",
+            f"DatabaseSecret was unavailable: {SYNTHETIC_BEARER_TOKEN}, status ok",
+            f"DatabaseAccessToken = {SYNTHETIC_ACCESS_TOKEN}",
+            f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN}",
+            f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN} in production",
+            f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN}, while production was active",
             f"refreshToken={SYNTHETIC_REFRESH_TOKEN}",
             f"githubToken: {SYNTHETIC_ACCESS_TOKEN}",
             f"serviceAuthToken: {SYNTHETIC_REFRESH_TOKEN}",

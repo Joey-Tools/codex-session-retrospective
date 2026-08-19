@@ -57,8 +57,11 @@ from retrospective_v2.result_validation import (  # noqa: E402
 )
 
 
-# Review helper synthetic-token catalog IDs: access-a and refresh-a.
+# Review helper synthetic-token catalog IDs: access-a, api-key-a, bearer-a,
+# and refresh-a.
 SYNTHETIC_ACCESS_TOKEN = "codex_synth_v1_access_a"
+SYNTHETIC_API_KEY = "codex_synth_v1_api_key_a"
+SYNTHETIC_BEARER_TOKEN = "codex_synth_v1_bearer_a"
 SYNTHETIC_REFRESH_TOKEN = "codex_synth_v1_refresh_a"
 
 
@@ -754,38 +757,38 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
-                "DatabaseSecret was purple",
-                "purple was rejected",
+                f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}",
+                f"{SYNTHETIC_BEARER_TOKEN} was rejected",
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
-                "DatabaseSecret WAS purple.",
-                "purple was rejected",
+                f"DatabaseSecret WAS {SYNTHETIC_BEARER_TOKEN}.",
+                f"{SYNTHETIC_BEARER_TOKEN} was rejected",
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
-                "DatabaseSecret was winter123, status ok",
-                "winter123 was rejected",
+                f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}, status ok",
+                f"{SYNTHETIC_BEARER_TOKEN} was rejected",
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
-                "DatabaseSecret was unavailable: winter123, status ok",
-                "winter123 was rejected",
+                f"DatabaseSecret was unavailable: {SYNTHETIC_BEARER_TOKEN}, status ok",
+                f"{SYNTHETIC_BEARER_TOKEN} was rejected",
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
-                "ServiceRefreshToken was purple before continuing.",
-                "purple was rejected",
+                f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN} before continuing.",
+                f"{SYNTHETIC_REFRESH_TOKEN} was rejected",
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
-                "ServiceRefreshToken was purple in production.",
-                "purple was rejected",
+                f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN} in production.",
+                f"{SYNTHETIC_REFRESH_TOKEN} was rejected",
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
-                "ServiceRefreshToken was purple, while production was active.",
-                "purple was rejected",
+                f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN}, while production was active.",
+                f"{SYNTHETIC_REFRESH_TOKEN} was rejected",
                 "[REDACTED_ORIGINAL_PROMPT] was rejected",
             ),
             (
@@ -1392,10 +1395,10 @@ class ResultValidationTests(unittest.TestCase):
             ),
         )
         self.assertEqual(
-            ("purple",),
+            (SYNTHETIC_BEARER_TOKEN,),
             tuple(
                 result_validation_module.privacy_locators.sensitive_labeled_values(
-                    "DatabaseSecret was purple"
+                    f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}"
                 )
             ),
         )
@@ -1934,63 +1937,63 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "UserPassword = winter123",
-                ("winter123",),
+                f"UserPassword = {SYNTHETIC_BEARER_TOKEN}",
+                (SYNTHETIC_BEARER_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "DatabaseSecret was purple",
-                ("purple",),
+                f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}",
+                (SYNTHETIC_BEARER_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "UserPIN = 8392",
-                ("8392",),
+                f"UserPIN = {SYNTHETIC_BEARER_TOKEN}",
+                (SYNTHETIC_BEARER_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "ServiceAPIKey = purple",
-                ("purple",),
+                f"ServiceAPIKey = {SYNTHETIC_API_KEY}",
+                (SYNTHETIC_API_KEY,),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "DatabaseCredential was winter123",
-                ("winter123",),
+                f"DatabaseCredential was {SYNTHETIC_BEARER_TOKEN}",
+                (SYNTHETIC_BEARER_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "DatabaseSecret WAS purple.",
-                ("purple",),
+                f"DatabaseSecret WAS {SYNTHETIC_BEARER_TOKEN}.",
+                (SYNTHETIC_BEARER_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "DatabaseSecret was winter123, status ok",
-                ("winter123", "status ok"),
+                f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}, status ok",
+                (SYNTHETIC_BEARER_TOKEN, "status ok"),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "DatabaseSecret was unavailable: winter123, status ok",
-                ("winter123", "status ok"),
+                f"DatabaseSecret was unavailable: {SYNTHETIC_BEARER_TOKEN}, status ok",
+                (SYNTHETIC_BEARER_TOKEN, "status ok"),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "DatabaseAccessToken = winter123",
-                ("winter123",),
+                f"DatabaseAccessToken = {SYNTHETIC_ACCESS_TOKEN}",
+                (SYNTHETIC_ACCESS_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "ServiceRefreshToken was purple",
-                ("purple",),
+                f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN}",
+                (SYNTHETIC_REFRESH_TOKEN,),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "ServiceRefreshToken was purple in production.",
-                ("purple", "production"),
+                f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN} in production.",
+                (SYNTHETIC_REFRESH_TOKEN, "production"),
                 "[REDACTED_CREDENTIAL]",
             ),
             (
-                "ServiceRefreshToken was purple, while production was active.",
-                ("purple", "production"),
+                f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN}, while production was active.",
+                (SYNTHETIC_REFRESH_TOKEN, "production"),
                 "[REDACTED_CREDENTIAL]",
             ),
             (

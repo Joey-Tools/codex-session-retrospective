@@ -40,6 +40,14 @@ from retrospective_v2.result_validation import (  # noqa: E402
 )
 
 
+# Review helper synthetic-token catalog IDs: access-a, api-key-a, bearer-a,
+# and refresh-a.
+SYNTHETIC_ACCESS_TOKEN = "codex_synth_v1_access_a"
+SYNTHETIC_API_KEY = "codex_synth_v1_api_key_a"
+SYNTHETIC_BEARER_TOKEN = "codex_synth_v1_bearer_a"
+SYNTHETIC_REFRESH_TOKEN = "codex_synth_v1_refresh_a"
+
+
 def ref(kind: str, marker: str) -> str:
     digest = hashlib.sha256(f"{kind}:{marker}".encode("ascii")).hexdigest()
     return f"{kind}_ref_v2:{digest}"
@@ -1414,17 +1422,17 @@ class AuditedResultContractTests(unittest.TestCase):
 
     def test_audit_redacts_pascalcase_credential_fields(self) -> None:
         for source in (
-            "UserPassword = winter123",
-            "DatabaseSecret was purple",
-            "UserPIN = 8392",
-            "ServiceAPIKey = purple",
-            "DatabaseCredential was winter123",
-            "DatabaseSecret WAS purple",
-            "ServiceAPIKey Is purple",
-            "DatabaseAccessToken = winter123",
-            "ServiceRefreshToken was purple",
-            "DatabaseSecret was winter123, status ok",
-            "DatabaseSecret was unavailable: winter123, status ok",
+            f"UserPassword = {SYNTHETIC_BEARER_TOKEN}",
+            f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}",
+            f"UserPIN = {SYNTHETIC_BEARER_TOKEN}",
+            f"ServiceAPIKey = {SYNTHETIC_API_KEY}",
+            f"DatabaseCredential was {SYNTHETIC_BEARER_TOKEN}",
+            f"DatabaseSecret WAS {SYNTHETIC_BEARER_TOKEN}",
+            f"ServiceAPIKey Is {SYNTHETIC_API_KEY}",
+            f"DatabaseAccessToken = {SYNTHETIC_ACCESS_TOKEN}",
+            f"ServiceRefreshToken was {SYNTHETIC_REFRESH_TOKEN}",
+            f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}, status ok",
+            f"DatabaseSecret was unavailable: {SYNTHETIC_BEARER_TOKEN}, status ok",
         ):
             with self.subTest(source=source):
                 self.assertEqual(
