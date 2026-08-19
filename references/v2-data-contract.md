@@ -380,7 +380,12 @@ source acceptance.
 - Raw run directory: mode `0700`; every file: mode `0600`. On Darwin, each
   owner-only directory and file must also have no extended ACL. Newly created
   objects clear inherited ACLs through their held descriptors before use;
-  existing objects with an ACL fail closed rather than being repaired.
+  existing objects with an ACL fail closed rather than being repaired. Every
+  existing ancestor is checked through its held descriptor: read-only and
+  inheritance-only ACL entries remain admissible, while any allow ACE granting
+  write, append, add, rename/delete, attribute/security mutation, or ownership
+  change fails closed. The ancestor ACL policy is revalidated around each child
+  open, so a late grant cannot redirect the descriptor walk.
 - Successful publication removes raw shards. Blocked raw state expires within
   seven days and remains an explicit recoverability/coverage outcome.
 

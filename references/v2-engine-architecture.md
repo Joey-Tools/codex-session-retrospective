@@ -148,9 +148,20 @@ source locators must satisfy the closed grammar and be UTF-8 encodable. A
 filesystem name that cannot be represented becomes an explicit
 `source_locator_unrepresentable` gap rather than crashing discovery or being
 silently omitted. Source rereads compare the selected protected properties:
-object identity, access policy, and the exact scanned byte-range digest.
-Timestamp-only churn is benign, while content, identity, or access-policy drift
-remains an explicit source-stability gap.
+object identity, normalized descriptor ACL policy, selected BSD access-policy
+flags, and the exact scanned byte-range digest. The candidate token and every
+scan proof sample bind that ACL policy; an ACL grant or revoke during scanning
+therefore produces `source_changed_during_scan`. Timestamp-only churn is benign,
+while content, identity, or access-policy drift remains an explicit
+source-stability gap.
+
+The remote relay keeps its leader unreaped until post-output work is terminal.
+It signals the task-owned process group while the PID/PGID is still pinned and
+retires signal authority before reaping. Darwin may return `EPERM` when the
+unreaped zombie is the group's only remaining member; that case is accepted
+only after reaping and a non-signaling group-absence probe. A still-present or
+unverifiable group is an explicit cleanup failure, and no later cleanup path may
+signal the now-reusable PGID.
 
 Source scheduling prepares the transport-program snapshot, remote-helper
 snapshot, and bound empty output together with the candidate checkpoint. Exact
@@ -300,11 +311,11 @@ Package-directory child-entry, link-count, and timestamp churn is benign while
 directory identity, ownership, type, and mode remain exact; regular components
 still require one link. Source rollout
 stability similarly compares only BSD immutable, append, nounlink, restricted,
-and datavault flags; `UF_HIDDEN` and other presentation flags are not access
-policy.
+and datavault flags plus the normalized descriptor ACL policy; `UF_HIDDEN` and
+other presentation flags are not access policy.
 
-The transport slice remains independently bounded after this hardening: 8,697
-physical lines across an 8,700-line aggregate limit. One exact 16-module
+The transport slice remains independently bounded after this hardening: 8,791
+physical lines across an 8,800-line aggregate limit. One exact 16-module
 inventory and its aggregate are enforced together, so omitting a transport
 module cannot create a false budget pass. The facade remains 266 lines;
 `transport_host_inventory.py` is 551/560 lines,

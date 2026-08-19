@@ -197,7 +197,7 @@ def terminal_revalidate_source_discovery(
     candidate_identities: Sequence[tuple[str, Sequence[DirectoryIdentity]]],
     candidate_tokens: Sequence[tuple[str, str]],
     open_candidate: Callable[[str, Sequence[DirectoryIdentity]], int],
-    candidate_token: Callable[[os.stat_result], str],
+    candidate_token: Callable[[int], str],
 ) -> None:
     active_budget = SourceDiscoveryBudget()
 
@@ -219,7 +219,7 @@ def terminal_revalidate_source_discovery(
         active_budget.checkpoint()
         descriptor = open_candidate(relative, identities)
         try:
-            if expected_tokens.get(relative) != candidate_token(os.fstat(descriptor)):
+            if expected_tokens.get(relative) != candidate_token(descriptor):
                 raise ValueError(
                     "source candidate identity or access policy changed after discovery"
                 )

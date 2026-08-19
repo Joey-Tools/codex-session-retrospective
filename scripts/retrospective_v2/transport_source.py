@@ -11,7 +11,6 @@ from dataclasses import dataclass
 import errno
 import hashlib
 import hmac
-import json
 import os
 import pathlib
 import pwd
@@ -21,7 +20,7 @@ import sys
 from typing import Any, Callable, Mapping, NoReturn, Sequence
 
 try:
-    from . import catalog, contracts as common_contracts
+    from . import catalog, contracts as common_contracts, transport_resume
     from .contracts import (
         JsonValue,
         RefType,
@@ -69,7 +68,6 @@ try:
         _SourceTransportResumeProbeBudget,
         _SourceTransportResumeProbeBudgetExhausted,
         _source_transport_candidate_token,
-        _source_transport_file_identity,
         _source_transport_range_digest,
         decode_source_resume_position,
         encode_source_resume_position,
@@ -77,6 +75,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     import catalog  # type: ignore[no-redef]
     import contracts as common_contracts  # type: ignore[no-redef]
+    import transport_resume  # type: ignore[no-redef]
     from contracts import (  # type: ignore[no-redef]
         JsonValue,
         RefType,
@@ -126,13 +125,14 @@ except (ImportError, ModuleNotFoundError):
         _SourceTransportResumeProbeBudget,
         _SourceTransportResumeProbeBudgetExhausted,
         _source_transport_candidate_token,
-        _source_transport_file_identity,
         _source_transport_range_digest,
         decode_source_resume_position,
         encode_source_resume_position,
     )
 
 SOURCE_TRANSPORT_MIN_FRAME_BYTES = 4096
+_source_transport_file_identity = transport_resume._source_transport_file_identity
+_source_transport_json_bytes = common_contracts.canonical_json_bytes
 
 
 def _local_codex_root() -> pathlib.Path:
@@ -281,16 +281,6 @@ def _resolve_safe_codex_root(codex_root: pathlib.Path) -> pathlib.Path:
         anchor.close()
 
 
-def _source_transport_json_bytes(value: dict[str, Any]) -> bytes:
-    return json.dumps(
-        value,
-        ensure_ascii=True,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("ascii")
-
-
 def _source_transport_header(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "execution_argv_commitment": args.execution_argv_commitment,
@@ -319,7 +309,7 @@ def _source_transport_header(args: argparse.Namespace) -> dict[str, Any]:
 def _emit_source_transport_frame(
     value: dict[str, Any], *, max_frame_bytes: int
 ) -> None:
-    encoded = _source_transport_json_bytes(value)
+    encoded = common_contracts.canonical_json_bytes(value)
     if len(encoded) > max_frame_bytes:
         raise ValueError("source transport frame exceeds --max-frame-bytes")
     sys.stdout.buffer.write(encoded + b"\n")
@@ -658,12 +648,17 @@ def _source_transport_candidate_paths(
         )
         with contextlib.ExitStack() as custody:
             custody.callback(os.close, descriptor)
-            metadata = os.fstat(descriptor)
+            metadata, access_policy_sha256 = (
+                transport_resume._source_transport_file_observation(descriptor)
+            )
             budget.checkpoint()
         seen.add(relative)
         candidates.append((root / relative, relative))
         candidate_identities[relative] = identities
-        candidate_tokens[relative] = _source_transport_candidate_token(metadata)
+        candidate_tokens[relative] = _source_transport_candidate_token(
+            metadata,
+            access_policy_sha256,
+        )
 
     def scan_candidate_entries(
         entries: Sequence[transport_discovery.DirectoryEntry],
@@ -1022,7 +1017,7 @@ def _terminal_source_discovery_gap(discovery: _SourceCandidateDiscovery) -> str 
             identities: _open_source_transport_candidate(
                 anchor, pathlib.PurePosixPath(relative), expected_identities=identities
             )[0],
-            candidate_token=_source_transport_candidate_token,
+            candidate_token=transport_resume._source_transport_observed_candidate_token,
         )
     )
 
@@ -1047,7 +1042,7 @@ def _finalize_source_transport_scan(
         revalidation_gap = _terminal_source_discovery_gap(discovery)
     finally:
         discovery.close()
-    if revalidation_gap is not None:
+    if revalidation_gap is not None and terminal_reason != "source_changed_during_scan":
         terminal_status = "gap"
         terminal_reason = revalidation_gap
         resume_position = None
@@ -1127,16 +1122,21 @@ def _source_transport_scan(
             terminal_reason = "source_read_failed"
             break
         try:
-            before = os.fstat(descriptor)
+            before, before_access_policy = (
+                transport_resume._source_transport_file_observation(descriptor)
+            )
             if not stat.S_ISREG(before.st_mode):
                 raise ValueError("source entry is not a regular file")
             source_token = candidate_tokens[relative]
-            if source_token != _source_transport_candidate_token(before):
+            if source_token != _source_transport_candidate_token(
+                before,
+                before_access_policy,
+            ):
                 raise ValueError("source entry changed after discovery")
             source_occurrence = (
                 "sha256:"
                 + hashlib.sha256(
-                    _source_transport_json_bytes(
+                    common_contracts.canonical_json_bytes(
                         {
                             "device": before.st_dev,
                             "inode": before.st_ino,
@@ -1461,7 +1461,9 @@ def _source_transport_scan(
                     else "source_byte_limit_reached"
                 )
                 stop = True
-            proof_before = os.fstat(descriptor)
+            proof_before, proof_access_policy = (
+                transport_resume._source_transport_file_observation(descriptor)
+            )
             resume_probe_stable = True
             probe_failure_reason: str | None = None
             if proof_before.st_size < max(source_size, scanned):
@@ -1489,27 +1491,24 @@ def _source_transport_scan(
                         probe_failure_reason = "source_resume_probe_budget_exhausted"
                     except (OSError, ValueError):
                         resume_probe_stable = False
-            after = os.fstat(descriptor)
+            after, after_access_policy = (
+                transport_resume._source_transport_file_observation(descriptor)
+            )
             read_range_commitment = "sha256:" + digest.hexdigest()
-            stable = (
-                _source_transport_file_identity(before)
-                == _source_transport_file_identity(proof_before)
-                and _source_transport_file_identity(proof_before)
-                == _source_transport_file_identity(after)
-                and after.st_size >= source_size
-                and scanned_range_commitment == read_range_commitment
-                and resume_probe_stable
-                and (
-                    scanned == source_size
-                    or (
-                        terminal_status == "gap"
-                        and terminal_reason
-                        in {
-                            "source_byte_limit_reached",
-                            "source_record_limit_reached",
-                        }
-                    )
-                )
+            stable = transport_resume._source_transport_scan_is_stable(
+                before=before,
+                before_access_policy=before_access_policy,
+                proof_before=proof_before,
+                proof_access_policy=proof_access_policy,
+                after=after,
+                after_access_policy=after_access_policy,
+                source_size=source_size,
+                scanned=scanned,
+                scanned_range_commitment=scanned_range_commitment,
+                read_range_commitment=read_range_commitment,
+                resume_probe_stable=resume_probe_stable,
+                terminal_status=terminal_status,
+                terminal_reason=terminal_reason,
             )
             if not stable:
                 terminal_status = "gap"
@@ -1850,7 +1849,7 @@ def _publish_bound_source_transport_relay(
     output.seek(0, os.SEEK_END)
     input_bytes = output.tell()
     output.seek(remainder_start)
-    bound_header_bytes = len(_source_transport_json_bytes(expected_header)) + 1
+    bound_header_bytes = len(common_contracts.canonical_json_bytes(expected_header)) + 1
     if input_bytes - header_line.byte_count + bound_header_bytes > max_output_bytes:
         raise TransportValidationError(
             "bound remote source transport exceeds its output envelope"

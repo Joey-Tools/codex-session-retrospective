@@ -10,6 +10,7 @@ import os
 from typing import Mapping
 
 try:
+    from . import safe_io
     from .contracts import JsonValue, canonical_json_bytes, strict_json_loads
     from .transport_contracts import (
         SOURCE_TRANSPORT_BOUNDARY_PROBE_BYTES,
@@ -20,6 +21,7 @@ try:
         _normalize_source_resume_position,
     )
 except (ImportError, ModuleNotFoundError):
+    import safe_io  # type: ignore[no-redef]
     from contracts import (  # type: ignore[no-redef]
         JsonValue,
         canonical_json_bytes,
@@ -48,27 +50,92 @@ def _source_object_generation(metadata: os.stat_result) -> tuple[int, int]:
     return int(getattr(metadata, "st_gen", -1)), int(birthtime_ns)
 
 
-def _source_transport_candidate_token(metadata: os.stat_result) -> str:
+def _source_transport_candidate_token(
+    metadata: os.stat_result,
+    access_policy_sha256: str = "sha256:" + hashlib.sha256(b"").hexdigest(),
+) -> str:
     generation, birthtime_ns = _source_object_generation(metadata)
     return _canonical_commitment(
         {
             "birthtime_ns": birthtime_ns,
+            "access_policy_sha256": access_policy_sha256,
             "device": metadata.st_dev,
             "generation": generation,
             "gid": metadata.st_gid,
             "inode": metadata.st_ino,
             "mode": metadata.st_mode,
-            "schema": "source_transport_candidate_v4",
+            "schema": "source_transport_candidate_v5",
             "uid": metadata.st_uid,
         }
     )
 
 
-def _source_transport_file_identity(metadata: os.stat_result) -> tuple[int, ...]:
+def _source_transport_file_identity(
+    metadata: os.stat_result,
+    access_policy_sha256: str = "sha256:" + hashlib.sha256(b"").hexdigest(),
+) -> tuple[int | str, ...]:
     fields = ("st_dev", "st_ino", "st_mode", "st_uid", "st_gid", "st_nlink")
     return tuple(int(getattr(metadata, field)) for field in fields) + (
         int(getattr(metadata, "st_flags", 0)) & _SOURCE_ACCESS_POLICY_FLAG_MASK,
         int(getattr(metadata, "st_gen", -1)),
+        access_policy_sha256,
+    )
+
+
+def _source_transport_file_observation(
+    descriptor: int,
+) -> tuple[os.stat_result, str]:
+    """Bind file identity and the descriptor's normalized ACL policy."""
+
+    before = os.fstat(descriptor)
+    access_policy_sha256 = (
+        "sha256:"
+        + hashlib.sha256(safe_io.descriptor_acl_policy_bytes(descriptor)).hexdigest()
+    )
+    after = os.fstat(descriptor)
+    if _source_transport_file_identity(
+        before, access_policy_sha256
+    ) != _source_transport_file_identity(after, access_policy_sha256):
+        raise ValueError("source entry changed while its access policy was inspected")
+    return after, access_policy_sha256
+
+
+def _source_transport_observed_candidate_token(descriptor: int) -> str:
+    metadata, access_policy_sha256 = _source_transport_file_observation(descriptor)
+    return _source_transport_candidate_token(metadata, access_policy_sha256)
+
+
+def _source_transport_scan_is_stable(
+    *,
+    before: os.stat_result,
+    before_access_policy: str,
+    proof_before: os.stat_result,
+    proof_access_policy: str,
+    after: os.stat_result,
+    after_access_policy: str,
+    source_size: int,
+    scanned: int,
+    scanned_range_commitment: str | None,
+    read_range_commitment: str,
+    resume_probe_stable: bool,
+    terminal_status: str | None,
+    terminal_reason: str | None,
+) -> bool:
+    identities_stable = (
+        _source_transport_file_identity(before, before_access_policy)
+        == _source_transport_file_identity(proof_before, proof_access_policy)
+        == _source_transport_file_identity(after, after_access_policy)
+    )
+    bounded_stop = terminal_status == "gap" and terminal_reason in {
+        "source_byte_limit_reached",
+        "source_record_limit_reached",
+    }
+    return (
+        identities_stable
+        and after.st_size >= source_size
+        and scanned_range_commitment == read_range_commitment
+        and resume_probe_stable
+        and (scanned == source_size or bounded_stop)
     )
 
 

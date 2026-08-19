@@ -1758,6 +1758,49 @@ superseded_by:
   Ruff lint and changed-file format checks, both workflows under `actionlint`,
   the isolated official OpenAI Skill validator, project-journal validation,
   and `git diff --check` pass.
+- Signed head `e4029bf6` became stale when its fresh whole-range Codex processor
+  found three remaining access-policy and cleanup gaps: source candidate and
+  scan proofs omitted Darwin ACL policy, writable ACLs on otherwise admitted
+  data-path ancestors could redirect creation, and the remote relay swallowed
+  every process-group signal failure. The reviewer workspace was materialized
+  and postvalidated at the exact 62-commit, 61-parent-edge range with graph
+  digest `6598888e48a8cffc280b9679190bbd6b12cd61e29df97a130eb64a35dc067d93`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`;
+  the trusted release manifest, Skill, and guard digests remained unchanged,
+  and the task root was safely removed.
+- Source candidate schema v5 and every scan proof sample now bind the normalized
+  descriptor ACL digest in addition to identity and selected BSD flags.
+  Existing data-path ancestors are checked and revalidated through held
+  descriptors: read-only and inheritance-only ACEs remain valid, while any
+  allow ACE granting mutation authority fails closed. Remote cleanup preserves
+  the unreaped leader fence, surfaces every non-`ESRCH` signal failure, and
+  accepts Darwin's zombie-only `EPERM` case only after reap plus a non-signaling
+  group-absence proof; a surviving or unverifiable group remains an explicit
+  closure failure.
+- The exact source-transport module passes 128/128 in 42.995 seconds, identity
+  and safe-I/O tests pass 51/51, six exact remote lifecycle regressions pass
+  6/6, module boundaries pass 19/19, CI contracts pass 33/33, and the public
+  Skill contract passes 5/5. The independent Darwin security inventory expands
+  to 14 exact tests and passes 14/14 in 78.501 seconds. One initial full-shard
+  launch had unrecoverable terminal output after a task-context transition and
+  is non-counting. Its replacement exposed the stale CI expectation of 11
+  Darwin tests; that four-shard tree was intentionally interrupted and is also
+  non-counting. The corrected closed inventory expectation is 14. Two optional
+  read-only precommit explorer audits produced no terminal artifact within
+  their bounded window and were shut down; no partial output was accepted and
+  neither audit counts as review evidence.
+- The final Python 3.13 inventory contains 1,802 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `8677372f2c4d20c9e704d1960683f24b3793360f66a08babe3a352a37904f7af`.
+  Shard 0 passes 430/430 in 1,679.632 seconds, shard 1 passes 485/485 in
+  1,441.753 seconds, shard 2 passes 474/474 in 1,409.367 seconds, and shard 3
+  passes 413/413 in 1,332.657 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary, for exact aggregate coverage of 1,802/1,802. Ruff
+  0.13.2 lint and changed-file formatting, both workflows under `actionlint`,
+  the generated bootstrap manifest, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check` pass on the same implementation tree.
 
 ## Follow-up Work
 

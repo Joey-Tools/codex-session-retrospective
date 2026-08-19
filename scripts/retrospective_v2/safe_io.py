@@ -145,6 +145,53 @@ class TreeInventoryBudget:
 _DARWIN_ACL_TYPE_EXTENDED = 0x100
 _DARWIN_FILESEC_ACL = 5
 _DARWIN_FILESEC_REMOVE_ACL = ctypes.c_void_p(1)
+_DARWIN_ACL_ACTIONS = frozenset({b"allow", b"deny"})
+_DARWIN_ACL_FLAGS = frozenset(
+    {
+        b"directory_inherit",
+        b"file_inherit",
+        b"inherited",
+        b"limit_inherit",
+        b"only_inherit",
+    }
+)
+_DARWIN_ACL_PERMISSIONS = frozenset(
+    {
+        b"add_file",
+        b"add_subdirectory",
+        b"append",
+        b"chown",
+        b"delete",
+        b"delete_child",
+        b"execute",
+        b"list",
+        b"read",
+        b"readattr",
+        b"readextattr",
+        b"readsecurity",
+        b"search",
+        b"synchronize",
+        b"write",
+        b"writeattr",
+        b"writeextattr",
+        b"writesecurity",
+    }
+)
+_DARWIN_ACL_ANCESTOR_MUTATION_PERMISSIONS = frozenset(
+    {
+        b"add_file",
+        b"add_subdirectory",
+        b"append",
+        b"chown",
+        b"delete",
+        b"delete_child",
+        b"write",
+        b"writeattr",
+        b"writeextattr",
+        b"writesecurity",
+    }
+)
+_ANCESTOR_ACCESS_POLICY_FLAG_MASK = 0x001E0096
 
 
 class _DarwinAclApi:
@@ -264,6 +311,46 @@ def descriptor_acl_policy_bytes(descriptor: int) -> bytes:
                 primary.add_note(message)
             else:
                 raise UnsafePathError(message)
+
+
+def _validate_ancestor_acl_policy(policy: bytes, display_path: Path) -> None:
+    if not policy:
+        return
+    lines = policy.splitlines()
+    if not lines or lines[0] != b"!#acl 1" or len(lines) < 2:
+        raise UnsafePathError(
+            f"path ancestor has an unrecognized Darwin ACL: {display_path}"
+        )
+    for line in lines[1:]:
+        fields = line.split(b":")
+        if len(fields) != 6:
+            raise UnsafePathError(
+                f"path ancestor has an unrecognized Darwin ACL: {display_path}"
+            )
+        entry_type, qualifier, name, numeric_id, raw_flags, raw_permissions = fields
+        flags = frozenset(raw_flags.split(b","))
+        permissions = frozenset(raw_permissions.split(b","))
+        actions = flags & _DARWIN_ACL_ACTIONS
+        inheritance_flags = flags - actions
+        if (
+            entry_type not in {b"user", b"group"}
+            or not qualifier
+            or not name
+            or not numeric_id.isdigit()
+            or len(actions) != 1
+            or not inheritance_flags <= _DARWIN_ACL_FLAGS
+            or not permissions
+            or not permissions <= _DARWIN_ACL_PERMISSIONS
+        ):
+            raise UnsafePathError(
+                f"path ancestor has an unrecognized Darwin ACL: {display_path}"
+            )
+        if b"allow" in actions and (
+            permissions & _DARWIN_ACL_ANCESTOR_MUTATION_PERMISSIONS
+        ):
+            raise UnsafePathError(
+                f"path ancestor has a writable Darwin ACL: {display_path}"
+            )
 
 
 def _validate_owner_only_acl(descriptor: int, display_path: Path) -> None:
@@ -439,6 +526,37 @@ def _validate_ancestor_directory(st: os.stat_result, path: Path) -> None:
         raise UnsafePathError(f"path ancestor is writable by another user: {path}")
 
 
+def _ancestor_access_policy_identity(st: os.stat_result) -> tuple[int, ...]:
+    return (
+        int(st.st_dev),
+        int(st.st_ino),
+        int(st.st_mode),
+        int(st.st_uid),
+        int(st.st_gid),
+        int(getattr(st, "st_flags", 0)) & _ANCESTOR_ACCESS_POLICY_FLAG_MASK,
+        int(getattr(st, "st_gen", -1)),
+    )
+
+
+def _validate_ancestor_directory_descriptor(
+    descriptor: int,
+    display_path: Path,
+) -> bytes:
+    before = os.fstat(descriptor)
+    _validate_ancestor_directory(before, display_path)
+    policy = descriptor_acl_policy_bytes(descriptor)
+    _validate_ancestor_acl_policy(policy, display_path)
+    after = os.fstat(descriptor)
+    _validate_ancestor_directory(after, display_path)
+    if _ancestor_access_policy_identity(before) != _ancestor_access_policy_identity(
+        after
+    ):
+        raise UnsafePathError(
+            f"path ancestor changed while its access policy was inspected: {display_path}"
+        )
+    return policy
+
+
 def _validate_directory_stat(
     st: os.stat_result,
     path: Path,
@@ -521,6 +639,7 @@ def _trusted_symlink_target(
     traversed: list[str],
     remaining: list[str],
     display_path: Path,
+    expected_parent_policy: bytes,
 ) -> list[str] | None:
     try:
         before = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
@@ -529,6 +648,14 @@ def _trusted_symlink_target(
     if not stat.S_ISLNK(before.st_mode):
         return None
 
+    parent_path = Path(display_path).parent
+    if (
+        _validate_ancestor_directory_descriptor(directory_fd, parent_path)
+        != expected_parent_policy
+    ):
+        raise UnsafePathError(
+            f"path ancestor access policy changed while inspected: {parent_path}"
+        )
     parent = os.fstat(directory_fd)
     if before.st_uid != 0 or parent.st_uid != 0 or stat.S_IMODE(parent.st_mode) & 0o022:
         raise UnsafePathError(
@@ -536,6 +663,13 @@ def _trusted_symlink_target(
         )
     target = os.readlink(name, dir_fd=directory_fd)
     after = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    if (
+        _validate_ancestor_directory_descriptor(directory_fd, parent_path)
+        != expected_parent_policy
+    ):
+        raise UnsafePathError(
+            f"path ancestor access policy changed while inspected: {parent_path}"
+        )
     if (before.st_dev, before.st_ino) != (after.st_dev, after.st_ino):
         raise UnsafePathError(
             f"symlink ancestor changed while inspected: {display_path}"
@@ -558,6 +692,10 @@ def _open_directory_chain(
         raise UnsafePathError("a filesystem root cannot be an owner-only data path")
 
     directory_fd = os.open(path.anchor, _DIRECTORY_FLAGS)
+    directory_policy = _validate_ancestor_directory_descriptor(
+        directory_fd,
+        Path(path.anchor),
+    )
     traversed: list[str] = []
     symlink_count = 0
     index = 0
@@ -566,6 +704,14 @@ def _open_directory_chain(
             name = components[index]
             is_final = index == len(components) - 1
             created = False
+            parent_path = Path(path.anchor, *traversed)
+            if (
+                _validate_ancestor_directory_descriptor(directory_fd, parent_path)
+                != directory_policy
+            ):
+                raise UnsafePathError(
+                    f"path ancestor access policy changed while opening: {parent_path}"
+                )
             try:
                 child_fd = os.open(name, _DIRECTORY_FLAGS, dir_fd=directory_fd)
             except FileNotFoundError:
@@ -589,6 +735,7 @@ def _open_directory_chain(
                     traversed,
                     components[index + 1 :],
                     Path(path.anchor, *traversed, name),
+                    directory_policy,
                 )
                 if replacement is None:
                     raise exc
@@ -599,6 +746,10 @@ def _open_directory_chain(
                     ) from exc
                 os.close(directory_fd)
                 directory_fd = os.open(path.anchor, _DIRECTORY_FLAGS)
+                directory_policy = _validate_ancestor_directory_descriptor(
+                    directory_fd,
+                    Path(path.anchor),
+                )
                 components = replacement
                 traversed = []
                 index = 0
@@ -607,6 +758,14 @@ def _open_directory_chain(
             try:
                 metadata = os.fstat(child_fd)
                 component_path = Path(path.anchor, *traversed, name)
+                if (
+                    _validate_ancestor_directory_descriptor(directory_fd, parent_path)
+                    != directory_policy
+                ):
+                    raise UnsafePathError(
+                        "path ancestor access policy changed while opening: "
+                        f"{parent_path}"
+                    )
                 if created:
                     _validate_directory_stat(metadata, component_path, exact_mode=False)
                     metadata = harden_created_owner_only_directory_descriptor(
@@ -620,14 +779,20 @@ def _open_directory_chain(
                         path,
                         exact_mode=exact_mode,
                     )
+                if not is_final:
+                    child_policy = _validate_ancestor_directory_descriptor(
+                        child_fd,
+                        component_path,
+                    )
                 else:
-                    _validate_ancestor_directory(metadata, component_path)
+                    child_policy = b""
             except BaseException:
                 os.close(child_fd)
                 raise
 
             os.close(directory_fd)
             directory_fd = child_fd
+            directory_policy = child_policy
             traversed.append(name)
             index += 1
         return directory_fd

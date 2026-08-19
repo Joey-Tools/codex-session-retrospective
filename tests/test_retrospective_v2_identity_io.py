@@ -1215,6 +1215,47 @@ class SafeIoTests(unittest.TestCase):
             self._remove_darwin_acl(inheriting)
 
     @darwin_security_test
+    def test_darwin_ancestor_acl_drift_during_open_is_rejected(self) -> None:
+        ancestor = self.root / "acl-drift-ancestor"
+        ancestor.mkdir(mode=0o700)
+        target = ancestor / "nested" / "state.json"
+        real_open = os.open
+        changed = False
+
+        def open_and_change_parent_acl(
+            path: str | bytes | os.PathLike[str] | os.PathLike[bytes],
+            flags: int,
+            mode: int = 0o777,
+            *,
+            dir_fd: int | None = None,
+        ) -> int:
+            nonlocal changed
+            descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+            if path == "nested" and dir_fd is not None and not changed:
+                changed = True
+                self._add_darwin_acl(
+                    ancestor,
+                    "everyone allow delete_child,add_subdirectory",
+                )
+            return descriptor
+
+        try:
+            with (
+                mock.patch.object(
+                    safe_io.os,
+                    "open",
+                    side_effect=open_and_change_parent_acl,
+                ),
+                self.assertRaisesRegex(UnsafePathError, "writable Darwin ACL"),
+            ):
+                atomic_write_bytes(target, b"payload")
+        finally:
+            self._remove_darwin_acl(ancestor)
+
+        self.assertTrue(changed)
+        self.assertFalse(target.exists())
+
+    @darwin_security_test
     def test_darwin_bounded_read_rejects_late_acl_policy_change(self) -> None:
         target = self.root / "late-acl"
         payload = b"x" * (64 * 1024 + 32)
@@ -1238,6 +1279,20 @@ class SafeIoTests(unittest.TestCase):
                 read_bounded_bytes(target, max_bytes=len(payload))
         finally:
             self._remove_darwin_acl(target)
+
+    @darwin_security_test
+    def test_darwin_writable_ancestor_acl_is_rejected(self) -> None:
+        ancestor = self.root / "writable-acl-ancestor"
+        ancestor.mkdir(mode=0o700)
+        self._add_darwin_acl(
+            ancestor,
+            "everyone allow delete_child,add_subdirectory",
+        )
+        try:
+            with self.assertRaisesRegex(UnsafePathError, "writable Darwin ACL"):
+                atomic_write_bytes(ancestor / "nested" / "state.json", b"payload")
+        finally:
+            self._remove_darwin_acl(ancestor)
 
     def test_darwin_acl_query_distinguishes_absence_from_failure(self) -> None:
         class FakeAclApi:

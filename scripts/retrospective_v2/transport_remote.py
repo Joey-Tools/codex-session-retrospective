@@ -6,6 +6,7 @@ import argparse
 import base64
 import binascii
 import codecs
+import errno
 import hmac
 import os
 import pathlib
@@ -79,6 +80,10 @@ class RemoteTransportAuthenticationError(TransportValidationError):
 
 class RemoteTransportExecutionError(RuntimeError):
     """Raised when authenticated helper code violates its execution contract."""
+
+
+class _RemoteProcessGroupSignalDenied(RuntimeError):
+    """The pinned group exists, but the kernel found no signalable member."""
 
 
 def remote_host_context_helper_path() -> pathlib.Path:
@@ -315,15 +320,21 @@ def _relay_valid_utf8(output: Any) -> None:
 
 
 def _terminate_remote_process_group(process: subprocess.Popen[bytes]) -> None:
-    terminations = {
-        False: (process.kill,),
-        True: (lambda: os.killpg(process.pid, signal.SIGKILL), process.kill),
-    }[os.name == "posix"]
-    for terminate in terminations:
-        try:
-            terminate()
-        except OSError:
-            pass
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGKILL)
+        else:
+            process.kill()
+    except OSError as error:
+        if error.errno == errno.ESRCH:
+            return
+        if error.errno == errno.EPERM:
+            raise _RemoteProcessGroupSignalDenied(
+                "remote-host-context process group signal was denied"
+            ) from error
+        raise RuntimeError(
+            "remote-host-context process group could not be signaled"
+        ) from error
 
 
 def _reap_remote_process_group(process: subprocess.Popen[bytes]) -> int:
@@ -340,7 +351,24 @@ def _close_remote_process_group(
     *,
     retire_group_signal: Callable[[], None],
 ) -> int:
-    _terminate_remote_process_group(process)
+    try:
+        _terminate_remote_process_group(process)
+    except _RemoteProcessGroupSignalDenied as signal_error:
+        return_code = _reap_remote_process_group(process)
+        # Reaping releases the PID/PGID fence. Retire signal authority before
+        # proving absence so no later cleanup path can target a reused group.
+        retire_group_signal()
+        try:
+            os.killpg(process.pid, 0)
+        except OSError as probe_error:
+            if probe_error.errno == errno.ESRCH:
+                return return_code
+            raise RuntimeError(
+                "remote-host-context process group closure is unproven"
+            ) from signal_error
+        raise RuntimeError(
+            "remote-host-context process group closure is unproven"
+        ) from signal_error
     retire_group_signal()
     return _reap_remote_process_group(process)
 

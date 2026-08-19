@@ -20,11 +20,15 @@ from tests.darwin_security import DARWIN_SECURITY_ATTRIBUTE  # noqa: E402
 
 EXPECTED_DARWIN_SECURITY_TEST_IDS = (
     "tests.test_retrospective_v2_identity_io.SafeIoTests."
+    "test_darwin_ancestor_acl_drift_during_open_is_rejected",
+    "tests.test_retrospective_v2_identity_io.SafeIoTests."
     "test_darwin_bounded_read_rejects_late_acl_policy_change",
     "tests.test_retrospective_v2_identity_io.SafeIoTests."
     "test_darwin_creation_clears_inherited_extended_acls",
     "tests.test_retrospective_v2_identity_io.SafeIoTests."
     "test_darwin_existing_owner_only_paths_reject_extended_acls",
+    "tests.test_retrospective_v2_identity_io.SafeIoTests."
+    "test_darwin_writable_ancestor_acl_is_rejected",
     "tests.test_retrospective_v2_publication_transaction."
     "DurablePublicationTests."
     "test_history_reader_and_publisher_reject_config_extended_acl",
@@ -39,6 +43,8 @@ EXPECTED_DARWIN_SECURITY_TEST_IDS = (
     "test_remote_helper_launch_rejects_snapshot_extended_acl",
     "tests.test_retrospective_v2_source_transport.SourceTransportProtocolTests."
     "test_source_identity_ignores_non_policy_flags",
+    "tests.test_retrospective_v2_source_transport.SourceTransportProtocolTests."
+    "test_source_scan_rejects_acl_access_policy_change",
     "tests.test_session_retrospective.SessionRetrospectiveTests."
     "test_history_git_rejects_extended_acl_repository",
     "tests.test_session_retrospective_v2_cli.CliContractTests."

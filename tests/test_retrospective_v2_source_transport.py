@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import datetime as dt
+import errno
 import hashlib
 import json
 import io
@@ -10,6 +11,7 @@ from pathlib import Path
 import pwd
 import py_compile
 import shutil
+import signal
 import stat
 import subprocess
 import sys
@@ -3105,6 +3107,61 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual(1, terminations)
         self.assertEqual(2, reap_calls)
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_remote_cleanup_surfaces_group_signal_failure(self) -> None:
+        helper = self.root / "remote-helper-group-signal-failure.py"
+        child_pid_path = self.root / "remote-helper-group-signal-failure.pid"
+        helper.write_text(
+            "import pathlib, subprocess, sys\n"
+            "child = subprocess.Popen(\n"
+            "    [sys.executable, '-I', '-c', 'import time; time.sleep(60)'],\n"
+            "    stdin=subprocess.DEVNULL,\n"
+            "    stdout=subprocess.DEVNULL,\n"
+            "    stderr=subprocess.DEVNULL,\n"
+            ")\n"
+            "pathlib.Path(sys.argv[1]).write_text(str(child.pid), encoding='ascii')\n"
+            "print('{}')\n",
+            encoding="ascii",
+        )
+        real_killpg = os.killpg
+        signal_attempts = 0
+
+        def fail_first_group_signal(
+            process_group_id: int, selected_signal: int
+        ) -> None:
+            nonlocal signal_attempts
+            signal_attempts += 1
+            if signal_attempts == 1:
+                raise PermissionError(errno.EPERM, "simulated group signal denial")
+            real_killpg(process_group_id, selected_signal)
+
+        with (
+            mock.patch.object(
+                transport_remote.os,
+                "killpg",
+                side_effect=fail_first_group_signal,
+            ),
+            self.assertRaisesRegex(RuntimeError, "closure is unproven"),
+        ):
+            transport._relay_remote_host_context_command(
+                (sys.executable, "-I", "-B", "-S", str(helper), str(child_pid_path)),
+                max_output_bytes=1024,
+            )
+
+        self.assertEqual(2, signal_attempts)
+        child_pid = int(child_pid_path.read_text(encoding="ascii"))
+        os.kill(child_pid, 0)
+        os.kill(child_pid, signal.SIGKILL)
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            try:
+                os.kill(child_pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.02)
+        else:
+            self.fail(f"remote helper descendant survived cleanup: {child_pid}")
+
     def test_line_reader_is_bounded_before_allocation(self) -> None:
         class GuardedStream(io.BytesIO):
             maximum_request = 0
@@ -5093,7 +5150,40 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         self.assertTrue(changed)
         self.assertEqual("gap", frames[-1]["status"])
-        self.assertEqual("source_enumeration_changed", frames[-1]["reason"])
+        self.assertEqual("source_changed_during_scan", frames[-1]["reason"])
+
+    @darwin_security_test
+    def test_source_scan_rejects_acl_access_policy_change(self) -> None:
+        source = self.codex_root / "history.jsonl"
+        source.write_bytes(self._line("acl-access-policy-change"))
+        real_read = transport_source._read_bounded_line
+        changed = False
+
+        def add_acl_after_read(*args, **kwargs):
+            nonlocal changed
+            line = real_read(*args, **kwargs)
+            if line.byte_count and not changed:
+                changed = True
+                self._add_darwin_acl(source, "everyone allow read")
+            return line
+
+        try:
+            with mock.patch.object(
+                transport_source,
+                "_read_bounded_line",
+                side_effect=add_acl_after_read,
+            ):
+                frames = self._direct_source_frames(
+                    "acl-access-policy-change",
+                    source_kind="history",
+                    max_records=16,
+                )
+        finally:
+            self._remove_darwin_acl(source)
+
+        self.assertTrue(changed)
+        self.assertEqual("gap", frames[-1]["status"])
+        self.assertEqual("source_changed_during_scan", frames[-1]["reason"])
 
     def test_codex_root_validation_uses_lexical_no_follow_open(self) -> None:
         self.codex_root.joinpath("history.jsonl").write_bytes(
