@@ -304,25 +304,7 @@ def _run_bounded_subprocess(
     )
     if python_authority is not None:
         executable_authority.revalidate_executable(python_authority)
-    try:
-        process = subprocess.Popen(
-            launch_command,
-            stdin=(subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=dict(environment),
-            close_fds=True,
-            pass_fds=inherited_descriptors,
-            start_new_session=os.name == "posix",
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        if python_authority is not None:
-            executable_authority.revalidate_executable(python_authority)
-        raise LocalGitPublicationError("cannot start bounded subprocess") from exc
-
-    assert process.stdout is not None
-    assert process.stderr is not None
-    selector = selectors.DefaultSelector()
+    selector: selectors.BaseSelector | None = None
     stdout = bytearray()
     stderr = bytearray()
     input_view = memoryview(input_bytes or b"")
@@ -332,10 +314,11 @@ def _run_bounded_subprocess(
     active_error: BaseException | None = None
 
     def close_stream(stream: Any) -> None:
-        try:
-            selector.unregister(stream)
-        except (KeyError, ValueError):
-            pass
+        if selector is not None:
+            try:
+                selector.unregister(stream)
+            except (KeyError, ValueError):
+                pass
         try:
             stream.close()
         except OSError:
@@ -360,6 +343,25 @@ def _run_bounded_subprocess(
         )
 
     try:
+        process = subprocess.Popen(
+            launch_command,
+            stdin=(subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=dict(environment),
+            close_fds=True,
+            pass_fds=inherited_descriptors,
+            start_new_session=os.name == "posix",
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        if python_authority is not None:
+            executable_authority.revalidate_executable(python_authority)
+        raise LocalGitPublicationError("cannot start bounded subprocess") from exc
+
+    try:
+        if process.stdout is None or process.stderr is None:
+            raise LocalGitPublicationError("subprocess streams are unavailable")
+        selector = selectors.DefaultSelector()
         for stream, target in (
             (process.stdout, stdout),
             (process.stderr, stderr),
@@ -437,12 +439,20 @@ def _run_bounded_subprocess(
         raise
     finally:
         try:
-            for stream in (process.stdin, process.stdout, process.stderr):
-                if stream is not None:
-                    close_stream(stream)
-            selector.close()
-            process_lifecycle.finish_cleanup(
+            resource_closers = tuple(
+                closer
+                for closer in (
+                    None if selector is None else selector.close,
+                    None if process.stdin is None else process.stdin.close,
+                    None if process.stdout is None else process.stdout.close,
+                    None if process.stderr is None else process.stderr.close,
+                )
+                if closer is not None
+            )
+            process_lifecycle.finish_cleanup_after_resource_teardown(
                 process,
+                resource_closers=resource_closers,
+                resource_label="publication subprocess resource teardown",
                 signal_retired=signal_retirement.retired,
                 terminate_and_reap=close_process_group,
                 reap_only=reap_process,

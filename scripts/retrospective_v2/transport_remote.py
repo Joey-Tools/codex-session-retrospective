@@ -360,6 +360,9 @@ def _relay_remote_host_context_command(
 
     if max_output_bytes < 1:
         raise RuntimeError("remote-host-context output envelope is invalid")
+    signal_retirement = process_lifecycle.GroupSignalRetirement()
+    selector: selectors.BaseSelector | None = None
+    active_error: BaseException | None = None
     try:
         process = subprocess.Popen(
             list(argv),
@@ -375,15 +378,12 @@ def _relay_remote_host_context_command(
             "remote-host-context transport unavailable"
         ) from exc
 
-    signal_retirement = process_lifecycle.GroupSignalRetirement()
-
-    selector = selectors.DefaultSelector()
-    active_error: BaseException | None = None
     try:
         if process.stdout is None:
             raise RemoteTransportUnavailableError(
                 "remote-host-context transport unavailable"
             )
+        selector = selectors.DefaultSelector()
         os.set_blocking(process.stdout.fileno(), False)
         selector.register(process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS
@@ -485,11 +485,18 @@ def _relay_remote_host_context_command(
         active_error = exc
         raise
     finally:
-        selector.close()
-        if process.stdout is not None:
-            process.stdout.close()
-        process_lifecycle.finish_cleanup(
+        resource_closers = tuple(
+            closer
+            for closer in (
+                None if selector is None else selector.close,
+                None if process.stdout is None else process.stdout.close,
+            )
+            if closer is not None
+        )
+        process_lifecycle.finish_cleanup_after_resource_teardown(
             process,
+            resource_closers=resource_closers,
+            resource_label="remote transport resource teardown",
             signal_retired=signal_retirement.retired,
             terminate_and_reap=lambda child: _close_remote_process_group(
                 child,

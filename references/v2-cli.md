@@ -339,6 +339,8 @@ used as automation guidance. Unknown failures collapse to
 If a bounded subprocess has an active primary failure and its process-group
 cleanup also fails, the CLI instead emits the non-retryable
 `process_group_cleanup_incomplete` security result. Its bounded result preserves
-only the primary error code, reason code, and exit code; it never exposes raw
-exception or process output. Operators must repair or prove the retained trust
-boundary before retrying.
+only the outer command primary's error code, reason code, and exit code. A
+cleanup-only wrapper is unwrapped to its command primary, while a later
+command-level wrapper remains the authoritative primary. The result never
+exposes raw exception or process output. Operators must repair or prove the
+retained trust boundary before retrying.

@@ -1882,9 +1882,13 @@ def _primary_failure_from_exception(command: str, error: Exception) -> CommandRe
 
 
 def _failure_from_exception(command: str, error: Exception) -> CommandResult:
-    primary = _primary_failure_from_exception(command, error)
-    if not process_lifecycle.has_incomplete_process_group_cleanup(error):
-        return primary
+    cleanup_primary = process_lifecycle.incomplete_process_group_cleanup_primary(error)
+    if cleanup_primary is None:
+        return _primary_failure_from_exception(command, error)
+    primary = _primary_failure_from_exception(
+        command,
+        cleanup_primary if isinstance(cleanup_primary, Exception) else error,
+    )
     assert primary.error is not None
     return CommandResult.failure(
         command,

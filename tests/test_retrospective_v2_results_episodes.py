@@ -2405,6 +2405,38 @@ class ResultValidationTests(unittest.TestCase):
                 )
                 self.assertEqual(scan_for_leaks(result), ())
 
+    def test_post_redaction_removes_single_label_host_emails(self) -> None:
+        for email in (
+            "alice@buildhost",
+            "release.bot+alerts@localhost",
+            "reviewer@internal-host",
+        ):
+            with self.subTest(email=email):
+                findings = scan_for_leaks({"unsafe": email})
+                self.assertIn(
+                    "personal_identifier",
+                    {item.category for item in findings},
+                )
+
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = (
+                    f"Notify {email} before continuing."
+                )
+                result = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    "Notify [REDACTED_PERSONAL_IDENTIFIER] before continuing.",
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual(scan_for_leaks(result), ())
+
+        for invalid in ("alice@-buildhost", "alice@buildhost."):
+            with self.subTest(invalid=invalid):
+                self.assertNotIn(
+                    "personal_identifier",
+                    {item.category for item in scan_for_leaks({"safe": invalid})},
+                )
+
     def test_uri_scheme_matching_does_not_unicode_casefold(self) -> None:
         for uri_like_text in (
             "\u0130ttp://host",

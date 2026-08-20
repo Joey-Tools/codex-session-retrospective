@@ -20,7 +20,12 @@ import sys
 from typing import Any, Callable, Mapping, NoReturn, Sequence
 
 try:
-    from . import catalog, contracts as common_contracts, transport_resume
+    from . import (
+        catalog,
+        contracts as common_contracts,
+        process_lifecycle,
+        transport_resume,
+    )
     from .contracts import (
         JsonValue,
         RefType,
@@ -75,6 +80,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     import catalog  # type: ignore[no-redef]
     import contracts as common_contracts  # type: ignore[no-redef]
+    import process_lifecycle  # type: ignore[no-redef]
     import transport_resume  # type: ignore[no-redef]
     from contracts import (  # type: ignore[no-redef]
         JsonValue,
@@ -1939,7 +1945,8 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
                 max_output_bytes=wire_limit,
             ),
         )
-    except RemoteTransportUnavailableError:
+    except RemoteTransportUnavailableError as error:
+        process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
         _emit_source_transport_gap(
             args,
             reason="remote_host_context_transport_unavailable",

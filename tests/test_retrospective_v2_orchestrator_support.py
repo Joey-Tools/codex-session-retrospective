@@ -141,6 +141,20 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                     self.fail(f"publisher canary child {pid} survived cleanup")
                 time.sleep(0.01)
 
+    @staticmethod
+    def _mark_cleanup_incomplete(error: RuntimeError) -> RuntimeError:
+        def cleanup_failure(_process) -> int:
+            raise RuntimeError("simulated persistent process cleanup failure")
+
+        orchestrator_support.process_lifecycle.finish_cleanup(
+            mock.Mock(spec=subprocess.Popen),
+            signal_retired=False,
+            terminate_and_reap=cleanup_failure,
+            reap_only=cleanup_failure,
+            active_error=error,
+        )
+        return error
+
     def test_bounded_canary_accepts_valid_sign_and_verify_output(self) -> None:
         self.assertTrue(
             orchestrator_support.publisher_sign_verify_canary(
@@ -149,6 +163,150 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             )
         )
         self.assertFalse(self.gpg_sentinel.exists())
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_canary_selector_setup_failure_reaps_started_process(self) -> None:
+        real_popen = subprocess.Popen
+        spawned: list[subprocess.Popen[bytes]] = []
+
+        def capture_popen(*args, **kwargs):
+            process = real_popen(*args, **kwargs)
+            spawned.append(process)
+            return process
+
+        with (
+            mock.patch.object(
+                orchestrator_support.subprocess,
+                "Popen",
+                side_effect=capture_popen,
+            ),
+            mock.patch.object(
+                orchestrator_support.selectors,
+                "DefaultSelector",
+                side_effect=OSError(errno.EMFILE, "selector unavailable"),
+            ),
+            self.assertRaises(OSError),
+        ):
+            orchestrator_support._run_bounded_publisher_canary_process(
+                [
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-S",
+                    "-c",
+                    "import time; time.sleep(60)",
+                ],
+                environment=dict(os.environ),
+                timeout_seconds=2,
+            )
+
+        self.assertEqual(1, len(spawned))
+        self.assertIsNotNone(spawned[0].poll())
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_canary_selector_close_failure_still_finishes_process_cleanup(self) -> None:
+        real_selector = orchestrator_support.selectors.DefaultSelector
+
+        class CloseFailingSelector:
+            def __init__(self) -> None:
+                self._inner = real_selector()
+
+            def __getattr__(self, name: str):
+                return getattr(self._inner, name)
+
+            def close(self) -> None:
+                self._inner.close()
+                raise OSError(errno.EIO, "selector close failure")
+
+        with (
+            mock.patch.object(
+                orchestrator_support.selectors,
+                "DefaultSelector",
+                CloseFailingSelector,
+            ),
+            self.assertRaisesRegex(OSError, "selector close failure"),
+        ):
+            orchestrator_support._run_bounded_publisher_canary_process(
+                [sys.executable, "-I", "-B", "-S", "-c", "pass"],
+                environment=dict(os.environ),
+                timeout_seconds=2,
+            )
+
+    def test_readiness_does_not_downgrade_incomplete_process_cleanup(self) -> None:
+        error = self._mark_cleanup_incomplete(
+            orchestrator_support.finalize.LocalGitPublicationError(
+                "simulated readiness failure"
+            )
+        )
+        with (
+            mock.patch.object(
+                orchestrator_support.finalize,
+                "validate_publisher_keyring",
+                side_effect=error,
+            ),
+            self.assertRaises(
+                orchestrator_support.process_lifecycle.ProcessGroupCleanupIncompleteError
+            ),
+        ):
+            orchestrator_support.publisher_readiness(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+
+    def test_canary_does_not_downgrade_incomplete_process_cleanup(self) -> None:
+        error = self._mark_cleanup_incomplete(
+            orchestrator_support._PublisherCanaryProcessError(
+                "simulated canary failure"
+            )
+        )
+        with (
+            mock.patch.object(
+                orchestrator_support,
+                "_run_bounded_publisher_canary_process",
+                side_effect=error,
+            ),
+            self.assertRaises(
+                orchestrator_support.process_lifecycle.ProcessGroupCleanupIncompleteError
+            ),
+        ):
+            orchestrator_support.publisher_sign_verify_canary(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+
+    def test_canary_does_not_downgrade_cleanup_only_failure(self) -> None:
+        error = orchestrator_support._PublisherCanaryProcessError(
+            "simulated direct process cleanup failure"
+        )
+
+        def cleanup_failure(_process) -> int:
+            raise error
+
+        with self.assertRaises(
+            orchestrator_support._PublisherCanaryProcessError
+        ) as caught:
+            orchestrator_support.process_lifecycle.finish_cleanup(
+                mock.Mock(spec=subprocess.Popen),
+                signal_retired=False,
+                terminate_and_reap=cleanup_failure,
+                reap_only=cleanup_failure,
+                active_error=None,
+            )
+
+        with (
+            mock.patch.object(
+                orchestrator_support,
+                "_run_bounded_publisher_canary_process",
+                side_effect=caught.exception,
+            ),
+            self.assertRaises(
+                orchestrator_support.process_lifecycle.ProcessGroupCleanupIncompleteError
+            ),
+        ):
+            orchestrator_support.publisher_sign_verify_canary(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
 
     def test_canary_accepts_signing_subkey_bound_to_primary(self) -> None:
         self.gpg_mode.write_text("subkey_validsig", encoding="ascii")
@@ -388,11 +546,18 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                     result = orchestrator_support._run_bounded_publisher_canary_process(
                         [sys.executable, "-I", "-B", "-S", "-c", "pass"],
                         environment=dict(os.environ),
-                        timeout_seconds=2,
+                        timeout_seconds=0.25,
                     )
                     self.assertEqual(0, result.returncode)
 
-                self.assertEqual([signal.SIGKILL, 0], attempted_signals)
+                self.assertEqual(signal.SIGKILL, attempted_signals[0])
+                self.assertTrue(
+                    all(selected == 0 for selected in attempted_signals[1:])
+                )
+                if group_present:
+                    self.assertGreater(len(attempted_signals), 2)
+                else:
+                    self.assertEqual([signal.SIGKILL, 0], attempted_signals)
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
     def test_canary_timeout_closes_group_after_leader_exit(self) -> None:

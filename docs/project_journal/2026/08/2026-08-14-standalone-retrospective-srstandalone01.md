@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-19
+updated: 2026-08-20
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -1872,6 +1872,46 @@ superseded_by:
   `actionlint` invocation named a nonexistent stale workflow path and is
   non-counting; the exact current workflow invocation supplied the passing
   evidence.
+- Signed head `c659738d` became stale when its fresh whole-range Codex
+  processor found four remaining trust-boundary gaps. A successful `SIGKILL`
+  path reaped only the leader without proving process-group absence; readiness,
+  canary, and remote-gap fallbacks could downgrade a marked cleanup failure;
+  selector construction or teardown after `Popen` could bypass process cleanup;
+  and bounded single-label `account@host` identifiers could enter retained
+  history. The first reviewer launch stopped before any Git read because its
+  prompt omitted the complete sanitized Git prefix. That metadata-only attempt
+  postvalidated clean and was safely removed. Its one permitted fresh retry
+  used the exact 65-commit, 64-parent-edge range, returned the four findings,
+  postvalidated clean, retained unchanged trusted-bundle digests, and was also
+  safely removed.
+- The shared process owner now retains one cleanup deadline across signal,
+  leader reap, and non-signaling group-absence polling. `EPERM` after reap is
+  never accepted as absence; only a later `ESRCH` proves closure. Every direct
+  or secondary process-cleanup failure receives bounded structured evidence,
+  and cleanup-only wrappers preserve the outer command primary classification.
+  Resource owners construct selectors inside the process-owned boundary,
+  attempt every selector/stream close, and always finish group cleanup.
+  Readiness, canary, and remote availability fallbacks rethrow unproven cleanup
+  as a dedicated security failure. Working-zone and retained privacy validation
+  now classify RFC-shaped and bounded single-label `account@host` values as
+  personal identifiers while preserving complete SCP-style locator precedence.
+- The superseding Python 3.13 inventory contains 1,818 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `355d7e1df66a099a868f197be6facfb9d9ef6aa59084667ea2c854f2ed53df09`.
+  Shard 0 passes 433/433 in 1,633.951 seconds, shard 1 passes 492/492 in
+  1,401.182 seconds, shard 2 passes 479/479 in 1,376.005 seconds, and shard 3
+  passes 414/414 in 1,296.878 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary, for exact aggregate coverage of 1,818/1,818. One
+  redundant affected-class run was intentionally interrupted before completion
+  and is non-counting; the canonical four-shard inventory supersedes it.
+  Darwin security contracts pass 14/14 in 66.297 seconds, CI contracts pass
+  33/33, and public Skill contracts pass 5/5. Ruff 0.13.2 lint and changed-file
+  formatting, both workflows under `actionlint`, the generated bootstrap
+  manifest, the official OpenAI Skill validator, project-journal validation,
+  source-tree bytecode exclusion, and `git diff --check` pass on the same tree.
+  A repository-wide formatter diagnostic still identifies six unchanged
+  inherited migration files; it is non-counting and did not trigger unrelated
+  mechanical rewrites.
 
 ## Follow-up Work
 

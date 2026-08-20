@@ -161,12 +161,17 @@ strict closure owner, signal each task-owned process group while the PID/PGID is
 still pinned, and retire signal authority before any operation that may reap.
 `ESRCH` is the only ordinary signal absence; every other signal failure is
 explicit. Darwin may return `EPERM` when the unreaped zombie is the group's only
-remaining member; that case is accepted only after reaping and a non-signaling
-group-absence probe. A still-present or unverifiable group or an incomplete
-leader reap is an explicit cleanup failure, and no later cleanup path may signal
-the now-reusable PGID. Cleanup failure alongside an active primary is carried
-through bounded exception wrappers and becomes a non-retryable machine-visible
-CLI result rather than an invisible note.
+remaining member. After the leader is reaped, `EPERM` from the non-signaling
+probe remains unproven and is retried only within the original cleanup deadline;
+only a later `ESRCH` proves closure. A still-present or unverifiable group or an
+incomplete leader reap is an explicit cleanup failure, and no later cleanup path
+may signal the now-reusable PGID. Selector construction, selector close, and
+stream close all run inside the process owner's cleanup boundary; every local
+resource close is attempted, but none can bypass group closure. Cleanup failure
+alongside an active primary is carried through bounded exception wrappers and
+becomes a non-retryable machine-visible CLI result rather than an invisible note.
+Availability, readiness, canary, and remote-gap fallbacks must rethrow that
+security failure instead of converting it to an ordinary false or gap result.
 
 Source scheduling prepares the transport-program snapshot, remote-helper
 snapshot, and bound empty output together with the candidate checkpoint. Exact

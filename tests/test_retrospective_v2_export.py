@@ -1670,6 +1670,47 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 with self.assertRaisesRegex(RetainedPrivacyError, "forbidden locator"):
                     validate_retained_artifacts(scp_tampered)
 
+        for email in (
+            "alice@buildhost",
+            "release.bot+alerts@localhost",
+            "reviewer@internal-host",
+        ):
+            with self.subTest(email=email, phase="assembly"):
+                email_review = review_data()
+                email_review["turn_findings"][1]["rewritten_prompt"] = (
+                    f"Notify {email} before continuing."
+                )
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError,
+                    "personal identifier",
+                ):
+                    assemble_retained_artifacts(run_state(), email_review)
+
+            with self.subTest(email=email, phase="retained-reread"):
+                email_artifacts = assemble_retained_artifacts(
+                    run_state(), review_data()
+                )
+                email_tampered = dict(email_artifacts)
+                email_rows = [
+                    json.loads(line)
+                    for line in email_tampered["turn_findings.jsonl"].splitlines()
+                ]
+                email_high_impact = next(
+                    row for row in email_rows if row["disposition"] == "high_impact"
+                )
+                email_high_impact["rewritten_prompt"] = (
+                    f"Notify {email} before continuing."
+                )
+                email_tampered["turn_findings.jsonl"] = b"".join(
+                    canonical_json_bytes(row) for row in email_rows
+                )
+                refresh_bundle_digest(email_tampered)
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError,
+                    "personal identifier",
+                ):
+                    validate_retained_artifacts(email_tampered)
+
         for network_locator in (
             "localhost",
             "10.0.0.1",

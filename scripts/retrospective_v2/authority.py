@@ -665,21 +665,7 @@ def _run_bounded(
 ) -> subprocess.CompletedProcess[bytes]:
     if input_bytes is not None and len(input_bytes) > MAX_GIT_OUTPUT_BYTES:
         raise HistoryValidationError("history command input exceeds its byte bound")
-    try:
-        process = subprocess.Popen(
-            list(argv),
-            stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=dict(env),
-            close_fds=True,
-            pass_fds=pass_fds,
-            start_new_session=True,
-        )
-    except OSError as exc:
-        raise HistoryValidationError("cannot start bounded history command") from exc
-    assert process.stdout is not None and process.stderr is not None
-    selector = selectors.DefaultSelector()
+    selector: selectors.BaseSelector | None = None
     output = bytearray()
     errors = bytearray()
     input_offset = 0
@@ -706,6 +692,23 @@ def _run_bounded(
         )
 
     try:
+        process = subprocess.Popen(
+            list(argv),
+            stdin=subprocess.PIPE if input_bytes is not None else subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=dict(env),
+            close_fds=True,
+            pass_fds=pass_fds,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        raise HistoryValidationError("cannot start bounded history command") from exc
+
+    try:
+        if process.stdout is None or process.stderr is None:
+            raise HistoryValidationError("history command streams are unavailable")
+        selector = selectors.DefaultSelector()
         for stream, target in ((process.stdout, output), (process.stderr, errors)):
             os.set_blocking(stream.fileno(), False)
             selector.register(stream, selectors.EVENT_READ, ("read", target))
@@ -773,16 +776,20 @@ def _run_bounded(
         active_error = exc
         raise
     finally:
-        selector.close()
-        for stream in (process.stdin, process.stdout, process.stderr):
-            if stream is None:
-                continue
-            try:
-                stream.close()
-            except OSError:
-                pass
-        process_lifecycle.finish_cleanup(
+        resource_closers = tuple(
+            closer
+            for closer in (
+                None if selector is None else selector.close,
+                None if process.stdin is None else process.stdin.close,
+                None if process.stdout is None else process.stdout.close,
+                None if process.stderr is None else process.stderr.close,
+            )
+            if closer is not None
+        )
+        process_lifecycle.finish_cleanup_after_resource_teardown(
             process,
+            resource_closers=resource_closers,
+            resource_label="history command resource teardown",
             signal_retired=signal_retirement.retired,
             terminate_and_reap=close_process_group,
             reap_only=reap_process,

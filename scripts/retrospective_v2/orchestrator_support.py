@@ -334,7 +334,8 @@ def publisher_readiness(
             expected_uid=expected_uid,
             gpg_program=gpg_program,
         )
-    except finalize.LocalGitPublicationError:
+    except finalize.LocalGitPublicationError as error:
+        process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
         return safe_result
     safe_result["ready"] = identity.get("fingerprint") == PUBLISHER_FINGERPRINT
     return safe_result
@@ -377,9 +378,7 @@ def _run_bounded_publisher_canary_process(
             "cannot start publisher canary process"
         ) from error
 
-    assert process.stdout is not None
-    assert process.stderr is not None
-    selector = selectors.DefaultSelector()
+    selector: selectors.BaseSelector | None = None
     stdout = bytearray()
     stderr = bytearray()
     deadline = time.monotonic() + timeout_seconds
@@ -412,6 +411,11 @@ def _run_bounded_publisher_canary_process(
         )
 
     try:
+        if process.stdout is None or process.stderr is None:
+            raise _PublisherCanaryProcessError(
+                "publisher canary process streams are unavailable"
+            )
+        selector = selectors.DefaultSelector()
         for stream, target, limit in (
             (process.stdout, stdout, max_stdout_bytes),
             (process.stderr, stderr, max_stderr_bytes),
@@ -473,26 +477,27 @@ def _run_bounded_publisher_canary_process(
         active_error = error
         raise
     finally:
-        try:
-            selector.close()
-            for stream in (process.stdout, process.stderr):
-                try:
-                    stream.close()
-                except OSError:
-                    pass
-        finally:
-            process_lifecycle.finish_cleanup(
-                process,
-                signal_retired=signal_retirement.retired,
-                terminate_and_reap=lambda child: close_process_group(
-                    child,
-                    cleanup_deadline=(
-                        time.monotonic() + _PUBLISHER_CANARY_CLEANUP_SECONDS
-                    ),
-                ),
-                reap_only=reap_process_group,
-                active_error=active_error,
+        resource_closers = tuple(
+            closer
+            for closer in (
+                None if selector is None else selector.close,
+                None if process.stdout is None else process.stdout.close,
+                None if process.stderr is None else process.stderr.close,
             )
+            if closer is not None
+        )
+        process_lifecycle.finish_cleanup_after_resource_teardown(
+            process,
+            resource_closers=resource_closers,
+            resource_label="publisher canary resource teardown",
+            signal_retired=signal_retirement.retired,
+            terminate_and_reap=lambda child: close_process_group(
+                child,
+                cleanup_deadline=(time.monotonic() + _PUBLISHER_CANARY_CLEANUP_SECONDS),
+            ),
+            reap_only=reap_process_group,
+            active_error=active_error,
+        )
 
 
 def publisher_sign_verify_canary(
@@ -561,7 +566,8 @@ def publisher_sign_verify_canary(
         OSError,
         _PublisherCanaryProcessError,
         executable_authority.ExecutableAuthorityError,
-    ):
+    ) as error:
+        process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
         return False
     if verified.returncode != 0:
         return False

@@ -2824,6 +2824,41 @@ class CliContractTests(unittest.TestCase):
         )
         self.assertNotIn(secret, json.dumps(payload, sort_keys=True))
 
+    def test_cli_unwraps_cleanup_only_error_to_the_command_primary(self) -> None:
+        secret = "private process cleanup detail"
+        primary = cli.export_api.RetainedExportError(secret)
+
+        def cleanup_failure(_process) -> int:
+            raise RuntimeError(secret)
+
+        process_lifecycle.finish_cleanup(
+            mock.Mock(spec=subprocess.Popen),
+            signal_retired=False,
+            terminate_and_reap=cleanup_failure,
+            reap_only=cleanup_failure,
+            active_error=primary,
+        )
+        with self.assertRaises(
+            process_lifecycle.ProcessGroupCleanupIncompleteError
+        ) as caught:
+            process_lifecycle.raise_if_incomplete_process_group_cleanup(primary)
+
+        result = cli._failure_from_exception("export", caught.exception)
+        payload = result.to_json()
+        self.assertEqual(cli.ExitCode.SECURITY, result.exit_code)
+        self.assertEqual(
+            {
+                "primary_error": {
+                    "code": "io_error",
+                    "exit_code": int(cli.ExitCode.IO),
+                    "reason_code": "retained_export_io_failed",
+                },
+                "process_group_cleanup": "incomplete",
+            },
+            payload["result"],
+        )
+        self.assertNotIn(secret, json.dumps(payload, sort_keys=True))
+
     def test_export_cli_uses_prior_period_for_real_trend_comparison(self) -> None:
         coordinator = self.real_coordinator(self.run_dir, activity=False)
         state = coordinator.load_state()

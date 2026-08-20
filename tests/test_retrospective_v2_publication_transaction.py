@@ -1258,6 +1258,126 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                     getattr(primary, "__notes__", []),
                 )
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_successful_group_signal_still_requires_group_absence(self) -> None:
+        process = mock.Mock(spec=subprocess.Popen)
+        process.pid = 4242
+        process.wait.return_value = 0
+        attempted_signals: list[int] = []
+
+        def group_remains(_process_group_id: int, selected_signal: int) -> None:
+            attempted_signals.append(selected_signal)
+
+        with (
+            mock.patch.object(
+                process_lifecycle.os,
+                "killpg",
+                side_effect=group_remains,
+            ),
+            mock.patch.object(
+                process_lifecycle.time,
+                "monotonic",
+                side_effect=(0.0, 0.1, 2.0),
+            ),
+            self.assertRaisesRegex(RuntimeError, "closure is unproven"),
+        ):
+            process_lifecycle.close_process_group(
+                process,
+                signal_retirement=process_lifecycle.GroupSignalRetirement(),
+                timeout_seconds=1,
+                error_type=RuntimeError,
+                label="test process",
+                termination_message="test process did not terminate",
+            )
+
+        self.assertEqual([signal.SIGKILL, 0], attempted_signals)
+        process.wait.assert_called_once()
+
+    def test_resource_teardown_failure_cannot_skip_process_cleanup(self) -> None:
+        calls: list[str] = []
+
+        def fail_close() -> None:
+            calls.append("failed-close")
+            raise OSError(errno.EIO, "simulated selector close failure")
+
+        def later_close() -> None:
+            calls.append("later-close")
+
+        def terminate_and_reap(_process) -> int:
+            calls.append("process-cleanup")
+            return 0
+
+        with self.assertRaisesRegex(OSError, "selector close failure"):
+            process_lifecycle.finish_cleanup_after_resource_teardown(
+                mock.Mock(spec=subprocess.Popen),
+                resource_closers=(fail_close, later_close),
+                resource_label="test resource teardown",
+                signal_retired=False,
+                terminate_and_reap=terminate_and_reap,
+                reap_only=terminate_and_reap,
+                active_error=None,
+            )
+
+        self.assertEqual(
+            ["failed-close", "later-close", "process-cleanup"],
+            calls,
+        )
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_bounded_selector_setup_failure_reaps_started_process(self) -> None:
+        real_popen = subprocess.Popen
+        for module, runner, error_type, arguments in (
+            (
+                publication_support,
+                publication_support._run_bounded_subprocess,
+                OSError,
+                {"environment": dict(os.environ)},
+            ),
+            (
+                authority,
+                authority._run_bounded,
+                OSError,
+                {"env": dict(os.environ)},
+            ),
+        ):
+            with self.subTest(module=module.__name__):
+                spawned: list[subprocess.Popen[bytes]] = []
+
+                def capture_popen(*args, **kwargs):
+                    process = real_popen(*args, **kwargs)
+                    spawned.append(process)
+                    return process
+
+                with (
+                    mock.patch.object(
+                        module.subprocess,
+                        "Popen",
+                        side_effect=capture_popen,
+                    ),
+                    mock.patch.object(
+                        module.selectors,
+                        "DefaultSelector",
+                        side_effect=OSError(errno.EMFILE, "selector unavailable"),
+                    ),
+                    self.assertRaises(error_type),
+                ):
+                    runner(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-B",
+                            "-S",
+                            "-c",
+                            "import time; time.sleep(60)",
+                        ],
+                        timeout_seconds=2,
+                        max_output_bytes=1024,
+                        **arguments,
+                    )
+
+                self.assertEqual(1, len(spawned))
+                self.assertIsNotNone(spawned[0].poll())
+
     def test_bounded_subprocesses_wait_for_leader_after_output_eof(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

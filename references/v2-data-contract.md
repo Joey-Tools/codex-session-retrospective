@@ -417,7 +417,10 @@ post-redaction. Source values from 4 through 11 normalized characters use
 Unicode token-boundary matching, so a value such as `Acme` is removed from
 derived prose without treating `Acmeology` as the same source token. Bare FQDNs
 are redacted regardless of suffix; protocol URLs, private locators, paths, and
-bare hosts retain distinct deterministic precedence. Typed references and hashes
+bare hosts retain distinct deterministic precedence. RFC-shaped email addresses
+and bounded single-label `account@host` identifiers are personal identifiers;
+an immediately following colon keeps the complete SCP-style locator under the
+higher-priority URL rule. Typed references and hashes
 are exempt from source-literal
 replacement only in result-side schema fields that are independently format- and
 allow-list validated; the same bytes in retained prose are rejected. Fixed enum,

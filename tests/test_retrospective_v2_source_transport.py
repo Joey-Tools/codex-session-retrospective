@@ -30,6 +30,7 @@ sys.path.insert(0, str(SCRIPTS))
 from retrospective_v2 import (  # noqa: E402
     authority,
     catalog,
+    process_lifecycle,
     safe_io,
     source_capacity,
     source_inputs,
@@ -2011,28 +2012,54 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         self.assertEqual("", authentication_output.read_text(encoding="ascii"))
 
+        cleanup_failure = transport.RemoteTransportUnavailableError(
+            "remote-host-context transport unavailable"
+        )
+
+        def persistent_cleanup_failure(_process) -> int:
+            raise RuntimeError("simulated persistent process cleanup failure")
+
+        process_lifecycle.finish_cleanup(
+            mock.Mock(spec=subprocess.Popen),
+            signal_retired=False,
+            terminate_and_reap=persistent_cleanup_failure,
+            reap_only=persistent_cleanup_failure,
+            active_error=cleanup_failure,
+        )
         failure_cases = (
             (
                 transport.RemoteTransportUnavailableError(
                     "remote-host-context transport unavailable"
                 ),
                 True,
+                transport.RemoteTransportUnavailableError,
             ),
             (
                 transport.RemoteTransportAuthenticationError(
                     "remote-host-context helper authentication failed"
                 ),
                 False,
+                transport.RemoteTransportAuthenticationError,
             ),
             (
                 transport.RemoteTransportExecutionError(
                     "remote-host-context helper execution failed"
                 ),
                 False,
+                transport.RemoteTransportExecutionError,
             ),
-            (RuntimeError("remote-host-context protocol invalid"), False),
+            (
+                RuntimeError("remote-host-context protocol invalid"),
+                False,
+                RuntimeError,
+            ),
+            (
+                cleanup_failure,
+                False,
+                process_lifecycle.ProcessGroupCleanupIncompleteError,
+            ),
         )
-        for index, (failure, emits_gap) in enumerate(failure_cases):
+        for index, (failure, emits_gap, expected_error) in enumerate(failure_cases):
             failure_output = self.root / f"remote-helper-failure-{index}.jsonl"
             with (
                 self.subTest(failure=type(failure).__name__),
@@ -2062,7 +2089,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                         transport_source._run_private_transport_worker(bound_arguments),
                     )
                 else:
-                    with self.assertRaises(type(failure)):
+                    with self.assertRaises(expected_error):
                         transport_source._run_private_transport_worker(bound_arguments)
             frames = failure_output.read_text(encoding="ascii").splitlines()
             if emits_gap:
@@ -2306,6 +2333,44 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 command,
                 max_output_bytes=1024,
             )
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_remote_relay_selector_setup_failure_reaps_started_process(self) -> None:
+        real_popen = subprocess.Popen
+        spawned: list[subprocess.Popen[bytes]] = []
+
+        def capture_popen(*args, **kwargs):
+            process = real_popen(*args, **kwargs)
+            spawned.append(process)
+            return process
+
+        with (
+            mock.patch.object(
+                transport_remote.subprocess,
+                "Popen",
+                side_effect=capture_popen,
+            ),
+            mock.patch.object(
+                transport_remote.selectors,
+                "DefaultSelector",
+                side_effect=OSError(errno.EMFILE, "selector unavailable"),
+            ),
+            self.assertRaises(OSError),
+        ):
+            transport._relay_remote_host_context_command(
+                (
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-S",
+                    "-c",
+                    "import time; time.sleep(60)",
+                ),
+                max_output_bytes=1024,
+            )
+
+        self.assertEqual(1, len(spawned))
+        self.assertIsNotNone(spawned[0].poll())
 
     def test_remote_relay_classifies_execution_before_terminal_filter(self) -> None:
         stream_filter = mock.Mock()
@@ -3148,7 +3213,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 max_output_bytes=1024,
             )
 
-        self.assertEqual(2, signal_attempts)
+        self.assertGreater(signal_attempts, 2)
         child_pid = int(child_pid_path.read_text(encoding="ascii"))
         os.kill(child_pid, 0)
         os.kill(child_pid, signal.SIGKILL)
