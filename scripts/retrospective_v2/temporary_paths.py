@@ -22,6 +22,7 @@ except (ImportError, ModuleNotFoundError):
 
 _RUNTIME_TEMP_BASE = Path("/tmp") / f"codex-session-retrospective-{os.getuid()}"
 PUBLISHER_CANARY_TEMP_ROOT = _RUNTIME_TEMP_BASE / "publisher-canary"
+PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT = Path("/tmp") / f"csr{os.getuid()}"
 REMOTE_HELPER_TEMP_ROOT = _RUNTIME_TEMP_BASE / "remote-helper"
 REMOTE_TRANSPORT_SPOOL_TEMP_ROOT = _RUNTIME_TEMP_BASE / "remote-transport-spool"
 SESSION_SHARDS_SPOOL_TEMP_ROOT = _RUNTIME_TEMP_BASE / "session-shards-spool"

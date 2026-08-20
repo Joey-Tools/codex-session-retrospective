@@ -89,6 +89,11 @@ Remote helper execution has two separate owners. Parent-only
 cache. Worker-visible `transport_snapshot.py` contains only deterministic path,
 commitment, and isolated bootstrap logic for that external helper; the worker
 manifest does not expose the parent materializer.
+The installed helper selector and the sanitized relay environment use one
+account-database binding. They resolve the current UID through `getpwuid`,
+canonicalize the declared absolute home, and derive both the helper path and
+child `HOME` from that result. Caller `HOME` therefore cannot redirect helper
+selection before the descriptor-authenticated snapshot is created.
 The bootstrap keeps the helper descriptor open through its bounded read and
 revalidates object identity plus owner/mode/link/size policy before executing
 the retained exact bytes. The same parent-only owner performs the legacy CLI
@@ -339,11 +344,59 @@ place `--no-options` before every other GPG argument. Git reaches GPG only
 through the fixed executable `scripts/retrospective_v2_gpg_no_options`; the
 launcher bytes, executable identity, and access policy are authenticated around
 each signing or verification subprocess, while the selected GPG executable is
-passed through one closed environment key. A dedicated `GNUPGHOME/gpg.conf`
-therefore cannot redirect output, run helpers, or alter signing and verification
-behavior. Repository Git calls also force `core.fsmonitor=false` together with
-the existing commit-graph and multi-pack-index controls, so a repository-local
-fsmonitor hook cannot execute during publication or history validation.
+passed through one closed environment key.
+
+Every such operation first opens the configured publisher home through an
+owner-only descriptor binding and copies only the bounded `pubring.kbx`,
+optional `trustdb.gpg`, and closed `private-keys-v1.d/<keygrip>.key`
+inventory into an unpredictable owner-only snapshot under the fixed short
+socket-safe root. Each selected source file must remain a single regular
+owner-controlled object with stable bytes and access policy while copied. The
+private-key directory is enumerated again after copying, and every selected
+private-key object is read and compared again through its held descriptor, so
+inventory churn or a same-object content change cannot be hidden by the first
+copy pass.
+`common.conf`, `gpg.conf`, `gpg-agent.conf`, source sockets, and every
+other source-home entry are excluded rather than interpreted. Snapshot
+configuration therefore cannot redirect output, run helpers, or alter signing
+and verification behavior.
+
+The snapshot owner shuts down any spawned agent through a bounded authenticated
+Assuan exchange on the owner-only primary socket; it does not add `gpgconf` or
+another ambient executable to the trust root. One monotonic deadline covers the
+connect, greeting, `KILLAGENT`, response, and socket-disappearance phases; a
+peer cannot multiply the bound by delivering one byte per read. Every `S.*`
+socket must disappear before descriptor-bound snapshot cleanup can succeed.
+Agent, socket, source binding, or cleanup uncertainty fails the
+otherwise-successful operation and is retained as secondary evidence when work
+has already failed.
+If interruption leaves GPG's documented lock/sentinel hard-link shape, cleanup
+accepts only strict bounded lock names and proves regular-file identity, owner,
+non-writable access policy, ACL absence, and that every inode link is present
+inside the bound snapshot. It then unlinks each name relative to the held
+snapshot descriptor while rechecking the decreasing link count. A malformed
+name, external link, replacement, or incomplete proof retains the snapshot
+rather than generalizing deletion authority.
+
+Repeated readiness projections use a bounded process-local cache only after
+opening one configuration-free keyring snapshot receipt. The same descriptor-
+held receipt supplies both the cache commitment and the inventory validation;
+readiness never keys on one snapshot and validates an independently rebuilt
+snapshot. The key also binds the GPG executable authority digest, canonical
+source path, expected fingerprint, and sole UID. Only a successful parsed
+identity is cached; failures are not. GPG configuration changes are
+intentionally outside that commitment because configuration is excluded, while
+any selected key bytes, admitted access policy, path, identity expectation, or
+executable authority change forces a new GPG inventory validation. The startup
+canary, every actual signing operation, and every signature verification remain
+uncached.
+
+Repository Git calls also force `core.fsmonitor=false` together with the
+existing commit-graph and multi-pack-index controls. Publication calls
+additionally force `core.splitIndex=false`, so the descriptor-bound temporary
+index cannot create a repository-local shared index. Repository-local
+fsmonitor hooks and split-index side effects therefore cannot execute during
+publication or history validation.
 
 Source-program, descriptor-bound Git, and remote-helper Python bootstraps all
 inherit the coordinator's fixed owner-controlled copied runtime. `doctor` and

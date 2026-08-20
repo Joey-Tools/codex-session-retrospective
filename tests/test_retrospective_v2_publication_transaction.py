@@ -41,6 +41,7 @@ from retrospective_v2 import (  # noqa: E402
     executable_authority,
     finalize as finalize_module,
     git_safety,
+    gpg_keyring_snapshot,
     gpg_status,
     orchestrator as orchestrator_module,
     orchestrator_support,
@@ -111,6 +112,19 @@ def _publication_test_temp_parent() -> str:
     return tempfile.gettempdir()
 
 
+def _write_synthetic_publisher_keyring(home: Path) -> None:
+    """Create the smallest source keyring admitted by the snapshot contract."""
+
+    public_keyring = home / "pubring.kbx"
+    public_keyring.write_bytes(b"synthetic public keyring")
+    public_keyring.chmod(0o600)
+    private_keys = home / "private-keys-v1.d"
+    private_keys.mkdir(mode=0o700)
+    private_key = private_keys / ("A" * 40 + ".key")
+    private_key.write_bytes(b"synthetic private key")
+    private_key.chmod(0o600)
+
+
 def run_command(
     argv: list[str],
     *,
@@ -132,7 +146,7 @@ def run_command(
 
 class PublicationInvariantUnitTests(unittest.TestCase):
     def test_publication_index_ignores_ambient_temporary_roots(self) -> None:
-        with tempfile.TemporaryDirectory() as raw:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
             root = Path(raw)
             source_root = root / "poisoned-codex-source"
             source_root.mkdir(mode=0o700)
@@ -224,6 +238,287 @@ class PublicationInvariantUnitTests(unittest.TestCase):
         )
         self.assertEqual(0, launcher.executable.mode & 0o022)
         self.assertNotEqual(0, launcher.executable.mode & 0o100)
+
+    def test_config_free_keyring_snapshot_excludes_source_configuration(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            root = Path(raw)
+            source = root / "publisher-keyring"
+            source.mkdir(mode=0o700)
+            (source / "pubring.kbx").write_bytes(b"synthetic public keyring")
+            private = source / "private-keys-v1.d"
+            private.mkdir(mode=0o700)
+            private_key = private / ("A" * 40 + ".key")
+            private_key.write_bytes(b"synthetic private key")
+            private_key.chmod(0o600)
+            for name in ("common.conf", "gpg.conf", "gpg-agent.conf"):
+                (source / name).write_text("malicious fixture\n", encoding="ascii")
+            snapshot_root = root / "snapshot-root"
+            source_root = root / "retrospective-source-root"
+
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+            ):
+                with gpg_keyring_snapshot.config_free_keyring_snapshot(
+                    source
+                ) as snapshot:
+                    snapshot_path = snapshot
+                    self.assertEqual(
+                        b"synthetic public keyring",
+                        (snapshot / "pubring.kbx").read_bytes(),
+                    )
+                    self.assertEqual(
+                        b"synthetic private key",
+                        (
+                            snapshot / "private-keys-v1.d" / private_key.name
+                        ).read_bytes(),
+                    )
+                    self.assertTrue(
+                        all(
+                            not (snapshot / name).exists()
+                            for name in ("common.conf", "gpg.conf", "gpg-agent.conf")
+                        )
+                    )
+
+            self.assertFalse(snapshot_path.exists())
+            self.assertEqual([], list(snapshot_root.iterdir()))
+
+    def test_keyring_snapshot_rejects_private_inventory_churn(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            root = Path(raw)
+            source = root / "publisher-keyring"
+            source.mkdir(mode=0o700)
+            (source / "pubring.kbx").write_bytes(b"synthetic public keyring")
+            private = source / "private-keys-v1.d"
+            private.mkdir(mode=0o700)
+            private_key = private / ("A" * 40 + ".key")
+            private_key.write_bytes(b"synthetic private key")
+            private_key.chmod(0o600)
+            snapshot_root = root / "snapshot-root"
+            source_root = root / "source-root"
+            original_create = gpg_keyring_snapshot.safe_io.atomic_create_bytes
+
+            def add_private_key_after_copy(path, payload, **kwargs):
+                result = original_create(path, payload, **kwargs)
+                if Path(path).name == private_key.name:
+                    added = private / ("B" * 40 + ".key")
+                    added.write_bytes(b"added private key")
+                    added.chmod(0o600)
+                return result
+
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                mock.patch.object(
+                    gpg_keyring_snapshot.safe_io,
+                    "atomic_create_bytes",
+                    side_effect=add_private_key_after_copy,
+                ),
+                self.assertRaisesRegex(
+                    gpg_keyring_snapshot.ConfigFreeKeyringError,
+                    "private-key inventory changed",
+                ),
+            ):
+                with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                    self.fail("unstable private-key inventory was accepted")
+
+            self.assertEqual([], list(snapshot_root.iterdir()))
+
+    def test_assuan_read_uses_one_monotonic_deadline(self) -> None:
+        connection = mock.Mock()
+        connection.recv.return_value = b"x"
+
+        with (
+            mock.patch.object(
+                gpg_keyring_snapshot.time,
+                "monotonic",
+                side_effect=(10.0, 16.0),
+            ),
+            self.assertRaisesRegex(
+                gpg_keyring_snapshot.ConfigFreeKeyringError,
+                "response exceeded its deadline",
+            ),
+        ):
+            gpg_keyring_snapshot._assuan_line(connection, deadline=15.0)
+
+        connection.settimeout.assert_called_once_with(5.0)
+        connection.recv.assert_called_once_with(1)
+
+    def test_keyring_file_close_failure_preserves_primary_policy_error(self) -> None:
+        with (
+            mock.patch.object(
+                gpg_keyring_snapshot.os,
+                "stat",
+                return_value=mock.Mock(
+                    st_dev=1,
+                    st_ino=2,
+                    st_uid=os.getuid(),
+                    st_mode=stat.S_IFREG | 0o600,
+                    st_nlink=1,
+                    st_size=1,
+                ),
+            ),
+            mock.patch.object(
+                gpg_keyring_snapshot.safe_io,
+                "open_checked_file_at",
+                return_value=91,
+            ),
+            mock.patch.object(
+                gpg_keyring_snapshot.safe_io,
+                "descriptor_acl_policy_bytes",
+                return_value=b"extended-acl",
+            ),
+            mock.patch.object(
+                gpg_keyring_snapshot.os,
+                "close",
+                side_effect=OSError("close failed"),
+            ),
+            self.assertRaisesRegex(
+                gpg_keyring_snapshot.ConfigFreeKeyringError,
+                "extended ACL",
+            ) as raised,
+        ):
+            gpg_keyring_snapshot._read_keyring_file_at(
+                17,
+                "pubring.kbx",
+                display_path=Path("/publisher/pubring.kbx"),
+                max_bytes=1024,
+                private=False,
+            )
+
+        self.assertIn(
+            "publisher keyring file descriptor cleanup failed",
+            "\n".join(getattr(raised.exception, "__notes__", ())),
+        )
+
+    def test_snapshot_cleanup_removes_only_fully_bound_gpg_lock_links(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            root = Path(raw)
+            snapshot_root = root / "snapshot-root"
+            source_root = root / "source-root"
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                temporary_paths.owner_only_temporary_directory(
+                    root=snapshot_root,
+                    prefix="g-",
+                ) as temporary,
+            ):
+                lock = temporary.path / ".#lk0x0000000100f9e600.HOST-NAME.12345"
+                sentinel = temporary.path / "gnupg_spawn_agent_sentinel.lock"
+                lock.write_bytes(b"bounded GPG lock\n")
+                lock.chmod(0o644)
+                os.link(lock, sentinel)
+
+                gpg_keyring_snapshot._remove_gpg_lock_files(temporary)
+
+                self.assertFalse(lock.exists())
+                self.assertFalse(sentinel.exists())
+
+            self.assertEqual([], list(snapshot_root.iterdir()))
+
+    def test_snapshot_cleanup_rejects_a_gpg_lock_with_an_external_link(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            root = Path(raw)
+            snapshot_root = root / "snapshot-root"
+            source_root = root / "source-root"
+            external = root / "external-lock-link"
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                temporary_paths.owner_only_temporary_directory(
+                    root=snapshot_root,
+                    prefix="g-",
+                ) as temporary,
+            ):
+                lock = temporary.path / ".#lk0x0000000100f9e600.HOST-NAME.12345"
+                lock.write_bytes(b"bounded GPG lock\n")
+                lock.chmod(0o644)
+                os.link(lock, external)
+
+                with self.assertRaisesRegex(
+                    gpg_keyring_snapshot.ConfigFreeKeyringError,
+                    "unbound hard link",
+                ):
+                    gpg_keyring_snapshot._remove_gpg_lock_files(temporary)
+
+                self.assertTrue(lock.exists())
+                self.assertTrue(external.exists())
+                external.unlink()
+                lock.unlink()
+
+            self.assertEqual([], list(snapshot_root.iterdir()))
+
+    def test_snapshot_context_cleans_gpg_locks_after_operation_error(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            root = Path(raw)
+            source = root / "publisher-keyring"
+            source.mkdir(mode=0o700)
+            (source / "pubring.kbx").write_bytes(b"synthetic public keyring")
+            private = source / "private-keys-v1.d"
+            private.mkdir(mode=0o700)
+            private_key = private / ("A" * 40 + ".key")
+            private_key.write_bytes(b"synthetic private key")
+            private_key.chmod(0o600)
+            snapshot_root = root / "snapshot-root"
+            source_root = root / "source-root"
+
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                self.assertRaisesRegex(RuntimeError, "fixture operation failed"),
+            ):
+                with gpg_keyring_snapshot.config_free_keyring_snapshot(
+                    source
+                ) as snapshot:
+                    lock = snapshot / ".#lk0x0000000100f9e600.HOST-NAME.12345"
+                    sentinel = snapshot / "gnupg_spawn_agent_sentinel.lock"
+                    lock.write_bytes(b"bounded GPG lock\n")
+                    lock.chmod(0o644)
+                    os.link(lock, sentinel)
+                    raise RuntimeError("fixture operation failed")
+
+            self.assertEqual([], list(snapshot_root.iterdir()))
 
     def test_abort_replay_response_uses_lifecycle_authority(self) -> None:
         def mark_finalized(*_args, **_kwargs):
@@ -568,9 +863,9 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 return_value=replacement,
             ),
             mock.patch.object(
-                publication_support,
-                "_publisher_home_subprocess_binding",
-            ) as publisher_home,
+                gpg_keyring_snapshot,
+                "config_free_keyring_snapshot",
+            ) as keyring_snapshot,
             self.assertRaisesRegex(
                 publication_support.LocalGitPublicationError,
                 "GPG executable is not trusted",
@@ -585,7 +880,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                     executable_authority.authority_digest(expected)
                 ),
             )
-        publisher_home.assert_not_called()
+        keyring_snapshot.assert_not_called()
 
     def test_executable_invocation_detects_post_resolution_replacement(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as temporary_directory:
@@ -752,6 +1047,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             executable.chmod(0o700)
             home = Path(temporary_directory) / "gnupg"
             home.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(home)
 
             def mutate_executable(*_args, **_kwargs):
                 executable.write_bytes(b"#!/bin/sh\nexit 1\n")
@@ -946,6 +1242,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             moved_home = root / "gnupg-original"
             replacement_home = root / "gnupg-replacement"
             home.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(home)
             original_identity = home.stat()
             fingerprint = "A" * 40
 
@@ -968,16 +1265,23 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                     descriptor_path,
                     kwargs["environment"]["GNUPGHOME"],
                 )
-                self.assertEqual(".", descriptor_path)
-                self.assertGreaterEqual(kwargs["cwd_descriptor"], 0)
+                self.assertTrue(Path(descriptor_path).is_absolute())
+                self.assertNotEqual(home, Path(descriptor_path))
+                self.assertTrue(Path(descriptor_path).name.startswith("g-"))
+                self.assertNotIn("cwd_descriptor", kwargs)
                 if calls == 1:
                     home.rename(moved_home)
                     replacement_home.mkdir(mode=0o700)
                     replacement_home.rename(home)
-                    anchored = os.fstat(kwargs["cwd_descriptor"])
-                    self.assertEqual(
+                    anchored = Path(descriptor_path).stat()
+                    self.assertNotEqual(
                         (original_identity.st_dev, original_identity.st_ino),
                         (anchored.st_dev, anchored.st_ino),
+                    )
+                    self.assertEqual(0, stat.S_IMODE(anchored.st_mode) & 0o077)
+                    self.assertEqual(
+                        b"synthetic public keyring",
+                        (Path(descriptor_path) / "pubring.kbx").read_bytes(),
                     )
                     home.rename(replacement_home)
                     moved_home.rename(home)
@@ -1012,6 +1316,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
         ) as temporary_directory:
             home = Path(temporary_directory) / "gnupg"
             home.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(home)
             calls = 0
 
             def secret_listing_only(command, **_kwargs):
@@ -1054,6 +1359,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             home = root / "gnupg"
             moved_home = root / "gnupg-original"
             home.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(home)
 
             def replace_keyring(*_args, **_kwargs):
                 home.rename(moved_home)
@@ -1073,7 +1379,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 ),
                 self.assertRaisesRegex(
                     publication_support.LocalGitPublicationError,
-                    "GNUPGHOME changed after validation",
+                    "publisher keyring directory identity changed",
                 ),
             ):
                 publication_support.validate_publisher_keyring(
@@ -1093,6 +1399,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             home = root / "gnupg"
             moved_home = root / "gnupg-original"
             home.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(home)
             operation_error = publication_support.LocalGitPublicationError(
                 "subprocess exceeded its deadline"
             )
@@ -1112,7 +1419,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             ):
                 with self.assertRaisesRegex(
                     publication_support.LocalGitPublicationError,
-                    "GNUPGHOME changed after validation",
+                    "publisher keyring directory identity changed",
                 ) as raised:
                     publication_support.validate_publisher_keyring(
                         gnupg_home=home,
@@ -1121,7 +1428,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                         gpg_program="/usr/bin/true",
                     )
 
-            self.assertIs(operation_error, raised.exception.__cause__)
+            self.assertIs(operation_error, raised.exception.__cause__.__cause__)
             self.assertEqual(1, calls)
 
     def test_bounded_subprocesses_close_group_after_leader_exit(self) -> None:
@@ -1878,8 +2185,11 @@ class DurablePublicationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         source_gpg = shutil.which("gpg")
-        if source_gpg is None:
-            raise unittest.SkipTest("gpg is required for signed publication tests")
+        source_gpgconf = shutil.which("gpgconf")
+        if source_gpg is None or source_gpgconf is None:
+            raise unittest.SkipTest(
+                "gpg and gpgconf are required for signed publication tests"
+            )
         cls.key_fixture = tempfile.TemporaryDirectory(
             dir=_publication_test_temp_parent()
         )
@@ -1887,8 +2197,11 @@ class DurablePublicationTests(unittest.TestCase):
         trusted_bin = Path(cls.tool_fixture.name) / "trusted-bin"
         trusted_bin.mkdir(mode=0o700)
         cls.gpg = os.fspath(trusted_bin / "gpg")
+        cls.gpgconf = os.fspath(trusted_bin / "gpgconf")
         shutil.copyfile(source_gpg, cls.gpg)
+        shutil.copyfile(source_gpgconf, cls.gpgconf)
         os.chmod(cls.gpg, 0o700)
+        os.chmod(cls.gpgconf, 0o700)
         cls.path_patch = mock.patch.dict(
             os.environ,
             {"PATH": f"{trusted_bin}{os.pathsep}{os.environ.get('PATH', os.defpath)}"},
@@ -1934,7 +2247,13 @@ class DurablePublicationTests(unittest.TestCase):
         gpgconf = shutil.which("gpgconf")
         if gpgconf is not None:
             subprocess.run(
-                [gpgconf, "--homedir", str(cls.gnupg_home), "--kill", "gpg-agent"],
+                [
+                    cls.gpgconf,
+                    "--homedir",
+                    str(cls.gnupg_home),
+                    "--kill",
+                    "gpg-agent",
+                ],
                 check=False,
                 capture_output=True,
             )
@@ -2834,9 +3153,21 @@ class DurablePublicationTests(unittest.TestCase):
         self,
     ) -> None:
         config = self.gnupg_home / "gpg.conf"
+        agent_config = self.gnupg_home / "gpg-agent.conf"
         marker = self.root / "gpg-default-options-marker"
+        agent_marker = self.root / "gpg-agent-options-marker"
         config.write_text(f"logger-file {marker}\n", encoding="ascii")
+        agent_config.write_text(f"log-file {agent_marker}\n", encoding="ascii")
         try:
+            run_command(
+                [
+                    self.gpgconf,
+                    "--homedir",
+                    str(self.gnupg_home),
+                    "--kill",
+                    "gpg-agent",
+                ]
+            )
             run_command(
                 [
                     self.gpg,
@@ -2847,7 +3178,9 @@ class DurablePublicationTests(unittest.TestCase):
                 ]
             )
             self.assertTrue(marker.exists())
+            self.assertTrue(agent_marker.exists())
             marker.unlink()
+            agent_marker.unlink()
 
             publication_support.validate_publisher_keyring(
                 gnupg_home=self.gnupg_home,
@@ -2871,9 +3204,21 @@ class DurablePublicationTests(unittest.TestCase):
             self.publish(self.transaction(coordinator, bundle))
             self.load_history()
             self.assertFalse(marker.exists())
+            self.assertFalse(agent_marker.exists())
         finally:
+            run_command(
+                [
+                    self.gpgconf,
+                    "--homedir",
+                    str(self.gnupg_home),
+                    "--kill",
+                    "gpg-agent",
+                ]
+            )
             config.unlink(missing_ok=True)
+            agent_config.unlink(missing_ok=True)
             marker.unlink(missing_ok=True)
+            agent_marker.unlink(missing_ok=True)
 
     def test_repository_fsmonitor_cannot_run_during_publication(self) -> None:
         marker = self.root / "fsmonitor-invoked"
@@ -2898,6 +3243,30 @@ class DurablePublicationTests(unittest.TestCase):
         finally:
             run_command(
                 ["git", "config", "--local", "--unset-all", "core.fsmonitor"],
+                cwd=self.repo,
+            )
+
+    def test_publication_disables_repository_split_index(self) -> None:
+        git_directory = Path(
+            run_command(
+                ["git", "rev-parse", "--absolute-git-dir"],
+                cwd=self.repo,
+            ).stdout.strip()
+        )
+        run_command(
+            ["git", "config", "--local", "core.splitIndex", "true"],
+            cwd=self.repo,
+        )
+        before = tuple(sorted(git_directory.glob("sharedindex.*")))
+        try:
+            adapter = self.publication_adapter()
+            coordinator, bundle = self.build_exportable_run("split-index-disabled")
+            self.publish(self.transaction(coordinator, bundle, adapter=adapter))
+            self.load_history()
+            self.assertEqual(before, tuple(sorted(git_directory.glob("sharedindex.*"))))
+        finally:
+            run_command(
+                ["git", "config", "--local", "--unset-all", "core.splitIndex"],
                 cwd=self.repo,
             )
 

@@ -2286,6 +2286,144 @@ superseded_by:
   invocation lacked the repository loader and produced only `_FailedTest`; it
   is non-counting, and the required closed loader supplied the passing 19/19
   result.
+- Signed head `7250e302` had clean exact-secret admission but became stale when
+  its fresh local Codex processor found one P1 helper-selection gap: the legacy
+  relay derived the installed `remote_codex_probe.py` path through
+  environment-sensitive `Path.home()` before launching the authenticated
+  snapshot with the real account and SSH agent environment. The independent
+  reviewer workspace postvalidated with its original 74-commit, 73-edge graph
+  and config receipts; trusted bundle, Skill, guard, and Python digests remained
+  unchanged; the agent closed; and the exact task root was removed.
+- Remote helper selection and the sanitized relay child environment now share
+  one POSIX account-database authority. It validates the account name, resolves
+  the declared absolute home to an existing canonical directory, and derives
+  both the helper path and child `HOME` from that result. A real legacy-relay
+  regression places executable account and poisoned-home helpers side by side,
+  proves only the account helper executes, and requires both snapshot and output
+  spool roots to be empty afterward. Additional fail-closed cases cover invalid
+  names, relative or malformed homes, and missing homes. Focused tests pass 3/3,
+  the complete source-transport module passes 132/132 in 52.570 seconds, module
+  boundaries pass 19/19 in 1.876 seconds, and Ruff lint/format plus
+  `git diff --check` are clean. Full superseding-tree evidence follows below.
+- The superseding Python 3.13 inventory contains 1,842 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `883518f7535f66d1530215c2f13ce8b6e7fc3a51e8a6bbe660b06c5f029c398b`.
+  Shard 0 passes 438/438 in 1,795.699 seconds, shard 1 passes 498/498 in
+  1,573.032 seconds, shard 2 passes 488/488 in 1,505.547 seconds, and shard 3
+  passes 418/418 in 1,438.351 seconds, for exact aggregate coverage of
+  1,842/1,842. Darwin security tests pass 14/14 in 71.126 seconds.
+- The superseding tree also passes module boundaries 19/19 in 2.055 seconds,
+  Ruff 0.13.2 lint and changed-file formatting, both current workflows under
+  bounded `actionlint`, the generated bootstrap manifest check, the official
+  OpenAI Skill validator, project-journal validation, source-tree bytecode
+  exclusion, and `git diff --check`.
+- Current-head GitHub review then identified five independent gaps. Retained
+  privacy validation missed a labeled street address, a bare private-style
+  host and port, and a six-octet MAC address. Publication's temporary index did
+  not override repository `core.splitIndex=true`. GPG's `--no-options` excluded
+  `gpg.conf` but did not prevent `gpg-agent.conf` from redirecting agent logs.
+  All five findings block the `7250e302` evidence and are fixed in the
+  superseding tree.
+- Shared privacy locators now recognize and redact labeled street addresses,
+  strict six-octet MAC addresses with one consistent delimiter, and bounded
+  hyphenated or private-prefix bare host/port tokens without treating ordinary
+  timestamps, status codes, or versions as hosts. Report, agent-result, and
+  retained-history validators consume the same detectors. Publication Git now
+  forces `core.splitIndex=false`; its end-to-end regression proves no new
+  `sharedindex.*` object appears even when the repository enables split index.
+- Every publisher inventory, canary, sign, and verify operation now uses a
+  config-free keyring snapshot. The source directory is held and revalidated by
+  descriptor, and only `pubring.kbx`, optional `trustdb.gpg`, and bounded strict
+  40-hex private-key files are copied. GPG configuration, sockets, and unrelated
+  entries are excluded. Agent shutdown uses one bounded Assuan `KILLAGENT`
+  exchange, and cleanup accepts only fully bound GPG lock files whose complete
+  link inventory remains inside the snapshot. External hard links fail closed.
+  A process-local readiness cache is bounded to eight entries and keyed by the
+  exact selected-key commitment plus executable authority; configuration-only
+  changes may reuse a successful readiness result, while selected keyring or
+  GPG executable changes force revalidation. Actual sign and verify operations
+  remain uncached.
+- One deliberately interrupted redundant publication-module invocation exposed
+  a retained GPG lock snapshot. It is non-counting. The exact retained object
+  was recovered through descriptor-bound lock validation and cleanup, and the
+  fixed `/tmp/csr501` snapshot parent was verified empty afterward. Host-level
+  Python probes that failed executable-authority or isolation admission are also
+  non-counting; all counted tests use the owner-controlled Python 3.13.12
+  runtime with `-I -B -S`.
+- The first complete 1,850-test run found six stale fixture assumptions rather
+  than product failures. Shard 0 ran 441 tests with one failure in 1,767.253
+  seconds, shard 1 passed 500/500 in 1,612.229 seconds, shard 2 ran 489 tests
+  with four failures in 1,473.081 seconds, and shard 3 ran 420 tests with one
+  error in 1,423.025 seconds. The six publisher fixtures had empty keyring
+  homes, an ambient unsafe temporary ancestor, or a nonexistent GPG substitute,
+  so the new snapshot admission correctly preempted their intended downstream
+  assertions. That aggregate is non-counting.
+- The fixtures now construct the smallest admitted keyring, use the fixed
+  trusted GPG substitute, clear the readiness cache between distinct mocked
+  outcomes, and assert that GPG reads the isolated snapshot rather than the
+  source home during an ABA exercise. The exact six regressions pass 6/6 in
+  0.748 seconds. The complete publication-invariant and orchestrator classes
+  pass 177/177 in 526.951 seconds. The complete source-transport module passes
+  132/132 in 56.221 seconds, including poisoned ambient `HOME` coverage.
+- The final Python 3.13 inventory contains 1,850 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `5d7a48f46008e0bb968a910ce6585d0dda9e61d1a61512aeecaa5675e4b4629a`.
+  Shard 0 passes 441/441 in 1,697.732 seconds, shard 1 passes 500/500 in
+  1,547.084 seconds, shard 2 passes 489/489 in 1,420.324 seconds, and shard 3
+  passes 420/420 in 1,376.397 seconds, for exact aggregate coverage of
+  1,850/1,850. The independent Darwin security inventory passes 14/14 in
+  60.241 seconds.
+- The final tree passes module boundaries 19/19 in 1.961 seconds, CI contracts
+  33/33 in 2.279 seconds, Ruff 0.13.2 lint and changed-file formatting, both
+  current workflows under `actionlint`, the generated bootstrap manifest check,
+  and `git diff --check`. One repository-wide formatting probe reported six
+  unchanged baseline files and is non-counting; changed-file formatting is
+  clean. One `actionlint` invocation named a nonexistent stale workflow path
+  and is also non-counting; the two current workflow files pass together.
+- Two final bounded precommit audits found eight additional issues before the
+  delivery head was frozen. The transport/privacy audit found an unredacted
+  camel-case `streetAddress` label, an account-snapshot split between helper
+  selection and launch, prefix-only MAC matches, ambiguous `Node:20` and
+  `Server:2025` host/port matches, and a source-snapshot regression that did not
+  prove which helper file executed. The GPG audit found a readiness-cache ABA
+  between two independent keyring snapshots, a per-byte Assuan timeout that
+  multiplied the intended bound, and a private-key inventory copied without a
+  closing enumeration and byte reread. All eight issues were fixed before the
+  final manifest was generated.
+- The relay now captures one validated account tuple and uses it for helper
+  selection, snapshot materialization, launch environment, and execution. The
+  privacy grammar consumes camel-case street-address labels, bounds six-octet
+  MAC tokens against embedded or extra-octet identifiers, and requires a real
+  host signal before treating a labeled host/port value as sensitive. The
+  source regression proves the content-addressed helper snapshot, rather than
+  the live installed helper, executed without changing the installed helper's
+  identity, bytes, or mode.
+- Publisher readiness now opens one descriptor-held configuration-free keyring
+  snapshot and binds both its cache commitment and validation to that same
+  receipt. Assuan shutdown uses one monotonic deadline across the complete
+  exchange and socket disappearance, and private-key copying closes its
+  inventory with a second enumeration plus a second exact read of every
+  selected object. The direct new regressions pass, publication invariants pass
+  49/49 in 2.453 seconds, source transport passes 132/132 in 56.810 seconds,
+  and module boundaries pass 19/19 in 1.949 seconds.
+- Two intermediate invocations are explicitly non-counting. One used an
+  incorrect isolated-import module shape and produced eight import errors. A
+  later 225-test affected-module run exposed six stale compatibility-export
+  fixtures; the exact compatibility tests and the complete source-transport
+  module passed after those exports were repaired.
+- The superseding Python 3.13.12 inventory contains 1,853 exact test IDs from
+  22 authenticated source modules under manifest digest
+  `a1da7d4f23d067ffe550845b0b09cb50781866030b4042932beb8359e325aed6`.
+  Shard 0 passes 442/442 in 1,708.395 seconds, shard 1 passes 501/501 in
+  1,557.650 seconds, shard 2 passes 490/490 in 1,440.213 seconds, and shard 3
+  passes 420/420 in 1,392.431 seconds, for exact aggregate coverage of
+  1,853/1,853 on one frozen code-and-test tree.
+- The superseding documentation tree passes the independent Darwin security
+  inventory 14/14 in 62.954 seconds, CI contracts 33/33, skill contracts 5/5,
+  Ruff 0.13.2 lint and changed/new-file formatting, both current workflows
+  under `actionlint`, the generated bootstrap manifest check, the isolated
+  official OpenAI Skill validator, project-journal validation, source-tree
+  bytecode exclusion, and `git diff --check`.
 
 ## Follow-up Work
 

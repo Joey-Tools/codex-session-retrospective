@@ -61,10 +61,14 @@ def normalize_model_result_strings(value: Any) -> Any:
 
 
 BARE_PRIVATE_LOCATOR_RE = re.compile(
-    r"(?i)\b(?:localhost|(?:10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"(?i)\b(?:(?:localhost|(?:10|127)\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
     r"192\.168\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|"
     r"(?:[a-z0-9-]+\.)+(?:corp|home|internal|intranet|lan|local))"
-    r"(?::\d{1,5})?(?:/[^\s<>\"']*)?"
+    r"(?::\d{1,5})?|(?=[a-z0-9-]{1,63}:\d{1,5}\b)"
+    r"(?:(?=[a-z0-9-]*-)|"
+    r"(?=(?:host|node|server)(?:[a-z0-9-]*[a-z-]|[0-9]+):))"
+    r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?:\d{1,5})"
+    r"(?:/[^\s<>\"']*)?"
 )
 BARE_FQDN_RE = re.compile(
     r"(?i)(?<![a-z0-9_@-])"
@@ -553,7 +557,9 @@ _BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
     r"legal|maiden|middle|preferred|Display|Family|First|Full|Given|Last|Legal|"
     r"Maiden|Middle|Preferred)Name))"
 )
-_BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT = r"\baddress"
+_BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT = (
+    r"\b(?:address|street[_ -]+address|(?-i:(?:street|Street)Address))"
+)
 BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?:(?:\A|(?<=[\r\n]))[ \t]*(?:[-*+>][ \t]+)?|"
     r"(?<=[.!?;:,([{'\"])[ \t]*)"
@@ -843,7 +849,8 @@ PERSONAL_IDENTIFIER_GROUPS = {
 }
 LABELED_INTERNAL_HOST_RE = re.compile(
     r"\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
-    r"(?!\[REDACTED)[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
+    r"(?!\[REDACTED)(?=[a-z0-9._-]*[a-z._-])"
+    r"[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
     re.ASCII | re.IGNORECASE,
 )
 UNIX_PATH_RE = re.compile(
@@ -901,6 +908,13 @@ IPV6_CANDIDATE_RE = re.compile(
     r"(?<![0-9A-Za-z_.:%-])(?:[0-9A-Fa-f]{0,4}:){2,}"
     r"(?:[0-9A-Za-z:.%_-]*[0-9A-Za-z:_-])?"
     r")(?=$|[^0-9A-Za-z.]|\.(?=$|[^0-9A-Za-z.]))"
+)
+MAC_ADDRESS_RE = re.compile(
+    r"(?<![0-9A-Za-z])(?<![0-9A-Fa-f]:)(?<![0-9A-Fa-f]-)"
+    r"[0-9A-Fa-f]{2}(?P<mac_separator>[:-])"
+    r"(?:[0-9A-Fa-f]{2}(?P=mac_separator)){4}[0-9A-Fa-f]{2}"
+    r"(?![0-9A-Za-z])(?![:-][0-9A-Fa-f]{2})",
+    re.ASCII,
 )
 _PRIVATE_KEY_LABEL_PATTERN_TEXT = (
     r"(?:(?:[A-Z0-9][A-Z0-9 -]{0,62})\s+)?PRIVATE\s+KEY(?:\s+BLOCK)?"
@@ -1900,6 +1914,12 @@ def contains_personal_identifier(value: str) -> bool:
     return next(personal_identifier_spans(value), None) is not None
 
 
+def contains_mac_address(value: str) -> bool:
+    """Return whether text contains a strict six-octet MAC address."""
+
+    return MAC_ADDRESS_RE.search(value) is not None
+
+
 def personal_identifier_values(value: str) -> Iterator[str]:
     return map(lambda span: value[slice(*span)], personal_identifier_spans(value))
 
@@ -1913,6 +1933,12 @@ def redact_personal_identifiers(value: str) -> str:
     for start, end in reversed(spans):
         value = value[:start] + "[REDACTED_PERSONAL_IDENTIFIER]" + value[end:]
     return value
+
+
+def redact_mac_addresses(value: str) -> str:
+    """Redact strict colon- or hyphen-delimited MAC addresses."""
+
+    return MAC_ADDRESS_RE.sub("[REDACTED_INTERNAL_ADDRESS]", value)
 
 
 def contains_raw_identifier(value: str) -> bool:

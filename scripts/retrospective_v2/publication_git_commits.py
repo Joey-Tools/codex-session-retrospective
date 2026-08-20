@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 from collections.abc import Mapping, Sequence
+from contextlib import ExitStack
 from copy import deepcopy
 from pathlib import Path
 import subprocess
 from typing import Any
-from . import authority, executable_authority, git_safety, gpg_status, temporary_paths
+from . import (
+    authority,
+    executable_authority,
+    git_safety,
+    gpg_keyring_snapshot,
+    gpg_status,
+    temporary_paths,
+)
 from .checkpoints import canonical_json_bytes
 from .identity import IdentityKey
 
@@ -442,6 +450,8 @@ class LocalGitCommitOperations:
         arguments = [
             *git_safety.HISTORY_TOPOLOGY_CONFIG_ARGUMENTS,
             "-c",
+            "core.splitIndex=false",
+            "-c",
             "core.hooksPath=/dev/null",
             "-c",
             "core.askPass=/usr/bin/false",
@@ -462,62 +472,71 @@ class LocalGitCommitOperations:
                 )
             )
         arguments.extend(args)
-        environment = _strict_subprocess_environment(
-            home=self._gnupg_home or self._repo
-        )
-        environment.update(git_safety.local_only_git_environment())
-        if signing and self._gnupg_home is not None:
-            environment["GNUPGHOME"] = str(self._gnupg_home)
-            environment[gpg_status.GPG_PROGRAM_ENV] = self._signing_program
-        if extra_env:
-            unsupported = set(extra_env) - _HELPER_GIT_ENV_KEYS
-            if unsupported:
-                raise LocalGitPublicationError(
-                    "Git helper environment contains unsupported variables: "
-                    f"{sorted(unsupported)}"
-                )
-            if any(not isinstance(value, str) for value in extra_env.values()):
-                raise LocalGitPublicationError(
-                    "Git helper environment values must be strings"
-                )
-            environment.update(extra_env)
         try:
-            executable_authorities = [self._git_executable_authority]
-            if signing:
-                executable_authorities.extend(
-                    (
-                        self._signing_executable_authority,
-                        self._gpg_no_options_launcher_authority,
+            with ExitStack() as stack:
+                subprocess_home = self._gnupg_home or self._repo
+                if signing and self._gnupg_home is not None:
+                    subprocess_home = stack.enter_context(
+                        gpg_keyring_snapshot.config_free_keyring_snapshot(
+                            self._gnupg_home,
+                        )
                     )
-                )
-            with executable_authority.executable_invocation(*executable_authorities):
-                with git_safety.repository_git_invocation(
-                    getattr(self, "_git_repository_admission", None),
-                    self._repo,
-                    self._git_binary,
-                    arguments,
-                    environment,
-                    self._git_directory_identity,
-                ) as (command, environment, descriptors):
-                    result = _run_bounded_subprocess(
-                        command,
-                        input_bytes=input_bytes,
-                        environment=environment,
-                        inherited_descriptors=descriptors,
-                        timeout_seconds=(
-                            self._subprocess_timeout_seconds
-                            if timeout_seconds is None
-                            else timeout_seconds
-                        ),
-                        max_output_bytes=(
-                            self._subprocess_output_limit_bytes
-                            if max_output_bytes is None
-                            else max_output_bytes
-                        ),
+                environment = _strict_subprocess_environment(home=subprocess_home)
+                environment.update(git_safety.local_only_git_environment())
+                if signing:
+                    environment["GNUPGHOME"] = str(subprocess_home)
+                    environment[gpg_status.GPG_PROGRAM_ENV] = self._signing_program
+                if extra_env:
+                    unsupported = set(extra_env) - _HELPER_GIT_ENV_KEYS
+                    if unsupported:
+                        raise LocalGitPublicationError(
+                            "Git helper environment contains unsupported variables: "
+                            f"{sorted(unsupported)}"
+                        )
+                    if any(not isinstance(value, str) for value in extra_env.values()):
+                        raise LocalGitPublicationError(
+                            "Git helper environment values must be strings"
+                        )
+                    environment.update(extra_env)
+                executable_authorities = [self._git_executable_authority]
+                if signing:
+                    executable_authorities.extend(
+                        (
+                            self._signing_executable_authority,
+                            self._gpg_no_options_launcher_authority,
+                        )
                     )
+                with executable_authority.executable_invocation(
+                    *executable_authorities
+                ):
+                    with git_safety.repository_git_invocation(
+                        getattr(self, "_git_repository_admission", None),
+                        self._repo,
+                        self._git_binary,
+                        arguments,
+                        environment,
+                        self._git_directory_identity,
+                    ) as (command, environment, descriptors):
+                        result = _run_bounded_subprocess(
+                            command,
+                            input_bytes=input_bytes,
+                            environment=environment,
+                            inherited_descriptors=descriptors,
+                            timeout_seconds=(
+                                self._subprocess_timeout_seconds
+                                if timeout_seconds is None
+                                else timeout_seconds
+                            ),
+                            max_output_bytes=(
+                                self._subprocess_output_limit_bytes
+                                if max_output_bytes is None
+                                else max_output_bytes
+                            ),
+                        )
         except (
             executable_authority.ExecutableAuthorityError,
             git_safety.LocalRepositorySafetyError,
+            gpg_keyring_snapshot.ConfigFreeKeyringError,
         ) as error:
             raise LocalGitPublicationError(str(error)) from error
         if check and result.returncode != 0:

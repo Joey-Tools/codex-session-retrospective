@@ -1544,6 +1544,26 @@ class AuditedResultContractTests(unittest.TestCase):
                 "[REDACTED_INTERNAL_HOST]",
             ),
             (
+                "Connect to build-node-7:8080 before continuing.",
+                "internal_url",
+                "[REDACTED_URL]",
+            ),
+            (
+                "Street address: 123 Main Street",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "streetAddress: 123 Main Street",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Device MAC address: 00:1A:2B:3C:4D:5E",
+                "internal_host",
+                "[REDACTED_INTERNAL_ADDRESS]",
+            ),
+            (
                 "Inspect identifier abcdefabcdefabcdefabcdef before continuing.",
                 "raw_id",
                 "[REDACTED_RAW_ID]",
@@ -1596,6 +1616,45 @@ class AuditedResultContractTests(unittest.TestCase):
         self.assertIn("2026.07.14.4", text)
         self.assertIn("999.1.1.1", text)
         self.assertEqual(scan_for_leaks(validated), ())
+
+    def test_internal_host_and_mac_patterns_reject_ambiguous_shapes(self) -> None:
+        for safe_text in (
+            "window ends 2026-07-07T00:00:00Z",
+            "status:200",
+            "version:8080",
+            "Node:20",
+            "Server:2025",
+            "mixed MAC 00:1A-2B:3C:4D:5E",
+            "short MAC 00:1A:2B:3C:4D",
+            "embedded MAC x00:1A:2B:3C:4D:5E",
+            "long hardware id 00-1A-2B-3C-4D-5E-6F",
+        ):
+            with self.subTest(safe_text=safe_text):
+                self.assertEqual((), scan_for_leaks({"summary": safe_text}))
+
+        self.assertFalse(
+            privacy_locators.contains_mac_address("IPv6 fe80::1a2b:3c4d:5e6f")
+        )
+        self.assertFalse(
+            privacy_locators.contains_mac_address("IPv6 00:1A:2B:3C:4D:5E:6F:70")
+        )
+        self.assertEqual(
+            {"ip_address"},
+            {
+                finding.category
+                for finding in scan_for_leaks(
+                    {"summary": "IPv6 00:1A:2B:3C:4D:5E:6F:70"}
+                )
+            },
+        )
+
+        for private_text in (
+            "Connect to build-node-7:8080.",
+            "Connect to server9:8080.",
+            "Device MAC address: 00-1A-2B-3C-4D-5E",
+        ):
+            with self.subTest(private_text=private_text):
+                self.assertNotEqual((), scan_for_leaks({"summary": private_text}))
 
     def test_audit_redacts_bare_unspecified_ipv6(self) -> None:
         for source, expected in (

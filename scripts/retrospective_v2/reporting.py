@@ -732,6 +732,7 @@ def _validate_safe_string(value: str, *, path: str) -> None:
             privacy_locators.contains_ip_address(value),
             privacy_locators.contains_personal_identifier(value),
             privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
+            privacy_locators.contains_mac_address(value),
             privacy_locators.contains_path_locator(value),
             next(privacy_locators.noncanonical_redacted_placeholder_spans(value), None),
         )
@@ -767,6 +768,7 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
             privacy_locators.contains_ip_address(value),
             privacy_locators.contains_personal_identifier(value),
             privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
+            privacy_locators.contains_mac_address(value),
             privacy_locators.contains_path_locator(value),
             next(privacy_locators.noncanonical_redacted_placeholder_spans(value), None),
         )
@@ -3859,6 +3861,7 @@ def _validate_report_bytes(
             privacy_locators.contains_ip_address(locator_scan_text),
             privacy_locators.contains_personal_identifier(text),
             privacy_locators.LABELED_INTERNAL_HOST_RE.search(text),
+            privacy_locators.contains_mac_address(text),
             privacy_locators.contains_path_locator(text),
             privacy_locators.CODE_FENCE_RE.search(text),
             privacy_locators.contains_credential_material(text),

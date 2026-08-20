@@ -1719,8 +1719,9 @@ class SourceTransportProtocolTests(unittest.TestCase):
         source_sentinel.write_text("unchanged", encoding="ascii")
         snapshot_root = self.root / "remote-helper-temporary-root"
 
-        def inspect_relay(argv, *, max_output_bytes) -> None:
+        def inspect_relay(argv, *, max_output_bytes, account) -> None:
             nonlocal observed_snapshot
+            self.assertEqual(2, len(account))
             observed_snapshot = Path(argv[10])
             self.assertNotEqual(helper, observed_snapshot)
             self.assertEqual(helper.read_bytes(), observed_snapshot.read_bytes())
@@ -1799,6 +1800,151 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     invalid,
                     max_output_bytes=4096,
                 )
+
+    def test_legacy_cli_relay_ignores_poisoned_home_helper(self) -> None:
+        account_home = self.root / "account-home"
+        poisoned_home = self.root / "poisoned-home"
+        account_helper = account_home.joinpath(
+            *transport_remote.REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH.parts
+        )
+        poisoned_helper = poisoned_home.joinpath(
+            *transport_remote.REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH.parts
+        )
+        account_helper.parent.mkdir(parents=True)
+        poisoned_helper.parent.mkdir(parents=True)
+        account_executed = self.root / "account-helper-executed"
+        poison_executed = self.root / "poison-helper-executed"
+        account_helper.write_text(
+            executable_remote_helper_source(
+                "account helper",
+                after_hosts="import os\n",
+                main_prefix=(
+                    f"    with open({str(account_executed)!r}, 'w', "
+                    "encoding='ascii') as stream:\n"
+                    "        stream.write('|'.join((__file__, os.environ['HOME'], "
+                    "os.environ['USER'], os.environ['LOGNAME'])))\n"
+                ),
+            ),
+            encoding="ascii",
+        )
+        poisoned_helper.write_text(
+            executable_remote_helper_source(
+                "poison helper",
+                main_prefix=(
+                    f"    with open({str(poison_executed)!r}, 'w', "
+                    "encoding='ascii') as stream:\n"
+                    "        stream.write('poison')\n"
+                ),
+            ),
+            encoding="ascii",
+        )
+        snapshot_root = self.root / "account-helper-snapshot-root"
+        spool_root = self.root / "account-helper-spool-root"
+        account = types.SimpleNamespace(
+            pw_name="retrospective-test",
+            pw_dir=str(account_home),
+        )
+        changed_home = self.root / "changed-account-home"
+        changed_home.mkdir(mode=0o700)
+        changed_account = types.SimpleNamespace(
+            pw_name="changed-account",
+            pw_dir=str(changed_home),
+        )
+        source_before = account_helper.read_bytes()
+        source_metadata_before = account_helper.stat()
+        self.assertEqual(
+            account_helper.resolve(strict=True),
+            transport_remote._remote_host_context_helper_path_for_account(
+                (account.pw_name, account_home.resolve(strict=True))
+            ),
+        )
+
+        with (
+            mock.patch.dict(os.environ, {"HOME": str(poisoned_home)}, clear=True),
+            mock.patch.object(
+                transport_remote.pwd,
+                "getpwuid",
+                side_effect=(account, changed_account),
+            ) as getpwuid,
+            mock.patch.object(
+                transport_remote_snapshot.temporary_paths,
+                "REMOTE_HELPER_TEMP_ROOT",
+                snapshot_root,
+            ),
+            mock.patch.object(
+                transport_remote.temporary_paths,
+                "REMOTE_TRANSPORT_SPOOL_TEMP_ROOT",
+                spool_root,
+            ),
+            mock.patch.object(
+                transport_remote.temporary_paths,
+                "local_codex_root",
+                return_value=self.codex_root,
+            ),
+            mock.patch.object(transport_remote, "_relay_valid_utf8"),
+        ):
+            transport.relay_remote_host_context_cli(
+                ("session-meta", "--host", "remote.example", "--limit", "1"),
+                max_output_bytes=4096,
+            )
+
+        executed_path, home, user, logname = account_executed.read_text(
+            encoding="ascii"
+        ).split("|")
+        self.assertNotEqual(str(account_helper), executed_path)
+        self.assertTrue(executed_path.startswith(str(snapshot_root) + os.sep))
+        self.assertEqual(
+            (
+                str(account_home.resolve(strict=True)),
+                account.pw_name,
+                account.pw_name,
+            ),
+            (home, user, logname),
+        )
+        self.assertEqual(1, getpwuid.call_count)
+        self.assertFalse(poison_executed.exists())
+        self.assertEqual(source_before, account_helper.read_bytes())
+        source_metadata_after = account_helper.stat()
+        self.assertEqual(
+            (
+                source_metadata_before.st_dev,
+                source_metadata_before.st_ino,
+                stat.S_IMODE(source_metadata_before.st_mode),
+            ),
+            (
+                source_metadata_after.st_dev,
+                source_metadata_after.st_ino,
+                stat.S_IMODE(source_metadata_after.st_mode),
+            ),
+        )
+        self.assertEqual([], list(snapshot_root.iterdir()))
+        self.assertEqual([], list(spool_root.iterdir()))
+
+    def test_remote_helper_selection_rejects_invalid_account_identity(self) -> None:
+        valid_home = self.root / "valid-account-home"
+        valid_home.mkdir(mode=0o700)
+        invalid_accounts = (
+            types.SimpleNamespace(pw_name="", pw_dir=str(valid_home)),
+            types.SimpleNamespace(pw_name="invalid\nname", pw_dir=str(valid_home)),
+            types.SimpleNamespace(pw_name="valid", pw_dir="relative-home"),
+            types.SimpleNamespace(pw_name="valid", pw_dir=f"{valid_home}\n"),
+            types.SimpleNamespace(
+                pw_name="valid",
+                pw_dir=str(self.root / "missing-account-home"),
+            ),
+        )
+
+        for account in invalid_accounts:
+            with (
+                self.subTest(account=account),
+                mock.patch.object(
+                    transport_remote.pwd,
+                    "getpwuid",
+                    return_value=account,
+                ),
+                self.assertRaisesRegex(RuntimeError, "account (identity|home)"),
+            ):
+                transport_remote_snapshot.remote_host_context_helper_path()
 
     def test_remote_session_relay_validates_paired_target_without_exporting_it(
         self,

@@ -355,25 +355,26 @@ TRANSPORT_LINE_INVENTORY = {
     "transport_paths.py": 100,
     "transport_program.py": 389,
     "transport_program_components.py": 207,
-    "transport_remote.py": 519,
-    "transport_remote_snapshot.py": 178,
+    "transport_remote.py": 559,
+    "transport_remote_snapshot.py": 185,
     "transport_resume.py": 235,
     "transport_session_shards.py": 1_650,
     "transport_snapshot.py": 243,
     "transport_source.py": 1_940,
     "transport_worker.py": 21,
 }
-TRANSPORT_AGGREGATE_LINE_LIMIT = 8_825
+TRANSPORT_AGGREGATE_LINE_LIMIT = 8_875
 
 BOUNDED_MODULE_LINES = {
     "executable_authority.py": 350,
+    "gpg_keyring_snapshot.py": 700,
     "gpg_status.py": 200,
     "cli.py": 2_000,
     "implementation_authority.py": 600,
     "legacy_history_git.py": 325,
     "legacy_history_worktree.py": 600,
     "finalize.py": 120,
-    "authority.py": 3_375,
+    "authority.py": 3_400,
     "orchestrator_execution_contract.py": 200,
     "cleanup_inventory.py": 925,
     "cleanup_sidecars.py": 300,
@@ -415,10 +416,11 @@ BOUNDED_MODULE_LINES = {
     "source_capacity.py": 150,
     "orchestrator_core.py": 250,
     "orchestrator_protocols.py": 450,
-    "orchestrator_support.py": 610,
+    "orchestrator_support.py": 625,
     "orchestrator_transport.py": 1_100,
     "orchestrator_state.py": 300,
     "process_lifecycle.py": 300,
+    "publisher_readiness_cache.py": 100,
     "publication_abort_authority.py": 300,
     "publication_abort_replay.py": 200,
     "publication_cli_adapter.py": 75,
@@ -440,7 +442,7 @@ BOUNDED_MODULE_LINES = {
     "run_state_holdouts.py": 240,
     "run_state_lineage.py": 275,
     "reporting.py": 4_600,
-    "result_validation.py": 3_900,
+    "result_validation.py": 3_925,
     "agent_result_contracts.py": 525,
     "transport.py": 275,
     "transport_auth.py": 200,
@@ -451,7 +453,7 @@ BOUNDED_MODULE_LINES = {
     "transport_paths.py": 100,
     "transport_program.py": 450,
     "transport_program_components.py": 225,
-    "transport_remote.py": 550,
+    "transport_remote.py": 575,
     "transport_remote_snapshot.py": 200,
     "transport_resume.py": 250,
     "transport_session_shards.py": 1_650,
@@ -1073,7 +1075,7 @@ spec.loader.exec_module(module)
                 len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
                 for name in ORCHESTRATOR_FOUNDATION_MODULES
             ),
-            3_750,
+            3_800,
         )
         run_state_authority_inventory = {
             name: len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
@@ -1218,7 +1220,7 @@ spec.loader.exec_module(module)
         }
         self.assertEqual(TRANSPORT_MODULES, set(TRANSPORT_LINE_INVENTORY))
         self.assertEqual(TRANSPORT_LINE_INVENTORY, observed)
-        self.assertEqual(8_816, sum(observed.values()))
+        self.assertEqual(8_863, sum(observed.values()))
         self.assertLessEqual(
             sum(observed.values()),
             TRANSPORT_AGGREGATE_LINE_LIMIT,
@@ -1267,8 +1269,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_601, branch_total)
-        self.assertLessEqual(branch_total, 9_601)
+        self.assertEqual(9_698, branch_total)
+        self.assertLessEqual(branch_total, 9_698)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

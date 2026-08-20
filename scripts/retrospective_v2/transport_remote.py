@@ -81,8 +81,51 @@ class RemoteTransportExecutionError(RuntimeError):
     """Raised when authenticated helper code violates its execution contract."""
 
 
-def remote_host_context_helper_path() -> pathlib.Path:
-    return pathlib.Path.home().joinpath(*REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH.parts)
+def _remote_host_context_account() -> tuple[str, pathlib.Path]:
+    try:
+        account = pwd.getpwuid(os.getuid())
+    except (KeyError, OSError) as exc:
+        raise RuntimeError("remote-host-context account identity unavailable") from exc
+    account_name = account.pw_name
+    raw_home = account.pw_dir
+    if (
+        not isinstance(account_name, str)
+        or not account_name
+        or "\x00" in account_name
+        or "\r" in account_name
+        or "\n" in account_name
+        or not isinstance(raw_home, str)
+        or not raw_home
+        or "\x00" in raw_home
+        or "\r" in raw_home
+        or "\n" in raw_home
+    ):
+        raise RuntimeError("remote-host-context account identity unavailable")
+    declared_home = pathlib.Path(raw_home)
+    if not declared_home.is_absolute():
+        raise RuntimeError("remote-host-context account home is invalid")
+    try:
+        account_home = declared_home.resolve(strict=True)
+        if not account_home.is_dir():
+            raise RuntimeError("remote-host-context account home is invalid")
+    except OSError as exc:
+        raise RuntimeError("remote-host-context account home is invalid") from exc
+    return account_name, account_home
+
+
+def _remote_host_context_helper_path_for_account(
+    account: tuple[str, pathlib.Path],
+) -> pathlib.Path:
+    _account_name, account_home = account
+    return account_home.joinpath(*REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH.parts)
+
+
+def remote_host_context_helper_path(
+    *, account: tuple[str, pathlib.Path] | None = None
+) -> pathlib.Path:
+    return _remote_host_context_helper_path_for_account(
+        _remote_host_context_account() if account is None else account
+    )
 
 
 def remote_host_context_helper_commitment(
@@ -257,24 +300,20 @@ def _remote_host_context_command(
     )
 
 
-def _remote_host_context_environment() -> dict[str, str]:
-    try:
-        account = pwd.getpwuid(os.getuid())
-    except (KeyError, OSError) as exc:
-        raise RuntimeError("remote-host-context account identity unavailable") from exc
-    if not account.pw_name or not account.pw_dir:
-        raise RuntimeError("remote-host-context account identity unavailable")
-    account_home = pathlib.PurePath(account.pw_dir)
-    if not account_home.is_absolute() or "\x00" in account.pw_dir:
-        raise RuntimeError("remote-host-context account home is invalid")
+def _remote_host_context_environment(
+    *, account: tuple[str, pathlib.Path] | None = None
+) -> dict[str, str]:
+    account_name, account_home = (
+        _remote_host_context_account() if account is None else account
+    )
 
     environment = {
-        "HOME": account.pw_dir,
+        "HOME": str(account_home),
         "LANG": "C",
         "LC_ALL": "C",
-        "LOGNAME": account.pw_name,
+        "LOGNAME": account_name,
         "PATH": REMOTE_HOST_CONTEXT_FIXED_PATH,
-        "USER": account.pw_name,
+        "USER": account_name,
     }
     for key in REMOTE_HOST_CONTEXT_AUTH_ENVIRONMENT_KEYS:
         value = os.environ.get(key)
@@ -356,6 +395,7 @@ def _relay_remote_host_context_command(
     validator: Callable[[Any], None] | None = None,
     stream_filter: Any | None = None,
     publisher: Callable[[Any], None] | None = None,
+    account: tuple[str, pathlib.Path] | None = None,
 ) -> None:
     """Run the canonical helper with bounded, content-free failure handling."""
 
@@ -370,7 +410,7 @@ def _relay_remote_host_context_command(
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            env=_remote_host_context_environment(),
+            env=_remote_host_context_environment(account=account),
             close_fds=True,
             start_new_session=os.name == "posix",
         )

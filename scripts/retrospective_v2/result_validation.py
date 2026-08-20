@@ -777,6 +777,8 @@ def scan_for_leaks(
             findings.add(LeakFinding(category, path, match.start(), match.end()))
         for match in privacy_locators.LABELED_INTERNAL_HOST_RE.finditer(text):
             findings.add(LeakFinding("internal_host", path, match.start(), match.end()))
+        for match in privacy_locators.MAC_ADDRESS_RE.finditer(text):
+            findings.add(LeakFinding("internal_host", path, match.start(), match.end()))
         for match in privacy_locators.ipv4_matches(text):
             findings.add(LeakFinding("ip_address", path, match.start(), match.end()))
         for match in privacy_locators.ipv6_matches(text):
@@ -853,6 +855,7 @@ def _post_redact_text(
     redacted = privacy_locators.LABELED_INTERNAL_HOST_RE.sub(
         "[REDACTED_INTERNAL_HOST]", redacted
     )
+    redacted = privacy_locators.redact_mac_addresses(redacted)
     redacted = privacy_locators.redact_ip_addresses(redacted)
     for pattern in privacy_locators.PATH_LOCATOR_PATTERNS:
         redacted = pattern.sub("[REDACTED_PATH]", redacted)

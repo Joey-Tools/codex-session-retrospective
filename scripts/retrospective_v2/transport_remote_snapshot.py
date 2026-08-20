@@ -19,6 +19,7 @@ try:
     from .transport_remote import (
         _authenticated_hosts,
         _relay_remote_host_context_command,
+        _remote_host_context_account,
         _remote_helper_bootstrap_argv,
         remote_host_context_helper_commitment,
         remote_host_context_helper_component_commitment,
@@ -40,6 +41,7 @@ except (ImportError, ModuleNotFoundError):
     from transport_remote import (  # type: ignore[no-redef]
         _authenticated_hosts,
         _relay_remote_host_context_command,
+        _remote_host_context_account,
         _remote_helper_bootstrap_argv,
         remote_host_context_helper_commitment,
         remote_host_context_helper_component_commitment,
@@ -148,7 +150,8 @@ def relay_remote_host_context_cli(
         )
     ):
         raise ValueError("remote-host-context legacy request is invalid")
-    helper = remote_host_context_helper_path()
+    account = _remote_host_context_account()
+    helper = remote_host_context_helper_path(account=account)
     helper_commitment = remote_host_context_helper_commitment(helper)
     with temporary_paths.owner_only_temporary_directory(
         root=temporary_paths.REMOTE_HELPER_TEMP_ROOT,
@@ -174,5 +177,9 @@ def relay_remote_host_context_cli(
             runtime_commitment,
             normalized,
         )
-        _relay_remote_host_context_command(argv, max_output_bytes=max_output_bytes)
+        _relay_remote_host_context_command(
+            argv,
+            max_output_bytes=max_output_bytes,
+            account=account,
+        )
         temporary.revalidate()

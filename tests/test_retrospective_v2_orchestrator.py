@@ -34,6 +34,7 @@ from retrospective_v2 import (  # noqa: E402
     episode_review,
     executable_authority,
     implementation_authority,
+    publisher_readiness_cache,
     reporting,
     reduction_lineage,
     retained_export_coordination,
@@ -1646,8 +1647,23 @@ class OrchestratorTests(unittest.TestCase):
         self.assertFalse(mismatched_helper["ok"])
         self.assertFalse(mismatched_helper["checks"]["execution_contract"]["ok"])
 
-        gnupg = self.root / "publisher-gnupg-v2"
+        private_tmp = Path("/private/tmp")
+        publisher_temporary = tempfile.TemporaryDirectory(
+            dir=private_tmp if private_tmp.is_dir() else tempfile.gettempdir()
+        )
+        self.addCleanup(publisher_temporary.cleanup)
+        gnupg = Path(publisher_temporary.name) / "publisher-gnupg-v2"
         gnupg.mkdir(mode=0o700)
+        public_keyring = gnupg / "pubring.kbx"
+        public_keyring.write_bytes(b"synthetic public keyring")
+        public_keyring.chmod(0o600)
+        private_keys = gnupg / "private-keys-v1.d"
+        private_keys.mkdir(mode=0o700)
+        private_key = private_keys / (PUBLISHER_FINGERPRINT + ".key")
+        private_key.write_bytes(b"synthetic private key")
+        private_key.chmod(0o600)
+        publisher_readiness_cache.clear()
+        self.addCleanup(publisher_readiness_cache.clear)
         with mock.patch(
             "retrospective_v2.orchestrator.finalize.validate_publisher_keyring",
             return_value={
@@ -1657,8 +1673,12 @@ class OrchestratorTests(unittest.TestCase):
             },
         ):
             self.assertTrue(
-                publisher_readiness(gnupg_home=gnupg, gpg_program="fake-gpg")["ready"]
+                publisher_readiness(
+                    gnupg_home=gnupg,
+                    gpg_program=TEST_PUBLISHER_GPG,
+                )["ready"]
             )
+        publisher_readiness_cache.clear()
         with mock.patch(
             "retrospective_v2.orchestrator.finalize.validate_publisher_keyring",
             return_value={
@@ -1668,7 +1688,10 @@ class OrchestratorTests(unittest.TestCase):
             },
         ):
             self.assertFalse(
-                publisher_readiness(gnupg_home=gnupg, gpg_program="fake-gpg")["ready"]
+                publisher_readiness(
+                    gnupg_home=gnupg,
+                    gpg_program=TEST_PUBLISHER_GPG,
+                )["ready"]
             )
 
         with self.assertRaisesRegex(InvalidInputError, "every canonical host"):

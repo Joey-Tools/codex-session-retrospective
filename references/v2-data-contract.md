@@ -39,6 +39,10 @@ Before a remote lease is committed, the parent opens the installed
 content-addressed snapshot below that run's `raw-inputs` tree. The source
 commitment derived from that same descriptor-bound read must equal the run's
 frozen helper provenance before snapshot preparation or lease creation. The
+installed helper location and the relay child's `HOME`, `USER`, and `LOGNAME`
+share one POSIX account-database authority. The account home is resolved from
+`getpwuid(getuid())` to an existing canonical absolute directory; ambient
+`HOME` cannot select helper bytes or the child account context. The
 transport-program snapshot, remote-helper snapshot, bound empty transport output,
 and candidate checkpoint are capacity-checked and staged as one transaction;
 none of those files is materialized before the candidate checkpoint fits. The
@@ -586,6 +590,41 @@ sentence. Prefixes, suffixes, control characters, unknown fields or tables,
 boolean versions, reference-only text, v1 paths, shadow, holdout, and partial
 production controls all fail closed. The production marker embeds the complete
 authenticated cutover record and must include its release commit.
+
+## Publication Signing Isolation
+
+Every publisher-key inventory, sign/verify canary, signed commit, and durable
+history verification uses an owner-only configuration-free keyring snapshot.
+The source publisher home is descriptor-bound, and only a bounded stable
+`pubring.kbx`, optional `trustdb.gpg`, and 1-16 canonical owner-`0600`
+private-key files are copied. GPG configuration files, agent sockets, and all
+other source-home entries are excluded. The short fixed snapshot root is outside
+retrospective source trees, snapshot paths are unpredictable, and successful
+cleanup requires Assuan agent shutdown under one monotonic deadline spanning
+connect, greeting, `KILLAGENT`, response, and `S.*` disappearance. After copy,
+the private-key inventory is enumerated again and every admitted private-key
+object is read and compared again through its held descriptor. Any source-
+binding, inventory, copied-byte, access-policy, agent, or cleanup uncertainty
+fails closed.
+Interrupted GPG lock cleanup is a separate closed exception: only strict
+`.#lk...` names and the fixed agent-spawn sentinel are eligible, every object
+must be a bounded owner-controlled regular file without an ACL, and its link
+count must equal the complete descriptor-bound in-snapshot alias set. External
+hard links, malformed locks, identity drift, or deletion uncertainty retain the
+snapshot.
+Within one coordinator process, repeated readiness views may reuse a successful
+parsed publisher identity only under an exact cache key containing the
+configuration-free selected-key commitment, canonical source path, expected
+fingerprint and UID, and GPG executable authority digest. Each lookup rebuilds
+one descriptor-held configuration-free snapshot receipt and uses that same
+receipt for both the cache commitment and inventory validation; an independently
+rebuilt second snapshot cannot satisfy the lookup. Failure results, startup
+canaries, signing, and verification are never cache-authoritative.
+
+Publication uses a separate descriptor-bound temporary Git index and forces
+`core.splitIndex=false` for every publication Git command. A repository that
+enables split-index therefore cannot create or reuse `sharedindex.*` as part of
+the publication transaction.
 
 ## Retained Bundle
 

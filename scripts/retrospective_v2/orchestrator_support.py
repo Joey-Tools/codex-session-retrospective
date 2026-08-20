@@ -12,10 +12,12 @@ from typing import Any, Mapping, Sequence
 from . import (
     executable_authority,
     finalize,
+    gpg_keyring_snapshot,
     gpg_status,
     implementation_authority,
     process_lifecycle,
     publication_support,
+    publisher_readiness_cache,
     result_validation,
     safe_io,
     sharding,
@@ -328,16 +330,39 @@ def publisher_readiness(
     if fingerprint != PUBLISHER_FINGERPRINT or expected_uid != PUBLISHER_UID:
         return safe_result
     try:
-        identity = finalize.validate_publisher_keyring(
-            gnupg_home=gnupg_home,
-            fingerprint=fingerprint,
-            expected_uid=expected_uid,
-            gpg_program=gpg_program,
-        )
-    except finalize.LocalGitPublicationError as error:
+        with gpg_keyring_snapshot.config_free_keyring_snapshot_receipt(
+            gnupg_home
+        ) as snapshot:
+            probe = publisher_readiness_cache.probe(
+                gnupg_home=gnupg_home,
+                fingerprint=fingerprint,
+                expected_uid=expected_uid,
+                gpg_program=gpg_program,
+                keyring_commitment=snapshot.source_commitment,
+            )
+            if probe.cached is not None:
+                return probe.cached
+            identity = finalize.validate_publisher_keyring(
+                gnupg_home=probe.home,
+                fingerprint=fingerprint,
+                expected_uid=expected_uid,
+                gpg_program=probe.gpg_authority.path,
+                expected_gpg_authority_sha256=probe.authority_sha256,
+                _snapshot=snapshot,
+            )
+    except (
+        OSError,
+        TypeError,
+        ValueError,
+        executable_authority.ExecutableAuthorityError,
+        finalize.LocalGitPublicationError,
+        gpg_keyring_snapshot.ConfigFreeKeyringError,
+    ) as error:
         process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
         return safe_result
     safe_result["ready"] = identity.get("fingerprint") == PUBLISHER_FINGERPRINT
+    if safe_result["ready"]:
+        publisher_readiness_cache.record_ready(probe.cache_key, safe_result)
     return safe_result
 
 
@@ -510,70 +535,76 @@ def publisher_sign_verify_canary(
 
     if fingerprint != PUBLISHER_FINGERPRINT:
         return False
-    home = Path(gnupg_home).expanduser().absolute()
-    environment = publication_support._strict_subprocess_environment(home=home)
-    environment["GNUPGHOME"] = str(home)
     try:
         gpg_authority = executable_authority.resolve_executable(
             gpg_program,
             label="GPG",
         )
+
         with temporary_paths.owner_only_temporary_directory(
             root=temporary_paths.PUBLISHER_CANARY_TEMP_ROOT,
             prefix="retrospective-publisher-canary-",
         ) as temporary:
             directory = temporary.path
             temporary.revalidate()
-            environment["TEMP"] = environment["TMP"] = environment["TMPDIR"] = str(
-                directory
-            )
             payload = directory / "payload"
             signature = directory / "payload.sig"
             safe_io.atomic_create_bytes(
                 payload, b"session-retrospective-publisher-canary-v2\n"
             )
             temporary.revalidate()
-            with executable_authority.executable_invocation(gpg_authority):
-                signed = _run_bounded_publisher_canary_process(
-                    gpg_status.no_options_argv(
-                        gpg_authority.path,
-                        "--homedir",
-                        str(home),
-                        "--batch",
-                        "--yes",
-                        "--local-user",
-                        fingerprint,
-                        "--detach-sign",
-                        "--output",
-                        str(signature),
-                        str(payload),
-                    ),
-                    environment=environment,
+            with gpg_keyring_snapshot.config_free_keyring_snapshot(
+                gnupg_home,
+            ) as snapshot_home:
+                environment = publication_support._strict_subprocess_environment(
+                    home=snapshot_home
                 )
-            temporary.revalidate()
-            if signed.returncode != 0 or not signature.is_file():
-                return False
-            temporary.harden_file(signature.name)
-            with executable_authority.executable_invocation(gpg_authority):
-                verified = _run_bounded_publisher_canary_process(
-                    gpg_status.no_options_argv(
-                        gpg_authority.path,
-                        "--homedir",
-                        str(home),
-                        "--batch",
-                        "--status-fd",
-                        "1",
-                        "--verify",
-                        str(signature),
-                        str(payload),
-                    ),
-                    environment=environment,
+                environment["GNUPGHOME"] = str(snapshot_home)
+                environment["TEMP"] = environment["TMP"] = environment["TMPDIR"] = str(
+                    directory
                 )
+                with executable_authority.executable_invocation(gpg_authority):
+                    signed = _run_bounded_publisher_canary_process(
+                        gpg_status.no_options_argv(
+                            gpg_authority.path,
+                            "--homedir",
+                            str(snapshot_home),
+                            "--batch",
+                            "--yes",
+                            "--local-user",
+                            fingerprint,
+                            "--detach-sign",
+                            "--output",
+                            str(signature),
+                            str(payload),
+                        ),
+                        environment=environment,
+                    )
+                temporary.revalidate()
+                if signed.returncode != 0 or not signature.is_file():
+                    return False
+                temporary.harden_file(signature.name)
+                with executable_authority.executable_invocation(gpg_authority):
+                    verified = _run_bounded_publisher_canary_process(
+                        gpg_status.no_options_argv(
+                            gpg_authority.path,
+                            "--homedir",
+                            str(snapshot_home),
+                            "--batch",
+                            "--status-fd",
+                            "1",
+                            "--verify",
+                            str(signature),
+                            str(payload),
+                        ),
+                        environment=environment,
+                    )
             temporary.revalidate()
     except (
         OSError,
         _PublisherCanaryProcessError,
         executable_authority.ExecutableAuthorityError,
+        gpg_keyring_snapshot.ConfigFreeKeyringError,
     ) as error:
         process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
         return False

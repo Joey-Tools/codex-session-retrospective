@@ -139,15 +139,30 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             "PUBLISHER_CANARY_TEMP_ROOT",
             self.canary_root,
         )
+        self.keyring_root = self.root / "keyring-root"
+        self.keyring_root_patch = mock.patch.object(
+            orchestrator_support.temporary_paths,
+            "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+            self.keyring_root,
+        )
         self.source_root_patch = mock.patch.object(
             orchestrator_support.temporary_paths,
             "local_codex_root",
             return_value=self.source_root,
         )
         self.canary_root_patch.start()
+        self.keyring_root_patch.start()
         self.source_root_patch.start()
+        orchestrator_support.publisher_readiness_cache.clear()
         self.gnupg_home = self.root / "gnupg"
         self.gnupg_home.mkdir(mode=0o700)
+        (self.gnupg_home / "pubring.kbx").write_bytes(b"fixture public keyring")
+        os.chmod(self.gnupg_home / "pubring.kbx", 0o600)
+        private_keys = self.gnupg_home / "private-keys-v1.d"
+        private_keys.mkdir(mode=0o700)
+        private_key = private_keys / ("A" * 40 + ".key")
+        private_key.write_bytes(b"fixture private key")
+        os.chmod(private_key, 0o600)
         self.gpg_program = self.root / "fake-gpg"
         self.gpg_mode = self.root / "fake-gpg-mode"
         self.gpg_environment = self.root / "fake-gpg-environments"
@@ -272,7 +287,9 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                 except (ProcessLookupError, ValueError):
                     pass
         self.source_root_patch.stop()
+        self.keyring_root_patch.stop()
         self.canary_root_patch.stop()
+        orchestrator_support.publisher_readiness_cache.clear()
         self.temporary_directory.cleanup()
 
     def _spawned_child_pids(self) -> list[int]:
@@ -280,6 +297,93 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             int(value)
             for value in self.gpg_child_pids.read_text(encoding="ascii").splitlines()
         ]
+
+    def test_readiness_cache_binds_selected_keyring_and_gpg_authority(self) -> None:
+        identity = {
+            "fingerprint": orchestrator_support.PUBLISHER_FINGERPRINT,
+            "gnupg_home": str(self.gnupg_home),
+            "uid": orchestrator_support.PUBLISHER_UID,
+        }
+        config = self.gnupg_home / "gpg-agent.conf"
+        public_keyring = self.gnupg_home / "pubring.kbx"
+        with mock.patch.object(
+            orchestrator_support.finalize,
+            "validate_publisher_keyring",
+            return_value=identity,
+        ) as validate:
+            first = orchestrator_support.publisher_readiness(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+            config.write_text("log-file /untrusted/marker\n", encoding="ascii")
+            config.chmod(0o600)
+            config_only = orchestrator_support.publisher_readiness(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+            public_keyring.write_bytes(b"changed selected public keyring")
+            selected_material_changed = orchestrator_support.publisher_readiness(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+            self.gpg_program.write_text(
+                self.gpg_program.read_text(encoding="utf-8") + "\n# changed\n",
+                encoding="utf-8",
+            )
+            self.gpg_program.chmod(0o700)
+            gpg_authority_changed = orchestrator_support.publisher_readiness(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+
+        self.assertTrue(first["ready"])
+        self.assertEqual(first, config_only)
+        self.assertTrue(selected_material_changed["ready"])
+        self.assertTrue(gpg_authority_changed["ready"])
+        self.assertEqual(3, validate.call_count)
+        self.assertEqual([], list(self.keyring_root.iterdir()))
+
+    def test_readiness_validation_and_cache_share_one_snapshot_receipt(self) -> None:
+        identity = {
+            "fingerprint": orchestrator_support.PUBLISHER_FINGERPRINT,
+            "gnupg_home": str(self.gnupg_home),
+            "uid": orchestrator_support.PUBLISHER_UID,
+        }
+        public_keyring = self.gnupg_home / "pubring.kbx"
+        original_payload = public_keyring.read_bytes()
+        validated_snapshots = []
+
+        def validate_same_snapshot(**kwargs):
+            snapshot = kwargs["_snapshot"]
+            validated_snapshots.append(snapshot)
+            self.assertEqual(
+                original_payload,
+                (snapshot.path / "pubring.kbx").read_bytes(),
+            )
+            public_keyring.write_bytes(b"intermediate selected keyring")
+            return identity
+
+        with mock.patch.object(
+            orchestrator_support.finalize,
+            "validate_publisher_keyring",
+            side_effect=validate_same_snapshot,
+        ) as validate:
+            first = orchestrator_support.publisher_readiness(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+            public_keyring.write_bytes(original_payload)
+            restored = orchestrator_support.publisher_readiness(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+
+        self.assertTrue(first["ready"])
+        self.assertEqual(first, restored)
+        self.assertEqual(1, validate.call_count)
+        self.assertEqual(1, len(validated_snapshots))
+        self.assertFalse(validated_snapshots[0].path.exists())
+        self.assertEqual([], list(self.keyring_root.iterdir()))
 
     def _assert_spawned_children_absent(self, expected_count: int) -> None:
         pids = self._spawned_child_pids()
@@ -548,8 +652,10 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             self.assertEqual(captured, record["values"])
             self.assertFalse(record["runtime_text_encoding_is_poisoned"])
             self.assertLessEqual(set(captured), allowed)
-            self.assertEqual(captured["GNUPGHOME"], str(self.gnupg_home))
-            self.assertEqual(captured["HOME"], str(self.gnupg_home))
+            snapshot_home = Path(captured["GNUPGHOME"])
+            self.assertEqual(captured["HOME"], str(snapshot_home))
+            self.assertEqual(self.keyring_root, snapshot_home.parent)
+            self.assertNotEqual(self.gnupg_home, snapshot_home)
             self.assertEqual(captured["PATH"], os.defpath)
             self.assertEqual(captured["LANG"], "C")
             self.assertEqual(captured["LC_ALL"], "C")
@@ -561,6 +667,7 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             self.assertNotEqual(str(self.source_root), selected_temp)
         self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
         self.assertEqual([source_sentinel], list(self.source_root.iterdir()))
+        self.assertEqual([], list(self.keyring_root.iterdir()))
 
     def test_canary_cold_start_uses_fixed_safe_io_probe_parent(self) -> None:
         source_sentinel = self.source_root / "source-sentinel"

@@ -2157,6 +2157,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "The response embeds ```secret_code``` inline.",
             "The response embeds ```secret_code inline.",
             "Inspect host: build-node-7 before continuing.",
+            "Connect to build-node-7:8080 before continuing.",
+            "Street address: 123 Main Street",
+            "streetAddress: 123 Main Street",
+            "Device MAC address: 00:1A:2B:3C:4D:5E",
             "Inspect identifier abcdefabcdefabcdefabcdef before continuing.",
             "Inspect identifier 01890f3e-7b12-7cc2-bf79-123456789abc.",
             f"Inspect identifier {'a' * 65}.",
@@ -2165,6 +2169,16 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(RetainedPrivacyError):
                     reporting_module.validate_retained_value({"cause": value})
+
+        artifacts = assemble_retained_artifacts(run_state(), review_data())
+        tampered = dict(artifacts)
+        tampered["report.md"] += b"\nDevice MAC address: 00:1A:2B:3C:4D:5E\n"
+        refresh_bundle_digest(tampered)
+        with self.assertRaisesRegex(
+            RetainedPrivacyError,
+            "forbidden locator or credential-shaped value",
+        ):
+            validate_retained_artifacts(tampered)
 
     def test_retained_credentials_use_the_complete_shared_detector(self) -> None:
         slack_probe = "".join(("xoxb-", "A" * 16))

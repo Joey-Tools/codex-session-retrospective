@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from contextlib import ExitStack
 from dataclasses import dataclass
 import datetime as dt
 import fcntl
@@ -26,6 +27,7 @@ from . import (
     episode_review,
     executable_authority,
     git_safety,
+    gpg_keyring_snapshot,
     gpg_status,
     history_graph,
     process_lifecycle,
@@ -918,23 +920,38 @@ class _GitRepository:
                 )
             executable_authorities.append(launcher_authority)
         try:
-            with executable_authority.executable_invocation(*executable_authorities):
-                with git_safety.history_repository_git_invocation(
-                    getattr(self, "_repository_admission", None),
-                    self.path,
-                    self.git,
-                    arguments,
-                    self.env,
-                    safe_io.owner_controlled_directory_identity,
-                ) as (command, environment, descriptors):
-                    result = _run_bounded(
-                        command,
-                        env=environment,
-                        pass_fds=descriptors,
-                        input_bytes=input_bytes,
-                        max_output_bytes=max_output_bytes,
+            with ExitStack() as stack:
+                environment = dict(self.env)
+                if args and args[0] in {"verify-commit", "verify-tag"}:
+                    assert self._gpg_executable_authority is not None
+                    snapshot_home = stack.enter_context(
+                        gpg_keyring_snapshot.config_free_keyring_snapshot(
+                            self.gnupg_home,
+                        )
                     )
-        except executable_authority.ExecutableAuthorityError as exc:
+                    environment["GNUPGHOME"] = str(snapshot_home)
+                with executable_authority.executable_invocation(
+                    *executable_authorities
+                ):
+                    with git_safety.history_repository_git_invocation(
+                        getattr(self, "_repository_admission", None),
+                        self.path,
+                        self.git,
+                        arguments,
+                        environment,
+                        safe_io.owner_controlled_directory_identity,
+                    ) as (command, environment, descriptors):
+                        result = _run_bounded(
+                            command,
+                            env=environment,
+                            pass_fds=descriptors,
+                            input_bytes=input_bytes,
+                            max_output_bytes=max_output_bytes,
+                        )
+        except (
+            executable_authority.ExecutableAuthorityError,
+            gpg_keyring_snapshot.ConfigFreeKeyringError,
+        ) as exc:
             raise HistoryValidationError(
                 "history executable authority changed after validation"
             ) from exc
