@@ -2239,6 +2239,53 @@ superseded_by:
   current workflows under bounded `actionlint`, the generated bootstrap
   manifest check, the official OpenAI Skill validator, project-journal
   validation, source-tree bytecode exclusion, and `git diff --check`.
+- Signed head `2b09e19e` had clean exact-secret admission but became stale when
+  its fresh local Codex processor found one P1 raw-evidence gap: the remote
+  transport output spool and both session-shards spools still delegated their
+  placement to ambient `TEMP`, `TMP`, `TMPDIR`, or Python's cached temp root.
+  The independent workspace postvalidated with its original graph and config
+  receipts, the trusted bundle and Python digests remained unchanged, and the
+  reviewer task root was removed through the bounded cleanup helper.
+- The three spools now use separate fixed roots under the shared
+  descriptor-bound temporary-directory authority. Every file receives an
+  explicit admitted directory, is descriptor-hardened before raw bytes are
+  written, and remains enclosed by directory revalidation and inventoried
+  cleanup. Real poisoned-environment regressions spy on the real temporary-file
+  factories and bind every explicit `dir` to an owner-`0700` random child of the
+  purpose-specific root; they also prove that source trees remain byte-identical
+  and the roots are empty after success. The source worker's closed module
+  manifest includes the new authority dependency; its reachability contract and
+  the four isolated snapshot regressions pass 5/5.
+- The first 1,840-test P1-fix shard group is non-counting: a bounded precommit
+  audit found that the initial poisoned-environment regressions observed only
+  post-cleanup trees, which could not prove the placement of immediately
+  unlinked anonymous files. All four process-group-bounded shard sessions were
+  interrupted once, reached terminal exit 130, and were quiescent before the
+  real factory-binding assertions were added. The corrected exact regressions
+  pass 2/2. One affected-suite session then became unavailable before its
+  terminal result could be collected and is non-counting. A replacement harness
+  incorrectly applied a 4 MiB process-wide file-size limit, causing three
+  fixture writes to fail with `EFBIG`; that harness result is also non-counting.
+  Without that inherited limit, the complete affected source and session-shards
+  transport modules pass 172/172 in 57.700 seconds.
+- The final Python 3.13 inventory contains 1,840 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `744f59832de0e0374bf5ab8feb358c81d2b12685200487613b4ebf6a945e747b`.
+  Shard 0 passes 438/438 in 1,810.306 seconds, shard 1 passes 498/498 in
+  1,580.265 seconds, shard 2 passes 486/486 in 1,514.090 seconds, and shard 3
+  passes 418/418 in 1,450.248 seconds, for exact aggregate coverage of
+  1,840/1,840. Darwin security tests pass 14/14 in 70.579 seconds. An earlier
+  accidental Darwin invocation with an unretained session handle was terminated
+  once and is non-counting; the counted run used a pollable process-group
+  deadline and reached a complete terminal result.
+- The final tree passes module boundaries 19/19 in 2.047 seconds, Ruff 0.13.2
+  lint and changed-file formatting, both current workflows under bounded
+  `actionlint`, the generated bootstrap manifest check, the official OpenAI
+  Skill validator, project-journal validation, source-tree bytecode exclusion,
+  and `git diff --check`. One direct isolated `python -m unittest` boundary
+  invocation lacked the repository loader and produced only `_FailedTest`; it
+  is non-counting, and the required closed loader supplied the passing 19/19
+  result.
 
 ## Follow-up Work
 

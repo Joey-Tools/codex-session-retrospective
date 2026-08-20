@@ -7,26 +7,51 @@ from dataclasses import dataclass
 import operator
 import os
 from pathlib import Path
+import pwd
 import secrets
 import stat
 from typing import Iterator
 
 try:
-    from . import safe_io, transport_source
+    from . import safe_io
+    from .transport_contracts import source_root_commitment
 except (ImportError, ModuleNotFoundError):
     import safe_io  # type: ignore[no-redef]
-    import transport_source  # type: ignore[no-redef]
+    from transport_contracts import source_root_commitment  # type: ignore[no-redef]
 
 
 _RUNTIME_TEMP_BASE = Path("/tmp") / f"codex-session-retrospective-{os.getuid()}"
 PUBLISHER_CANARY_TEMP_ROOT = _RUNTIME_TEMP_BASE / "publisher-canary"
 REMOTE_HELPER_TEMP_ROOT = _RUNTIME_TEMP_BASE / "remote-helper"
+REMOTE_TRANSPORT_SPOOL_TEMP_ROOT = _RUNTIME_TEMP_BASE / "remote-transport-spool"
+SESSION_SHARDS_SPOOL_TEMP_ROOT = _RUNTIME_TEMP_BASE / "session-shards-spool"
 PUBLICATION_INDEX_TEMP_ROOT = _RUNTIME_TEMP_BASE / "publication-index"
 _TEMPORARY_NAME_ATTEMPTS = 8
 _TEMPORARY_CLEANUP_ENTRIES = 64
 _TEMPORARY_CLEANUP_PATH_BYTES = 64 * 1024
 _TEMPORARY_CLEANUP_DEPTH = 4
 _TEMPORARY_CLEANUP_SECONDS = 30.0
+
+
+def local_codex_root() -> Path:
+    """Resolve the canonical local source root without ambient HOME state."""
+
+    try:
+        account = pwd.getpwuid(os.getuid())
+    except (KeyError, OSError) as exc:
+        raise ValueError("local account identity is unavailable") from exc
+    home = account.pw_dir
+    if (
+        not isinstance(home, str)
+        or not home
+        or "\x00" in home
+        or "\r" in home
+        or "\n" in home
+    ):
+        raise ValueError("local account home is invalid")
+    root = Path(home) / ".codex"
+    source_root_commitment(codex_root=str(root), route="local", host="local")
+    return root
 
 
 def _require_root_outside_source(temporary_root: Path, source_root: Path) -> None:
@@ -174,7 +199,7 @@ def owner_only_temporary_directory(
         )
     ):
         raise ValueError("temporary directory prefix is invalid")
-    source_root = transport_source._local_codex_root()
+    source_root = local_codex_root()
     root = Path(root)
     _require_root_outside_source(root, source_root)
     root_path, root_fd = safe_io.open_owner_only_directory(root, create=True)

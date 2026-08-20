@@ -97,8 +97,8 @@ class PublisherCanaryPathContractTests(unittest.TestCase):
             try:
                 with (
                     mock.patch.object(
-                        orchestrator_support.temporary_paths.transport_source,
-                        "_local_codex_root",
+                        orchestrator_support.temporary_paths,
+                        "local_codex_root",
                         return_value=source_root,
                     ),
                     mock.patch.object(
@@ -140,8 +140,8 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             self.canary_root,
         )
         self.source_root_patch = mock.patch.object(
-            orchestrator_support.temporary_paths.transport_source,
-            "_local_codex_root",
+            orchestrator_support.temporary_paths,
+            "local_codex_root",
             return_value=self.source_root,
         )
         self.canary_root_patch.start()
@@ -645,8 +645,8 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                 canary_root,
             ),
             mock.patch.object(
-                orchestrator_support.temporary_paths.transport_source,
-                "_local_codex_root",
+                orchestrator_support.temporary_paths,
+                "local_codex_root",
                 return_value=source_alias,
             ),
         ):

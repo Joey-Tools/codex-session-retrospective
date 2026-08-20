@@ -56,6 +56,7 @@ SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST = (
     "contracts.py",
     "process_lifecycle.py",
     "safe_io.py",
+    "temporary_paths.py",
     "transport_capture.py",
     "transport_contracts.py",
     "transport_discovery.py",

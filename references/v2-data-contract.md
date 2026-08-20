@@ -103,10 +103,11 @@ that supplies neither generation nor birth time, a same-inode replacement with
 byte-identical frozen content cannot be distinguished from the prior object;
 this is an explicit platform non-guarantee, not an identity proof. Every
 records-mode request separately scans and hashes the complete frozen prefix into
-an owner-only temporary spool before emitting its first frame. Content mutation
-anywhere in that prefix therefore rejects the stream even on the fallback
-platform, while the spool retains only the requested byte range and closes on
-every terminal path.
+an owner-only temporary spool beneath a fixed descriptor-bound root that ignores
+ambient temporary-directory selection before emitting its first frame. Content
+mutation anywhere in that prefix therefore rejects the stream even on the
+fallback platform, while the spool retains only the requested byte range and
+closes on every terminal path.
 
 Remote descriptor and record streams are incrementally validated before spool.
 Every frame is either consistently wrapped and bound to the exact requested

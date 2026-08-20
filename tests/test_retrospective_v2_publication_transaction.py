@@ -193,8 +193,8 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                     index_root,
                 ),
                 mock.patch.object(
-                    temporary_paths.transport_source,
-                    "_local_codex_root",
+                    temporary_paths,
+                    "local_codex_root",
                     return_value=source_root,
                 ),
             ):

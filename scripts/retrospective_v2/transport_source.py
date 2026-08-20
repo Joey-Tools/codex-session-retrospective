@@ -13,7 +13,6 @@ import hashlib
 import hmac
 import os
 import pathlib
-import pwd
 import re
 import stat
 import sys
@@ -24,6 +23,7 @@ try:
         catalog,
         contracts as common_contracts,
         process_lifecycle,
+        temporary_paths,
         transport_resume,
     )
     from .contracts import (
@@ -81,6 +81,7 @@ except (ImportError, ModuleNotFoundError):
     import catalog  # type: ignore[no-redef]
     import contracts as common_contracts  # type: ignore[no-redef]
     import process_lifecycle  # type: ignore[no-redef]
+    import temporary_paths  # type: ignore[no-redef]
     import transport_resume  # type: ignore[no-redef]
     from contracts import (  # type: ignore[no-redef]
         JsonValue,
@@ -142,22 +143,7 @@ _source_transport_json_bytes = common_contracts.canonical_json_bytes
 
 
 def _local_codex_root() -> pathlib.Path:
-    try:
-        account = pwd.getpwuid(os.getuid())
-    except (KeyError, OSError) as exc:
-        raise ValueError("local account identity is unavailable") from exc
-    home = account.pw_dir
-    if (
-        not isinstance(home, str)
-        or not home
-        or "\x00" in home
-        or "\r" in home
-        or "\n" in home
-    ):
-        raise ValueError("local account home is invalid")
-    root = pathlib.Path(home) / ".codex"
-    source_root_commitment(codex_root=str(root), route="local", host="local")
-    return root
+    return temporary_paths.local_codex_root()
 
 
 @dataclass(frozen=True, slots=True)

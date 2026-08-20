@@ -1748,8 +1748,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 snapshot_root,
             ),
             mock.patch.object(
-                transport_remote_snapshot.temporary_paths.transport_source,
-                "_local_codex_root",
+                transport_remote_snapshot.temporary_paths,
+                "local_codex_root",
                 return_value=source_root,
             ),
             mock.patch.object(
@@ -3012,6 +3012,86 @@ class SourceTransportProtocolTests(unittest.TestCase):
             )
 
         self.assertTrue(guarded.hardened)
+
+    def test_remote_relay_spool_ignores_poisoned_temporary_environment(self) -> None:
+        source_root = self.root / "poisoned-remote-source"
+        source_root.mkdir(mode=0o700)
+        sentinel = source_root / "rollout.jsonl"
+        sentinel.write_bytes(b'{"source":"unchanged"}\n')
+        spool_root = self.root / "remote-output-spool-root"
+        captured: list[bytes] = []
+        factory_directories: list[tuple[Path, int, int]] = []
+        real_temporary_file = tempfile.TemporaryFile
+
+        def tracked_temporary_file(*args, **kwargs):
+            directory = Path(kwargs["dir"])
+            metadata = directory.stat()
+            factory_directories.append(
+                (directory, stat.S_IMODE(metadata.st_mode), metadata.st_uid)
+            )
+            return real_temporary_file(*args, **kwargs)
+
+        source_inventory = [
+            (path.relative_to(source_root).as_posix(), path.read_bytes())
+            for path in source_root.rglob("*")
+            if path.is_file()
+        ]
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "TEMP": str(source_root),
+                    "TMP": str(source_root),
+                    "TMPDIR": str(source_root),
+                },
+            ),
+            mock.patch.object(tempfile, "tempdir", str(source_root)),
+            mock.patch.object(
+                transport_remote.temporary_paths,
+                "REMOTE_TRANSPORT_SPOOL_TEMP_ROOT",
+                spool_root,
+            ),
+            mock.patch.object(
+                transport_remote.temporary_paths,
+                "local_codex_root",
+                return_value=source_root,
+            ),
+            mock.patch.object(
+                transport_remote.tempfile,
+                "TemporaryFile",
+                side_effect=tracked_temporary_file,
+            ),
+        ):
+            transport._relay_remote_host_context_command(
+                (
+                    sys.executable,
+                    "-I",
+                    "-B",
+                    "-S",
+                    "-c",
+                    "import sys; sys.stdout.buffer.write(b'raw-remote')",
+                ),
+                max_output_bytes=1024,
+                publisher=lambda output: captured.append(output.read()),
+            )
+
+        self.assertEqual(captured, [b"raw-remote"])
+        self.assertEqual(len(factory_directories), 1)
+        factory_directory, factory_mode, factory_uid = factory_directories[0]
+        self.assertEqual(factory_directory.parent, spool_root)
+        self.assertTrue(factory_directory.name.startswith("output-"))
+        self.assertFalse(factory_directory.is_relative_to(source_root))
+        self.assertEqual((factory_mode, factory_uid), (0o700, os.getuid()))
+        self.assertEqual(
+            source_inventory,
+            [
+                (path.relative_to(source_root).as_posix(), path.read_bytes())
+                for path in source_root.rglob("*")
+                if path.is_file()
+            ],
+        )
+        self.assertEqual(list(spool_root.iterdir()), [])
 
     def test_remote_helper_timeout_closes_detached_inherited_stdout(self) -> None:
         helper = self.root / "remote-helper-with-detached-writer.py"

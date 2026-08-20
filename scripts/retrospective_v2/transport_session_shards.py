@@ -14,9 +14,9 @@ import os
 import pathlib
 import sys
 import tempfile
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
 
-from . import safe_io
+from . import safe_io, temporary_paths
 from .contracts import (
     MAX_JSON_INTEGER,
     SESSION_SHARDS_PREFIX_COMMITMENT_DOMAIN,
@@ -607,6 +607,7 @@ def _session_shards_frozen_prefix_commitment(
     return "sha256:" + hasher.hexdigest()
 
 
+@contextlib.contextmanager
 def _spool_verified_session_shards_range(
     handle: Any,
     *,
@@ -615,71 +616,82 @@ def _spool_verified_session_shards_range(
     records_byte_end: int,
     expected_record_start: int,
     expected_prefix_commitment: str,
-) -> Any:
-    storage = tempfile.TemporaryFile(mode="w+b")
-    try:
-        safe_io.harden_created_owner_only_file_descriptor(
-            storage.fileno(),
-            pathlib.Path("<session-shards-verified-spool>"),
-            single_link=False,
-        )
-        handle.seek(0)
-        byte_offset = 0
-        record_index = 0
-        prefix_hasher = _session_shards_prefix_hasher()
-        observed_record_start: int | None = None
-        while byte_offset < frozen_byte_end:
-            if byte_offset == records_byte_start:
-                observed_record_start = record_index
-            total_bytes = 0
-            final_segment = b""
-            while byte_offset + total_bytes < frozen_byte_end:
-                remaining = frozen_byte_end - byte_offset - total_bytes
-                segment = handle.readline(
-                    min(SESSION_SHARDS_RECORD_SCAN_CHUNK_BYTES, remaining)
-                )
-                if not segment:
-                    raise ValueError(
-                        "rollout ended before the frozen prefix was verified"
-                    )
-                segment_start = byte_offset + total_bytes
-                segment_end = segment_start + len(segment)
-                spool_start = max(segment_start, records_byte_start)
-                spool_end = min(segment_end, records_byte_end)
-                if spool_start < spool_end:
-                    storage.write(
-                        segment[spool_start - segment_start : spool_end - segment_start]
-                    )
-                prefix_hasher.update(segment)
-                total_bytes += len(segment)
-                final_segment = segment
-                if segment.endswith(b"\n"):
-                    break
-            if (
-                not final_segment.endswith(b"\n")
-                and byte_offset + total_bytes < frozen_byte_end
-            ):
-                raise ValueError("frozen byte end is inside a JSONL record")
-            byte_offset += total_bytes
-            record_index += 1
-        if byte_offset != frozen_byte_end:
-            raise ValueError("frozen session-shards prefix did not conserve bytes")
-        if records_byte_start == frozen_byte_end:
-            observed_record_start = record_index
-        if observed_record_start != expected_record_start:
-            raise ValueError(
-                "records cursor does not match the frozen JSONL record boundary"
+) -> Iterator[Any]:
+    with temporary_paths.owner_only_temporary_directory(
+        root=temporary_paths.SESSION_SHARDS_SPOOL_TEMP_ROOT,
+        prefix="verified-",
+    ) as spool_directory:
+        spool_directory.revalidate()
+        storage = tempfile.TemporaryFile(mode="w+b", dir=spool_directory.path)
+        try:
+            spool_directory.revalidate()
+            safe_io.harden_created_owner_only_file_descriptor(
+                storage.fileno(),
+                pathlib.Path("<session-shards-verified-spool>"),
+                single_link=False,
             )
-        if "sha256:" + prefix_hasher.hexdigest() != expected_prefix_commitment:
-            raise ValueError("frozen rollout prefix commitment mismatch")
-        if storage.tell() != records_byte_end - records_byte_start:
-            raise RuntimeError("session-shards verified range spool lost source bytes")
-        storage.flush()
-        storage.seek(0)
-        return storage
-    except BaseException:
-        storage.close()
-        raise
+            handle.seek(0)
+            byte_offset = 0
+            record_index = 0
+            prefix_hasher = _session_shards_prefix_hasher()
+            observed_record_start: int | None = None
+            while byte_offset < frozen_byte_end:
+                if byte_offset == records_byte_start:
+                    observed_record_start = record_index
+                total_bytes = 0
+                final_segment = b""
+                while byte_offset + total_bytes < frozen_byte_end:
+                    remaining = frozen_byte_end - byte_offset - total_bytes
+                    segment = handle.readline(
+                        min(SESSION_SHARDS_RECORD_SCAN_CHUNK_BYTES, remaining)
+                    )
+                    if not segment:
+                        raise ValueError(
+                            "rollout ended before the frozen prefix was verified"
+                        )
+                    segment_start = byte_offset + total_bytes
+                    segment_end = segment_start + len(segment)
+                    spool_start = max(segment_start, records_byte_start)
+                    spool_end = min(segment_end, records_byte_end)
+                    if spool_start < spool_end:
+                        storage.write(
+                            segment[
+                                spool_start - segment_start : spool_end - segment_start
+                            ]
+                        )
+                    prefix_hasher.update(segment)
+                    total_bytes += len(segment)
+                    final_segment = segment
+                    if segment.endswith(b"\n"):
+                        break
+                if (
+                    not final_segment.endswith(b"\n")
+                    and byte_offset + total_bytes < frozen_byte_end
+                ):
+                    raise ValueError("frozen byte end is inside a JSONL record")
+                byte_offset += total_bytes
+                record_index += 1
+            if byte_offset != frozen_byte_end:
+                raise ValueError("frozen session-shards prefix did not conserve bytes")
+            if records_byte_start == frozen_byte_end:
+                observed_record_start = record_index
+            if observed_record_start != expected_record_start:
+                raise ValueError(
+                    "records cursor does not match the frozen JSONL record boundary"
+                )
+            if "sha256:" + prefix_hasher.hexdigest() != expected_prefix_commitment:
+                raise ValueError("frozen rollout prefix commitment mismatch")
+            if storage.tell() != records_byte_end - records_byte_start:
+                raise RuntimeError(
+                    "session-shards verified range spool lost source bytes"
+                )
+            storage.flush()
+            storage.seek(0)
+            spool_directory.revalidate()
+            yield storage
+            spool_directory.revalidate()
+        finally:
+            storage.close()
 
 
 def _iter_session_shard_records(
@@ -691,21 +703,52 @@ def _iter_session_shard_records(
     record_processing_budget_bytes: int,
     coordinate_offset: int = 0,
 ) -> Iterable[SessionShardRecord]:
+    with temporary_paths.owner_only_temporary_directory(
+        root=temporary_paths.SESSION_SHARDS_SPOOL_TEMP_ROOT,
+        prefix="records-",
+    ) as spool_directory:
+        spool_directory.revalidate()
+        yield from _iter_session_shard_records_in_directory(
+            handle,
+            byte_start=byte_start,
+            byte_end=byte_end,
+            record_start=record_start,
+            record_processing_budget_bytes=record_processing_budget_bytes,
+            coordinate_offset=coordinate_offset,
+            spool_directory=spool_directory,
+        )
+        spool_directory.revalidate()
+
+
+def _iter_session_shard_records_in_directory(
+    handle: Any,
+    *,
+    byte_start: int,
+    byte_end: int,
+    record_start: int,
+    record_processing_budget_bytes: int,
+    coordinate_offset: int,
+    spool_directory: temporary_paths.BoundTemporaryDirectory,
+) -> Iterable[SessionShardRecord]:
     handle.seek(byte_start)
     byte_offset = byte_start
     record_index = record_start
     while byte_offset < byte_end:
+        spool_directory.revalidate()
         storage: Any | None = tempfile.SpooledTemporaryFile(
             max_size=SESSION_SHARDS_RECORD_SPOOL_MEMORY_BYTES,
             mode="w+b",
+            dir=spool_directory.path,
         )
         try:
             storage.rollover()
+            spool_directory.revalidate()
             safe_io.harden_created_owner_only_file_descriptor(
                 storage.fileno(),
                 pathlib.Path("<session-shards-record-spool>"),
                 single_link=False,
             )
+            spool_directory.revalidate()
             record_hasher = hashlib.sha256()
             total_bytes = 0
             over_processing_budget = False
@@ -792,6 +835,7 @@ def _iter_session_shard_records(
         finally:
             if storage is not None:
                 storage.close()
+            spool_directory.revalidate()
 
     if byte_offset != byte_end:
         raise ValueError("requested byte range did not end on a JSONL record boundary")
@@ -1114,15 +1158,16 @@ def _iter_local_session_shard_frames(
             )
             record_start = int(cursor_value["next_record_index"])
             frozen_prefix_commitment = str(cursor_value["prefix_commitment"])
-            verified_storage = _spool_verified_session_shards_range(
-                handle,
-                frozen_byte_end=frozen_byte_end,
-                records_byte_start=byte_start,
-                records_byte_end=byte_end,
-                expected_record_start=record_start,
-                expected_prefix_commitment=frozen_prefix_commitment,
+            verified_storage = cleanup.enter_context(
+                _spool_verified_session_shards_range(
+                    handle,
+                    frozen_byte_end=frozen_byte_end,
+                    records_byte_start=byte_start,
+                    records_byte_end=byte_end,
+                    expected_record_start=record_start,
+                    expected_prefix_commitment=frozen_prefix_commitment,
+                )
             )
-            cleanup.callback(verified_storage.close)
             final_stat = os.fstat(handle.fileno())
             if (
                 source_identity_reader(final_stat) != source_identity

@@ -457,6 +457,129 @@ class SessionShardsLocalTests(unittest.TestCase):
             lines[0],
         )
 
+    def test_session_shards_spools_ignore_poisoned_temporary_environment(
+        self,
+    ) -> None:
+        data = b'{"n":1}\n{"n":2}\n'
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_root = root / ".codex"
+            rollout = write_rollout(codex_root, data)
+            spool_root = root / "session-shards-spool-root"
+            temporary_file_directories: list[tuple[Path, int, int]] = []
+            spooled_file_directories: list[tuple[Path, int, int]] = []
+            real_temporary_file = tempfile.TemporaryFile
+            real_spooled_temporary_file = tempfile.SpooledTemporaryFile
+
+            def observe_factory_directory(
+                arguments: dict[str, object],
+                observations: list[tuple[Path, int, int]],
+            ) -> None:
+                directory = Path(arguments["dir"])
+                metadata = directory.stat()
+                observations.append(
+                    (directory, stat.S_IMODE(metadata.st_mode), metadata.st_uid)
+                )
+
+            def tracked_temporary_file(*args, **kwargs):
+                observe_factory_directory(kwargs, temporary_file_directories)
+                return real_temporary_file(*args, **kwargs)
+
+            def tracked_spooled_temporary_file(*args, **kwargs):
+                observe_factory_directory(kwargs, spooled_file_directories)
+                return real_spooled_temporary_file(*args, **kwargs)
+
+            before = [
+                (
+                    path.relative_to(codex_root).as_posix(),
+                    path.is_dir(),
+                    None if path.is_dir() else path.read_bytes(),
+                )
+                for path in sorted(codex_root.rglob("*"))
+            ]
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "TEMP": str(codex_root),
+                        "TMP": str(codex_root),
+                        "TMPDIR": str(codex_root),
+                    },
+                ),
+                mock.patch.object(tempfile, "tempdir", str(codex_root)),
+                mock.patch.object(
+                    SHARDS_MODULE.temporary_paths,
+                    "SESSION_SHARDS_SPOOL_TEMP_ROOT",
+                    spool_root,
+                ),
+                mock.patch.object(
+                    SHARDS_MODULE.temporary_paths,
+                    "local_codex_root",
+                    return_value=codex_root,
+                ),
+                mock.patch.object(
+                    SHARDS_MODULE.tempfile,
+                    "TemporaryFile",
+                    side_effect=tracked_temporary_file,
+                ),
+                mock.patch.object(
+                    SHARDS_MODULE.tempfile,
+                    "SpooledTemporaryFile",
+                    side_effect=tracked_spooled_temporary_file,
+                ),
+            ):
+                descriptor_rc, descriptors, descriptor_error = run_local(
+                    codex_root,
+                    command_args(rollout, shard_bytes=len(b'{"n":1}\n')),
+                )
+                records_rc, records, records_error = run_local(
+                    codex_root,
+                    records_command_args(rollout, descriptors),
+                )
+            after = [
+                (
+                    path.relative_to(codex_root).as_posix(),
+                    path.is_dir(),
+                    None if path.is_dir() else path.read_bytes(),
+                )
+                for path in sorted(codex_root.rglob("*"))
+            ]
+            spool_entries = list(spool_root.iterdir())
+
+        self.assertEqual((descriptor_rc, descriptor_error), (0, ""))
+        self.assertEqual((records_rc, records_error), (0, ""))
+        self.assertGreaterEqual(len(temporary_file_directories), 2)
+        self.assertGreaterEqual(len(spooled_file_directories), 1)
+        self.assertTrue(
+            any(
+                path.name.startswith("verified-")
+                for path, _mode, _uid in temporary_file_directories
+            )
+        )
+        self.assertTrue(
+            all(
+                path.name.startswith("records-")
+                for path, _mode, _uid in spooled_file_directories
+            )
+        )
+        for path, mode, uid in (
+            *temporary_file_directories,
+            *spooled_file_directories,
+        ):
+            self.assertEqual(path.parent, spool_root)
+            self.assertFalse(path.is_relative_to(codex_root))
+            self.assertEqual((mode, uid), (0o700, os.getuid()))
+        self.assertEqual(
+            b"".join(
+                base64.b64decode(frame["record_b64"])
+                for frame in records
+                if frame["kind"] == "record"
+            ),
+            data,
+        )
+        self.assertEqual(before, after)
+        self.assertEqual(spool_entries, [])
+
     def test_descriptor_pagination_has_linear_read_budget(self) -> None:
         lines = [f'{{"n":"{index:03d}"}}\n'.encode() for index in range(80)]
         data = b"".join(lines)

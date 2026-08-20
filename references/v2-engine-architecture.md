@@ -187,8 +187,9 @@ alongside an active primary is carried through bounded exception wrappers and
 becomes a non-retryable machine-visible CLI result rather than an invisible note.
 Availability, readiness, canary, and remote-gap fallbacks must rethrow that
 security failure instead of converting it to an ordinary false or gap result.
-The publisher canary, legacy remote-helper snapshot, and publication Git index
-use separate fixed owner-only roots beneath
+The publisher canary, legacy remote-helper snapshot, remote transport output
+spool, session-shards verification/record spools, and publication Git index use
+separate fixed owner-only roots beneath
 `/tmp/codex-session-retrospective-<uid>`. A shared temporary-directory authority
 rejects both lexical and resolved overlap with the canonical local Codex source,
 opens the fixed root through the secure directory-chain policy, creates the
@@ -203,9 +204,10 @@ syscall window; that writer remains part of the host trust boundary.
 
 The canary child receives `TEMP`, `TMP`, and `TMPDIR` bound to the exact
 descriptor-validated disposable workspace through the otherwise closed
-subprocess environment. The remote snapshot and publication index likewise
-ignore ambient temporary-directory selection. Host variables therefore cannot
-redirect any of these writes into session or archive sources. The secure-I/O
+subprocess environment. The remote snapshot, transport spools, and publication
+index likewise ignore ambient temporary-directory selection. Host variables
+therefore cannot redirect any of these writes into session or archive sources.
+The secure-I/O
 capability probe that can run before temporary-root creation also uses the fixed
 `/tmp` parent rather than ambient temporary-directory selection.
 

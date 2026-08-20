@@ -18,7 +18,7 @@ import time
 from typing import Any, Callable, Mapping, Sequence
 
 try:
-    from . import process_lifecycle, safe_io
+    from . import process_lifecycle, safe_io, temporary_paths
     from .transport_contracts import (
         RemoteTransportCapabilityError,
         TransportValidationError,
@@ -39,6 +39,7 @@ try:
 except (ImportError, ModuleNotFoundError):
     import process_lifecycle  # type: ignore[no-redef]
     import safe_io  # type: ignore[no-redef]
+    import temporary_paths  # type: ignore[no-redef]
     from transport_contracts import (  # type: ignore[no-redef]
         RemoteTransportCapabilityError,
         TransportValidationError,
@@ -387,7 +388,17 @@ def _relay_remote_host_context_command(
         os.set_blocking(process.stdout.fileno(), False)
         selector.register(process.stdout, selectors.EVENT_READ)
         deadline = time.monotonic() + REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS
-        with tempfile.TemporaryFile(mode="w+b") as output:
+        with (
+            temporary_paths.owner_only_temporary_directory(
+                root=temporary_paths.REMOTE_TRANSPORT_SPOOL_TEMP_ROOT,
+                prefix="output-",
+            ) as output_directory,
+            tempfile.TemporaryFile(
+                mode="w+b",
+                dir=output_directory.path,
+            ) as output,
+        ):
+            output_directory.revalidate()
             try:
                 safe_io.harden_created_owner_only_file_descriptor(
                     output.fileno(),
@@ -481,6 +492,7 @@ def _relay_remote_host_context_command(
                 raise RuntimeError(
                     "remote-host-context transport emitted an invalid protocol stream"
                 ) from exc
+            output_directory.revalidate()
     except BaseException as exc:
         active_error = exc
         raise
