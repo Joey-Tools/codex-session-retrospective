@@ -69,7 +69,10 @@ from .orchestrator_support import (
     _normalize_source_kinds,
     _normalize_timestamp,
     _parse_timestamp,
-    _require_canonical_production_binding_paths,
+)
+from .orchestrator_startup_authority import (
+    load_production_marker_for_publisher,
+    require_canonical_production_binding_paths,
 )
 
 _RAW_CLEANUP_CONTRACTS = cleanup_inventory.RAW_CLEANUP_CONTRACTS
@@ -125,6 +128,23 @@ class RunLifecycleOperations(OrchestratorComponent):
                 label="GPG",
             )
             gpg_authority_sha256 = executable_authority.authority_digest(gpg_authority)
+            if not shadow:
+                if marker_path is None:
+                    raise InvalidInputError(
+                        "production start requires the completed cutover marker"
+                    )
+                load_production_marker_for_publisher(
+                    marker_path,
+                    identity=self.identity,
+                    canonical_hosts=canonical_hosts,
+                    history_repo=history_path,
+                    target_ref=history_target_ref,
+                    configuration_root=configuration_root,
+                    configuration_ref=configuration_ref,
+                    model_era=model_era,
+                    policy_era=policy_era,
+                    gpg_authority=gpg_authority,
+                )
             with executable_authority.executable_invocation(gpg_authority):
                 durable_history = authority.load_durable_history(
                     history_path,
@@ -144,22 +164,6 @@ class RunLifecycleOperations(OrchestratorComponent):
                 elif not shadow:
                     raise InvalidInputError(
                         "production start requires an initialized provider cache"
-                    )
-                if not shadow:
-                    if marker_path is None:
-                        raise InvalidInputError(
-                            "production start requires the completed cutover marker"
-                        )
-                    authority.load_production_marker(
-                        marker_path,
-                        identity=self.identity,
-                        canonical_hosts=canonical_hosts,
-                        history_repo=history_path,
-                        target_ref=history_target_ref,
-                        configuration_root=configuration_root,
-                        configuration_ref=configuration_ref,
-                        model_era=model_era,
-                        policy_era=policy_era,
                     )
         except (
             authority.AuthorityError,
@@ -216,7 +220,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             raise InvalidInputError("allow_partial must be a boolean")
         if not isinstance(shadow, bool):
             raise InvalidInputError("shadow must be a boolean")
-        _require_canonical_production_binding_paths(
+        require_canonical_production_binding_paths(
             shadow=shadow,
             provider_state=provider_state,
             production_marker=production_marker,

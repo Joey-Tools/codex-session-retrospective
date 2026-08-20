@@ -265,6 +265,7 @@ ORCHESTRATOR_FOUNDATION_MODULES = {
     "orchestrator_core.py",
     "orchestrator_execution_contract.py",
     "orchestrator_protocols.py",
+    "orchestrator_startup_authority.py",
     "orchestrator_support.py",
     "orchestrator_transport.py",
     *RUN_STATE_AUTHORITY_MODULES,
@@ -388,6 +389,7 @@ BOUNDED_MODULE_LINES = {
     "orchestrator_scheduler.py": 1_150,
     "orchestrator_source.py": 2_150,
     "orchestrator_source_segments.py": 150,
+    "orchestrator_startup_authority.py": 175,
     "agent_capacity.py": 100,
     "agent_checkpoint_capacity.py": 130,
     "agent_claim_artifacts.py": 100,
@@ -1070,7 +1072,7 @@ spec.loader.exec_module(module)
                 len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
                 for name in ORCHESTRATOR_FOUNDATION_MODULES
             ),
-            3_650,
+            3_750,
         )
         run_state_authority_inventory = {
             name: len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
@@ -1264,7 +1266,7 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_565, branch_total)
+        self.assertEqual(9_573, branch_total)
         self.assertLessEqual(branch_total, 9_575)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)

@@ -2029,21 +2029,31 @@ class DurablePublicationTests(unittest.TestCase):
                 installed_commits=(self.base_head,),
             )
 
-    def build_automation_cutover_record(self) -> dict[str, object]:
+    def build_automation_cutover_record(
+        self,
+        *,
+        publisher_gpg_program: str | None = None,
+        fixture_name: str = "default",
+    ) -> dict[str, object]:
+        selected_gpg_program = publisher_gpg_program or self.gpg
+        suffix = "" if fixture_name == "default" else f"-{fixture_name}"
         automation_root = self.root / ".codex" / "automations"
-        automation_root.mkdir(mode=0o700, parents=True)
+        automation_root.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(automation_root, 0o700)
         snapshot = authority.capture_automation_cutover_snapshot(
-            self.root / "automation-cutover-pre-update-v2.json",
+            self.root / f"automation-cutover-pre-update-v2{suffix}.json",
             identity=self.identity,
             automation_root=automation_root,
         )
         installed_cli = authority.installed_v2_cli_path()
         installed_python = authority.installed_runtime_python_path()
+        prior_records = {
+            str(row["automation_id"]): row for row in snapshot["automation_records"]
+        }
         operations: list[dict[str, object]] = []
         for automation_id, mode in authority.STABLE_AUTOMATION_MODES.items():
             record_dir = automation_root / automation_id
-            record_dir.mkdir(parents=True)
+            record_dir.mkdir(parents=True, exist_ok=True)
             schedule = (
                 "FREQ=DAILY;BYHOUR=3" if mode == "daily" else "FREQ=WEEKLY;BYDAY=MO"
             )
@@ -2051,7 +2061,7 @@ class DurablePublicationTests(unittest.TestCase):
                 cli_path=installed_cli,
                 python_path=installed_python,
                 expected_mode=mode,
-                publisher_gpg_program="/usr/bin/true",
+                publisher_gpg_program=selected_gpg_program,
                 provider_state_path=authority.DEFAULT_PROVIDER_STATE,
                 production_marker_path=authority.DEFAULT_PRODUCTION_MARKER,
             )
@@ -2070,11 +2080,14 @@ class DurablePublicationTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            previous = prior_records[automation_id]
             operations.append(
                 {
                     "automation_id": automation_id,
-                    "operation": "register",
-                    "previous_record_sha256": None,
+                    "operation": (
+                        "register" if previous["state"] == "absent" else "update"
+                    ),
+                    "previous_record_sha256": previous["record_sha256"],
                     "record_sha256": hashlib.sha256(
                         (record_dir / "automation.toml").read_bytes()
                     ).hexdigest(),
@@ -2089,13 +2102,39 @@ class DurablePublicationTests(unittest.TestCase):
             "schema": authority.AUTOMATION_UPDATE_RESULT_SCHEMA,
         }
         return authority.issue_automation_cutover_record(
-            self.root / "automation-cutover-v2.json",
+            self.root / f"automation-cutover-v2{suffix}.json",
             identity=self.identity,
             capability_result=capability_result,
             pre_update_snapshot=snapshot,
             installed_commit=self.base_head,
-            publisher_gpg_program="/usr/bin/true",
+            publisher_gpg_program=selected_gpg_program,
             automation_root=automation_root,
+        )
+
+    def issue_production_marker_for_publisher(
+        self,
+        publisher_gpg_program: str,
+        *,
+        fixture_name: str,
+    ) -> dict[str, object]:
+        cutover_record = self.build_automation_cutover_record(
+            publisher_gpg_program=publisher_gpg_program,
+            fixture_name=fixture_name,
+        )
+        return authority.issue_production_marker(
+            self.marker_path,
+            identity=self.identity,
+            canonical_hosts=TEST_HOSTS,
+            history_repo=self.repo,
+            target_ref=TARGET_REF,
+            configuration_root=self.configuration_root,
+            configuration_ref=self.configuration_ref,
+            model_era=self.model_era,
+            policy_era=self.policy_era,
+            calibration_receipt=self.calibration_receipt,
+            accepted_shadow_evidence=self.shadow_evidence,
+            automation_cutover_record=cutover_record,
+            installed_commits=(self.base_head,),
         )
 
     def head(self) -> str:
@@ -2413,6 +2452,17 @@ class DurablePublicationTests(unittest.TestCase):
         export_now: dt.datetime | None = None,
         export_retention_deadline: str | None = None,
     ) -> tuple[RetrospectiveOrchestrator, Path]:
+        selected_gpg_program = publisher_gpg_program or self.gpg
+        if (
+            not shadow
+            and publisher_gpg_program is not None
+            and os.path.realpath(selected_gpg_program, strict=True)
+            != os.path.realpath(self.gpg, strict=True)
+        ):
+            self.marker = self.issue_production_marker_for_publisher(
+                selected_gpg_program,
+                fixture_name=name,
+            )
         coordinator = RetrospectiveOrchestrator(
             self.root / "runs" / name,
             clock=lambda: "2026-07-15T00:00:00Z",
@@ -2435,7 +2485,7 @@ class DurablePublicationTests(unittest.TestCase):
             provider_state=self.provider_state,
             production_marker=self.marker_path,
             publisher_fingerprint=self.fingerprint,
-            publisher_gpg_program=publisher_gpg_program or self.gpg,
+            publisher_gpg_program=selected_gpg_program,
             publisher_gnupg_home=self.gnupg_home,
         )
         if holdout_host is not None:

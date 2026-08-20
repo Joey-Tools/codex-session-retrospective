@@ -854,7 +854,11 @@ class OrchestratorTests(unittest.TestCase):
             ),
             mock.patch(
                 "retrospective_v2.orchestrator.authority.load_production_marker",
-                return_value={"authentication_tag": "test"},
+                return_value={
+                    "automation_cutover_record": {
+                        "publisher_gpg_program": TEST_PUBLISHER_GPG,
+                    }
+                },
             ),
             mock.patch(
                 "retrospective_v2.orchestrator.authority.history_repository_binding",
@@ -1853,6 +1857,85 @@ class OrchestratorTests(unittest.TestCase):
                             provider_state=provider,
                             production_marker=marker,
                         )
+
+    def test_production_marker_authorizes_gpg_before_first_execution(self) -> None:
+        alternate_gpg = "/usr/bin/false"
+        publisher_probe = mock.Mock(
+            return_value={"fingerprint": PUBLISHER_FINGERPRINT, "ready": True}
+        )
+        with (
+            mock.patch(
+                "retrospective_v2.orchestrator.authority.load_durable_history"
+            ) as load_history,
+            mock.patch.object(
+                executable_authority,
+                "executable_invocation",
+            ) as executable_invocation,
+        ):
+            readiness = doctor(
+                identity_path=self.identity_path,
+                require_existing_identity=True,
+                provenance=execution_provenance(),
+                history_repo=self.root / "history",
+                history_target_ref="refs/heads/main",
+                publisher_gpg_program=alternate_gpg,
+                provider_state=self.root / "provider",
+                production_marker=self.root / "production-marker.json",
+                publisher_probe=publisher_probe,
+                host_inventory_provider=authenticated_host_inventory,
+            )
+        self.assertFalse(readiness["ok"])
+        self.assertEqual(
+            "ProductionMarkerError",
+            readiness["checks"]["production_marker_binding"]["detail"],
+            readiness,
+        )
+        publisher_probe.assert_not_called()
+        load_history.assert_not_called()
+        executable_invocation.assert_not_called()
+
+        start_authority = self.start_authority()
+        start_authority["publisher_gpg_program"] = alternate_gpg
+        with (
+            mock.patch(
+                "retrospective_v2.orchestrator.authority.load_durable_history"
+            ) as load_history,
+            mock.patch.object(
+                executable_authority,
+                "executable_invocation",
+            ) as executable_invocation,
+        ):
+            with self.assertRaisesRegex(
+                RunConflictError,
+                "publisher authority validation failed",
+            ):
+                self.coordinator("unauthorized-production-gpg").start(
+                    mode=RunMode.DAILY,
+                    start=WINDOW_START,
+                    end=DAILY_END,
+                    **start_authority,
+                )
+        load_history.assert_not_called()
+        executable_invocation.assert_not_called()
+
+        alias = self.root / "authorized-gpg-alias"
+        alias.symlink_to(TEST_PUBLISHER_GPG)
+        accepted = doctor(
+            identity_path=self.identity_path,
+            require_existing_identity=True,
+            provenance=execution_provenance(),
+            history_repo=self.root / "history",
+            history_target_ref="refs/heads/main",
+            publisher_gpg_program=alias,
+            provider_state=self.root / "provider",
+            production_marker=self.root / "production-marker.json",
+            publisher_probe=lambda: {
+                "fingerprint": PUBLISHER_FINGERPRINT,
+                "ready": True,
+            },
+            host_inventory_provider=authenticated_host_inventory,
+        )
+        self.assertTrue(accepted["ok"], accepted)
 
     def test_doctor_and_start_reject_unauthenticated_python_runtime(self) -> None:
         error = transport.TransportValidationError("unsafe coordinator Python")

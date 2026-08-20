@@ -114,7 +114,11 @@ class CliContractTests(unittest.TestCase):
             ),
             mock.patch(
                 "retrospective_v2.orchestrator.authority.load_production_marker",
-                return_value={"authentication_tag": "test"},
+                return_value={
+                    "automation_cutover_record": {
+                        "publisher_gpg_program": TEST_PUBLISHER_GPG,
+                    }
+                },
             ),
             mock.patch.object(
                 authority,

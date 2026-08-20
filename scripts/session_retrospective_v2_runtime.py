@@ -136,6 +136,7 @@ else:
         "orchestrator_scheduler.py",
         "orchestrator_source.py",
         "orchestrator_source_segments.py",
+        "orchestrator_startup_authority.py",
         "orchestrator_state.py",
         "orchestrator_support.py",
         "orchestrator_synthesis.py",

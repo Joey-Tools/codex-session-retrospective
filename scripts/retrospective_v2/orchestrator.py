@@ -62,7 +62,6 @@ from .orchestrator_support import (
     _checkpoint_key_id,
     _normalize_hosts,
     _normalize_source_kinds,
-    _require_canonical_production_binding_paths,
     _require_current_execution_contract,
     _transport_accounting_bytes,
     consume_session_shard_frames,
@@ -76,6 +75,11 @@ from .orchestrator_components import (
 )
 from .orchestrator_context import Clock, OrchestratorContext
 from .orchestrator_projection import StateProjectionOperations
+from .orchestrator_startup_authority import (
+    load_production_marker_for_publisher,
+    publisher_readiness_report,
+    require_canonical_production_binding_paths,
+)
 from .transport_host_inventory import AuthenticatedHostInventory
 
 
@@ -103,7 +107,7 @@ def doctor(
 ) -> dict[str, Any]:
     """Run actual capability probes and return a safe readiness report."""
 
-    _require_canonical_production_binding_paths(
+    require_canonical_production_binding_paths(
         shadow=shadow,
         provider_state=provider_state,
         production_marker=production_marker,
@@ -148,6 +152,7 @@ def doctor(
         record("fixed_identity", False, type(error).__name__)
     publisher_program: str | None = None
     publisher_authority_sha256: str | None = None
+    gpg_authority: executable_authority.ExecutableAuthority | None = None
     try:
         if publisher_gpg_program is None:
             raise executable_authority.ExecutableAuthorityError(
@@ -161,48 +166,13 @@ def doctor(
         publisher_authority_sha256 = executable_authority.authority_digest(
             gpg_authority
         )
-        with executable_authority.executable_invocation(gpg_authority):
-            publisher = dict(
-                publisher_readiness(
-                    gnupg_home=publisher_gnupg_home,
-                    fingerprint=publisher_fingerprint,
-                    gpg_program=publisher_program,
-                )
-                if publisher_probe is None
-                else publisher_probe()
-            )
-            canary_ready = (
-                publisher_sign_verify_canary(
-                    gnupg_home=publisher_gnupg_home,
-                    fingerprint=publisher_fingerprint,
-                    gpg_program=publisher_program,
-                )
-                if publisher_canary is None and publisher_probe is None
-                else publisher.get("ready") is True
-                if publisher_canary is None
-                else publisher_canary()
-            )
     except (
         OSError,
         TypeError,
         ValueError,
         executable_authority.ExecutableAuthorityError,
     ):
-        publisher = {"fingerprint": None, "ready": False}
-        canary_ready = False
-    publisher_safe = {
-        "fingerprint": publisher_fingerprint,
-        "gpg_authority_sha256": publisher_authority_sha256,
-        "gpg_program": publisher_program,
-        "ready": publisher.get("ready") is True
-        and publisher.get("fingerprint") == publisher_fingerprint,
-    }
-    publisher_safe["ready"] = publisher_safe["ready"] and canary_ready
-    record(
-        "publisher_identity",
-        publisher_safe["ready"],
-        publisher_fingerprint,
-    )
+        pass
     normalized_hosts: tuple[str, ...] | None = None
     canonical_hosts: tuple[str, ...] | None = None
     authenticated_inventory: AuthenticatedHostInventory | None = None
@@ -292,6 +262,67 @@ def doctor(
     except (OSError, source_transport.TransportValidationError) as error:
         record("remote_host_context_transport", False, type(error).__name__)
 
+    production_marker_ready = shadow
+    if shadow:
+        record("production_marker_binding", True, "not_applicable_for_shadow")
+    elif (
+        resolved_identity is None
+        or normalized_provenance is None
+        or history_repo is None
+        or not isinstance(history_target_ref, str)
+        or not history_target_ref
+        or production_marker is None
+        or canonical_hosts is None
+    ):
+        record(
+            "production_marker_binding",
+            False,
+            "production marker and complete configuration are required",
+        )
+    else:
+        marker_state = {"provenance": normalized_provenance}
+        configuration_ref = str(
+            resolved_identity.derive_ref(
+                RefType.CONFIGURATION,
+                {"parts": [normalized_provenance["configuration_root"]]},
+            )
+        )
+        try:
+            load_production_marker_for_publisher(
+                production_marker,
+                identity=resolved_identity,
+                canonical_hosts=canonical_hosts,
+                history_repo=history_repo,
+                target_ref=history_target_ref,
+                configuration_root=normalized_provenance["configuration_root"],
+                configuration_ref=configuration_ref,
+                model_era=StateProjectionOperations._model_era(marker_state),
+                policy_era=StateProjectionOperations._policy_token(
+                    marker_state,
+                    "policy",
+                    "source_policy_v2",
+                ),
+                gpg_authority=gpg_authority,
+            )
+            production_marker_ready = True
+            record("production_marker_binding", True, "matches configuration")
+        except (OSError, authority.AuthorityError) as error:
+            record("production_marker_binding", False, type(error).__name__)
+
+    publisher_safe = publisher_readiness_report(
+        gpg_authority=gpg_authority if production_marker_ready else None,
+        authority_sha256=publisher_authority_sha256,
+        fingerprint=publisher_fingerprint,
+        gnupg_home=publisher_gnupg_home,
+        publisher_probe=publisher_probe,
+        publisher_canary=publisher_canary,
+    )
+    record(
+        "publisher_identity",
+        publisher_safe["ready"],
+        publisher_fingerprint,
+    )
+
     durable_history: authority.DurableHistoryState | None = None
     history_binding: str | None = None
     if (
@@ -301,6 +332,7 @@ def doctor(
         or not history_target_ref
         or publisher_program is None
         or publisher_authority_sha256 is None
+        or not production_marker_ready
     ):
         record(
             "durable_history_contract",
@@ -329,7 +361,6 @@ def doctor(
 
     if shadow:
         record("provider_binding", True, "not_applicable_for_shadow")
-        record("production_marker_binding", True, "not_applicable_for_shadow")
     elif durable_history is None or resolved_identity is None or provider_state is None:
         record("provider_binding", False, "production provider state is required")
     else:
@@ -343,47 +374,6 @@ def doctor(
         except (OSError, authority.AuthorityError) as error:
             record("provider_binding", False, type(error).__name__)
 
-    if not shadow:
-        if (
-            resolved_identity is None
-            or normalized_provenance is None
-            or history_repo is None
-            or not isinstance(history_target_ref, str)
-            or production_marker is None
-            or canonical_hosts is None
-        ):
-            record(
-                "production_marker_binding",
-                False,
-                "production marker and complete configuration are required",
-            )
-        else:
-            marker_state = {"provenance": normalized_provenance}
-            configuration_ref = str(
-                resolved_identity.derive_ref(
-                    RefType.CONFIGURATION,
-                    {"parts": [normalized_provenance["configuration_root"]]},
-                )
-            )
-            try:
-                authority.load_production_marker(
-                    production_marker,
-                    identity=resolved_identity,
-                    canonical_hosts=canonical_hosts,
-                    history_repo=history_repo,
-                    target_ref=history_target_ref,
-                    configuration_root=normalized_provenance["configuration_root"],
-                    configuration_ref=configuration_ref,
-                    model_era=StateProjectionOperations._model_era(marker_state),
-                    policy_era=StateProjectionOperations._policy_token(
-                        marker_state,
-                        "policy",
-                        "source_policy_v2",
-                    ),
-                )
-                record("production_marker_binding", True, "matches configuration")
-            except (OSError, authority.AuthorityError) as error:
-                record("production_marker_binding", False, type(error).__name__)
     record("checkpoint_contract", True, f"checkpoint format {STATE_SCHEMA_VERSION}")
     if checks:
         raise InvalidInputError(
@@ -536,7 +526,7 @@ def start_run(
     require_existing_identity: bool = False,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    _require_canonical_production_binding_paths(
+    require_canonical_production_binding_paths(
         shadow=kwargs.get("shadow", False),
         provider_state=kwargs.get("provider_state"),
         production_marker=kwargs.get("production_marker"),

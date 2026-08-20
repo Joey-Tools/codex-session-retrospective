@@ -2042,6 +2042,43 @@ superseded_by:
   OpenAI Skill validator, project-journal validation, and `git diff --check`.
   One earlier `actionlint` invocation named a nonexistent stale workflow path
   and is non-counting; the exact current workflow checks passed.
+- Signed head `4d7442e0` became stale when the next fresh local Codex processor
+  found one production authority defect: `doctor` and `start` authenticated the
+  cutover marker only after resolving and potentially executing the
+  caller-selected GPG program, and neither path compared that actual executable
+  target with the marker's authenticated `publisher_gpg_program`. The review
+  workspace postvalidated clean, all trusted bundle digests stayed unchanged,
+  and the task root was removed after the terminal finding.
+- Production startup now loads and authenticates the complete marker before
+  publisher readiness, durable-history verification, or any GPG invocation.
+  The new `orchestrator_startup_authority.py` owner compares canonical actual
+  executable targets, permits only harmless aliases to the same target, and
+  rejects a different target before creating run or history state. Publication
+  fixtures now model an authenticated update on the fixed automation paths when
+  a test intentionally selects a different GPG executable.
+- The first 1,831-test attempt under manifest digest
+  `e9a155b650693b0664ef9f73afcbcb0a1a3c73cf6a8a71c22f932b6ff4739944`
+  exposed the stale publication fixture and was interrupted after all four
+  shards reported the same marker-authority error. After that fixture fix, the
+  next attempt under digest
+  `f1f8ae72d9645c22c8edaa636afc80f30d04d28b4999994d22d9b7da30c8a523`
+  exposed two expected `implementation_authority_invalid` failures in shard 3
+  because the generated runtime source manifest did not yet include the new
+  module; the other shards were interrupted. Both groups, a non-PTY focused
+  run without a delivered terminal, and a focused invocation with an incorrect
+  unittest class name are explicitly non-counting.
+- The final Python 3.13 inventory contains 1,831 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `f1f8ae72d9645c22c8edaa636afc80f30d04d28b4999994d22d9b7da30c8a523`.
+  Shard 0 passes 436/436 in 1,630.139 seconds, shard 1 passes 495/495 in
+  1,429.418 seconds, shard 2 passes 483/483 in 1,362.516 seconds, and shard 3
+  passes 417/417 in 1,299.089 seconds. Every runner exits zero with an explicit
+  `OK` terminal, for exact aggregate coverage of 1,831/1,831.
+- The final tree also passes the production GPG authority regressions 10/10,
+  module boundaries 19/19, CI contracts 33/33, bootstrap contracts 12/12,
+  Ruff 0.13.2 lint and formatting, both current workflows under `actionlint`,
+  the generated bootstrap manifest check, the official OpenAI Skill validator,
+  source-tree bytecode exclusion, and `git diff --check`.
 
 ## Follow-up Work
 
