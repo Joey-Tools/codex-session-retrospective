@@ -5,6 +5,7 @@ import ast
 from concurrent.futures import ThreadPoolExecutor
 import datetime as dt
 import hashlib
+import inspect
 import io
 import json
 import os
@@ -914,6 +915,97 @@ class CliContractTests(unittest.TestCase):
             production_marker,
             start_run.call_args.kwargs["production_marker"],
         )
+
+    def test_non_shadow_cli_rejects_copied_production_binding_paths(self) -> None:
+        canonical_provider = self.root / "canonical-provider-state"
+        copied_provider = self.root / "copied-provider-state"
+        canonical_marker = self.root / "canonical-production-marker.json"
+        copied_marker = self.root / "copied-production-marker.json"
+        for provider in (canonical_provider, copied_provider):
+            provider.mkdir(mode=0o700)
+            (provider / "provider-cache-v2.json").write_text(
+                '{"schema":"provider_cache_v2"}\n', encoding="ascii"
+            )
+        for marker in (canonical_marker, copied_marker):
+            marker.write_text('{"schema":"production_marker_v2"}\n', encoding="ascii")
+            os.chmod(marker, 0o600)
+        common = [
+            "--run-config",
+            str(self.run_config),
+            "--history-repo",
+            str(self.history_repo),
+            "--history-target-ref",
+            "refs/heads/main",
+            "--publisher-gpg-program",
+            TEST_PUBLISHER_GPG,
+        ]
+        with (
+            mock.patch.object(authority, "DEFAULT_PROVIDER_STATE", canonical_provider),
+            mock.patch.object(authority, "DEFAULT_PRODUCTION_MARKER", canonical_marker),
+            mock.patch.object(cli.orchestrator_api, "doctor") as doctor,
+            mock.patch.object(cli.orchestrator_api, "start_run") as start_run,
+        ):
+            cases = (
+                ("provider", copied_provider, canonical_marker),
+                ("marker", canonical_provider, copied_marker),
+            )
+            for command, prefix in (
+                ("doctor", ()),
+                (
+                    "start",
+                    (
+                        "--mode",
+                        "daily",
+                        "--start",
+                        WINDOW_START,
+                        "--end",
+                        WINDOW_END,
+                        "--run-dir",
+                        str(self.root / "production-run"),
+                    ),
+                ),
+            ):
+                for label, provider, marker in cases:
+                    with self.subTest(command=command, copied=label):
+                        result = self.parse_dispatch(
+                            command,
+                            *prefix,
+                            *common,
+                            "--provider-state",
+                            str(provider),
+                            "--production-marker",
+                            str(marker),
+                        )
+                        self.assertFalse(result.ok)
+                        self.assertIsNotNone(result.error)
+                        self.assertEqual(
+                            "production_readiness_binding_required",
+                            result.error.code,
+                        )
+        doctor.assert_not_called()
+        start_run.assert_not_called()
+
+    def test_cutover_reference_supplies_every_required_keyword(self) -> None:
+        reference = (ROOT / "references" / "v2-cli.md").read_text(encoding="utf-8")
+        code = reference.split("```python\n", 1)[1].split("\n```", 1)[0]
+        module = ast.parse(code)
+        call = next(
+            node
+            for node in ast.walk(module)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "issue_automation_cutover_record"
+        )
+        supplied = {keyword.arg for keyword in call.keywords if keyword.arg}
+        required = {
+            name
+            for name, parameter in inspect.signature(
+                authority.issue_automation_cutover_record
+            ).parameters.items()
+            if parameter.kind is inspect.Parameter.KEYWORD_ONLY
+            and parameter.default is inspect.Parameter.empty
+        }
+        self.assertEqual(required, supplied)
 
     def test_cutover_record_rejects_ambiguous_modes_and_bounded_rrules(self) -> None:
         automation_root = self.automation_root()

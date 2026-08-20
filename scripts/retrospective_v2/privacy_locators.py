@@ -268,7 +268,8 @@ _PERSONAL_NAME_OR_ID_FIELD_PATTERN_TEXT = (
     r"(?:id|(?:(?:first|full|last|middle)[_ -]+)?name)"
 )
 _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
-    r"(?:dob|date[_ -]+of[_ -]+birth|(?-i:(?:dateOfBirth|DateOfBirth)))"
+    r"(?:dob|date[_ -]+of[_ -]+birth|birth[_ -]?(?:date|day)|"
+    r"(?-i:(?:dateOfBirth|DateOfBirth)))"
 )
 _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"

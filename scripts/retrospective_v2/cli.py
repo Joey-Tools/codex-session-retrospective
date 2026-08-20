@@ -442,6 +442,36 @@ def _command_identity_path(
     return path
 
 
+def _startup_production_binding_paths(
+    args: argparse.Namespace,
+) -> tuple[Optional[Path], Optional[Path]]:
+    provider_state = (
+        None if args.provider_state is None else _absolute_path(args.provider_state)
+    )
+    production_marker = (
+        None
+        if args.production_marker is None
+        else _absolute_path(args.production_marker)
+    )
+    if args.shadow:
+        return provider_state, production_marker
+    expected_provider_state = authority_api.DEFAULT_PROVIDER_STATE.absolute()
+    expected_production_marker = authority_api.DEFAULT_PRODUCTION_MARKER.absolute()
+    if (
+        provider_state != expected_provider_state
+        or production_marker != expected_production_marker
+    ):
+        raise CliContractError(
+            exit_code=ExitCode.INVALID_INPUT,
+            code="production_readiness_binding_required",
+            message=(
+                "production doctor/start requires the fixed provider state and "
+                "production marker paths"
+            ),
+        )
+    return provider_state, production_marker
+
+
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for key, value in pairs:
@@ -640,16 +670,7 @@ def _parse_timestamp(value: str) -> dt.datetime:
 
 def command_doctor(args: argparse.Namespace) -> CommandResult:
     identity_path = _command_identity_path(args, startup=True)
-    if not args.shadow and (
-        args.provider_state is None or args.production_marker is None
-    ):
-        raise CliContractError(
-            exit_code=ExitCode.INVALID_INPUT,
-            code="production_readiness_binding_required",
-            message=(
-                "production doctor requires provider state and production marker bindings"
-            ),
-        )
+    provider_state, production_marker = _startup_production_binding_paths(args)
     provenance = _read_json_object(
         args.run_config,
         max_bytes=MAX_DESCRIPTOR_BYTES,
@@ -663,16 +684,8 @@ def command_doctor(args: argparse.Namespace) -> CommandResult:
             history_repo=_absolute_path(args.history_repo),
             history_target_ref=args.history_target_ref,
             publisher_gpg_program=_absolute_path(args.publisher_gpg_program),
-            provider_state=(
-                None
-                if args.provider_state is None
-                else _absolute_path(args.provider_state)
-            ),
-            production_marker=(
-                None
-                if args.production_marker is None
-                else _absolute_path(args.production_marker)
-            ),
+            provider_state=provider_state,
+            production_marker=production_marker,
         )
     )
     if report.get("ok") is not True:
@@ -836,6 +849,7 @@ def command_start(args: argparse.Namespace) -> CommandResult:
             )
         )
     )
+    provider_state, production_marker = _startup_production_binding_paths(args)
     result = orchestrator_api.start_run(
         _absolute_path(args.run_dir),
         identity_path=identity_path,
@@ -855,14 +869,8 @@ def command_start(args: argparse.Namespace) -> CommandResult:
         history_repo=_absolute_path(args.history_repo),
         history_target_ref=args.history_target_ref,
         publisher_gpg_program=_absolute_path(args.publisher_gpg_program),
-        provider_state=(
-            None if args.provider_state is None else _absolute_path(args.provider_state)
-        ),
-        production_marker=(
-            None
-            if args.production_marker is None
-            else _absolute_path(args.production_marker)
-        ),
+        provider_state=provider_state,
+        production_marker=production_marker,
     )
     response = _mapping_result(result)
     if successor is not None:

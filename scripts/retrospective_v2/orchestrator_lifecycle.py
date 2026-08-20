@@ -69,6 +69,7 @@ from .orchestrator_support import (
     _normalize_source_kinds,
     _normalize_timestamp,
     _parse_timestamp,
+    _require_canonical_production_binding_paths,
 )
 
 _RAW_CLEANUP_CONTRACTS = cleanup_inventory.RAW_CLEANUP_CONTRACTS
@@ -215,6 +216,11 @@ class RunLifecycleOperations(OrchestratorComponent):
             raise InvalidInputError("allow_partial must be a boolean")
         if not isinstance(shadow, bool):
             raise InvalidInputError("shadow must be a boolean")
+        _require_canonical_production_binding_paths(
+            shadow=shadow,
+            provider_state=provider_state,
+            production_marker=production_marker,
+        )
         if None in (history_repo, history_target_ref):
             raise InvalidInputError(
                 "start requires the configured durable history repository and ref"

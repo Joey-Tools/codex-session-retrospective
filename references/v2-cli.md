@@ -282,7 +282,9 @@ status/accept/advance, `export`, and `finalize` workflow. An incomplete literal
 prompt, leading whitespace, changed lines, extra arguments, and unknown TOML
 fields or tables are rejected.
 
-The controller uses this exact internal sequence; it is not an engine command:
+The controller independently authenticates the fixed GPG executable as
+`publisher_gpg_program`, then uses this exact internal sequence; it is not an
+engine command:
 
 ```python
 snapshot = authority.capture_automation_cutover_snapshot(
@@ -296,6 +298,7 @@ record = authority.issue_automation_cutover_record(
     capability_result=capability_result,
     pre_update_snapshot=snapshot,
     installed_commit=installed_commit,
+    publisher_gpg_program=publisher_gpg_program,
 )
 ```
 

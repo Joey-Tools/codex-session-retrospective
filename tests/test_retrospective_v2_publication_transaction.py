@@ -1864,6 +1864,22 @@ class DurablePublicationTests(unittest.TestCase):
         os.chmod(self.root, 0o700)
         self.identity_path = self.root / "identity-v2.key"
         self.identity = IdentityKey.create(self.identity_path)
+        self.provider_state = self.root / "provider-state"
+        self.marker_path = self.root / "production-marker.json"
+        self.production_path_patches = (
+            mock.patch.object(
+                authority,
+                "DEFAULT_PROVIDER_STATE",
+                self.provider_state,
+            ),
+            mock.patch.object(
+                authority,
+                "DEFAULT_PRODUCTION_MARKER",
+                self.marker_path,
+            ),
+        )
+        for patcher in self.production_path_patches:
+            patcher.start()
         self.repo = self.root / "history"
         run_command(["git", "init", "-q", "-b", "main", str(self.repo)])
         (self.repo / "README.md").write_text("# Private history\n", encoding="ascii")
@@ -1886,7 +1902,6 @@ class DurablePublicationTests(unittest.TestCase):
         )
         self.base_head = self.head()
         self.automation_cutover_record = self.build_automation_cutover_record()
-        self.provider_state = self.root / "provider-state"
         self.initial_history = self.load_history()
         authority.initialize_provider_cache(
             self.provider_state,
@@ -1919,7 +1934,6 @@ class DurablePublicationTests(unittest.TestCase):
             "policy",
             "source_policy_v2",
         )
-        self.marker_path = self.root / "production-marker.json"
         self.calibration_receipt = calibration.evaluate_calibration_corpus(
             self.identity,
             passing_corpus(),
@@ -1953,6 +1967,8 @@ class DurablePublicationTests(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
+        for patcher in reversed(self.production_path_patches):
+            patcher.stop()
         self.temporary.cleanup()
 
     def _add_darwin_acl(self, path: Path, entry: str = "everyone allow write") -> None:

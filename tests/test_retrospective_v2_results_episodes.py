@@ -1149,6 +1149,21 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "Birthday: 1990-01-02",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Birth date: 1990-01-02",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Birthdate: 1990-01-02",
+                "1990-01-02 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "DOB: 1990-01-02",
                 "1990-01-02 was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
@@ -1399,6 +1414,8 @@ class ResultValidationTests(unittest.TestCase):
             "Customer's address book: shared",
             "DOB status: unavailable",
             "date of birth policy: enabled",
+            "birthday policy: enabled",
+            "Birth date status: unavailable",
             "**Customer status:** Alice Smith",
             "DOB: [REDACTED_PERSONAL_IDENTIFIER]",
             'DOB: "[REDACTED_PERSONAL_IDENTIFIER]"',
@@ -1570,6 +1587,21 @@ class ResultValidationTests(unittest.TestCase):
                     "[REDACTED_PERSONAL_IDENTIFIER]",
                     result_validation_module.privacy_locators.redact_personal_identifiers(
                         middle_name
+                    ),
+                )
+        for birth_date in (
+            "Birthday: 1990-01-02",
+            "Birth date: 1990-01-02",
+            "Birthdate: 1990-01-02",
+            "Birth_date: 1990-01-02",
+            "Birth-date: 1990-01-02",
+            "birthDate: 1990-01-02",
+        ):
+            with self.subTest(birth_date=birth_date):
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result_validation_module.privacy_locators.redact_personal_identifiers(
+                        birth_date
                     ),
                 )
         for safe_pin_text in (

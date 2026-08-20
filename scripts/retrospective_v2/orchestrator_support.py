@@ -11,6 +11,7 @@ import time
 from typing import Any, Mapping, Sequence
 
 from . import (
+    authority,
     executable_authority,
     finalize,
     gpg_status,
@@ -122,6 +123,29 @@ _MODEL_PARAMETER_KEYS = frozenset(
 )
 _REASONING_EFFORTS = frozenset({"low", "medium", "high", "xhigh", "max", "ultra"})
 _SERVICE_TIERS = frozenset({"default", "flex", "priority"})
+
+
+def _require_canonical_production_binding_paths(
+    *,
+    shadow: object,
+    provider_state: str | os.PathLike[str] | None,
+    production_marker: str | os.PathLike[str] | None,
+) -> None:
+    if shadow is True:
+        return
+    bindings = (
+        (provider_state, authority.DEFAULT_PROVIDER_STATE, "provider state"),
+        (production_marker, authority.DEFAULT_PRODUCTION_MARKER, "production marker"),
+    )
+    for supplied, expected, label in bindings:
+        if supplied is None:
+            continue
+        try:
+            selected = Path(supplied).expanduser().absolute()
+        except (OSError, TypeError, ValueError) as error:
+            raise InvalidInputError(f"production {label} path is invalid") from error
+        if selected != expected.absolute():
+            raise InvalidInputError(f"production {label} must use its fixed path")
 
 
 def _current_coordinator_runtime() -> dict[str, Any]:

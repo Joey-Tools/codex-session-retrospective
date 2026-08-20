@@ -62,6 +62,7 @@ from .orchestrator_support import (
     _checkpoint_key_id,
     _normalize_hosts,
     _normalize_source_kinds,
+    _require_canonical_production_binding_paths,
     _require_current_execution_contract,
     _transport_accounting_bytes,
     consume_session_shard_frames,
@@ -101,6 +102,12 @@ def doctor(
     host_inventory_provider: Callable[[], AuthenticatedHostInventory] | None = None,
 ) -> dict[str, Any]:
     """Run actual capability probes and return a safe readiness report."""
+
+    _require_canonical_production_binding_paths(
+        shadow=shadow,
+        provider_state=provider_state,
+        production_marker=production_marker,
+    )
 
     results: dict[str, dict[str, Any]] = {}
 
@@ -529,6 +536,11 @@ def start_run(
     require_existing_identity: bool = False,
     **kwargs: Any,
 ) -> dict[str, Any]:
+    _require_canonical_production_binding_paths(
+        shadow=kwargs.get("shadow", False),
+        provider_state=kwargs.get("provider_state"),
+        production_marker=kwargs.get("production_marker"),
+    )
     try:
         source_transport.source_transport_python_runtime_readiness(
             expected_executable=authority.installed_runtime_python_path()

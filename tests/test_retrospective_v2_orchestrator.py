@@ -834,6 +834,16 @@ class OrchestratorTests(unittest.TestCase):
         self.clock = FixedClock()
         self.history_state = self.durable_history()
         self.authority_patches = [
+            mock.patch.object(
+                authority,
+                "DEFAULT_PROVIDER_STATE",
+                self.root / "provider",
+            ),
+            mock.patch.object(
+                authority,
+                "DEFAULT_PRODUCTION_MARKER",
+                self.root / "production-marker.json",
+            ),
             mock.patch(
                 "retrospective_v2.orchestrator.authority.load_durable_history",
                 side_effect=lambda *_args, **_kwargs: self.history_state,
@@ -1801,6 +1811,48 @@ class OrchestratorTests(unittest.TestCase):
                 allow_partial=True,
                 **self.start_authority(),
             )
+
+    def test_public_engine_rejects_alternate_production_binding_paths(self) -> None:
+        canonical_provider = self.root / "canonical-provider"
+        canonical_marker = self.root / "canonical-marker.json"
+        alternate_provider = self.root / "alternate-provider"
+        alternate_marker = self.root / "alternate-marker.json"
+        with (
+            mock.patch.object(authority, "DEFAULT_PROVIDER_STATE", canonical_provider),
+            mock.patch.object(authority, "DEFAULT_PRODUCTION_MARKER", canonical_marker),
+        ):
+            for label, provider, marker in (
+                ("provider", alternate_provider, canonical_marker),
+                ("marker", canonical_provider, alternate_marker),
+            ):
+                with self.subTest(entry="doctor", copied=label):
+                    with self.assertRaisesRegex(InvalidInputError, "fixed path"):
+                        doctor(
+                            shadow=False,
+                            provider_state=provider,
+                            production_marker=marker,
+                        )
+                with self.subTest(entry="start_run", copied=label):
+                    with self.assertRaisesRegex(InvalidInputError, "fixed path"):
+                        orchestrator_module.start_run(
+                            self.root / f"alternate-{label}",
+                            shadow=False,
+                            provider_state=provider,
+                            production_marker=marker,
+                        )
+                with self.subTest(entry="lifecycle", copied=label):
+                    with self.assertRaisesRegex(InvalidInputError, "fixed path"):
+                        self.coordinator(f"alternate-lifecycle-{label}").start(
+                            mode=RunMode.DAILY,
+                            start=WINDOW_START,
+                            end=DAILY_END,
+                            shadow=False,
+                            history_repo=self.root / "history",
+                            history_target_ref="refs/heads/main",
+                            publisher_gpg_program=TEST_PUBLISHER_GPG,
+                            provider_state=provider,
+                            production_marker=marker,
+                        )
 
     def test_doctor_and_start_reject_unauthenticated_python_runtime(self) -> None:
         error = transport.TransportValidationError("unsafe coordinator Python")

@@ -2001,6 +2001,47 @@ superseded_by:
   branch and module budgets, and `git diff --check` pass. The validator's first
   host-Python attempt lacked PyYAML and is non-counting; the official validator
   passed under `uv run --with pyyaml`.
+- Signed head `5e3023ae` became stale after two independent review processors
+  exposed three remaining contract gaps. The fresh local Codex processor found
+  that non-shadow startup accepted copied provider-state and production-marker
+  paths instead of the fixed production bindings, and that the canonical
+  cutover example omitted the required `publisher_gpg_program`. Current-head
+  GitHub Codex then found that the shared personal-data grammar omitted
+  `Birthday`, `Birth date`, and `Birthdate` labels. The local reviewer workspace
+  postvalidated clean, retained unchanged trusted-release digests, and was
+  safely removed after its terminal findings.
+- Non-shadow CLI, public engine, and direct lifecycle startup now reject every
+  alternative provider-state or production-marker path before the engine can
+  create a run. Shadow startup retains its explicitly isolated path contract,
+  and malformed shadow-successor inputs retain their own closed validation
+  precedence before production binding. The cutover reference supplies every
+  required keyword in the live authority signature. The shared personal-data
+  grammar now recognizes `birthday` plus controlled space, underscore, hyphen,
+  compact, and camel-case `birth date` forms across source-overlap redaction,
+  audit redaction, retained assembly, retained reread, and rendered-report
+  validation, while policy/status prose remains accepted.
+- The first 1,830-test production-binding shard group under manifest digest
+  `ed580319df893bf5eed77b2e08078256ed94b741213e390a2d27e42278eafa97`
+  was intentionally interrupted and is non-counting after the new GitHub P1
+  invalidated its source tree. The next group exposed the deterministic
+  shadow-successor error-precedence regression: shard 1 failed 1 of 495 tests,
+  shards 2 and 3 passed on the stale tree, and shard 0 was interrupted. Direct
+  non-isolated focused invocations that stopped at runtime authority are also
+  non-counting; exact isolated reruns supplied the passing evidence.
+- The final Python 3.13 inventory contains 1,830 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `f1ab5f7af11db5504b3786c73e4bb200ab2f06f49f9bb2e68f5af21ed05d4261`.
+  Shard 0 passes 436/436 in 1,631.108 seconds, shard 1 passes 495/495 in
+  1,431.228 seconds, shard 2 passes 483/483 in 1,367.274 seconds, and shard 3
+  passes 416/416 in 1,308.112 seconds. Every runner exits zero with an explicit
+  `OK` terminal, for exact aggregate coverage of 1,830/1,830. The final tree
+  also passes the three privacy-boundary focused regressions, the three
+  isolated CLI ordering/binding regressions, module boundaries 19/19, CI
+  contracts 33/33, Ruff lint and changed-file formatting, both current
+  workflows under `actionlint`, the generated bootstrap manifest, the official
+  OpenAI Skill validator, project-journal validation, and `git diff --check`.
+  One earlier `actionlint` invocation named a nonexistent stale workflow path
+  and is non-counting; the exact current workflow checks passed.
 
 ## Follow-up Work
 
