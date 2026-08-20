@@ -62,6 +62,11 @@ advance
 
 Joey triggers one retrospective task. The automation coordinator owns this loop
 and does not ask Joey to invoke individual stages.
+The installed Daily and Weekly automation prompts are closed coordinator
+prompts: each invokes this skill, binds the authenticated Python, CLI, and GPG
+executables, requires every production `start` input, and drives `doctor`, the
+status/accept/advance loop, `export`, and `finalize`. A prompt that stops after
+`start` is not a valid production coordinator.
 
 Keep verbose command output in a task-scoped ignored log and surface only
 progress markers. Use `pgrep -af` and `ps -p` for narrow process checks; do not

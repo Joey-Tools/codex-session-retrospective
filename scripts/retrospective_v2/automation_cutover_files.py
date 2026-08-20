@@ -17,6 +17,7 @@ from .authority_errors import AutomationCutoverBlocked
 
 _AUTOMATION_ACCESS_POLICY_FLAG_MASK = 0x001E0096  # BSD write/delete restrictions.
 _WEEKDAYS = frozenset({"MO", "TU", "WE", "TH", "FR", "SA", "SU"})
+_PUBLISHER_GPG_PROMPT_PREFIX = "Authenticated publisher GPG executable: "
 
 
 def _access_policy_flags(metadata: os.stat_result) -> int:
@@ -78,21 +79,31 @@ def build_production_prompt(
             raise ValueError("production automation path contains control characters")
         if not executable_authority.is_canonical_absolute_executable_path(value):
             raise ValueError("production automation executable path is invalid")
-    command = shlex.join(
+    authority_argv = shlex.join((str(python_path), "-I", "-B", "-S", str(cli_path)))
+    return "\n".join(
         (
-            str(python_path),
-            "-I",
-            "-B",
-            "-S",
-            str(cli_path),
-            "start",
-            "--mode",
-            expected_mode,
-            "--publisher-gpg-program",
-            publisher_gpg_program,
+            "Run $codex-session-retrospective as the exact "
+            f"{expected_mode} production coordinator.",
+            f"Authenticated coordinator argv prefix: {authority_argv}",
+            _PUBLISHER_GPG_PROMPT_PREFIX + shlex.quote(publisher_gpg_program),
+            "Derive the exact UTC --start and --end production window and bind "
+            "owner-private --run-dir, immutable --run-config, append-only "
+            "--history-repo, and fully qualified --history-target-ref before "
+            "invoking start.",
+            "Invoke doctor with --run-config, --history-repo, "
+            "--history-target-ref, and --publisher-gpg-program; then invoke "
+            f"start with --mode {expected_mode}, --start, --end, --run-dir, "
+            "--run-config, --history-repo, --history-target-ref, and "
+            "--publisher-gpg-program.",
+            "Repeat status -> execute every leased source action through "
+            "$remote-host-context session-shards -> accept-source -> spawn the "
+            "maximum available native subagent wave -> accept-agent-result -> "
+            "advance until exportable; then export and repeat finalize until "
+            "terminal.",
+            "Do not stop after start and do not ask Joey to invoke intermediate "
+            "stages.",
         )
     )
-    return f"Run {command} for the exact production window."
 
 
 def production_prompt_is_closed(
@@ -103,10 +114,13 @@ def production_prompt_is_closed(
     expected_mode: str,
 ) -> bool:
     try:
-        tokens = shlex.split(prompt)
-        if len(tokens) != 16:
+        lines = prompt.splitlines()
+        if len(lines) != 7 or not lines[2].startswith(_PUBLISHER_GPG_PROMPT_PREFIX):
             return False
-        publisher_gpg_program = tokens[10]
+        publisher_tokens = shlex.split(lines[2][len(_PUBLISHER_GPG_PROMPT_PREFIX) :])
+        if len(publisher_tokens) != 1:
+            return False
+        publisher_gpg_program = publisher_tokens[0]
         expected = build_production_prompt(
             cli_path=cli_path,
             python_path=python_path,

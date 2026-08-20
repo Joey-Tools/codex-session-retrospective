@@ -447,6 +447,8 @@ def validate_startup_receipt(evidence_bytes: bytes) -> dict[str, Any]:
             expected_path = "retrospective_v2/__init__.py"
         elif module.startswith("retrospective_v2.") and module.count(".") == 1:
             expected_path = "retrospective_v2/" + module.split(".", 1)[1] + ".py"
+        elif module == "session_retrospective_v2":
+            expected_path = "session_retrospective_v2.py"
         elif module.startswith("session_retrospective_v2_"):
             expected_path = module + ".py"
         else:

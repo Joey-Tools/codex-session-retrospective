@@ -497,7 +497,7 @@ def _relay_remote_host_context_command(
             process,
             resource_closers=resource_closers,
             resource_label="remote transport resource teardown",
-            signal_retired=signal_retirement.retired,
+            signal_retirement=signal_retirement,
             terminate_and_reap=lambda child: _close_remote_process_group(
                 child,
                 signal_retirement=signal_retirement,

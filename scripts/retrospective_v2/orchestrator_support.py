@@ -490,7 +490,7 @@ def _run_bounded_publisher_canary_process(
             process,
             resource_closers=resource_closers,
             resource_label="publisher canary resource teardown",
-            signal_retired=signal_retirement.retired,
+            signal_retirement=signal_retirement,
             terminate_and_reap=lambda child: close_process_group(
                 child,
                 cleanup_deadline=(time.monotonic() + _PUBLISHER_CANARY_CLEANUP_SECONDS),

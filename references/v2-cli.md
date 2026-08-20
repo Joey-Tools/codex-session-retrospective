@@ -272,9 +272,13 @@ The installed record is a closed document, not a command substring check. It
 must contain exactly the seven fields `version`, `id`, `kind`, `name`, `prompt`,
 `status`, and `rrule`. The prompt must be byte-equal to the canonical
 `build_production_prompt` value for its mode and authenticated executable
-paths. Arbitrary prose before or after that sentence, leading whitespace,
-embedded newlines, extra arguments, and unknown TOML fields or tables are
-rejected.
+paths. That prompt invokes `$codex-session-retrospective`, binds the exact
+Python/CLI/GPG authority, requires the coordinator to derive and pass every
+production `start` input, and names the complete `doctor`,
+status/accept/advance, `export`, and `finalize` workflow. An incomplete literal
+`start` command is not accepted. Arbitrary prose before or after the canonical
+prompt, leading whitespace, changed lines, extra arguments, and unknown TOML
+fields or tables are rejected.
 
 The controller uses this exact internal sequence; it is not an engine command:
 

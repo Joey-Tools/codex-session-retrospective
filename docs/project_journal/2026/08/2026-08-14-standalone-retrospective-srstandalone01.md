@@ -1912,6 +1912,52 @@ superseded_by:
   A repository-wide formatter diagnostic still identifies six unchanged
   inherited migration files; it is non-counting and did not trigger unrelated
   mechanical rewrites.
+- Signed head `c73c7887` became stale when its fresh whole-range Codex
+  processor found four release-control gaps. The installed production
+  automation prompt stopped after an incomplete `start` command; the startup
+  receipt omitted the executed entrypoint bytes; process cleanup treated signal
+  retirement as proof of process-group absence; and retained-history Git
+  admission did not reject pack-level `objects/pack/*.promisor` markers. The
+  exact reviewer workspace was independently materialized from trusted release
+  `f9e596f4`, postvalidated clean, retained unchanged trusted-bundle digests,
+  and was safely removed after the terminal findings.
+- Production automation records now require one canonical seven-line
+  coordinator prompt that binds the Python, CLI, and GPG executables, supplies
+  every production window/history/run input, and drives `doctor`, the complete
+  status/accept/advance loop, `export`, and `finalize`. Startup authority now
+  commits the executed `session_retrospective_v2.py` bytes and access policy
+  without exposing that entrypoint as an importable module. Shared process
+  cleanup separates irreversible signal retirement from a later non-signaling
+  `ESRCH` absence proof, so an interrupted signal attempt can never signal a
+  reused group identifier. Local history admission and every bound-command
+  revalidation perform a bounded, stable, descriptor-relative pack-directory
+  scan, reject non-ASCII pack names, and compare ASCII `.promisor` suffixes
+  case-insensitively without approximating native Unicode filesystem aliases.
+- Exact reviewer-fix checks pass: the two final lifecycle/promisor regressions
+  pass 2/2, the complete publication invariant class passes 41/41, module
+  boundaries pass 19/19, CI/Skill/Bootstrap contracts pass 46/46, and Darwin
+  security contracts pass 14/14. Ruff 0.13.2 lint and formatting, both
+  workflows under bounded `actionlint`, the official OpenAI Skill validator,
+  and `git diff --check` are clean. A final read-only audit found one
+  filesystem-alias gap in the first promisor implementation; the uppercase
+  `.PROMISOR` and default-ignorable Unicode regressions close it before the
+  full gate. The four shards already running on the superseded normalization
+  approximation were interrupted, fully quiesced, and are non-counting. The
+  same independent auditor re-read the portable-ASCII fix and returned
+  `No findings.`
+- The final Python 3.13 inventory contains 1,822 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `aa7f2596594301058fb466ce1e5a307b42ea396f9e71aada14a3471dcdcfb456`.
+  Shard 0 passes 435/435 in 1,658.325 seconds, shard 1 passes 493/493 in
+  1,457.583 seconds, shard 2 passes 479/479 in 1,391.880 seconds, and shard 3
+  passes 415/415 in 1,328.226 seconds. Every bounded shard exits zero with an
+  explicit `OK` terminal summary and no failure, error, traceback, or skip, for
+  exact aggregate coverage of 1,822/1,822. The final tree also passes Darwin
+  security 14/14, the final promisor integration regression 1/1, publication
+  invariants 41/41, module/CI/Skill/Bootstrap contracts 65/65, Ruff 0.13.2
+  lint and changed-file formatting, bounded `actionlint` for both workflows,
+  the official OpenAI Skill validator, project-journal validation, source-tree
+  bytecode exclusion, branch inventory caps, and `git diff --check`.
 
 ## Follow-up Work
 

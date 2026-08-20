@@ -128,12 +128,15 @@ the snapshot and requires it to equal the run's frozen transport provenance, so
 one run cannot mix helper versions across source leases.
 
 The public coordinator entrypoint is a stdlib-only trust root. Before any
-engine import, it descriptor-opens the complete generated package manifest and
-the root CLI helpers, rejects unlisted import candidates and bytecode, native,
-cache, symlink, or same-name-package substitutes, and captures stable exact
-bytes plus object-identity and access-policy evidence. Timestamp changes are
-not mutation evidence. A closed meta-path finder executes only those captured
-bytes and raises for every unknown `retrospective_v2.*` name; the live scripts
+engine import, it descriptor-opens itself, the complete generated package
+manifest, and the root CLI helpers; rejects unlisted import candidates and
+bytecode, native, cache, symlink, or same-name-package substitutes; and captures
+stable exact bytes plus object-identity and access-policy evidence for every
+file. The entrypoint contributes to the startup source, access-policy, and
+authority commitments but is not imported through the captured-module loader.
+Timestamp changes are not mutation evidence. A closed meta-path finder executes
+only those captured bytes and raises for every unknown `retrospective_v2.*`
+name; the live scripts
 directory is never added to `sys.path`. `implementation_authority.py` validates
 the schema-v2 startup receipt before command parsing. After adding or removing
 a production package module, update the generated block with
@@ -261,9 +264,15 @@ an already collected local bundle.
 History readiness and formal publication use the same local-repository
 admission receipt. It binds owner-controlled real ancestry for the worktree,
 Git directory, common directory, and closed object store; rejects alternates,
-grafts, shallow repositories, promisor/partial-clone configuration, include
-directives, worktree configuration, and an enabled `extensions.worktreeConfig`;
-and binds the exact owner-controlled common-config bytes. Each later Git command
+grafts, shallow repositories, promisor/partial-clone configuration, bounded
+descriptor-relative `objects/pack/*.promisor` markers, include directives,
+worktree configuration, and an enabled `extensions.worktreeConfig`; and binds
+the exact owner-controlled common-config bytes. Failure to complete a stable,
+bounded pack-directory scan is distinct from proof of a marker but still fails
+closed because marker absence remains unproved. Pack-directory entry names must
+be portable ASCII, and the marker suffix comparison is ASCII
+case-insensitive; this avoids claiming that Unicode normalization approximates
+the host filesystem's native alias rules. Each later Git command
 holds all four admitted directory descriptors, launches from the held worktree
 descriptor with only relative repository discovery, and revalidates directory
 identity, access policy, config content, and forbidden metadata before and after
@@ -342,10 +351,11 @@ support modules remain below 1,100 lines; the complete result-schema owner is
 2,356/2,500, and the dedicated synthesis-lineage owner is 226/250 after adding
 compact recursive commitments and
 revision-level recurrence proof. The global branch proxy is exactly
-9,491/9,500 nodes. These gates keep complete
-agent schemas, claim-size projection, source-byte provenance, semantic topic
-validation, and delegated remote transport in explicit owners instead of
-expanding the coordinator or reviving a second remote probe.
+9,558/9,575 nodes, and the shared process-group lifecycle owner is 290/300
+lines after separating signal retirement from group-absence proof. These gates
+keep complete agent schemas, claim-size projection, source-byte provenance,
+semantic topic validation, and delegated remote transport in explicit owners
+instead of expanding the coordinator or reviving a second remote probe.
 
 ## Architecture inventory
 

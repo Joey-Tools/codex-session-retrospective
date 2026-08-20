@@ -20,13 +20,19 @@ class ProcessGroupCleanupIncompleteError(RuntimeError):
 
 
 class GroupSignalRetirement:
-    """Publish when reaping may make a saved process-group ID reusable."""
+    """Separate signal retirement from proof that the group is absent."""
 
     def __init__(self) -> None:
         self.retired = False
+        self.group_absence_proven = False
 
     def retire(self) -> None:
         self.retired = True
+
+    def prove_group_absence(self) -> None:
+        if not self.retired:
+            raise RuntimeError("process-group signal authority is still active")
+        self.group_absence_proven = True
 
 
 def wait_for_unreaped_exit(
@@ -123,6 +129,20 @@ def close_process_group(
                 raise error_type(f"{label} process group closure is unproven")
             time.sleep(min(_GROUP_ABSENCE_POLL_SECONDS, remaining))
 
+    if signal_retirement.retired:
+        return_code = reap_after_termination(
+            process,
+            timeout_seconds=remaining_seconds(),
+            error_type=error_type,
+            error_message=termination_message,
+        )
+        prove_group_absent()
+        signal_retirement.prove_group_absence()
+        return return_code
+
+    # Retire before the syscall attempt: interruption can make its side effect
+    # ambiguous, so a cleanup retry must never signal the saved PGID again.
+    signal_retirement.retire()
     try:
         if os.name == "posix":
             os.killpg(process_group_id, signal.SIGKILL)
@@ -132,7 +152,6 @@ def close_process_group(
         if signal_error.errno == errno.ESRCH:
             pass
         elif os.name == "posix" and signal_error.errno == errno.EPERM:
-            signal_retirement.retire()
             return_code = reap_after_termination(
                 process,
                 timeout_seconds=remaining_seconds(),
@@ -143,12 +162,12 @@ def close_process_group(
                 prove_group_absent()
             except error_type as closure_error:
                 raise closure_error from signal_error
+            signal_retirement.prove_group_absence()
             return return_code
         else:
             raise error_type(
                 f"{label} process group could not be signaled"
             ) from signal_error
-    signal_retirement.retire()
     return_code = reap_after_termination(
         process,
         timeout_seconds=remaining_seconds(),
@@ -156,13 +175,14 @@ def close_process_group(
         error_message=termination_message,
     )
     prove_group_absent()
+    signal_retirement.prove_group_absence()
     return return_code
 
 
 def finish_cleanup(
     process: subprocess.Popen[bytes],
     *,
-    signal_retired: bool,
+    signal_retirement: GroupSignalRetirement,
     terminate_and_reap: Callable[[subprocess.Popen[bytes]], int],
     reap_only: Callable[[subprocess.Popen[bytes]], int],
     active_error: BaseException | None,
@@ -170,7 +190,12 @@ def finish_cleanup(
     """Finish cleanup without replacing an active primary failure."""
 
     try:
-        (reap_only if signal_retired else terminate_and_reap)(process)
+        cleanup = (
+            reap_only
+            if signal_retirement.retired and signal_retirement.group_absence_proven
+            else terminate_and_reap
+        )
+        cleanup(process)
     except RuntimeError as cleanup_error:
         setattr(cleanup_error, _CLEANUP_INCOMPLETE_ATTRIBUTE, True)
         if active_error is None:
@@ -184,7 +209,7 @@ def finish_cleanup_after_resource_teardown(
     *,
     resource_closers: tuple[Callable[[], None], ...],
     resource_label: str,
-    signal_retired: bool,
+    signal_retirement: GroupSignalRetirement,
     terminate_and_reap: Callable[[subprocess.Popen[bytes]], int],
     reap_only: Callable[[subprocess.Popen[bytes]], int],
     active_error: BaseException | None,
@@ -208,7 +233,7 @@ def finish_cleanup_after_resource_teardown(
         )
     finish_cleanup(
         process,
-        signal_retired=signal_retired,
+        signal_retirement=signal_retirement,
         terminate_and_reap=terminate_and_reap,
         reap_only=reap_only,
         active_error=active_error or resource_error,

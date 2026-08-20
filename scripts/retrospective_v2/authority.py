@@ -790,7 +790,7 @@ def _run_bounded(
             process,
             resource_closers=resource_closers,
             resource_label="history command resource teardown",
-            signal_retired=signal_retirement.retired,
+            signal_retirement=signal_retirement,
             terminate_and_reap=close_process_group,
             reap_only=reap_process,
             active_error=active_error,

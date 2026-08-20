@@ -2021,7 +2021,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         process_lifecycle.finish_cleanup(
             mock.Mock(spec=subprocess.Popen),
-            signal_retired=False,
+            signal_retirement=process_lifecycle.GroupSignalRetirement(),
             terminate_and_reap=persistent_cleanup_failure,
             reap_only=persistent_cleanup_failure,
             active_error=cleanup_failure,
@@ -3135,13 +3135,15 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
     def test_remote_cleanup_does_not_resignal_after_reap_interrupt(self) -> None:
-        terminations = 0
+        attempted_signals: list[int] = []
         reap_calls = 0
         reap_process = transport_remote.process_lifecycle.reap_after_termination
 
         def observe_termination(process_group_id: int, selected_signal: int) -> None:
-            nonlocal terminations
-            terminations += 1
+            del process_group_id
+            attempted_signals.append(selected_signal)
+            if selected_signal == 0:
+                raise OSError(errno.ESRCH, "process group is absent")
 
         def reap_then_interrupt(*args, **kwargs):
             nonlocal reap_calls
@@ -3169,7 +3171,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 max_output_bytes=1024,
             )
 
-        self.assertEqual(1, terminations)
+        self.assertEqual([signal.SIGKILL, 0], attempted_signals)
         self.assertEqual(2, reap_calls)
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")

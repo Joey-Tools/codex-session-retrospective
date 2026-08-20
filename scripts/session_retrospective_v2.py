@@ -464,6 +464,20 @@ else:
             initial_inventory = _validate_inventory(scripts_fd, package_fd)
             captured = []
             captured_bytes = 0
+            entry_name = os.path.basename(__file__)
+            entry_row = _capture_source(
+                scripts_fd,
+                entry_name,
+                "session_retrospective_v2",
+                entry_name,
+                os.path.join(scripts, entry_name),
+            )
+            captured_bytes += entry_row[3]["size"]
+            if captured_bytes > _MAX_SOURCE_TOTAL_BYTES:
+                raise _SourceAuthorityError(
+                    "implementation exceeds its aggregate byte bound"
+                )
+            captured.append(entry_row)
             for filename in _PACKAGE_SOURCE_MANIFEST:
                 relative_path = "retrospective_v2/" + filename
                 row = _capture_source(
@@ -510,11 +524,14 @@ else:
                 raise _SourceAuthorityError(
                     "implementation directory access policy changed"
                 )
-            sources = {row[0]: row[1] for row in captured}
-            paths = {row[0]: row[2] for row in captured}
+            importable = [
+                row for row in captured if row[0] != "session_retrospective_v2"
+            ]
+            sources = {row[0]: row[1] for row in importable}
+            paths = {row[0]: row[2] for row in importable}
             source_rows = [row[3] for row in captured]
             total_bytes = sum(row["size"] for row in source_rows)
-            manifest = list(sources)
+            manifest = [row[0] for row in captured]
             access = {
                 "ancestors": ancestor_policies,
                 "files": [row[4] for row in captured],
@@ -602,7 +619,9 @@ else:
                     "retrospective_v2 module is outside the startup manifest",
                     name=fullname,
                 )
-            if fullname.startswith("session_retrospective_v2_"):
+            if fullname == "session_retrospective_v2" or fullname.startswith(
+                "session_retrospective_v2_"
+            ):
                 raise ModuleNotFoundError(
                     "retrospective v2 helper is outside the startup manifest",
                     name=fullname,
@@ -619,6 +638,7 @@ else:
         if any(
             name == "retrospective_v2"
             or name.startswith("retrospective_v2.")
+            or name == "session_retrospective_v2"
             or name.startswith("session_retrospective_v2_")
             for name in sys.modules
         ):

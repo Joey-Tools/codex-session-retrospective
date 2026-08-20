@@ -67,6 +67,22 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def instrument_readiness_receipt(self, marker: Path) -> None:
+        authority = self.scripts / "retrospective_v2" / "implementation_authority.py"
+        authority.write_text(
+            authority.read_text(encoding="utf-8")
+            + "\n_original_readiness = coordinator_implementation_readiness\n"
+            + "def coordinator_implementation_readiness():\n"
+            + "    value = _original_readiness()\n"
+            + "    Path("
+            + repr(os.fspath(marker))
+            + ").write_text(\n"
+            + "        json.dumps(value, sort_keys=True), encoding='ascii'\n"
+            + "    )\n"
+            + "    return value\n",
+            encoding="utf-8",
+        )
+
     def test_stray_scripts_selectors_is_not_executed(self) -> None:
         marker = self.root / "selectors-executed"
         self.scripts.joinpath("selectors.py").write_text(
@@ -212,20 +228,7 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
 
     def test_help_validates_schema_v2_startup_receipt(self) -> None:
         marker = self.root / "startup-receipt.json"
-        authority = self.scripts / "retrospective_v2" / "implementation_authority.py"
-        authority.write_text(
-            authority.read_text(encoding="utf-8")
-            + "\n_original_readiness = coordinator_implementation_readiness\n"
-            + "def coordinator_implementation_readiness():\n"
-            + "    value = _original_readiness()\n"
-            + "    Path("
-            + repr(os.fspath(marker))
-            + ").write_text(\n"
-            + "        json.dumps(value, sort_keys=True), encoding='ascii'\n"
-            + "    )\n"
-            + "    return value\n",
-            encoding="utf-8",
-        )
+        self.instrument_readiness_receipt(marker)
 
         completed = self.run_entrypoint("--help")
 
@@ -233,6 +236,48 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
         self.assertTrue(json.loads(completed.stdout)["ok"])
         receipt = json.loads(marker.read_text(encoding="ascii"))
         self.assertEqual("coordinator_implementation_readiness_v2", receipt["schema"])
+
+    def test_startup_receipt_binds_entrypoint_content_and_access_policy(self) -> None:
+        marker = self.root / "startup-entry-receipt.json"
+        self.instrument_readiness_receipt(marker)
+        original = self.entrypoint.read_bytes()
+        original_mode = self.entrypoint.stat().st_mode & 0o777
+
+        initial = self.run_entrypoint("--help")
+        self.assertEqual(0, initial.returncode, initial.stderr)
+        initial_receipt = json.loads(marker.read_text(encoding="ascii"))
+
+        self.entrypoint.write_bytes(original + b"\n# entrypoint receipt mutation\n")
+        changed = self.run_entrypoint("--help")
+        self.assertEqual(0, changed.returncode, changed.stderr)
+        changed_receipt = json.loads(marker.read_text(encoding="ascii"))
+        self.assertNotEqual(
+            initial_receipt["source_sha256"], changed_receipt["source_sha256"]
+        )
+        self.assertNotEqual(
+            initial_receipt["authority_sha256"], changed_receipt["authority_sha256"]
+        )
+        self.assertEqual(
+            initial_receipt["access_policy_sha256"],
+            changed_receipt["access_policy_sha256"],
+        )
+
+        self.entrypoint.write_bytes(original)
+        self.entrypoint.chmod(0o700 if original_mode != 0o700 else 0o500)
+        policy_changed = self.run_entrypoint("--help")
+        self.assertEqual(0, policy_changed.returncode, policy_changed.stderr)
+        policy_receipt = json.loads(marker.read_text(encoding="ascii"))
+        self.assertEqual(
+            initial_receipt["source_sha256"], policy_receipt["source_sha256"]
+        )
+        self.assertNotEqual(
+            initial_receipt["access_policy_sha256"],
+            policy_receipt["access_policy_sha256"],
+        )
+        self.assertNotEqual(
+            initial_receipt["authority_sha256"],
+            policy_receipt["authority_sha256"],
+        )
 
     def test_generated_manifest_is_current(self) -> None:
         completed = subprocess.run(

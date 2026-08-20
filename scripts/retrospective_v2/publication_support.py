@@ -453,7 +453,7 @@ def _run_bounded_subprocess(
                 process,
                 resource_closers=resource_closers,
                 resource_label="publication subprocess resource teardown",
-                signal_retired=signal_retirement.retired,
+                signal_retirement=signal_retirement,
                 terminate_and_reap=close_process_group,
                 reap_only=reap_process,
                 active_error=active_error,

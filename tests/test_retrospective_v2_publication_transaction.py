@@ -1182,10 +1182,9 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                         max_output_bytes=1024,
                         **arguments,
                     )
-                self.assertEqual(
-                    [signal.SIGKILL, signal.SIGKILL], attempted_signals[:2]
-                )
-                self.assertIn(attempted_signals[2:], ([], [0]))
+                self.assertEqual(signal.SIGKILL, attempted_signals[0])
+                self.assertTrue(attempted_signals[1:])
+                self.assertEqual({0}, set(attempted_signals[1:]))
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
     def test_bounded_subprocesses_surface_reap_timeouts(self) -> None:
@@ -1233,6 +1232,10 @@ class PublicationInvariantUnitTests(unittest.TestCase):
     def test_active_primary_records_persistent_group_cleanup_failure(self) -> None:
         for signal_retired in (False, True):
             with self.subTest(signal_retired=signal_retired):
+                signal_retirement = process_lifecycle.GroupSignalRetirement()
+                if signal_retired:
+                    signal_retirement.retire()
+                    signal_retirement.prove_group_absence()
                 primary = publication_support.LocalGitPublicationError(
                     "simulated primary deadline"
                 )
@@ -1244,7 +1247,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
 
                 process_lifecycle.finish_cleanup(
                     mock.Mock(spec=subprocess.Popen),
-                    signal_retired=signal_retired,
+                    signal_retirement=signal_retirement,
                     terminate_and_reap=cleanup_failure,
                     reap_only=cleanup_failure,
                     active_error=primary,
@@ -1293,6 +1296,107 @@ class PublicationInvariantUnitTests(unittest.TestCase):
         self.assertEqual([signal.SIGKILL, 0], attempted_signals)
         process.wait.assert_called_once()
 
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_interrupted_signal_attempt_retries_only_group_absence(self) -> None:
+        process = mock.Mock(spec=subprocess.Popen)
+        process.pid = 4241
+        process.wait.return_value = 0
+        retirement = process_lifecycle.GroupSignalRetirement()
+        attempted_signals: list[int] = []
+
+        def interrupt_then_prove_absent(
+            _process_group_id: int, selected_signal: int
+        ) -> None:
+            attempted_signals.append(selected_signal)
+            if len(attempted_signals) == 1:
+                raise KeyboardInterrupt
+            raise OSError(errno.ESRCH, "group absent")
+
+        def close(child: subprocess.Popen[bytes]) -> int:
+            return process_lifecycle.close_process_group(
+                child,
+                signal_retirement=retirement,
+                timeout_seconds=1,
+                error_type=RuntimeError,
+                label="test process",
+                termination_message="test process did not terminate",
+            )
+
+        with mock.patch.object(
+            process_lifecycle.os,
+            "killpg",
+            side_effect=interrupt_then_prove_absent,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                close(process)
+            primary = KeyboardInterrupt()
+            process_lifecycle.finish_cleanup(
+                process,
+                signal_retirement=retirement,
+                terminate_and_reap=close,
+                reap_only=mock.Mock(
+                    side_effect=AssertionError("unsafe reap-only retry")
+                ),
+                active_error=primary,
+            )
+
+        self.assertEqual([signal.SIGKILL, 0], attempted_signals)
+        self.assertTrue(retirement.retired)
+        self.assertTrue(retirement.group_absence_proven)
+        self.assertFalse(
+            process_lifecycle.has_incomplete_process_group_cleanup(primary)
+        )
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_retired_cleanup_retries_group_absence_without_resignaling(self) -> None:
+        process = mock.Mock(spec=subprocess.Popen)
+        process.pid = 4242
+        process.wait.return_value = 0
+        retirement = process_lifecycle.GroupSignalRetirement()
+        attempted_signals: list[int] = []
+
+        def interrupted_probe(_process_group_id: int, selected_signal: int) -> None:
+            attempted_signals.append(selected_signal)
+            if len(attempted_signals) == 2:
+                raise KeyboardInterrupt
+            if selected_signal == 0:
+                raise OSError(errno.ESRCH, "group absent")
+
+        def close(child: subprocess.Popen[bytes]) -> int:
+            return process_lifecycle.close_process_group(
+                child,
+                signal_retirement=retirement,
+                timeout_seconds=1,
+                error_type=RuntimeError,
+                label="test process",
+                termination_message="test process did not terminate",
+            )
+
+        with mock.patch.object(
+            process_lifecycle.os,
+            "killpg",
+            side_effect=interrupted_probe,
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                close(process)
+            primary = KeyboardInterrupt()
+            process_lifecycle.finish_cleanup(
+                process,
+                signal_retirement=retirement,
+                terminate_and_reap=close,
+                reap_only=mock.Mock(
+                    side_effect=AssertionError("unsafe reap-only retry")
+                ),
+                active_error=primary,
+            )
+
+        self.assertEqual([signal.SIGKILL, 0, 0], attempted_signals)
+        self.assertTrue(retirement.retired)
+        self.assertTrue(retirement.group_absence_proven)
+        self.assertFalse(
+            process_lifecycle.has_incomplete_process_group_cleanup(primary)
+        )
+
     def test_resource_teardown_failure_cannot_skip_process_cleanup(self) -> None:
         calls: list[str] = []
 
@@ -1312,7 +1416,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 mock.Mock(spec=subprocess.Popen),
                 resource_closers=(fail_close, later_close),
                 resource_label="test resource teardown",
-                signal_retired=False,
+                signal_retirement=process_lifecycle.GroupSignalRetirement(),
                 terminate_and_reap=terminate_and_reap,
                 reap_only=terminate_and_reap,
                 active_error=None,
@@ -4411,6 +4515,120 @@ class DurablePublicationTests(unittest.TestCase):
                 self.publication_adapter()
         finally:
             alternates.unlink()
+
+    def test_history_reader_and_publisher_reject_promisor_pack_markers(self) -> None:
+        repository = authority._GitRepository(
+            self.repo,
+            gnupg_home=self.gnupg_home,
+            git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+            gpg_program=self.gpg,
+        )
+        pack_dir = self.repo / ".git" / "objects" / "pack"
+        pack_dir.mkdir(exist_ok=True)
+        marker = pack_dir / ("0" * 40 + ".promisor")
+        marker.write_bytes(b"")
+        try:
+            with self.assertRaisesRegex(
+                authority.HistoryValidationError, "safety binding changed"
+            ):
+                repository.text("rev-parse", "HEAD")
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "promisor pack metadata",
+            ):
+                self.adapter._git(("rev-parse", "HEAD"))
+            with self.assertRaisesRegex(
+                authority.HistoryValidationError, "complete and non-promisor"
+            ):
+                authority._GitRepository(
+                    self.repo,
+                    gnupg_home=self.gnupg_home,
+                    git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+                    gpg_program=self.gpg,
+                )
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "complete and non-promisor",
+            ):
+                self.publication_adapter()
+        finally:
+            marker.unlink()
+
+        real_revalidate = git_safety.revalidate_local_repository
+        injected = False
+
+        def inject_after_path_revalidation(*args, **kwargs) -> None:
+            nonlocal injected
+            real_revalidate(*args, **kwargs)
+            if not injected:
+                marker.write_bytes(b"")
+                injected = True
+
+        try:
+            with mock.patch.object(
+                git_safety,
+                "revalidate_local_repository",
+                side_effect=inject_after_path_revalidation,
+            ):
+                with self.assertRaisesRegex(
+                    git_safety.LocalRepositorySafetyError,
+                    "promisor pack metadata",
+                ):
+                    with git_safety.bind_local_repository_command(
+                        self.adapter._git_repository_admission,
+                        self.adapter._git_directory_identity,
+                    ):
+                        self.fail("promisor marker reached a bound Git command")
+        finally:
+            marker.unlink(missing_ok=True)
+
+        alias_marker = pack_dir / ("1" * 40 + ".PROMISOR")
+        alias_marker.write_bytes(b"")
+        try:
+            with self.assertRaisesRegex(
+                authority.HistoryValidationError, "complete and non-promisor"
+            ):
+                authority._GitRepository(
+                    self.repo,
+                    gnupg_home=self.gnupg_home,
+                    git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+                    gpg_program=self.gpg,
+                )
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "promisor pack metadata",
+            ):
+                self.adapter._git(("rev-parse", "HEAD"))
+        finally:
+            alias_marker.unlink()
+
+        ignorable_marker = pack_dir / ("2" * 40 + ".promi\u200dsor")
+        ignorable_marker.write_bytes(b"")
+        try:
+            with self.assertRaisesRegex(
+                authority.HistoryValidationError, "safety binding changed"
+            ):
+                repository.text("rev-parse", "HEAD")
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError, "portable ASCII"
+            ):
+                self.adapter._git(("rev-parse", "HEAD"))
+            with self.assertRaisesRegex(
+                authority.HistoryValidationError, "complete and non-promisor"
+            ):
+                authority._GitRepository(
+                    self.repo,
+                    gnupg_home=self.gnupg_home,
+                    git_binary=executable_authority.DEFAULT_GIT_EXECUTABLE,
+                    gpg_program=self.gpg,
+                )
+            with self.assertRaisesRegex(
+                publication_support.LocalGitPublicationError,
+                "complete and non-promisor",
+            ):
+                self.publication_adapter()
+        finally:
+            ignorable_marker.unlink()
 
     def test_history_reader_revalidates_shared_repository_admission(self) -> None:
         repository = authority._GitRepository(

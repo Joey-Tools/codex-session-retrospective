@@ -283,10 +283,16 @@ History verification and publication disable system and global Git
 configuration, credential helpers, interactive prompts, lazy fetching, pagers,
 optional locks, and repository fsmonitor execution. Before object reads, both
 paths reject shallow repositories and every repository-local partial-clone or
-promisor declaration; missing local objects therefore fail instead of triggering
-network or credential access. They pin the resolved OpenPGP verifier, invoke it
-through the authenticated fixed `--no-options` launcher so dedicated-home
-configuration is ignored, and validate every reachable commit that changes
+promisor declaration, including a bounded descriptor-relative scan that proves
+`objects/pack/*.promisor` marker absence at admission and revalidation. Scan
+failure or child-entry churn that prevents stable proof fails closed without
+being mislabeled as a proved marker. Non-ASCII pack-directory names also fail
+closed; ASCII marker suffixes are compared case-insensitively instead of
+guessing the filesystem's Unicode alias behavior. Missing local objects
+therefore fail instead of triggering network or credential access. They pin the
+resolved OpenPGP verifier, invoke it through the authenticated fixed `--no-options`
+launcher so dedicated-home configuration is ignored, and validate every
+reachable commit that changes
 `runs/**`. Each such commit must be a canonical signed publication that
 adds exactly one eight-artifact bundle; modification or deletion of retained
 history fails closed. An unrelated successor commit may advance the branch

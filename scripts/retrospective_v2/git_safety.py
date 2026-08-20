@@ -144,6 +144,14 @@ class LocalRepositoryCommandBinding:
 
 _CONFIG_LIMIT_BYTES = 1024 * 1024
 _GIT_DISCOVERY_FILE_LIMIT_BYTES = 4096
+_PACK_DIRECTORY_ENTRY_LIMIT = 100_000
+_PACK_DIRECTORY_NAME_BYTES_LIMIT = 16 * 1024 * 1024
+_DIRECTORY_OPEN_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_DIRECTORY", 0)
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_CLOEXEC", 0)
+)
 _BOUND_GIT_ENVIRONMENT_KEYS = frozenset(
     {
         "GIT_CEILING_DIRECTORIES",
@@ -525,6 +533,134 @@ def _open_bound_directory(
     return descriptor
 
 
+def _directory_scan_identity(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        int(metadata.st_dev),
+        int(metadata.st_ino),
+        int(metadata.st_mode),
+        int(metadata.st_uid),
+        int(metadata.st_gid),
+    )
+
+
+def _reject_promisor_pack_markers_at(
+    object_store_fd: int,
+    object_store: Path,
+) -> None:
+    """Prove a bounded, stable absence of pack-level promisor markers."""
+
+    pack_path = object_store / "pack"
+    try:
+        pack_fd = os.open("pack", _DIRECTORY_OPEN_FLAGS, dir_fd=object_store_fd)
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise LocalRepositorySafetyError(
+            "incomplete", "Git pack metadata cannot be authenticated"
+        ) from error
+
+    primary: BaseException | None = None
+    try:
+        try:
+            initial = safe_io.validate_owner_only_directory_descriptor(
+                pack_fd, pack_path, exact_mode=False
+            )
+            named = os.stat("pack", dir_fd=object_store_fd, follow_symlinks=False)
+        except (OSError, safe_io.UnsafePathError) as error:
+            raise LocalRepositorySafetyError(
+                "incomplete", "Git pack metadata cannot be authenticated"
+            ) from error
+        expected_identity = _directory_scan_identity(initial)
+        if _directory_scan_identity(named) != expected_identity:
+            raise LocalRepositorySafetyError(
+                "incomplete", "Git pack metadata identity is not stable"
+            )
+
+        def scan_once() -> tuple[str, ...]:
+            names: list[str] = []
+            name_bytes = 0
+            scan_fd: int | None = None
+            scan_error: BaseException | None = None
+            try:
+                scan_fd = os.open(".", _DIRECTORY_OPEN_FLAGS, dir_fd=pack_fd)
+                if _directory_scan_identity(os.fstat(scan_fd)) != expected_identity:
+                    raise LocalRepositorySafetyError(
+                        "incomplete", "Git pack metadata identity is not stable"
+                    )
+                with os.scandir(scan_fd) as entries:
+                    for index, entry in enumerate(entries):
+                        if index >= _PACK_DIRECTORY_ENTRY_LIMIT:
+                            raise LocalRepositorySafetyError(
+                                "incomplete",
+                                "Git pack metadata exceeds its entry bound",
+                            )
+                        name = entry.name
+                        if not isinstance(name, str) or "\x00" in name:
+                            raise LocalRepositorySafetyError(
+                                "incomplete", "Git pack metadata name is invalid"
+                            )
+                        if not name.isascii():
+                            raise LocalRepositorySafetyError(
+                                "incomplete",
+                                "Git pack metadata name is outside the portable "
+                                "ASCII contract",
+                            )
+                        name_bytes += len(os.fsencode(name))
+                        if name_bytes > _PACK_DIRECTORY_NAME_BYTES_LIMIT:
+                            raise LocalRepositorySafetyError(
+                                "incomplete",
+                                "Git pack metadata exceeds its name-byte bound",
+                            )
+                        if name.lower().endswith(".promisor"):
+                            raise LocalRepositorySafetyError(
+                                "incomplete",
+                                "repository has Git promisor pack metadata",
+                            )
+                        names.append(name)
+            except LocalRepositorySafetyError as error:
+                scan_error = error
+                raise
+            except OSError as error:
+                mapped = LocalRepositorySafetyError(
+                    "incomplete", "Git pack metadata cannot be scanned"
+                )
+                scan_error = mapped
+                raise mapped from error
+            except BaseException as error:
+                scan_error = error
+                raise
+            finally:
+                if scan_fd is not None:
+                    _close_descriptors((scan_fd,), "Git pack scan", primary=scan_error)
+            return tuple(sorted(names))
+
+        first = scan_once()
+        second = scan_once()
+        try:
+            final = safe_io.validate_owner_only_directory_descriptor(
+                pack_fd, pack_path, exact_mode=False
+            )
+            final_named = os.stat("pack", dir_fd=object_store_fd, follow_symlinks=False)
+        except (OSError, safe_io.UnsafePathError) as error:
+            raise LocalRepositorySafetyError(
+                "incomplete", "Git pack metadata cannot be revalidated"
+            ) from error
+        if (
+            first != second
+            or _directory_scan_identity(final) != expected_identity
+            or _directory_scan_identity(final_named) != expected_identity
+        ):
+            raise LocalRepositorySafetyError(
+                "incomplete",
+                "Git pack metadata absence could not be proved during child-entry churn",
+            )
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        _close_descriptors((pack_fd,), "Git pack metadata", primary=primary)
+
+
 def _admit_repository_discovery(
     *,
     repository: Path,
@@ -689,6 +825,9 @@ def _revalidate_command_binding(binding: LocalRepositoryCommandBinding) -> None:
         raise LocalRepositorySafetyError(
             "config-changed", "local Git configuration changed after validation"
         )
+    _reject_promisor_pack_markers_at(
+        binding.object_store_fd, binding.admission.object_store
+    )
 
 
 @contextmanager
@@ -953,6 +1092,9 @@ def admit_local_repository(
         descriptors.append(git_dir_fd)
         common_dir_fd = _open_bound_directory(common_dir, expected[common_dir])
         descriptors.append(common_dir_fd)
+        object_store_fd = _open_bound_directory(object_store, expected[object_store])
+        descriptors.append(object_store_fd)
+        _reject_promisor_pack_markers_at(object_store_fd, object_store)
         (
             git_marker_is_directory,
             discovery_files,
@@ -1018,6 +1160,11 @@ def revalidate_local_repository(
             admission.common_dir, expected[admission.common_dir]
         )
         descriptors.append(common_dir_fd)
+        object_store_fd = _open_bound_directory(
+            admission.object_store, expected[admission.object_store]
+        )
+        descriptors.append(object_store_fd)
+        _reject_promisor_pack_markers_at(object_store_fd, admission.object_store)
         _revalidate_repository_discovery(
             admission,
             {

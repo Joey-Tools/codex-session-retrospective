@@ -9,6 +9,7 @@ import io
 import json
 import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import tempfile
@@ -688,7 +689,20 @@ class CliContractTests(unittest.TestCase):
                 value, f" {canonical_prompt}"
             ),
             "embedded-newline": lambda value: replace_prompt(
-                value, canonical_prompt.replace(" for the", "\nfor the")
+                value,
+                canonical_prompt.replace(
+                    " production coordinator.", "\nproduction coordinator."
+                ),
+            ),
+            "gpg-extra-argument": lambda value: replace_prompt(
+                value,
+                canonical_prompt.replace(
+                    "Authenticated publisher GPG executable: "
+                    + shlex.quote(TEST_PUBLISHER_GPG),
+                    "Authenticated publisher GPG executable: "
+                    + shlex.quote(TEST_PUBLISHER_GPG)
+                    + " --batch",
+                ),
             ),
             "unknown-field": lambda value: value + 'notes = "extra instruction"\n',
             "nested-table": lambda value: value + '[controller]\naction = "extra"\n',
@@ -736,6 +750,30 @@ class CliContractTests(unittest.TestCase):
                 expected_mode="daily",
             )
         )
+        self.assertIn("Run $codex-session-retrospective", prompt)
+        self.assertNotIn(" start --mode daily ", prompt)
+        for argument in (
+            "--start",
+            "--end",
+            "--run-dir",
+            "--run-config",
+            "--history-repo",
+            "--history-target-ref",
+            "--publisher-gpg-program",
+        ):
+            self.assertIn(argument, prompt)
+        for stage in (
+            "doctor",
+            "start",
+            "status",
+            "accept-source",
+            "accept-agent-result",
+            "advance",
+            "export",
+            "finalize",
+        ):
+            self.assertIn(stage, prompt)
+        self.assertIn("Do not stop after start", prompt)
 
     def test_cutover_record_rejects_ambiguous_modes_and_bounded_rrules(self) -> None:
         automation_root = self.automation_root()
@@ -762,8 +800,11 @@ class CliContractTests(unittest.TestCase):
             (
                 "duplicate-equals-publisher",
                 lambda prompt: prompt.replace(
-                    f"--publisher-gpg-program {TEST_PUBLISHER_GPG} ",
-                    f"--publisher-gpg-program {TEST_PUBLISHER_GPG} "
+                    "Authenticated publisher GPG executable: "
+                    + shlex.quote(TEST_PUBLISHER_GPG),
+                    "Authenticated publisher GPG executable: "
+                    + shlex.quote(TEST_PUBLISHER_GPG)
+                    + " "
                     "--publisher-gpg-program=/tmp/untrusted-gpg ",
                     1,
                 ),
@@ -787,7 +828,9 @@ class CliContractTests(unittest.TestCase):
             (
                 "equals-publisher",
                 lambda prompt: prompt.replace(
-                    f"--publisher-gpg-program {TEST_PUBLISHER_GPG}",
+                    "Authenticated publisher GPG executable: "
+                    + shlex.quote(TEST_PUBLISHER_GPG),
+                    "Authenticated publisher GPG executable: "
                     f"--publisher-gpg-program={TEST_PUBLISHER_GPG}",
                     1,
                 ),
@@ -2793,7 +2836,7 @@ class CliContractTests(unittest.TestCase):
 
         process_lifecycle.finish_cleanup(
             mock.Mock(spec=subprocess.Popen),
-            signal_retired=False,
+            signal_retirement=process_lifecycle.GroupSignalRetirement(),
             terminate_and_reap=cleanup_failure,
             reap_only=cleanup_failure,
             active_error=primary,
@@ -2833,7 +2876,7 @@ class CliContractTests(unittest.TestCase):
 
         process_lifecycle.finish_cleanup(
             mock.Mock(spec=subprocess.Popen),
-            signal_retired=False,
+            signal_retirement=process_lifecycle.GroupSignalRetirement(),
             terminate_and_reap=cleanup_failure,
             reap_only=cleanup_failure,
             active_error=primary,

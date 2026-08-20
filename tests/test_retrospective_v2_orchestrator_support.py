@@ -148,7 +148,9 @@ class PublisherCanaryProcessTests(unittest.TestCase):
 
         orchestrator_support.process_lifecycle.finish_cleanup(
             mock.Mock(spec=subprocess.Popen),
-            signal_retired=False,
+            signal_retirement=(
+                orchestrator_support.process_lifecycle.GroupSignalRetirement()
+            ),
             terminate_and_reap=cleanup_failure,
             reap_only=cleanup_failure,
             active_error=error,
@@ -287,7 +289,9 @@ class PublisherCanaryProcessTests(unittest.TestCase):
         ) as caught:
             orchestrator_support.process_lifecycle.finish_cleanup(
                 mock.Mock(spec=subprocess.Popen),
-                signal_retired=False,
+                signal_retirement=(
+                    orchestrator_support.process_lifecycle.GroupSignalRetirement()
+                ),
                 terminate_and_reap=cleanup_failure,
                 reap_only=cleanup_failure,
                 active_error=None,
