@@ -1334,6 +1334,21 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "Customer legal name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Preferred name is Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "**Maiden name: Smith**",
+                "Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "password: ßx",
                 "SSX was used",
                 "[REDACTED_ORIGINAL_PROMPT] was used",
@@ -1618,6 +1633,24 @@ class ResultValidationTests(unittest.TestCase):
             "Surname: Smith",
             "familyName: Smith",
             "givenName: Alice",
+            "Customer legal name: Alice Smith",
+            "Customer legal_name: Alice Smith",
+            "Customer legal-name: Alice Smith",
+            "Customer preferred name: Alice",
+            "Customer preferred_name: Alice",
+            "Customer preferred-name: Alice",
+            "Customer maiden name: Smith",
+            "Customer maiden_name: Smith",
+            "Customer maiden-name: Smith",
+            "customerLegalName: Alice Smith",
+            "customerPreferredName: Alice",
+            "customerMaidenName: Smith",
+            "Legal name: Alice Smith",
+            "preferredName: Alice",
+            "maidenName: Smith",
+            "**Legal name: Alice Smith**",
+            "Preferred name is Alice",
+            "Maiden name was Smith",
         ):
             with self.subTest(name_label=name_label):
                 self.assertEqual(

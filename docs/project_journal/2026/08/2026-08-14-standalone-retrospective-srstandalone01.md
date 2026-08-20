@@ -2113,6 +2113,32 @@ superseded_by:
   bytecode exclusion, and `git diff --check`. A full-repository Ruff formatting
   probe identified six unchanged baseline files and is non-gating; no unrelated
   formatting changes were made.
+- Signed head `70a75621` had clean exact-secret admission but became stale when
+  its fresh local Codex processor found one P1 privacy gap: controlled `legal
+  name`, `preferred name`, and `maiden name` fields were not recognized. The
+  independent workspace postvalidated with the exact original graph and config
+  receipts, the 30-file trusted bundle and Python digests remained unchanged,
+  the reviewer closed, and the task root was removed through the bounded cleanup
+  helper before source changes resumed.
+- The shared closed name-field grammar now includes `legal`, `preferred`, and
+  `maiden` modifiers for controlled space, underscore, hyphen, camel-case,
+  Markdown, and narrative forms. Source-overlap extraction, scanner/redactor,
+  retained artifact reread, audit, and rendered report validation all consume
+  the same policy. The first three-test focused invocation exposed four
+  misplaced bare-field expectations and is non-counting; after preserving the
+  existing field-boundary semantics, the exact focused set passes 3/3 in 47.632
+  seconds, the affected modules pass 182/182 in 96.824 seconds, and module
+  boundaries pass 19/19 in 1.911 seconds.
+- The final Python 3.13 inventory contains 1,831 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `9e110ee8eb5e819e2b5a258e81d0fff3f30180ba5b8bf15a0c86ce89aebb34f6`.
+  Shard 0 passes 436/436 in 1,692.399 seconds, shard 1 passes 495/495 in
+  1,482.433 seconds, shard 2 passes 483/483 in 1,419.951 seconds, and shard 3
+  passes 417/417 in 1,343.546 seconds, for exact aggregate coverage of
+  1,831/1,831. Darwin security tests pass 14/14 in 68.027 seconds.
+- The final tree also passes Ruff 0.13.2 lint and changed-file formatting, both
+  current workflows under `actionlint`, the generated bootstrap manifest
+  check, the official OpenAI Skill validator, and `git diff --check`.
 
 ## Follow-up Work
 
