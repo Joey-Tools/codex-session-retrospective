@@ -50,6 +50,7 @@ _FILE_READ_FLAGS = (
     | getattr(os, "O_CLOEXEC", 0)
 )
 _MAX_TRUSTED_SYMLINKS = 16
+_DIR_FD_PROBE_PARENT = Path("/tmp")
 _ATOMIC_CREATE_PREFIX = ".atomic-create-"
 _ATOMIC_CREATE_RE = re.compile(
     r"\.atomic-create-(?P<target>[0-9a-f]{32})-"
@@ -412,7 +413,10 @@ def _run_dir_fd_smoke_probe() -> tuple[str, ...]:
         return missing
 
     try:
-        with tempfile.TemporaryDirectory(prefix="retrospective-safe-io-probe-") as root:
+        with tempfile.TemporaryDirectory(
+            prefix="retrospective-safe-io-probe-",
+            dir=_DIR_FD_PROBE_PARENT,
+        ) as root:
             root_fd = os.open(root, _DIRECTORY_FLAGS)
             try:
                 os.mkdir("child", OWNER_DIRECTORY_MODE, dir_fd=root_fd)

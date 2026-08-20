@@ -5,13 +5,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import os
 import pathlib
-import tempfile
 from typing import Callable, Sequence
 
 try:
-    from . import safe_io
+    from . import safe_io, temporary_paths
     from .transport_contracts import TransportValidationError
     from .transport_program import (
         SOURCE_TRANSPORT_MAX_PROGRAM_COMPONENT_BYTES,
@@ -28,6 +26,7 @@ try:
     )
 except (ImportError, ModuleNotFoundError):
     import safe_io  # type: ignore[no-redef]
+    import temporary_paths  # type: ignore[no-redef]
     from transport_contracts import (  # type: ignore[no-redef]
         TransportValidationError,
     )
@@ -151,21 +150,24 @@ def relay_remote_host_context_cli(
         raise ValueError("remote-host-context legacy request is invalid")
     helper = remote_host_context_helper_path()
     helper_commitment = remote_host_context_helper_commitment(helper)
-    with tempfile.TemporaryDirectory(
-        prefix="codex-retrospective-remote-helper-"
+    with temporary_paths.owner_only_temporary_directory(
+        root=temporary_paths.REMOTE_HELPER_TEMP_ROOT,
+        prefix="remote-helper-",
     ) as temporary:
-        snapshot_cache = pathlib.Path(temporary)
-        os.chmod(snapshot_cache, 0o700)
+        snapshot_cache = temporary.path
+        temporary.revalidate()
         snapshot, snapshot_commitment = _create_legacy_helper_snapshot(
             helper,
             snapshot_cache,
             helper_commitment,
         )
+        temporary.revalidate()
         _inventory, runtime_commitment, _component, _commands = _authenticated_hosts(
             snapshot,
             expected_commitment=snapshot_commitment,
             content_snapshot=True,
         )
+        temporary.revalidate()
         argv = _remote_helper_bootstrap_argv(
             snapshot,
             snapshot_commitment,
@@ -173,3 +175,4 @@ def relay_remote_host_context_cli(
             normalized,
         )
         _relay_remote_host_context_command(argv, max_output_bytes=max_output_bytes)
+        temporary.revalidate()

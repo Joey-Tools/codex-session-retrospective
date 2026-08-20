@@ -2139,6 +2139,106 @@ superseded_by:
 - The final tree also passes Ruff 0.13.2 lint and changed-file formatting, both
   current workflows under `actionlint`, the generated bootstrap manifest
   check, the official OpenAI Skill validator, and `git diff --check`.
+- Signed head `61958060` became stale when current-head GitHub Codex found two
+  remaining gaps. The shared personal-data grammar omitted controlled
+  `nickname` and `display name` labels, and the publisher sign/verify canary
+  allowed ambient temporary-directory selection to place its disposable files
+  inside a retrospective source tree.
+- The final privacy grammar separates subject-qualified and direct personal
+  labels from ambiguous product prose. Direct `Nickname:` and `Display name:`
+  assignments, controlled narrative boundaries, camel-case fields, Markdown,
+  and comma-form names remain protected, while ordinary service display names
+  and release nicknames remain ordinary product text. Name-component overlap
+  extraction removes closed trailing metadata before splitting components, so
+  status text is never promoted into the sensitive-value set.
+- The publisher canary now uses a fixed owner-only root beneath `/tmp`, rejects
+  both lexical and resolved overlap with the canonical local source before and
+  after creation, and gives GPG a closed environment whose three temporary
+  variables bind the exact disposable child. The secure-I/O cold capability
+  probe also selects `/tmp` explicitly instead of consulting ambient temporary
+  variables. Darwin's process-runtime-only `__CF_USER_TEXT_ENCODING` addition
+  is the sole tested child-environment exception and cannot inherit its ambient
+  value.
+- Two bounded read-only precommit audits found and drove the final ambiguity,
+  trailing-metadata, cold-probe, production-root, lexical-overlap, and actual
+  child-environment regressions. The resulting affected modules pass 241/241
+  in 119.463 seconds; CI contracts pass 33/33, module/bootstrap/skill contracts
+  pass 36/36, and Darwin security contracts pass 14/14 in 68.661 seconds.
+  The four-shard 1,833-test attempt under manifest digest
+  `53b25db3ffad09d56ffcc2f22b79dc760f7d787d3c0547563d774a3ea73e7b9e`
+  was intentionally interrupted after the audits invalidated its tree and is
+  non-counting. A direct CI-contract invocation through the symlinked Homebrew
+  launcher is likewise non-counting; the required owner-controlled copied
+  Python 3.13 runtime supplied the passing 33/33 evidence.
+- The bounded audit cutoff then produced five additional actionable findings,
+  so the preceding 1,836-test result is stale for the superseding tree. Bare
+  ambiguous name fields could still match dotted product qualifiers or a
+  colon-delimited product narrative, quoted trailing status metadata could be
+  split into a name component, and the canary root had a check-to-child-create
+  replacement window. The same audit identified two remaining ambient
+  temporary-root consumers in the legacy remote-helper snapshot and publication
+  Git index.
+- Ambiguous direct labels now exclude dotted qualification, ambiguous narrative
+  labels require a line/list boundary or an explicit `observed`, `recorded`, or
+  `reported` introducer, and the closed metadata suffix accepts quoted keys and
+  assignment forms before name-component splitting. The exact reviewer examples
+  remain protected or ordinary product text as intended.
+- A shared descriptor-bound temporary-directory authority now owns fixed,
+  purpose-specific canary, remote-helper, and publication-index roots. It creates
+  each random child through a held root descriptor; binds root and child identity
+  and access policy; verifies the actual resolved location before publication,
+  around path consumers, and before cleanup; and removes only an inventoried
+  matching object. Ambient `TEMP`, `TMP`, `TMPDIR`, and Python's cached temp root
+  cannot select these locations. The adversarial parent-replacement regression
+  fails before yielding a path and leaves the retrospective source unchanged.
+- The first expanded affected run passes 126 of 128 tests and reports only the
+  two deliberately exact static inventories changed by the new authority. After
+  updating those measured contracts, the four exact boundary regressions pass
+  4/4; the initial focused behavioral set passes 8/8 in 2.507 seconds. Full
+  superseding-tree evidence follows below.
+- On the pre-follow-up superseding tree, the affected orchestrator,
+  result, and boundary modules pass 128/128 in 18.867 seconds; bootstrap and
+  skill contracts pass 17/17 in 4.674 seconds; isolated source transport passes
+  129/129 in 61.007 seconds; publication transactions pass 132/132 in
+  5,252.573 seconds; export passes 72/72 in 105.082 seconds; result-contract
+  audit passes 24/24 in 2.594 seconds; and CI contracts pass 33/33 in 2.166
+  seconds. Darwin security contracts pass 14/14 in 71.210 seconds.
+- That pre-follow-up Python 3.13 inventory contains 1,838 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `252092f073fd3581786e3bd1742a9d1417e53f29301ad118b54c331ab55602c0`.
+  Shard 0 passes 438/438 in 1,806.130 seconds, shard 1 passes 496/496 in
+  1,592.075 seconds, shard 2 passes 486/486 in 1,523.450 seconds, and shard 3
+  passes 418/418 in 1,461.025 seconds, for exact aggregate coverage of
+  1,838/1,838. A final bounded privacy audit then made this result stale.
+- That audit found five remaining composition and evidence gaps. Contextual
+  personal fields did not accept dotted subject paths or a spaced subject plus
+  camel-case field; ambiguous direct assignments did not accept explicit
+  observation or sentence boundaries; structural product qualifiers could be
+  lost after punctuation; quoted and escaped trailing metadata used different
+  match-span and overlap grammars; and one canary regression fixture could write
+  arbitrary inherited environment values while demonstrating a failure.
+- The contextual name grammar now accepts subject-qualified dot, underscore,
+  space, and camel-case combinations. Ambiguous direct and narrative labels
+  share explicit observation and sentence-boundary rules while retaining parent
+  product qualifiers, and one shared quoted or escaped metadata grammar governs
+  both redaction spans and overlap extraction. The canary fixture persists only
+  environment keys, fixed safe values, and a boolean synthetic-canary result.
+  The first two-test focused invocation exposed four incorrect expected outputs
+  and is non-counting; after correcting those expectations, the exact tests pass
+  2/2 in 2.135 seconds. The affected modules pass 23/23, 86/86, 72/72, and
+  24/24, module boundaries pass 19/19, and the follow-up read-only audit reports
+  `No findings.`
+- The final Python 3.13 inventory contains 1,838 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `5262f57c841f882d8e3360d42cb77bda34b55be49ca111f7734d83b5a435adb7`.
+  Shard 0 passes 438/438 in 1,728.045 seconds, shard 1 passes 496/496 in
+  1,496.264 seconds, shard 2 passes 486/486 in 1,428.447 seconds, and shard 3
+  passes 418/418 in 1,380.751 seconds, for exact aggregate coverage of
+  1,838/1,838.
+- The final tree passes Ruff 0.13.2 lint and changed-file formatting, both
+  current workflows under bounded `actionlint`, the generated bootstrap
+  manifest check, the official OpenAI Skill validator, project-journal
+  validation, source-tree bytecode exclusion, and `git diff --check`.
 
 ## Follow-up Work
 

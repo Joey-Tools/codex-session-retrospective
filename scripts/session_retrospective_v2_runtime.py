@@ -185,6 +185,7 @@ else:
         "synthesis_lineage.py",
         "synthesis_sources.py",
         "synthesis_tasks.py",
+        "temporary_paths.py",
         "transport.py",
         "transport_auth.py",
         "transport_capture.py",

@@ -356,7 +356,7 @@ TRANSPORT_LINE_INVENTORY = {
     "transport_program.py": 389,
     "transport_program_components.py": 207,
     "transport_remote.py": 507,
-    "transport_remote_snapshot.py": 175,
+    "transport_remote_snapshot.py": 178,
     "transport_resume.py": 235,
     "transport_session_shards.py": 1_605,
     "transport_snapshot.py": 243,
@@ -409,6 +409,7 @@ BOUNDED_MODULE_LINES = {
     "synthesis_evidence.py": 200,
     "synthesis_sources.py": 175,
     "synthesis_tasks.py": 110,
+    "temporary_paths.py": 260,
     "source_spool.py": 350,
     "source_staging.py": 350,
     "source_capacity.py": 150,
@@ -1217,7 +1218,7 @@ spec.loader.exec_module(module)
         }
         self.assertEqual(TRANSPORT_MODULES, set(TRANSPORT_LINE_INVENTORY))
         self.assertEqual(TRANSPORT_LINE_INVENTORY, observed)
-        self.assertEqual(8_769, sum(observed.values()))
+        self.assertEqual(8_772, sum(observed.values()))
         self.assertLessEqual(
             sum(observed.values()),
             TRANSPORT_AGGREGATE_LINE_LIMIT,
@@ -1266,8 +1267,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_574, branch_total)
-        self.assertLessEqual(branch_total, 9_575)
+        self.assertEqual(9_601, branch_total)
+        self.assertLessEqual(branch_total, 9_601)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

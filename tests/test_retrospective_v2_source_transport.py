@@ -1713,6 +1713,11 @@ class SourceTransportProtocolTests(unittest.TestCase):
         helper.write_text(executable_remote_helper_source("{}"), encoding="ascii")
         commitment = transport.remote_host_context_helper_commitment(helper)
         observed_snapshot: Path | None = None
+        source_root = self.root / "poisoned-codex-source"
+        source_root.mkdir(mode=0o700)
+        source_sentinel = source_root / "source-sentinel"
+        source_sentinel.write_text("unchanged", encoding="ascii")
+        snapshot_root = self.root / "remote-helper-temporary-root"
 
         def inspect_relay(argv, *, max_output_bytes) -> None:
             nonlocal observed_snapshot
@@ -1728,6 +1733,25 @@ class SourceTransportProtocolTests(unittest.TestCase):
             self.assertEqual(4096, max_output_bytes)
 
         with (
+            mock.patch.dict(
+                os.environ,
+                {
+                    "TEMP": str(source_root),
+                    "TMP": str(source_root),
+                    "TMPDIR": str(source_root),
+                },
+            ),
+            mock.patch.object(tempfile, "tempdir", str(source_root)),
+            mock.patch.object(
+                transport_remote_snapshot.temporary_paths,
+                "REMOTE_HELPER_TEMP_ROOT",
+                snapshot_root,
+            ),
+            mock.patch.object(
+                transport_remote_snapshot.temporary_paths.transport_source,
+                "_local_codex_root",
+                return_value=source_root,
+            ),
             mock.patch.object(
                 transport_remote_snapshot,
                 "remote_host_context_helper_path",
@@ -1757,6 +1781,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         self.assertRegex(argv[9], r"\Asha256:[0-9a-f]{64}\Z")
         self.assertEqual(str(observed_snapshot), argv[10])
+        self.assertEqual(snapshot_root, observed_snapshot.parent.parent)
         self.assertRegex(argv[11], r"\Asha256:[0-9a-f]{64}\Z")
         self.assertEqual(
             ("session-meta", "--host", "remote.example", "--limit", "10"),
@@ -1765,6 +1790,8 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual(4096, relay.call_args.kwargs["max_output_bytes"])
         self.assertIsNotNone(observed_snapshot)
         self.assertFalse(observed_snapshot.exists())
+        self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
+        self.assertEqual([source_sentinel], list(source_root.iterdir()))
 
         for invalid in ((), ("source-transport",), ("preflight", "bad\nvalue")):
             with self.subTest(arguments=invalid), self.assertRaises(ValueError):

@@ -3,12 +3,10 @@
 from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from copy import deepcopy
-import os
 from pathlib import Path
 import subprocess
-import tempfile
 from typing import Any
-from . import authority, executable_authority, git_safety, gpg_status
+from . import authority, executable_authority, git_safety, gpg_status, temporary_paths
 from .checkpoints import canonical_json_bytes
 from .identity import IdentityKey
 
@@ -246,13 +244,15 @@ class LocalGitCommitOperations:
                 "signed publication requires an explicit signing key"
             )
         self._validate_signing_identity()
-        with tempfile.TemporaryDirectory(
-            prefix="retrospective-v2-git-index-"
-        ) as temp_dir:
-            os.chmod(temp_dir, 0o700)
-            index_path = Path(temp_dir) / "index"
+        with temporary_paths.owner_only_temporary_directory(
+            root=temporary_paths.PUBLICATION_INDEX_TEMP_ROOT,
+            prefix="retrospective-v2-git-index-",
+        ) as temporary:
+            index_path = temporary.path / "index"
             index_env = {"GIT_INDEX_FILE": str(index_path)}
+            temporary.revalidate()
             self._git(("read-tree", parent), extra_env=index_env)
+            temporary.harden_file(index_path.name)
             for name in ARTIFACT_NAMES_BYTEWISE:
                 content = unit["artifacts"][name]
                 blob = (
@@ -264,15 +264,19 @@ class LocalGitCommitOperations:
                     .strip()
                 )
                 path = f"{unit['destination']}/{name}"
+                temporary.revalidate()
                 self._git(
                     ("update-index", "--add", "--cacheinfo", f"100644,{blob},{path}"),
                     extra_env=index_env,
                 )
+                temporary.harden_file(index_path.name)
+            temporary.revalidate()
             tree = (
                 self._git(("write-tree",), extra_env=index_env)
                 .stdout.decode("ascii")
                 .strip()
             )
+            temporary.harden_file(index_path.name)
 
         timestamp = _publication_timestamp(attempt_ref, ordinal)
         message = _publication_commit_message(

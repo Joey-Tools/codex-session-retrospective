@@ -6,7 +6,6 @@ import os
 from pathlib import Path
 import selectors
 import subprocess
-import tempfile
 import time
 from typing import Any, Mapping, Sequence
 
@@ -20,6 +19,7 @@ from . import (
     result_validation,
     safe_io,
     sharding,
+    temporary_paths,
     transport as source_transport,
 )
 from .checkpoints import CheckpointIntegrityError, content_digest
@@ -518,16 +518,21 @@ def publisher_sign_verify_canary(
             gpg_program,
             label="GPG",
         )
-        with tempfile.TemporaryDirectory(
-            prefix="retrospective-publisher-canary-"
-        ) as raw:
-            directory = Path(raw)
-            os.chmod(directory, 0o700)
+        with temporary_paths.owner_only_temporary_directory(
+            root=temporary_paths.PUBLISHER_CANARY_TEMP_ROOT,
+            prefix="retrospective-publisher-canary-",
+        ) as temporary:
+            directory = temporary.path
+            temporary.revalidate()
+            environment["TEMP"] = environment["TMP"] = environment["TMPDIR"] = str(
+                directory
+            )
             payload = directory / "payload"
             signature = directory / "payload.sig"
             safe_io.atomic_create_bytes(
                 payload, b"session-retrospective-publisher-canary-v2\n"
             )
+            temporary.revalidate()
             with executable_authority.executable_invocation(gpg_authority):
                 signed = _run_bounded_publisher_canary_process(
                     gpg_status.no_options_argv(
@@ -545,8 +550,10 @@ def publisher_sign_verify_canary(
                     ),
                     environment=environment,
                 )
+            temporary.revalidate()
             if signed.returncode != 0 or not signature.is_file():
                 return False
+            temporary.harden_file(signature.name)
             with executable_authority.executable_invocation(gpg_authority):
                 verified = _run_bounded_publisher_canary_process(
                     gpg_status.no_options_argv(
@@ -562,6 +569,7 @@ def publisher_sign_verify_canary(
                     ),
                     environment=environment,
                 )
+            temporary.revalidate()
     except (
         OSError,
         _PublisherCanaryProcessError,

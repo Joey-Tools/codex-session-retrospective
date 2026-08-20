@@ -1339,6 +1339,56 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "Nickname: Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Display name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "customer.displayName: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "user.display_name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "customer displayName: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Observed display name: Alice Smith",
+                "Alice Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Profile loaded. Nickname: Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Customer full name: Smith, John",
+                "John was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Customer display name: Smith, John",
+                "John was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "customerDisplayName: Smith, John",
+                "John was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "Preferred name is Alice",
                 "Alice was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
@@ -1535,6 +1585,30 @@ class ResultValidationTests(unittest.TestCase):
         )
         self.assertIn("John", markdown_name_with_status_values)
         self.assertNotIn("status ok", markdown_name_with_status_values)
+        qualified_markdown_name_with_status_values = tuple(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                "**Customer display name: Smith, John, status ok**"
+            )
+        )
+        self.assertIn("Smith", qualified_markdown_name_with_status_values)
+        self.assertIn("John", qualified_markdown_name_with_status_values)
+        self.assertNotIn("status ok", qualified_markdown_name_with_status_values)
+        quoted_metadata_values = tuple(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                '**Customer display name: Smith, John, "status": "ok"**'
+            )
+        )
+        self.assertIn("Smith", quoted_metadata_values)
+        self.assertIn("John", quoted_metadata_values)
+        self.assertNotIn('"status": "ok"', quoted_metadata_values)
+        escaped_metadata_values = tuple(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                r"Display name was Smith, John, \"status\": \"ok\""
+            )
+        )
+        self.assertIn("Smith", escaped_metadata_values)
+        self.assertIn("John", escaped_metadata_values)
+        self.assertNotIn(r"\"status\": \"ok\"", escaped_metadata_values)
         markdown_address_with_status_values = tuple(
             result_validation_module.privacy_locators.sensitive_labeled_values(
                 "__Address was 123 Main Street, status ok__"
@@ -1547,6 +1621,13 @@ class ResultValidationTests(unittest.TestCase):
             scan_for_leaks(
                 {"text": "status ok"},
                 original_prompts=("Full name is Smith, John, status ok",),
+            ),
+        )
+        self.assertEqual(
+            (),
+            scan_for_leaks(
+                {"text": "status ok"},
+                original_prompts=("**Customer display name: Smith, John, status ok**",),
             ),
         )
         self.assertEqual(
@@ -1642,15 +1723,32 @@ class ResultValidationTests(unittest.TestCase):
             "Customer maiden name: Smith",
             "Customer maiden_name: Smith",
             "Customer maiden-name: Smith",
+            "Customer nickname: Alice",
+            "Customer display name: Alice Smith",
+            "Customer display_name: Alice Smith",
+            "Customer display-name: Alice Smith",
+            "customer.displayName: Alice Smith",
+            "user.display_name: Alice Smith",
+            "customer displayName: Alice Smith",
+            "Customer full name: Smith, John",
+            "Customer display name: Smith, John",
             "customerLegalName: Alice Smith",
             "customerPreferredName: Alice",
             "customerMaidenName: Smith",
+            "customerNickname: Alice",
+            "customerDisplayName: Alice Smith",
+            "customerDisplayName: Smith, John",
             "Legal name: Alice Smith",
             "preferredName: Alice",
             "maidenName: Smith",
+            "Nickname: Alice",
+            "displayName: Alice Smith",
             "**Legal name: Alice Smith**",
+            "**Display name: Alice Smith**",
             "Preferred name is Alice",
             "Maiden name was Smith",
+            "Nickname is Alice",
+            "Display name was Alice Smith",
         ):
             with self.subTest(name_label=name_label):
                 self.assertEqual(
@@ -1659,6 +1757,65 @@ class ResultValidationTests(unittest.TestCase):
                         name_label
                     ),
                 )
+        for narrative_name, expected in (
+            (
+                "Observed display name: Alice Smith",
+                "Observed [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Profile loaded. Nickname: Alice",
+                "Profile loaded. [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Profile loaded. Display name was Alice Smith",
+                "Profile loaded. [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+        ):
+            with self.subTest(narrative_name=narrative_name):
+                self.assertEqual(
+                    expected,
+                    result_validation_module.privacy_locators.redact_personal_identifiers(
+                        narrative_name
+                    ),
+                )
+        for product_label in (
+            "The service display name is Gateway",
+            "The release nickname was Canary",
+            "service.displayName: Gateway",
+            "release: nickname is Canary",
+            '{"service":{"displayName":"Gateway"}}',
+            "release: nickname: Canary",
+        ):
+            with self.subTest(product_label=product_label):
+                self.assertEqual(
+                    product_label,
+                    result_validation_module.privacy_locators.redact_personal_identifiers(
+                        product_label
+                    ),
+                )
+                self.assertEqual(
+                    (),
+                    scan_for_leaks(
+                        {
+                            "text": (
+                                "Gateway" if "Gateway" in product_label else "Canary"
+                            )
+                        },
+                        original_prompts=(product_label,),
+                    ),
+                )
+        self.assertEqual(
+            '**[REDACTED_PERSONAL_IDENTIFIER], "status": "ok"**',
+            result_validation_module.privacy_locators.redact_personal_identifiers(
+                '**Display name was Smith, John, "status": "ok"**'
+            ),
+        )
+        self.assertEqual(
+            r"[REDACTED_PERSONAL_IDENTIFIER], \"status\": \"ok\"",
+            result_validation_module.privacy_locators.redact_personal_identifiers(
+                r"Display name was Smith, John, \"status\": \"ok\""
+            ),
+        )
         for birth_date in (
             "Birthday: 1990-01-02",
             "Birth date: 1990-01-02",

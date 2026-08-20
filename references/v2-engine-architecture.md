@@ -187,6 +187,27 @@ alongside an active primary is carried through bounded exception wrappers and
 becomes a non-retryable machine-visible CLI result rather than an invisible note.
 Availability, readiness, canary, and remote-gap fallbacks must rethrow that
 security failure instead of converting it to an ordinary false or gap result.
+The publisher canary, legacy remote-helper snapshot, and publication Git index
+use separate fixed owner-only roots beneath
+`/tmp/codex-session-retrospective-<uid>`. A shared temporary-directory authority
+rejects both lexical and resolved overlap with the canonical local Codex source,
+opens the fixed root through the secure directory-chain policy, creates the
+unguessable child through the held root descriptor, and holds both root and
+child descriptors until bounded inventory-based cleanup. It validates the
+named root, named child, descriptor identities, access policy, and actual
+resolved location before publishing the path, around path-consuming work, and
+before cleanup. A proved mismatch retains the unproven object instead of
+removing a replacement. These checks detect replacement but do not claim to
+defeat an actively malicious same-UID writer in the final revalidation-to-use
+syscall window; that writer remains part of the host trust boundary.
+
+The canary child receives `TEMP`, `TMP`, and `TMPDIR` bound to the exact
+descriptor-validated disposable workspace through the otherwise closed
+subprocess environment. The remote snapshot and publication index likewise
+ignore ambient temporary-directory selection. Host variables therefore cannot
+redirect any of these writes into session or archive sources. The secure-I/O
+capability probe that can run before temporary-root creation also uses the fixed
+`/tmp` parent rather than ambient temporary-directory selection.
 
 Source scheduling prepares the transport-program snapshot, remote-helper
 snapshot, and bound empty output together with the candidate checkpoint. Exact

@@ -54,6 +54,7 @@ from retrospective_v2 import (  # noqa: E402
     retained_export_binding,
     retained_export_coordination,
     safe_io,
+    temporary_paths,
     transport,
 )
 from retrospective_v2.contracts import (  # noqa: E402
@@ -130,6 +131,90 @@ def run_command(
 
 
 class PublicationInvariantUnitTests(unittest.TestCase):
+    def test_publication_index_ignores_ambient_temporary_roots(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source_root = root / "poisoned-codex-source"
+            source_root.mkdir(mode=0o700)
+            source_sentinel = source_root / "source-sentinel"
+            source_sentinel.write_text("unchanged", encoding="ascii")
+            index_root = root / "publication-index-root"
+            observed_index_paths: list[Path] = []
+
+            subject = publication_git_commits.LocalGitCommitOperations()
+            subject._signing_key = "fixture-signing-key"
+            subject._expected_signer_uid = "Fixture <fixture@example.invalid>"
+            subject._validate_signing_identity = lambda: None
+            subject._validate_publication_commit = lambda **_kwargs: None
+
+            def fake_git(arguments, **kwargs):
+                command = arguments[0]
+                index_environment = kwargs.get("extra_env", {})
+                if "GIT_INDEX_FILE" in index_environment:
+                    index_path = Path(index_environment["GIT_INDEX_FILE"])
+                    index_path.unlink(missing_ok=True)
+                    index_path.write_bytes(b"fixture index\n")
+                    os.chmod(index_path, 0o644)
+                    observed_index_paths.append(index_path)
+                outputs = {
+                    "hash-object": ("a" * 40 + "\n").encode("ascii"),
+                    "write-tree": ("b" * 40 + "\n").encode("ascii"),
+                    "commit-tree": ("c" * 40 + "\n").encode("ascii"),
+                }
+                return subprocess.CompletedProcess(
+                    arguments,
+                    0,
+                    stdout=outputs.get(command, b""),
+                    stderr=b"",
+                )
+
+            subject._git = fake_git
+            unit = {
+                "artifacts": {
+                    name: b"{}\n"
+                    for name in publication_support.ARTIFACT_NAMES_BYTEWISE
+                },
+                "destination": "runs/weekly/window/run",
+                "publication_role": "standalone",
+            }
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "TEMP": str(source_root),
+                        "TMP": str(source_root),
+                        "TMPDIR": str(source_root),
+                    },
+                ),
+                mock.patch.object(tempfile, "tempdir", str(source_root)),
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLICATION_INDEX_TEMP_ROOT",
+                    index_root,
+                ),
+                mock.patch.object(
+                    temporary_paths.transport_source,
+                    "_local_codex_root",
+                    return_value=source_root,
+                ),
+            ):
+                commit = subject._create_signed_publication_commit(
+                    parent="d" * 40,
+                    unit=unit,
+                    ordinal=0,
+                    attempt_ref="attempt_ref_v2:" + "e" * 64,
+                    plan_digest="f" * 64,
+                )
+
+            self.assertEqual("c" * 40, commit)
+            self.assertTrue(observed_index_paths)
+            self.assertTrue(
+                all(path.parent.parent == index_root for path in observed_index_paths)
+            )
+            self.assertTrue(all(not path.exists() for path in observed_index_paths))
+            self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
+            self.assertEqual([source_sentinel], list(source_root.iterdir()))
+
     def test_gpg_no_options_launcher_is_fixed_and_executable(self) -> None:
         launcher = gpg_status.no_options_launcher_authority()
 

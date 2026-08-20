@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import contextlib
 import errno
+import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -21,14 +23,134 @@ sys.path.insert(0, str(SCRIPTS))
 from retrospective_v2 import orchestrator_support  # noqa: E402
 
 
+class PublisherCanaryPathContractTests(unittest.TestCase):
+    def test_production_canary_root_is_fixed_outside_environment_selection(
+        self,
+    ) -> None:
+        self.assertEqual(
+            Path("/tmp")
+            / f"codex-session-retrospective-{os.getuid()}"
+            / "publisher-canary",
+            orchestrator_support.temporary_paths.PUBLISHER_CANARY_TEMP_ROOT,
+        )
+        self.assertEqual(
+            Path("/tmp")
+            / f"codex-session-retrospective-{os.getuid()}"
+            / "remote-helper",
+            orchestrator_support.temporary_paths.REMOTE_HELPER_TEMP_ROOT,
+        )
+        self.assertEqual(
+            Path("/tmp")
+            / f"codex-session-retrospective-{os.getuid()}"
+            / "publication-index",
+            orchestrator_support.temporary_paths.PUBLICATION_INDEX_TEMP_ROOT,
+        )
+
+    def test_lexical_source_overlap_is_rejected_independently_of_resolution(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            outside = root / "outside"
+            outside.mkdir(mode=0o700)
+            (source_root / "escape").symlink_to(outside, target_is_directory=True)
+            canary_root = source_root / "escape" / "publisher-canary"
+
+            self.assertFalse(
+                canary_root.resolve(strict=False).is_relative_to(
+                    source_root.resolve(strict=False)
+                )
+            )
+            with self.assertRaises(orchestrator_support.safe_io.UnsafePathError):
+                orchestrator_support.temporary_paths._require_root_outside_source(
+                    canary_root,
+                    source_root,
+                )
+
+    def test_bound_creation_rejects_parent_replacement_before_yield(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            source_sentinel = source_root / "source-sentinel"
+            source_sentinel.write_text("unchanged", encoding="ascii")
+            temporary_root = root / "temporary-root"
+            displaced_root = root / "displaced-root"
+            real_mkdir = os.mkdir
+            swapped = False
+
+            def replace_after_child_creation(path, mode=0o777, *, dir_fd=None):
+                nonlocal swapped
+                result = real_mkdir(path, mode, dir_fd=dir_fd)
+                if (
+                    dir_fd is not None
+                    and str(path).startswith("replacement-test-")
+                    and not swapped
+                ):
+                    swapped = True
+                    temporary_root.rename(displaced_root)
+                    temporary_root.symlink_to(source_root, target_is_directory=True)
+                return result
+
+            try:
+                with (
+                    mock.patch.object(
+                        orchestrator_support.temporary_paths.transport_source,
+                        "_local_codex_root",
+                        return_value=source_root,
+                    ),
+                    mock.patch.object(
+                        orchestrator_support.temporary_paths.os,
+                        "mkdir",
+                        side_effect=replace_after_child_creation,
+                    ),
+                    self.assertRaisesRegex(
+                        orchestrator_support.safe_io.UnsafePathError,
+                        "temporary root changed",
+                    ),
+                ):
+                    with orchestrator_support.temporary_paths.owner_only_temporary_directory(
+                        root=temporary_root,
+                        prefix="replacement-test-",
+                    ):
+                        self.fail("a replaced temporary root must not be published")
+            finally:
+                if temporary_root.is_symlink():
+                    temporary_root.unlink()
+                if displaced_root.exists():
+                    shutil.rmtree(displaced_root)
+
+            self.assertTrue(swapped)
+            self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
+            self.assertEqual([source_sentinel], list(source_root.iterdir()))
+
+
 class PublisherCanaryProcessTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary_directory = tempfile.TemporaryDirectory(dir=ROOT)
         self.root = Path(self.temporary_directory.name)
+        self.source_root = self.root / "source-root"
+        self.source_root.mkdir(mode=0o700)
+        self.canary_root = self.root / "canary-root"
+        self.canary_root_patch = mock.patch.object(
+            orchestrator_support.temporary_paths,
+            "PUBLISHER_CANARY_TEMP_ROOT",
+            self.canary_root,
+        )
+        self.source_root_patch = mock.patch.object(
+            orchestrator_support.temporary_paths.transport_source,
+            "_local_codex_root",
+            return_value=self.source_root,
+        )
+        self.canary_root_patch.start()
+        self.source_root_patch.start()
         self.gnupg_home = self.root / "gnupg"
         self.gnupg_home.mkdir(mode=0o700)
         self.gpg_program = self.root / "fake-gpg"
         self.gpg_mode = self.root / "fake-gpg-mode"
+        self.gpg_environment = self.root / "fake-gpg-environments"
         self.gpg_child_pids = self.root / "fake-gpg-child-pids"
         self.gpg_sentinel = self.root / "fake-gpg-sentinel"
         self.gpg_mode.write_text("success", encoding="ascii")
@@ -36,6 +158,7 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             textwrap.dedent(
                 f"""\
                 #!{sys.executable}
+                import json
                 import os
                 from pathlib import Path
                 import subprocess
@@ -51,6 +174,35 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                 arguments = arguments[1:]
                 phase = "sign" if "--detach-sign" in arguments else "verify"
                 mode = Path({str(self.gpg_mode)!r}).read_text(encoding="ascii").strip()
+                if mode == "record_environment":
+                    recorded_value_keys = (
+                        "GNUPGHOME",
+                        "HOME",
+                        "LANG",
+                        "LC_ALL",
+                        "PATH",
+                        "TEMP",
+                        "TMP",
+                        "TMPDIR",
+                        "TZ",
+                    )
+                    environment_record = {{
+                        "keys": sorted(os.environ),
+                        "values": {{
+                            key: os.environ[key]
+                            for key in recorded_value_keys
+                            if key in os.environ
+                        }},
+                        "runtime_text_encoding_is_poisoned": (
+                            os.environ.get("__CF_USER_TEXT_ENCODING") == "poisoned"
+                        ),
+                    }}
+                    with Path({str(self.gpg_environment)!r}).open(
+                        "a", encoding="utf-8"
+                    ) as environment_stream:
+                        environment_stream.write(
+                            json.dumps(environment_record, sort_keys=True) + chr(10)
+                        )
                 limit = {orchestrator_support._PUBLISHER_CANARY_STREAM_LIMIT_BYTES}
                 if mode == f"{{phase}}_stdout":
                     stream = sys.stdout.buffer
@@ -119,6 +271,8 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                     os.kill(int(value), signal.SIGKILL)
                 except (ProcessLookupError, ValueError):
                     pass
+        self.source_root_patch.stop()
+        self.canary_root_patch.stop()
         self.temporary_directory.cleanup()
 
     def _spawned_child_pids(self) -> list[int]:
@@ -165,6 +319,7 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             )
         )
         self.assertFalse(self.gpg_sentinel.exists())
+        self.assertEqual(0o700, self.canary_root.stat().st_mode & 0o777)
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
     def test_canary_selector_setup_failure_reaps_started_process(self) -> None:
@@ -325,6 +480,7 @@ class PublisherCanaryProcessTests(unittest.TestCase):
     def test_canary_uses_closed_subprocess_environment(self) -> None:
         captured_environments: list[dict[str, str]] = []
         run_canary = orchestrator_support._run_bounded_publisher_canary_process
+        self.gpg_mode.write_text("record_environment", encoding="ascii")
 
         def capture_environment(command, *, environment):
             captured_environments.append(dict(environment))
@@ -341,7 +497,13 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             "PYTHONHOME": str(self.root / "python-home"),
             "PYTHONPATH": str(self.root / "python-path"),
             "SSH_AUTH_SOCK": str(self.root / "ssh-agent"),
+            "TEMP": str(self.source_root),
+            "TMP": str(self.source_root),
+            "TMPDIR": str(self.source_root),
+            "__CF_USER_TEXT_ENCODING": "poisoned",
         }
+        source_sentinel = self.source_root / "source-sentinel"
+        source_sentinel.write_text("unchanged", encoding="ascii")
         with (
             mock.patch.dict(os.environ, poisoned),
             mock.patch.object(
@@ -357,7 +519,11 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                 )
             )
 
-        self.assertEqual(len(captured_environments), 2)
+        child_environment_records = tuple(
+            json.loads(line)
+            for line in self.gpg_environment.read_text(encoding="utf-8").splitlines()
+        )
+        self.assertEqual(2, len(captured_environments))
         allowed = {
             "GNUPGHOME",
             "HOME",
@@ -369,14 +535,130 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             "TMPDIR",
             "TZ",
         }
-        for environment in captured_environments:
-            self.assertLessEqual(set(environment), allowed)
-            self.assertEqual(environment["GNUPGHOME"], str(self.gnupg_home))
-            self.assertEqual(environment["HOME"], str(self.gnupg_home))
-            self.assertEqual(environment["PATH"], os.defpath)
-            self.assertEqual(environment["LANG"], "C")
-            self.assertEqual(environment["LC_ALL"], "C")
-            self.assertEqual(environment["TZ"], "UTC")
+        for captured, record in zip(
+            captured_environments, child_environment_records, strict=True
+        ):
+            child_keys = set(record["keys"])
+            runtime_added = child_keys.difference(captured)
+            self.assertLessEqual(runtime_added, {"__CF_USER_TEXT_ENCODING"})
+            self.assertEqual(
+                set(captured),
+                child_keys.difference({"__CF_USER_TEXT_ENCODING"}),
+            )
+            self.assertEqual(captured, record["values"])
+            self.assertFalse(record["runtime_text_encoding_is_poisoned"])
+            self.assertLessEqual(set(captured), allowed)
+            self.assertEqual(captured["GNUPGHOME"], str(self.gnupg_home))
+            self.assertEqual(captured["HOME"], str(self.gnupg_home))
+            self.assertEqual(captured["PATH"], os.defpath)
+            self.assertEqual(captured["LANG"], "C")
+            self.assertEqual(captured["LC_ALL"], "C")
+            self.assertEqual(captured["TZ"], "UTC")
+            selected_temp = captured["TMPDIR"]
+            self.assertEqual(selected_temp, captured["TEMP"])
+            self.assertEqual(selected_temp, captured["TMP"])
+            self.assertEqual(self.canary_root, Path(selected_temp).parent)
+            self.assertNotEqual(str(self.source_root), selected_temp)
+        self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
+        self.assertEqual([source_sentinel], list(self.source_root.iterdir()))
+
+    def test_canary_cold_start_uses_fixed_safe_io_probe_parent(self) -> None:
+        source_sentinel = self.source_root / "source-sentinel"
+        source_sentinel.write_text("unchanged", encoding="ascii")
+        temporary_directory_calls: list[dict[str, object]] = []
+        real_temporary_directory = tempfile.TemporaryDirectory
+
+        def capture_temporary_directory(*args, **kwargs):
+            temporary_directory_calls.append(dict(kwargs))
+            return real_temporary_directory(*args, **kwargs)
+
+        safe_io = orchestrator_support.safe_io
+        safe_io._cached_dir_fd_capability_issues.cache_clear()
+        try:
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {
+                        "TEMP": str(self.source_root),
+                        "TMP": str(self.source_root),
+                        "TMPDIR": str(self.source_root),
+                    },
+                ),
+                mock.patch.object(tempfile, "tempdir", str(self.source_root)),
+                mock.patch.object(
+                    tempfile,
+                    "TemporaryDirectory",
+                    side_effect=capture_temporary_directory,
+                ),
+            ):
+                self.assertTrue(
+                    orchestrator_support.publisher_sign_verify_canary(
+                        gnupg_home=self.gnupg_home,
+                        gpg_program=self.gpg_program,
+                    )
+                )
+        finally:
+            safe_io._cached_dir_fd_capability_issues.cache_clear()
+
+        probe_calls = tuple(
+            call
+            for call in temporary_directory_calls
+            if call.get("prefix") == "retrospective-safe-io-probe-"
+        )
+        self.assertEqual(1, len(probe_calls))
+        self.assertEqual(Path("/tmp"), probe_calls[0].get("dir"))
+        self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
+        self.assertEqual([source_sentinel], list(self.source_root.iterdir()))
+
+    def test_canary_rejects_a_fixed_root_inside_a_source_root(self) -> None:
+        source_sentinel = self.source_root / "source-sentinel"
+        source_sentinel.write_text("unchanged", encoding="ascii")
+
+        with mock.patch.object(
+            orchestrator_support.temporary_paths,
+            "PUBLISHER_CANARY_TEMP_ROOT",
+            self.source_root / "publisher-canary",
+        ):
+            self.assertFalse(
+                orchestrator_support.publisher_sign_verify_canary(
+                    gnupg_home=self.gnupg_home,
+                    gpg_program=self.gpg_program,
+                )
+            )
+
+        self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
+        self.assertEqual([source_sentinel], list(self.source_root.iterdir()))
+
+    def test_canary_rejects_a_fixed_root_resolving_into_a_source_root(self) -> None:
+        actual_source_root = self.root / "actual-source-root"
+        actual_source_root.mkdir(mode=0o700)
+        source_alias = self.root / "source-alias"
+        source_alias.symlink_to(actual_source_root, target_is_directory=True)
+        source_sentinel = actual_source_root / "source-sentinel"
+        source_sentinel.write_text("unchanged", encoding="ascii")
+        canary_root = actual_source_root / "publisher-canary"
+
+        with (
+            mock.patch.object(
+                orchestrator_support.temporary_paths,
+                "PUBLISHER_CANARY_TEMP_ROOT",
+                canary_root,
+            ),
+            mock.patch.object(
+                orchestrator_support.temporary_paths.transport_source,
+                "_local_codex_root",
+                return_value=source_alias,
+            ),
+        ):
+            self.assertFalse(
+                orchestrator_support.publisher_sign_verify_canary(
+                    gnupg_home=self.gnupg_home,
+                    gpg_program=self.gpg_program,
+                )
+            )
+
+        self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
+        self.assertEqual([source_sentinel], list(actual_source_root.iterdir()))
 
     @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
     def test_canary_closes_spawned_process_groups_after_success(self) -> None:

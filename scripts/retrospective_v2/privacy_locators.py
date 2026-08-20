@@ -274,9 +274,15 @@ _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT = (
     r"organization|Organization|person|Person|tenant|Tenant|user|User)"
 )
 _PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
-_PERSONAL_NAME_OR_ID_FIELD_PATTERN_TEXT = (
-    r"(?:id|surname|(?:(?:family|first|full|given|last|legal|maiden|middle|"
-    r"preferred)[_ -]+)?name)"
+_PERSONAL_NAME_FIELD_PATTERN_TEXT = (
+    r"(?:nickname|surname|(?:(?:display|family|first|full|given|last|legal|"
+    r"maiden|middle|preferred)[_ -]+)?name)"
+)
+_PERSONAL_CONTEXTUAL_NAME_FIELD_PATTERN_TEXT = (
+    r"(?:"
+    + _PERSONAL_NAME_FIELD_PATTERN_TEXT
+    + r"|(?-i:(?:display|Display|family|Family|first|First|full|Full|given|Given|"
+    r"last|Last|legal|Legal|maiden|Maiden|middle|Middle|preferred|Preferred)Name))"
 )
 _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
     r"(?:dob|date[_ -]+of[_ -]+birth|birth[_ -]?(?:date|day)|"
@@ -297,21 +303,23 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"debitCard(?:Number)?|paymentCard(?:Number)?|cardNumber|"
     r"bankAccountNumber|accountNumber|routingNumber)))"
 )
+_LABELED_PERSONAL_NAME_FIELD_PATTERN_TEXT = (
+    r"\b(?:"
+    + _PERSONAL_SUBJECT_PATTERN_TEXT
+    + _PERSONAL_POSSESSIVE_PATTERN_TEXT
+    + r"(?:[._ -]+)?"
+    + _PERSONAL_CONTEXTUAL_NAME_FIELD_PATTERN_TEXT
+    + r")"
+)
 _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     r"\b(?:"
     + _PERSONAL_SUBJECT_PATTERN_TEXT
     + _PERSONAL_POSSESSIVE_PATTERN_TEXT
     + r"[_ -]?"
-    r"(?:"
-    + _PERSONAL_NAME_OR_ID_FIELD_PATTERN_TEXT
-    + r"|address|"
-    + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
-    + r")|"
+    r"(?:id|address|" + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT + r")|"
     r"(?-i:"
     + _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT
-    + r"(?:Id|Name|Surname|(?:Family|First|Full|Given|Last|Legal|Maiden|Middle|"
-    r"Preferred)Name|"
-    r"Address|DOB|Dob|DateOfBirth))|"
+    + r"(?:Id|Address|DOB|Dob|DateOfBirth))|"
     r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
     r"shipping|tenant|user)[_ -]?address|"
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
@@ -439,8 +447,18 @@ _ADDRESS_COMPONENT_FIELD_PATTERN_TEXT = (
     r"address[_ -]+line[_ -]*[2-9]|post(?:al)?[_ -]+code|postcode|"
     r"zip(?:[_ -]+code)?)\b"
 )
+_NAME_TRAILING_METADATA_KEY_PATTERN_TEXT = (
+    r"(?:note|notes|state|status|verification|verified)"
+)
+_NAME_TRAILING_METADATA_FIELD_PATTERN_TEXT = (
+    r"(?:\\?['\"]"
+    + _NAME_TRAILING_METADATA_KEY_PATTERN_TEXT
+    + r"\\?['\"]|"
+    + _NAME_TRAILING_METADATA_KEY_PATTERN_TEXT
+    + r"\b)"
+)
 _NAME_TRAILING_METADATA_PATTERN_TEXT = (
-    r"(?:note|notes|state|status|verification|verified)\b"
+    _NAME_TRAILING_METADATA_FIELD_PATTERN_TEXT + r"[ \t]*(?:(?:=|:)[ \t]*)?"
 )
 _ADDRESS_TRAILING_METADATA_PATTERN_TEXT = (
     r"(?:note|notes|status|verification|verified)\b"
@@ -501,16 +519,39 @@ LABELED_PERSONAL_VALUE_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 LABELED_PERSONAL_ID_RE = LABELED_PERSONAL_VALUE_RE
+LABELED_PERSONAL_NAME_VALUE_RE = re.compile(
+    _labeled_field_assignment_pattern(
+        _LABELED_PERSONAL_NAME_FIELD_PATTERN_TEXT,
+        markdown_group="personal_name_markdown",
+    )
+    + _NAME_VALUE_CAPTURE_PATTERN_TEXT,
+    re.ASCII | re.IGNORECASE,
+)
 NARRATIVE_LABELED_PERSONAL_VALUE_RE = re.compile(
     _narrative_labeled_field_assignment_pattern(_LABELED_PERSONAL_FIELD_PATTERN_TEXT)
     + _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT,
     re.ASCII | re.IGNORECASE,
 )
-_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
+NARRATIVE_LABELED_PERSONAL_NAME_VALUE_RE = re.compile(
+    _narrative_labeled_field_assignment_pattern(
+        _LABELED_PERSONAL_NAME_FIELD_PATTERN_TEXT
+    )
+    + _NAME_VALUE_CAPTURE_PATTERN_TEXT,
+    re.ASCII | re.IGNORECASE,
+)
+_UNAMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
     r"\b(?:surname|(?:family|first|full|given|last|legal|maiden|middle|preferred)"
     r"[_ -]+name|(?-i:(?:family|first|full|given|last|legal|maiden|middle|"
-    r"preferred|Family|First|Full|Given|Last|Legal|Maiden|Middle|Preferred)"
-    r"Name))"
+    r"preferred|Family|First|Full|Given|Last|Legal|Maiden|Middle|Preferred)Name))"
+)
+_AMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
+    r"\b(?:nickname|display[_ -]+name|(?-i:(?:display|Display)Name))"
+)
+_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
+    r"\b(?:nickname|surname|(?:display|family|first|full|given|last|legal|maiden|"
+    r"middle|preferred)[_ -]+name|(?-i:(?:display|family|first|full|given|last|"
+    r"legal|maiden|middle|preferred|Display|Family|First|Full|Given|Last|Legal|"
+    r"Maiden|Middle|Preferred)Name))"
 )
 _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT = r"\baddress"
 BARE_LABELED_NAME_VALUE_RE = re.compile(
@@ -518,8 +559,20 @@ BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?<=[.!?;:,([{'\"])[ \t]*)"
     r"(?P<personal>"
     + _labeled_field_assignment_pattern(
-        _BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
+        _UNAMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
         markdown_group="bare_name_markdown",
+    )
+    + _NAME_VALUE_CAPTURE_PATTERN_TEXT
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
+BOUNDARY_BARE_LABELED_AMBIGUOUS_NAME_VALUE_RE = re.compile(
+    r"(?:(?:\A|(?<=[\r\n]))[ \t]*(?:[-*+>][ \t]+)?|"
+    r"(?<=[.!?;])[ \t]+|\b(?:observed|recorded|reported)[ \t]+)"
+    r"(?P<personal>"
+    + _labeled_field_assignment_pattern(
+        _AMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT,
+        markdown_group="boundary_bare_ambiguous_name_markdown",
     )
     + _NAME_VALUE_CAPTURE_PATTERN_TEXT
     + r")",
@@ -540,7 +593,20 @@ BARE_LABELED_ADDRESS_VALUE_RE = re.compile(
 NARRATIVE_BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?<![A-Za-z0-9_*])"
     r"(?P<personal>"
-    + _narrative_labeled_field_assignment_pattern(_BARE_LABELED_NAME_FIELD_PATTERN_TEXT)
+    + _narrative_labeled_field_assignment_pattern(
+        _UNAMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT
+    )
+    + _NAME_VALUE_CAPTURE_PATTERN_TEXT
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
+BOUNDARY_NARRATIVE_BARE_LABELED_AMBIGUOUS_NAME_VALUE_RE = re.compile(
+    r"(?:(?:\A|(?<=[\r\n]))[ \t]*(?:[-*+>][ \t]+)?|"
+    r"(?<=[.!?;])[ \t]+|\b(?:observed|recorded|reported)[ \t]+)"
+    r"(?P<personal>"
+    + _narrative_labeled_field_assignment_pattern(
+        _AMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT
+    )
     + _NAME_VALUE_CAPTURE_PATTERN_TEXT
     + r")",
     re.ASCII | re.IGNORECASE,
@@ -671,6 +737,15 @@ MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE = re.compile(
     + r")",
     re.ASCII | re.IGNORECASE,
 )
+MARKDOWN_COMPLETE_LABELED_PERSONAL_NAME_VALUE_RE = re.compile(
+    r"(?P<personal>"
+    + _markdown_complete_labeled_value_pattern(
+        _LABELED_PERSONAL_NAME_FIELD_PATTERN_TEXT,
+        markdown_group="complete_personal_name_markdown",
+    )
+    + r")",
+    re.ASCII | re.IGNORECASE,
+)
 MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?P<personal>"
     + _markdown_complete_labeled_value_pattern(
@@ -700,19 +775,28 @@ _ADDRESS_LABELED_VALUE_PATTERNS = (
     MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE,
 )
 _NAME_LABELED_VALUE_PATTERNS = (
+    LABELED_PERSONAL_NAME_VALUE_RE,
+    NARRATIVE_LABELED_PERSONAL_NAME_VALUE_RE,
     BARE_LABELED_NAME_VALUE_RE,
+    BOUNDARY_BARE_LABELED_AMBIGUOUS_NAME_VALUE_RE,
     NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
+    BOUNDARY_NARRATIVE_BARE_LABELED_AMBIGUOUS_NAME_VALUE_RE,
     MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
     MALFORMED_MARKDOWN_NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE,
+    MARKDOWN_COMPLETE_LABELED_PERSONAL_NAME_VALUE_RE,
     MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE,
 )
 PERSONAL_LABELED_VALUE_PATTERNS = (
     LABELED_PERSONAL_VALUE_RE,
     NARRATIVE_LABELED_PERSONAL_VALUE_RE,
+    LABELED_PERSONAL_NAME_VALUE_RE,
+    NARRATIVE_LABELED_PERSONAL_NAME_VALUE_RE,
     BARE_LABELED_NAME_VALUE_RE,
+    BOUNDARY_BARE_LABELED_AMBIGUOUS_NAME_VALUE_RE,
     BARE_LABELED_ADDRESS_VALUE_RE,
     NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
+    BOUNDARY_NARRATIVE_BARE_LABELED_AMBIGUOUS_NAME_VALUE_RE,
     NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_NAME_VALUE_RE,
     MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE,
@@ -721,6 +805,7 @@ PERSONAL_LABELED_VALUE_PATTERNS = (
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE,
     MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE,
     MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE,
+    MARKDOWN_COMPLETE_LABELED_PERSONAL_NAME_VALUE_RE,
     MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE,
     MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE,
 )
@@ -737,9 +822,13 @@ PERSONAL_IDENTIFIER_GROUPS = {
     BARE_PAYMENT_CARD_RE: "personal",
     BARE_IBAN_RE: "personal",
     BARE_GROUPED_IBAN_RE: "personal",
+    LABELED_PERSONAL_NAME_VALUE_RE: 0,
+    NARRATIVE_LABELED_PERSONAL_NAME_VALUE_RE: 0,
     BARE_LABELED_NAME_VALUE_RE: "personal",
+    BOUNDARY_BARE_LABELED_AMBIGUOUS_NAME_VALUE_RE: "personal",
     BARE_LABELED_ADDRESS_VALUE_RE: "personal",
     NARRATIVE_BARE_LABELED_NAME_VALUE_RE: "personal",
+    BOUNDARY_NARRATIVE_BARE_LABELED_AMBIGUOUS_NAME_VALUE_RE: "personal",
     NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_NAME_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_NARRATIVE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
@@ -748,6 +837,7 @@ PERSONAL_IDENTIFIER_GROUPS = {
     MARKDOWN_BARE_LABELED_NAME_VALUE_RE: "personal",
     MARKDOWN_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_LABELED_PERSONAL_VALUE_RE: "personal",
+    MARKDOWN_COMPLETE_LABELED_PERSONAL_NAME_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
 }
@@ -1388,10 +1478,11 @@ _CREDENTIAL_NARRATIVE_CONTEXT_SUFFIX_RE = re.compile(
     _SAFE_CREDENTIAL_NARRATIVE_CONTINUATION_PATTERN_TEXT + r"\Z",
     re.ASCII | re.IGNORECASE,
 )
-_CREDENTIAL_NARRATIVE_METADATA_SUFFIX_RE = re.compile(
+_PERSONAL_NAME_METADATA_SUFFIX_RE = re.compile(
     r"[ \t]*,[ \t]*" + _NAME_TRAILING_METADATA_PATTERN_TEXT + r"[^\r\n]*+\Z",
     re.ASCII | re.IGNORECASE,
 )
+_CREDENTIAL_NARRATIVE_METADATA_SUFFIX_RE = _PERSONAL_NAME_METADATA_SUFFIX_RE
 _PERSONAL_STATUS_VALUE_SUFFIX_RE = re.compile(
     r"\A(?:"
     + _SAFE_CREDENTIAL_NARRATIVE_STATUS_PATTERN_TEXT
@@ -1502,12 +1593,18 @@ def _address_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
 
 def _name_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
     values = _personal_sensitive_overlap_values(match)
+    component_sources = map(
+        lambda value: _PERSONAL_NAME_METADATA_SUFFIX_RE.sub("", value),
+        values,
+    )
     components = tuple(
         filter(
             None,
             map(
                 _normalized_personal_sensitive_value,
-                chain.from_iterable(map(_ADDRESS_COMPONENT_SEPARATOR_RE.split, values)),
+                chain.from_iterable(
+                    map(_ADDRESS_COMPONENT_SEPARATOR_RE.split, component_sources)
+                ),
             ),
         )
     )
