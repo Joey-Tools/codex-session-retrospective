@@ -2079,6 +2079,40 @@ superseded_by:
   Ruff 0.13.2 lint and formatting, both current workflows under `actionlint`,
   the generated bootstrap manifest check, the official OpenAI Skill validator,
   source-tree bytecode exclusion, and `git diff --check`.
+- Signed head `a71acca9` passed all hosted CI checks and a fresh local Codex
+  processor returned `No findings.` from an independently materialized
+  workspace. That evidence became stale when current-head GitHub Codex review
+  `4981201468` found two remaining personal-data detector gaps: controlled
+  surname, family-name, and given-name fields were not recognized, while date,
+  time, and long dotted-version text could be misclassified as bare phone
+  numbers. The local reviewer workspace postvalidated clean, retained unchanged
+  trusted-release digests, and was safely removed.
+- The shared personal-data grammar now recognizes controlled `surname`,
+  `family name`, and `given name` labels across source-overlap scanning,
+  post-redaction, retained assembly and reread, and rendered-report validation.
+  Bare-phone filtering now excludes bounded 19xx/20xx date prefixes and
+  four-or-more-component dotted numeric versions without weakening ordinary
+  international, parenthesized, or compact phone detection. The exact four
+  finding regressions pass 4/4 in 45.331 seconds, the three affected modules
+  pass 182/182 in 95.263 seconds, and module boundaries pass 19/19 in 2.167
+  seconds.
+- The first current-fix 1,831-test group under manifest digest
+  `5a100214c9afcd3d335f185e710feade8a524212da4e777b418b9ff775b37fec`
+  is non-counting: shard 2 exposed the expected branch-total update, shard 3
+  passed on the stale tree, and shards 0 and 1 were interrupted and proved
+  quiescent. The final Python 3.13 inventory contains the same 1,831 exact test
+  IDs from 22 authenticated source modules under manifest digest
+  `5e5df32ccc896d59d96b8945b2c8c3626b369d831bb4553a86919d887740aede`.
+  Shard 0 passes 436/436 in 1,703.799 seconds, shard 1 passes 495/495 in
+  1,475.653 seconds, shard 2 passes 483/483 in 1,408.538 seconds, and shard 3
+  passes 417/417 in 1,343.336 seconds, for exact aggregate coverage of
+  1,831/1,831. Darwin security tests pass 14/14 in 70.362 seconds.
+- The final current-fix tree also passes Ruff 0.13.2 lint and changed-file
+  formatting, both current workflows under `actionlint`, the generated
+  bootstrap manifest check, the official OpenAI Skill validator, source-tree
+  bytecode exclusion, and `git diff --check`. A full-repository Ruff formatting
+  probe identified six unchanged baseline files and is non-gating; no unrelated
+  formatting changes were made.
 
 ## Follow-up Work
 

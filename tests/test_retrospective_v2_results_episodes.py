@@ -1319,6 +1319,21 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "Customer surname: Smith",
+                "Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Customer family name: Smith",
+                "Smith was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "Customer given name: Alice",
+                "Alice was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "password: ßx",
                 "SSX was used",
                 "[REDACTED_ORIGINAL_PROMPT] was used",
@@ -1587,6 +1602,28 @@ class ResultValidationTests(unittest.TestCase):
                     "[REDACTED_PERSONAL_IDENTIFIER]",
                     result_validation_module.privacy_locators.redact_personal_identifiers(
                         middle_name
+                    ),
+                )
+        for name_label in (
+            "Customer surname: Smith",
+            "Customer family name: Smith",
+            "Customer family_name: Smith",
+            "Customer family-name: Smith",
+            "Customer given name: Alice",
+            "Customer given_name: Alice",
+            "Customer given-name: Alice",
+            "customerSurname: Smith",
+            "customerFamilyName: Smith",
+            "customerGivenName: Alice",
+            "Surname: Smith",
+            "familyName: Smith",
+            "givenName: Alice",
+        ):
+            with self.subTest(name_label=name_label):
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result_validation_module.privacy_locators.redact_personal_identifiers(
+                        name_label
                     ),
                 )
         for birth_date in (

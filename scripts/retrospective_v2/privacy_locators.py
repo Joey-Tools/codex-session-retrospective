@@ -104,6 +104,16 @@ PHONE_RE = re.compile(
     r"(?![A-Za-z0-9_-])(?![() .-][0-9])",
     re.ASCII,
 )
+_DATE_PREFIXED_NUMERIC_RE = re.compile(
+    r"(?:19|20)[0-9]{2}(?P<date_separator>[-.])"
+    r"(?:0[1-9]|1[0-2])(?P=date_separator)"
+    r"(?:0[1-9]|[12][0-9]|3[01])(?:[^0-9]|\Z)",
+    re.ASCII,
+)
+_DOTTED_NUMERIC_VERSION_RE = re.compile(
+    r"[0-9]+(?:\.[0-9]+){3,}",
+    re.ASCII,
+)
 _PHONE_FIELD_PATTERN_TEXT = (
     r"\b(?:(?:call|phone|tel|telephone|mobile)"
     r"(?:[ _-]?(?:number|no))?|contact(?:[ _-]?(?:phone|number|no))?)"
@@ -265,7 +275,7 @@ _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT = (
 )
 _PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
 _PERSONAL_NAME_OR_ID_FIELD_PATTERN_TEXT = (
-    r"(?:id|(?:(?:first|full|last|middle)[_ -]+)?name)"
+    r"(?:id|surname|(?:(?:family|first|full|given|last|middle)[_ -]+)?name)"
 )
 _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
     r"(?:dob|date[_ -]+of[_ -]+birth|birth[_ -]?(?:date|day)|"
@@ -298,7 +308,8 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + r")|"
     r"(?-i:"
     + _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT
-    + r"(?:Id|Name|(?:First|Full|Last|Middle)Name|Address|DOB|Dob|DateOfBirth))|"
+    + r"(?:Id|Name|Surname|(?:Family|First|Full|Given|Last|Middle)Name|"
+    r"Address|DOB|Dob|DateOfBirth))|"
     r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
     r"shipping|tenant|user)[_ -]?address|"
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
@@ -494,8 +505,9 @@ NARRATIVE_LABELED_PERSONAL_VALUE_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 _BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
-    r"\b(?:(?:first|full|last|middle)[_ -]+name|"
-    r"(?-i:(?:first|full|last|middle|First|Full|Last|Middle)Name))"
+    r"\b(?:surname|(?:family|first|full|given|last|middle)[_ -]+name|"
+    r"(?-i:(?:family|first|full|given|last|middle|Family|First|Full|Given|"
+    r"Last|Middle)Name))"
 )
 _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT = r"\baddress"
 BARE_LABELED_NAME_VALUE_RE = re.compile(
@@ -1562,6 +1574,14 @@ def _iban_match_is_valid(match: re.Match[str]) -> bool:
     return remainder == 1
 
 
+def _bare_phone_match_is_valid(match: re.Match[str]) -> bool:
+    candidate = match.group(0)
+    return (
+        _DATE_PREFIXED_NUMERIC_RE.match(candidate) is None
+        and _DOTTED_NUMERIC_VERSION_RE.fullmatch(candidate) is None
+    )
+
+
 def _retain_every_match(_match: re.Match[str]) -> bool:
     return True
 
@@ -1584,6 +1604,7 @@ _PERSONAL_MATCH_FILTERS = {
     BARE_PAYMENT_CARD_RE: _payment_card_match_is_valid,
     BARE_IBAN_RE: _iban_match_is_valid,
     BARE_GROUPED_IBAN_RE: _iban_match_is_valid,
+    PHONE_RE: _bare_phone_match_is_valid,
 }
 
 
