@@ -71,14 +71,21 @@ def build_production_prompt(
     python_path: Path,
     expected_mode: str,
     publisher_gpg_program: str,
+    provider_state_path: Path,
+    production_marker_path: Path,
 ) -> str:
     if expected_mode not in {"daily", "weekly"}:
         raise ValueError("production automation mode is invalid")
     for value in (str(python_path), str(cli_path), publisher_gpg_program):
-        if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
-            raise ValueError("production automation path contains control characters")
         if not executable_authority.is_canonical_absolute_executable_path(value):
             raise ValueError("production automation executable path is invalid")
+    for value in (str(provider_state_path), str(production_marker_path)):
+        if any(ord(character) < 0x20 or ord(character) == 0x7F for character in value):
+            raise ValueError(
+                "production automation authority path contains control characters"
+            )
+        if not executable_authority.is_canonical_absolute_executable_path(value):
+            raise ValueError("production automation authority path is invalid")
     authority_argv = shlex.join((str(python_path), "-I", "-B", "-S", str(cli_path)))
     return "\n".join(
         (
@@ -89,17 +96,25 @@ def build_production_prompt(
             "Derive the exact UTC --start and --end production window and bind "
             "owner-private --run-dir, immutable --run-config, append-only "
             "--history-repo, and fully qualified --history-target-ref before "
-            "invoking start.",
+            "invoking either stage.",
             "Invoke doctor with --run-config, --history-repo, "
-            "--history-target-ref, and --publisher-gpg-program; then invoke "
-            f"start with --mode {expected_mode}, --start, --end, --run-dir, "
-            "--run-config, --history-repo, --history-target-ref, and "
-            "--publisher-gpg-program.",
-            "Repeat status -> execute every leased source action through "
-            "$remote-host-context session-shards -> accept-source -> spawn the "
-            "maximum available native subagent wave -> accept-agent-result -> "
-            "advance until exportable; then export and repeat finalize until "
-            "terminal.",
+            "--history-target-ref, --publisher-gpg-program "
+            f"{shlex.quote(publisher_gpg_program)}, --provider-state "
+            f"{shlex.quote(str(provider_state_path))}, and --production-marker "
+            f"{shlex.quote(str(production_marker_path))}.",
+            f"Invoke start with --mode {expected_mode}, --start, --end, "
+            "--run-dir, --run-config, --history-repo, --history-target-ref, "
+            "--publisher-gpg-program "
+            f"{shlex.quote(publisher_gpg_program)}, --provider-state "
+            f"{shlex.quote(str(provider_state_path))} and --production-marker "
+            f"{shlex.quote(str(production_marker_path))}.",
+            "Repeat status; execute every listed native_coordinator_actions "
+            "command exactly once, verbatim, and in listed order, honoring each "
+            "stdout_path, including each run-owned accept-source command; use "
+            "$remote-host-context session-shards only when that action explicitly "
+            "requires it; spawn the maximum available native subagent wave -> "
+            "accept-agent-result -> advance until exportable; then export and "
+            "repeat finalize until terminal.",
             "Do not stop after start and do not ask Joey to invoke intermediate "
             "stages.",
         )
@@ -112,20 +127,21 @@ def production_prompt_is_closed(
     cli_path: Path,
     python_path: Path,
     expected_mode: str,
+    publisher_gpg_program: str,
+    provider_state_path: Path,
+    production_marker_path: Path,
 ) -> bool:
     try:
         lines = prompt.splitlines()
-        if len(lines) != 7 or not lines[2].startswith(_PUBLISHER_GPG_PROMPT_PREFIX):
+        if len(lines) != 8:
             return False
-        publisher_tokens = shlex.split(lines[2][len(_PUBLISHER_GPG_PROMPT_PREFIX) :])
-        if len(publisher_tokens) != 1:
-            return False
-        publisher_gpg_program = publisher_tokens[0]
         expected = build_production_prompt(
             cli_path=cli_path,
             python_path=python_path,
             expected_mode=expected_mode,
             publisher_gpg_program=publisher_gpg_program,
+            provider_state_path=provider_state_path,
+            production_marker_path=production_marker_path,
         )
         return hmac.compare_digest(prompt.encode("utf-8"), expected.encode("utf-8"))
     except (UnicodeEncodeError, ValueError, IndexError):
@@ -139,6 +155,9 @@ def production_document_is_closed(
     cli_path: Path,
     python_path: Path,
     expected_mode: str,
+    publisher_gpg_program: str,
+    provider_state_path: Path,
+    production_marker_path: Path,
 ) -> bool:
     expected_fields = {"version", "id", "kind", "name", "prompt", "status", "rrule"}
     prompt = document.get("prompt")
@@ -157,6 +176,9 @@ def production_document_is_closed(
             cli_path=cli_path,
             python_path=python_path,
             expected_mode=expected_mode,
+            publisher_gpg_program=publisher_gpg_program,
+            provider_state_path=provider_state_path,
+            production_marker_path=production_marker_path,
         )
         and isinstance(schedule, str)
         and production_rrule_is_closed(schedule, expected_mode=expected_mode)

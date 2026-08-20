@@ -61,7 +61,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn(invocation, readme)
         self.assertNotIn('python3 "$V2_CLI"', cli_reference)
         self.assertNotIn('python3 -I -B -S "$V2_CLI"', cli_reference)
-        self.assertEqual(11, cli_reference.count(invocation))
+        self.assertEqual(10, cli_reference.count(invocation))
 
     def test_references_and_entry_points_exist(self) -> None:
         for name in (
@@ -78,6 +78,7 @@ class SkillContractTests(unittest.TestCase):
         for name in (
             "session_retrospective.py",
             "session_retrospective_v2.py",
+            "session_retrospective_v2_runtime.py",
             "session_retrospective_v2_export.py",
             "session_retrospective_v2_export_records.py",
             "session_retrospective_v2_transcript.py",

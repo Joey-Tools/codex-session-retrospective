@@ -1921,13 +1921,14 @@ superseded_by:
   exact reviewer workspace was independently materialized from trusted release
   `f9e596f4`, postvalidated clean, retained unchanged trusted-bundle digests,
   and was safely removed after the terminal findings.
-- Production automation records now require one canonical seven-line
-  coordinator prompt that binds the Python, CLI, and GPG executables, supplies
+- That follow-up required one canonical seven-line production coordinator
+  prompt that binds the Python, CLI, and GPG executables, supplies
   every production window/history/run input, and drives `doctor`, the complete
-  status/accept/advance loop, `export`, and `finalize`. Startup authority now
-  commits the executed `session_retrospective_v2.py` bytes and access policy
-  without exposing that entrypoint as an importable module. Shared process
-  cleanup separates irreversible signal retirement from a later non-signaling
+  status/accept/advance loop, `export`, and `finalize`. At that checkpoint,
+  startup authority committed the executed `session_retrospective_v2.py` bytes
+  and access policy without exposing that entrypoint as an importable module.
+  Shared process cleanup separates irreversible signal retirement from a later
+  non-signaling
   `ESRCH` absence proof, so an interrupted signal attempt can never signal a
   reused group identifier. Local history admission and every bound-command
   revalidation perform a bounded, stable, descriptor-relative pack-directory
@@ -1958,6 +1959,48 @@ superseded_by:
   lint and changed-file formatting, bounded `actionlint` for both workflows,
   the official OpenAI Skill validator, project-journal validation, source-tree
   bytecode exclusion, branch inventory caps, and `git diff --check`.
+- Signed head `ce394511` became stale when its fresh whole-range Codex
+  processor found three remaining coordinator-control gaps: the installed
+  prompt omitted exact provider-state and production-marker bindings, startup
+  could execute old entrypoint bytes while later attesting a replacement path,
+  and the prompt over-applied `$remote-host-context` to native local actions.
+  Its detached reviewer workspace postvalidated clean and was removed.
+- The public `session_retrospective_v2.py` is now a minimal installed
+  descriptor launcher and explicit outer trust root. It captures and
+  double-reads the separate `session_retrospective_v2_runtime.py`, transfers
+  descriptor custody only after the runtime binds exact content, identity, and
+  access policy into the startup receipt, and rejects direct runtime execution.
+  A successful CLI response cannot precede an unreported runtime-descriptor
+  close failure. The receipt requires exactly one runtime row and rejects any
+  claim that the outer launcher was captured by that receipt.
+- Production cutover now validates an eight-line byte-exact prompt. Both
+  `doctor` and `start` bind the independently supplied canonical GPG program,
+  default provider state, and default production marker. The authenticated
+  cutover record and each automation-record reference HMAC-bind the same GPG
+  path, so prompt text cannot select its own signer. Native source commands are
+  executed exactly once and verbatim; `$remote-host-context session-shards` is
+  used only when the exact run-owned action names it.
+- Two bounded read-only precommit audits found five actionable omissions: the
+  prompt-derived GPG expectation, remote-helper substitution in the CLI
+  reference, insufficient canonical stage-binding tests, successful-exit
+  descriptor-close handling, and an overbroad startup-receipt module grammar.
+  All five were fixed before the final inventory. Three earlier four-shard
+  starts were intentionally interrupted and fully quiesced after discovering
+  launcher mode, fixture inventory, or precommit-audit defects; they are
+  non-counting. A later non-isolated 68-test CLI probe produced only the
+  expected runtime-authority errors and is also non-counting.
+- The final Python 3.13 inventory contains 1,827 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `1959ee1c66186e4b03fd2a983987af1ddea619f9b58ad39faf2b9736cf9fc3e6`.
+  Shard 0 passes 436/436 in 1,652.268 seconds, shard 1 passes 494/494 in
+  1,453.825 seconds, shard 2 passes 482/482 in 1,386.621 seconds, and shard 3
+  passes 415/415 in 1,323.896 seconds. Every bounded runner exits zero with an
+  explicit `OK` terminal, for exact aggregate coverage of 1,827/1,827. Ruff
+  0.13.2 lint and changed-file formatting, both workflows under `actionlint`,
+  the generated bootstrap manifest, the official OpenAI Skill validator,
+  branch and module budgets, and `git diff --check` pass. The validator's first
+  host-Python attempt lacked PyYAML and is non-counting; the official validator
+  passed under `uv run --with pyyaml`.
 
 ## Follow-up Work
 

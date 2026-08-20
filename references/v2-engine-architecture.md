@@ -9,6 +9,8 @@ operate on that single coordinator context and do not import one another:
 
 | Module | Responsibility |
 | --- | --- |
+| `session_retrospective_v2.py` | Minimal installed descriptor launcher and bootstrap trust root |
+| `session_retrospective_v2_runtime.py` | Descriptor-captured coordinator runtime and startup source authority |
 | `cli.py` | Authenticated entrypoint-loaded CLI implementation and stable command API |
 | `orchestrator.py` | Stable facade, coordinator context, and CLI-compatible exports |
 | `orchestrator_support.py` | Source-frame consumption, shared contracts, and runtime readiness |
@@ -127,19 +129,29 @@ live-helper source commitment from the same descriptor-bound read used to create
 the snapshot and requires it to equal the run's frozen transport provenance, so
 one run cannot mix helper versions across source leases.
 
-The public coordinator entrypoint is a stdlib-only trust root. Before any
-engine import, it descriptor-opens itself, the complete generated package
-manifest, and the root CLI helpers; rejects unlisted import candidates and
-bytecode, native, cache, symlink, or same-name-package substitutes; and captures
-stable exact bytes plus object-identity and access-policy evidence for every
-file. The entrypoint contributes to the startup source, access-policy, and
-authority commitments but is not imported through the captured-module loader.
-Timestamp changes are not mutation evidence. A closed meta-path finder executes
-only those captured bytes and raises for every unknown `retrospective_v2.*`
-name; the live scripts
-directory is never added to `sys.path`. `implementation_authority.py` validates
-the schema-v2 startup receipt before command parsing. After adding or removing
-a production package module, update the generated block with
+The public coordinator script is a stdlib-only descriptor launcher and declared
+bootstrap trust root. Before any engine code executes, it opens the separate
+runtime without following links, validates the owner-controlled ancestor and
+file access policy, double-reads one held regular-file descriptor, and
+`compile`/`exec`s those exact bytes. The runtime receives that still-held
+descriptor and source snapshot, revalidates its named object, identity, content,
+and access policy, and uses that same snapshot for its startup receipt. A
+replace-after-load race therefore cannot make old executing runtime code attest
+new pathname bytes. Direct execution of the runtime file is rejected. The
+launcher itself is intentionally the outer installed trust root bound by the
+cutover's installed source identity; the runtime receipt does not overclaim that
+Python descriptor-binds bytes already loaded for the launcher.
+
+The captured runtime then descriptor-opens the complete generated package
+manifest and root CLI helpers; rejects unlisted import candidates and bytecode,
+native, cache, symlink, or same-name-package substitutes; and captures stable
+exact bytes plus object-identity and access-policy evidence for every retained
+source file. Timestamp changes are not mutation evidence. A closed meta-path
+finder executes only those captured bytes and raises for every unknown
+`retrospective_v2.*` name; the live scripts directory is never added to
+`sys.path`. `implementation_authority.py` validates the schema-v2 startup receipt
+before command parsing. After adding or removing a production package module,
+update the generated block in the runtime with
 `scripts/generate_retrospective_v2_bootstrap_manifest.py --write`; its default
 mode checks deterministically for a stale manifest.
 
@@ -294,6 +306,11 @@ publication phase supplies and rechecks that exact path/digest. `finalize` has
 no caller-selected signer override. Timestamp-only changes are benign because
 they are not part of the protected authority receipt.
 
+Automation cutover receives that executable path as an independent parent
+authority input. The cutover HMAC commits the exact canonical path in both the
+top-level record and each automation-record reference; prompt text cannot select
+or redefine the expected signer authority.
+
 Keyring inventory, sign/verify canaries, Git signing, and Git verification all
 place `--no-options` before every other GPG argument. Git reaches GPG only
 through the fixed executable `scripts/retrospective_v2_gpg_no_options`; the
@@ -346,12 +363,12 @@ host table or transport implementation.
 
 The orchestrator foundation remains below its aggregate limit. The seven agent
 support modules remain below 1,100 lines; the complete result-schema owner is
-503/525, implementation authority is 572/600, and `orchestrator_jobs.py` is
+503/525, implementation authority is 586/600, and `orchestrator_jobs.py` is
 526/530. The result validator is 3,900/3,900, hierarchical reduction is
 2,356/2,500, and the dedicated synthesis-lineage owner is 226/250 after adding
 compact recursive commitments and
 revision-level recurrence proof. The global branch proxy is exactly
-9,558/9,575 nodes, and the shared process-group lifecycle owner is 290/300
+9,560/9,575 nodes, and the shared process-group lifecycle owner is 290/300
 lines after separating signal retirement from group-absence proof. These gates
 keep complete agent schemas, claim-size projection, source-byte provenance,
 semantic topic validation, and delegated remote transport in explicit owners

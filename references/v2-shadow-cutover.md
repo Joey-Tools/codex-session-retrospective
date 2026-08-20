@@ -99,10 +99,15 @@ Each record must contain only the exact closed seven-field TOML document. Its
 prompt must be byte-equal to the canonical mode-specific coordinator prompt.
 It invokes `$codex-session-retrospective`, binds the authenticated Python,
 `-I -B -S`, installed CLI, and exactly one explicit absolute canonical GPG
-executable, requires every production `start` input, and drives the full
-`doctor`, status/accept/advance, `export`, and `finalize` workflow. Prefixes,
-suffixes, changed lines, embedded control characters, unknown fields, and
-nested tables fail closed.
+executable plus the exact owner-local provider-state and production-marker
+paths, requires every production `start` input, and drives the full `doctor`,
+ordered `native_coordinator_actions`, agent/advance, `export`, and `finalize`
+workflow. The controller supplies the expected GPG path independently and the
+cutover HMAC binds it; the prompt cannot choose its own signer authority. It
+never substitutes a generic remote helper command for the
+run-owned source actions returned by `status`. Prefixes, suffixes, changed
+lines, embedded control characters, unknown fields, and nested tables fail
+closed.
 It rejects reference-only templates, v1 paths, shadow/partial coverage controls,
 and unrelated IDs. The separate controller writes
 `~/.codex/session-retrospective/automation-cutover-v2.json`; production marker

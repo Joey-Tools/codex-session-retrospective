@@ -23,6 +23,8 @@ MAX_STARTUP_EVIDENCE_BYTES = 1024 * 1024
 MAX_SOURCE_FILES = 160
 MAX_SOURCE_FILE_BYTES = 2 * 1024 * 1024
 MAX_SOURCE_TOTAL_BYTES = 32 * 1024 * 1024
+BOOTSTRAP_LAUNCHER_NAME = "session_retrospective_v2.py"
+RUNTIME_ENTRYPOINT_NAME = "session_retrospective_v2_runtime.py"
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 _DIRECTORY_FLAGS = (
     os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
@@ -229,10 +231,17 @@ def _readiness_from_bound_scripts(
         scripts_names = _selected_names(scripts_fd, package=False)
         package_names = _selected_names(package_fd, package=True)
         if (
-            "session_retrospective_v2.py" not in scripts_names
+            BOOTSTRAP_LAUNCHER_NAME not in scripts_names
+            or RUNTIME_ENTRYPOINT_NAME not in scripts_names
             or "__init__.py" not in package_names
         ):
             raise ImplementationAuthorityError("implementation inventory is incomplete")
+        _source_row(
+            scripts_fd,
+            BOOTSTRAP_LAUNCHER_NAME,
+            module="session_retrospective_v2_bootstrap_trust_root",
+            relative_path=BOOTSTRAP_LAUNCHER_NAME,
+        )
         rows = [
             *(
                 _source_row(
@@ -242,6 +251,7 @@ def _readiness_from_bound_scripts(
                     relative_path=name,
                 )
                 for name in scripts_names
+                if name != BOOTSTRAP_LAUNCHER_NAME
             ),
             *(
                 _source_row(
@@ -432,6 +442,8 @@ def validate_startup_receipt(evidence_bytes: bytes) -> dict[str, Any]:
         or not 1 <= len(manifest) <= MAX_SOURCE_FILES
         or any(not isinstance(module, str) or not module for module in manifest)
         or len(manifest) != len(set(manifest))
+        or manifest.count("session_retrospective_v2_runtime") != 1
+        or "session_retrospective_v2" in manifest
         or not isinstance(source, list)
         or len(source) != len(manifest)
     ):
@@ -447,8 +459,8 @@ def validate_startup_receipt(evidence_bytes: bytes) -> dict[str, Any]:
             expected_path = "retrospective_v2/__init__.py"
         elif module.startswith("retrospective_v2.") and module.count(".") == 1:
             expected_path = "retrospective_v2/" + module.split(".", 1)[1] + ".py"
-        elif module == "session_retrospective_v2":
-            expected_path = "session_retrospective_v2.py"
+        elif module == "session_retrospective_v2_runtime":
+            expected_path = "session_retrospective_v2_runtime.py"
         elif module.startswith("session_retrospective_v2_"):
             expected_path = module + ".py"
         else:

@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 PACKAGE = SCRIPTS / "retrospective_v2"
 PUBLIC_ENTRYPOINT = SCRIPTS / "session_retrospective_v2.py"
+RUNTIME_ENTRYPOINT = SCRIPTS / "session_retrospective_v2_runtime.py"
 PUBLIC_CLI = PACKAGE / "cli.py"
 BOOTSTRAP_MANIFEST_GENERATOR = (
     SCRIPTS / "generate_retrospective_v2_bootstrap_manifest.py"
@@ -371,7 +372,7 @@ BOUNDED_MODULE_LINES = {
     "legacy_history_git.py": 325,
     "legacy_history_worktree.py": 600,
     "finalize.py": 120,
-    "authority.py": 3_350,
+    "authority.py": 3_375,
     "orchestrator_execution_contract.py": 200,
     "cleanup_inventory.py": 925,
     "cleanup_sidecars.py": 300,
@@ -1137,7 +1138,11 @@ spec.loader.exec_module(module)
         )
         self.assertLessEqual(
             len(PUBLIC_ENTRYPOINT.read_text(encoding="utf-8").splitlines()),
-            750,
+            400,
+        )
+        self.assertLessEqual(
+            len(RUNTIME_ENTRYPOINT.read_text(encoding="utf-8").splitlines()),
+            800,
         )
         self.assertLessEqual(
             len(BOOTSTRAP_MANIFEST_GENERATOR.read_text(encoding="utf-8").splitlines()),
@@ -1259,7 +1264,7 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_558, branch_total)
+        self.assertEqual(9_560, branch_total)
         self.assertLessEqual(branch_total, 9_575)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)

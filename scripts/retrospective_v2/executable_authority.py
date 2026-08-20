@@ -29,7 +29,7 @@ def is_canonical_absolute_executable_path(value: object) -> bool:
     return (
         isinstance(value, str)
         and bool(value)
-        and "\x00" not in value
+        and all(0x20 <= ord(character) != 0x7F for character in value)
         and not value.startswith("//")
         and Path(value).is_absolute()
         and os.path.abspath(value) == value

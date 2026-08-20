@@ -26,6 +26,8 @@ All examples use the same installed path:
 RETROSPECTIVE_PYTHON="$HOME/.codex/session-retrospective/runtime/bin/python3"
 V2_CLI="$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
 PUBLISHER_GPG="/absolute/owner-controlled/path/to/gpg"
+PROVIDER_STATE="$HOME/.codex/session-retrospective/provider-state-v2"
+PRODUCTION_MARKER="$HOME/.codex/session-retrospective/production-marker-v2.json"
 ```
 
 Every invocation must use `"$RETROSPECTIVE_PYTHON" -I -B -S`. The fixed
@@ -34,6 +36,12 @@ by the replacement sync beneath owner-only ancestors. The coordinator fails
 closed before importing its engine when any required isolation flag is absent,
 and `doctor` rejects a runtime whose executable identity, content, or ancestor
 access policy cannot be authenticated.
+The public script is a small descriptor launcher. It opens the separate runtime
+source without following links, binds its object identity and access policy,
+double-reads its exact bytes, and `compile`/`exec`s that same held snapshot. The
+runtime startup receipt revalidates the held descriptor and named object before
+binding those executed bytes; direct execution of the runtime source is
+rejected.
 `start` commits the canonical-path binding digest and executable-authority
 digest into the run configuration root. Every later command (`status`,
 `accept-source`, `accept-agent-result`, `advance`, `export`, and `finalize`)
@@ -43,6 +51,11 @@ advancing the checkpoint.
 The coordinator authenticates that executable's path identity, content, and
 ancestor access policy, persists the authority digest in the run specification,
 and rejects later substitution. `finalize` accepts no caller override.
+Non-shadow production `doctor` and `start` additionally require the exact
+`--provider-state "$PROVIDER_STATE"` and
+`--production-marker "$PRODUCTION_MARKER"` bindings. Daily and Weekly
+automation records carry those literal canonical paths; the model does not
+discover or substitute them.
 
 ## Identity
 
@@ -81,32 +94,21 @@ Shadow `doctor` and `start` require both an explicit `--identity-path` and
   --run-dir "$RUN"
 ```
 
-For each source job, run the ordered `native_coordinator_actions` returned by
-`status`:
-
-1. capture the bounded transport command at its run-owned `stdout_path`;
-2. run the provided `accept-source` command.
+For each source job, execute the ordered `native_coordinator_actions` returned
+by `status`. Execute each action's exact `command` array once, verbatim, and in
+listed order. Capture stdout only when that exact action supplies a run-owned
+`stdout_path`; do not reconstruct, wrap, or substitute a source or
+`accept-source` command.
 
 `accept-source` authenticates the transport lease, terminal proof, authoritative
 snapshot, manifest, and receipt before changing coverage. Raw source files must
 remain under `<run-dir>/raw-inputs/`; arbitrary output directories are rejected.
 
-For rollout sources, concatenate one complete `$remote-host-context
-session-shards` descriptor stream and its exact requested records stream in one
-owner-only JSONL file, then bind it to the manifest source:
-
-```bash
-"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" accept-source \
-  --identity-path "$IDENTITY" \
-  --require-existing-identity \
-  --run-dir "$RUN" \
-  --lease-ref <lease_ref> \
-  --transport-stream-file "$RUN/raw-inputs/source-transport.jsonl" \
-  --transport-stream <source_ref> "$RUN/raw-inputs/session-shards.jsonl"
-```
-
-The adapter validates descriptor EOF, derives the exact records request,
-normalizes only the authenticated wrapper, and conserves fragmented record bytes.
+An exact action may invoke `$remote-host-context session-shards`; only that
+action may do so. Local, history, and session-index actions remain native v2
+commands and must not be replaced by the remote helper. The adapter validates
+descriptor EOF, derives the exact records request, normalizes only the
+authenticated wrapper, and conserves fragmented record bytes.
 `$remote-host-context` remains the only SSH layer; v2 contains no SSH behavior.
 
 Repeat `status -> native actions -> accept results -> advance` until exportable.

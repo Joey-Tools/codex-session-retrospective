@@ -2009,12 +2009,14 @@ class OrchestratorTests(unittest.TestCase):
         package = scripts / "retrospective_v2"
         package.mkdir(parents=True, mode=0o700)
         entrypoint = scripts / "session_retrospective_v2.py"
+        runtime = scripts / "session_retrospective_v2_runtime.py"
         module = package / "worker.py"
         init = package / "__init__.py"
         entrypoint.write_text("VALUE = 'entry'\n", encoding="ascii")
+        runtime.write_text("VALUE = 'runtime'\n", encoding="ascii")
         init.write_text("VALUE = 'init'\n", encoding="ascii")
         module.write_text("VALUE = 'first'\n", encoding="ascii")
-        for path in (entrypoint, init, module):
+        for path in (entrypoint, runtime, init, module):
             path.chmod(0o600)
 
         scripts_fd = os.open(scripts, implementation_authority._DIRECTORY_FLAGS)

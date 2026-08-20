@@ -51,6 +51,7 @@ PROVIDER_INITIALIZATION_SCHEMA = "provider_cache_initialization_v2"
 DEFAULT_PRODUCTION_MARKER = (
     Path.home() / ".codex/session-retrospective/production-marker-v2.json"
 )
+DEFAULT_PROVIDER_STATE = Path.home() / ".codex/session-retrospective/provider-state-v2"
 DEFAULT_PUBLISHER_GNUPG_HOME = (
     Path.home() / ".codex/session-retrospective/publisher-gnupg-v2"
 )
@@ -2432,6 +2433,7 @@ def _validate_installed_automation(
     *,
     automation_root: Path,
     cli_path: Path,
+    publisher_gpg_program: str,
 ) -> tuple[str, str]:
     root = automation_cutover_files.open_automation_root(
         automation_root,
@@ -2444,6 +2446,7 @@ def _validate_installed_automation(
             automation_id,
             root=root,
             cli_path=cli_path,
+            publisher_gpg_program=publisher_gpg_program,
         )
         binding.revalidate()
         return str(binding.record_path), binding.sha256
@@ -2463,6 +2466,7 @@ def _open_validated_installed_automation(
     *,
     root: automation_cutover_files.AutomationRootBinding,
     cli_path: Path,
+    publisher_gpg_program: str,
 ) -> automation_cutover_files.AutomationRecordBinding:
     expected_mode = STABLE_AUTOMATION_MODES[automation_id]
     binding: automation_cutover_files.AutomationRecordBinding | None = None
@@ -2485,6 +2489,9 @@ def _open_validated_installed_automation(
         cli_path=cli_path,
         python_path=installed_runtime_python_path(),
         expected_mode=expected_mode,
+        publisher_gpg_program=publisher_gpg_program,
+        provider_state_path=DEFAULT_PROVIDER_STATE,
+        production_marker_path=DEFAULT_PRODUCTION_MARKER,
     ):
         error = AutomationCutoverBlocked(
             "automation record is not an active v2 production coordinator"
@@ -2615,6 +2622,7 @@ def verify_automation_cutover_record(
         "identity_key_id",
         "installed_cli_path",
         "installed_commit",
+        "publisher_gpg_program",
         "schema",
     }
     if not isinstance(value, Mapping) or set(value) != fields:
@@ -2627,6 +2635,7 @@ def verify_automation_cutover_record(
         "automation-cutover-v2", body
     )
     cli_path = record["installed_cli_path"]
+    publisher_gpg_program = record["publisher_gpg_program"]
     cli_suffix = (
         "/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
     )
@@ -2649,6 +2658,9 @@ def verify_automation_cutover_record(
         or not isinstance(cli_path, str)
         or not Path(cli_path).is_absolute()
         or not cli_path.endswith(cli_suffix)
+        or not executable_authority.is_canonical_absolute_executable_path(
+            publisher_gpg_program
+        )
         or not isinstance(record["authentication_tag"], str)
         or _AUTOMATION_CUTOVER_AUTH_RE.fullmatch(record["authentication_tag"]) is None
         or not hmac.compare_digest(record["authentication_tag"], expected_tag)
@@ -2685,6 +2697,7 @@ def verify_automation_cutover_record(
             "mode": row["mode"],
             "operation": operation,
             "previous_record_sha256": previous,
+            "publisher_gpg_program": publisher_gpg_program,
             "record_path": record_path,
             "record_sha256": record_sha256,
         }
@@ -2735,6 +2748,7 @@ def issue_automation_cutover_record(
     capability_result: Mapping[str, object],
     pre_update_snapshot: Mapping[str, object],
     installed_commit: str,
+    publisher_gpg_program: str,
     automation_root: str | os.PathLike[str] | None = None,
 ) -> dict[str, Any]:
     if (
@@ -2742,6 +2756,10 @@ def issue_automation_cutover_record(
         or _OBJECT_ID_RE.fullmatch(installed_commit) is None
     ):
         raise AutomationCutoverBlocked("installed release commit is invalid")
+    if not executable_authority.is_canonical_absolute_executable_path(
+        publisher_gpg_program
+    ):
+        raise AutomationCutoverBlocked("publisher GPG program is invalid")
     root = _validated_automation_root(
         _automation_root()
         if automation_root is None
@@ -2765,6 +2783,7 @@ def issue_automation_cutover_record(
                 automation_id,
                 root=root_binding,
                 cli_path=cli_path,
+                publisher_gpg_program=publisher_gpg_program,
             )
         installed_records = {
             automation_id: (str(binding.record_path), binding.sha256)
@@ -2789,6 +2808,7 @@ def issue_automation_cutover_record(
                 "mode": STABLE_AUTOMATION_MODES[automation_id],
                 "operation": operation["operation"],
                 "previous_record_sha256": previous,
+                "publisher_gpg_program": publisher_gpg_program,
                 "record_path": record_path,
                 "record_sha256": record_sha256,
             }
@@ -2813,6 +2833,7 @@ def issue_automation_cutover_record(
             "identity_key_id": identity.key_id,
             "installed_cli_path": str(cli_path),
             "installed_commit": installed_commit,
+            "publisher_gpg_program": publisher_gpg_program,
             "schema": AUTOMATION_CUTOVER_RECORD_SCHEMA,
         }
         record = {

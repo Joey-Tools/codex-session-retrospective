@@ -9,7 +9,8 @@ from pathlib import Path
 
 
 SCRIPTS = Path(__file__).resolve().parent
-ENTRYPOINT = SCRIPTS / "session_retrospective_v2.py"
+ENTRYPOINT = SCRIPTS / "session_retrospective_v2_runtime.py"
+BOOTSTRAP_LAUNCHER = "session_retrospective_v2.py"
 PACKAGE = SCRIPTS / "retrospective_v2"
 BEGIN = "    # BEGIN GENERATED RETROSPECTIVE V2 SOURCE MANIFEST\n"
 END = "    # END GENERATED RETROSPECTIVE V2 SOURCE MANIFEST\n"
@@ -41,7 +42,8 @@ def expected_block() -> str:
     root_sources = tuple(
         name
         for name in _regular_python_names(SCRIPTS)
-        if name.startswith("session_retrospective_v2") and name != ENTRYPOINT.name
+        if name.startswith("session_retrospective_v2")
+        and name not in {BOOTSTRAP_LAUNCHER, ENTRYPOINT.name}
     )
     if any(name not in root_sources for name in DIRECT_HELPERS):
         raise SystemExit("bootstrap direct helper inventory is incomplete")

@@ -2036,6 +2036,8 @@ class DurablePublicationTests(unittest.TestCase):
                 python_path=installed_python,
                 expected_mode=mode,
                 publisher_gpg_program="/usr/bin/true",
+                provider_state_path=authority.DEFAULT_PROVIDER_STATE,
+                production_marker_path=authority.DEFAULT_PRODUCTION_MARKER,
             )
             (record_dir / "automation.toml").write_text(
                 "\n".join(
@@ -2076,6 +2078,7 @@ class DurablePublicationTests(unittest.TestCase):
             capability_result=capability_result,
             pre_update_snapshot=snapshot,
             installed_commit=self.base_head,
+            publisher_gpg_program="/usr/bin/true",
             automation_root=automation_root,
         )
 

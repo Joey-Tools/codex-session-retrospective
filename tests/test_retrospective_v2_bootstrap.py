@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 
 
@@ -27,6 +28,7 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
         for source in SOURCE_SCRIPTS.glob("session_retrospective_v2*.py"):
             shutil.copy2(source, self.scripts / source.name)
         self.entrypoint = self.scripts / "session_retrospective_v2.py"
+        self.runtime = self.scripts / "session_retrospective_v2_runtime.py"
 
     def tearDown(self) -> None:
         self.temporary.cleanup()
@@ -114,6 +116,24 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
                 self.assertEqual(9, completed.returncode, completed.stderr)
                 result = json.loads(completed.stdout)
                 self.assertEqual("unsafe_python_runtime", result["error"]["code"])
+
+    def test_runtime_rejects_direct_execution_without_descriptor_launcher(self) -> None:
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-I",
+                "-B",
+                "-S",
+                os.fspath(self.runtime),
+                "--help",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        self.assert_authority_rejected(completed)
 
     def test_writable_fixture_root_is_rejected(self) -> None:
         self.root.chmod(0o777)
@@ -237,17 +257,63 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
         receipt = json.loads(marker.read_text(encoding="ascii"))
         self.assertEqual("coordinator_implementation_readiness_v2", receipt["schema"])
 
+    def test_startup_receipt_rejects_launcher_relabel_for_executed_runtime(
+        self,
+    ) -> None:
+        source = self.runtime.read_text(encoding="utf-8")
+        binding = (
+            '                "session_retrospective_v2_runtime",\n'
+            "                entry_name,\n"
+        )
+        self.assertIn(binding, source)
+        self.runtime.write_text(
+            source.replace(
+                binding,
+                '                "session_retrospective_v2",\n'
+                "                _BOOTSTRAP_LAUNCHER_NAME,\n",
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        completed = self.run_entrypoint("--help")
+
+        self.assert_authority_rejected(completed)
+
+    def test_successful_runtime_exit_rejects_descriptor_close_failure(self) -> None:
+        source = self.runtime.read_text(encoding="utf-8")
+        launch = "    try:\n        _cli = _authenticated_cli()\n"
+        self.assertIn(launch, source)
+        instrumented = source.replace(
+            launch,
+            "    _test_runtime_descriptor = globals()[\n"
+            "        _PRELOADED_ENTRY_ATTRIBUTE\n"
+            '    ]["descriptor"]\n'
+            "    _test_original_close = os.close\n"
+            "    def _test_close(descriptor):\n"
+            "        if descriptor == _test_runtime_descriptor:\n"
+            '            raise OSError("synthetic runtime descriptor close failure")\n'
+            "        return _test_original_close(descriptor)\n"
+            "    os.close = _test_close\n" + launch,
+            1,
+        )
+        self.runtime.write_text(instrumented, encoding="utf-8")
+
+        completed = self.run_entrypoint("--help")
+
+        self.assert_authority_rejected(completed)
+
     def test_startup_receipt_binds_entrypoint_content_and_access_policy(self) -> None:
         marker = self.root / "startup-entry-receipt.json"
         self.instrument_readiness_receipt(marker)
-        original = self.entrypoint.read_bytes()
-        original_mode = self.entrypoint.stat().st_mode & 0o777
+        original = self.runtime.read_bytes()
+        original_mode = self.runtime.stat().st_mode & 0o777
 
         initial = self.run_entrypoint("--help")
         self.assertEqual(0, initial.returncode, initial.stderr)
         initial_receipt = json.loads(marker.read_text(encoding="ascii"))
 
-        self.entrypoint.write_bytes(original + b"\n# entrypoint receipt mutation\n")
+        self.runtime.write_bytes(original + b"\n# runtime receipt mutation\n")
         changed = self.run_entrypoint("--help")
         self.assertEqual(0, changed.returncode, changed.stderr)
         changed_receipt = json.loads(marker.read_text(encoding="ascii"))
@@ -262,8 +328,8 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
             changed_receipt["access_policy_sha256"],
         )
 
-        self.entrypoint.write_bytes(original)
-        self.entrypoint.chmod(0o700 if original_mode != 0o700 else 0o500)
+        self.runtime.write_bytes(original)
+        self.runtime.chmod(0o700 if original_mode != 0o700 else 0o500)
         policy_changed = self.run_entrypoint("--help")
         self.assertEqual(0, policy_changed.returncode, policy_changed.stderr)
         policy_receipt = json.loads(marker.read_text(encoding="ascii"))
@@ -278,6 +344,72 @@ class RetrospectiveV2BootstrapTests(unittest.TestCase):
             initial_receipt["authority_sha256"],
             policy_receipt["authority_sha256"],
         )
+
+    def test_runtime_replacement_after_capture_fails_closed(self) -> None:
+        barrier = self.root / "runtime-captured"
+        release = self.root / "runtime-release"
+        package_marker = self.root / "package-imported-after-replacement"
+        self.add_package_import_marker(package_marker)
+        source = self.runtime.read_text(encoding="utf-8")
+        needle = "    try:\n        _cli = _authenticated_cli()\n"
+        self.assertIn(needle, source)
+        instrumented = source.replace(
+            needle,
+            "    import time as _bootstrap_test_time\n"
+            f"    open({os.fspath(barrier)!r}, 'wb').close()\n"
+            f"    while not os.path.exists({os.fspath(release)!r}):\n"
+            "        _bootstrap_test_time.sleep(0.01)\n" + needle,
+            1,
+        )
+        self.runtime.write_text(instrumented, encoding="utf-8")
+
+        process = subprocess.Popen(
+            [
+                sys.executable,
+                "-I",
+                "-B",
+                "-S",
+                os.fspath(self.entrypoint),
+                "--help",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        deadline = time.monotonic() + 10
+        while not barrier.exists() and process.poll() is None:
+            if time.monotonic() >= deadline:
+                process.kill()
+                process.communicate(timeout=10)
+                self.fail("descriptor launcher did not reach the runtime barrier")
+            time.sleep(0.01)
+        if not barrier.exists():
+            stdout, stderr = process.communicate(timeout=10)
+            self.fail(
+                "descriptor launcher exited before the runtime barrier: "
+                + stdout
+                + stderr
+            )
+
+        retained = self.scripts / "captured-runtime.py"
+        replacement = self.scripts / "replacement-runtime.py"
+        os.replace(self.runtime, retained)
+        replacement.write_text(
+            instrumented + "\n# replacement object\n",
+            encoding="utf-8",
+        )
+        os.replace(replacement, self.runtime)
+        release.touch()
+        stdout, stderr = process.communicate(timeout=30)
+
+        completed = subprocess.CompletedProcess(
+            process.args,
+            process.returncode,
+            stdout,
+            stderr,
+        )
+        self.assert_authority_rejected(completed)
+        self.assertFalse(package_marker.exists())
 
     def test_generated_manifest_is_current(self) -> None:
         completed = subprocess.run(

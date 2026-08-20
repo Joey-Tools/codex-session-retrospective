@@ -32,19 +32,26 @@ v1 helper for a v2 run.
    contracts to match. Supply one stable absolute owner-controlled GPG path as
    `--publisher-gpg-program` to both `doctor` and `start`; do not resolve it
    from ambient `PATH` or attempt to override it during `finalize`. The exact
+   production commands also bind `--provider-state` to
+   `~/.codex/session-retrospective/provider-state-v2` and
+   `--production-marker` to
+   `~/.codex/session-retrospective/production-marker-v2.json`; neither path is
+   inferred by the automation agent. The exact
    authenticated `$remote-host-context` helper must declare both
    `session-shards` and `source-transport` in its immutable capability
    manifest; otherwise `doctor` and `start` stop before creating a run. An
    older run-owned snapshot reports the explicit compatibility gap rather than
    retrying it as host unreachability.
 2. Start one immutable `daily`, `weekly`, `baseline`, or `session` run.
-3. Repeat the machine-readable coordinator loop. Execute rollout leases only
-   through `$remote-host-context session-shards`:
+3. Repeat the machine-readable coordinator loop. For every source job, execute
+   the returned `native_coordinator_actions` commands exactly once, verbatim,
+   and in listed order, honoring each `stdout_path`. Invoke
+   `$remote-host-context session-shards` only when that exact action requires
+   it:
 
 ```text
 status
-execute every leased source action through remote-host-context
-accept every source result
+execute every native_coordinator_actions command in order
 spawn the maximum available native ephemeral subagent wave
 accept every completed agent result
 advance
@@ -64,9 +71,12 @@ Joey triggers one retrospective task. The automation coordinator owns this loop
 and does not ask Joey to invoke individual stages.
 The installed Daily and Weekly automation prompts are closed coordinator
 prompts: each invokes this skill, binds the authenticated Python, CLI, and GPG
-executables, requires every production `start` input, and drives `doctor`, the
-status/accept/advance loop, `export`, and `finalize`. A prompt that stops after
-`start` is not a valid production coordinator.
+executables plus the exact provider-state and production-marker paths, requires
+every production `start` input, and drives `doctor`, the authoritative
+`native_coordinator_actions`/agent/advance loop, `export`, and `finalize`. A
+prompt that stops after `start` is not a valid production coordinator. Execute
+each native action's exact command without reconstruction or substitution;
+invoke `$remote-host-context` only when that exact action names it.
 
 Keep verbose command output in a task-scoped ignored log and surface only
 progress markers. Use `pgrep -af` and `ps -p` for narrow process checks; do not
