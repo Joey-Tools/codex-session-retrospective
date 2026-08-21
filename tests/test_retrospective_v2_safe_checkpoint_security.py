@@ -11,10 +11,7 @@ import unittest
 from unittest import mock
 
 
-SCRIPTS = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-)
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from retrospective_v2.checkpoints import (  # noqa: E402
@@ -24,6 +21,7 @@ from retrospective_v2.checkpoints import (  # noqa: E402
     CheckpointPermissionError,
 )
 from retrospective_v2.identity import IdentityKey  # noqa: E402
+from retrospective_v2 import temporary_paths  # noqa: E402
 from retrospective_v2.safe_io import (  # noqa: E402
     atomic_write_bytes,
     atomic_write_json,
@@ -309,6 +307,46 @@ class CheckpointSecurityTests(unittest.TestCase):
         self.assertFalse(staged_path.exists())
         self.assertEqual(initial, self.store.read())
 
+    def test_staged_transaction_marks_unproved_rollback_and_retains_primary(
+        self,
+    ) -> None:
+        initial = self.store.initialize({"value": "before"})
+        staged_path = self.store.run_dir / "raw-inputs" / "candidate.bin"
+        write_error = OSError("simulated staged replace failure")
+
+        def stage() -> Path:
+            staged_path.parent.mkdir(mode=0o700)
+            staged_path.write_bytes(b"sensitive candidate")
+            os.chmod(staged_path, 0o600)
+            return staged_path
+
+        def rollback(_path: Path) -> None:
+            raise OSError("simulated rollback failure")
+
+        with mock.patch.object(
+            self.store,
+            "_replace",
+            side_effect=write_error,
+        ):
+            with self.assertRaisesRegex(
+                OSError,
+                "staged replace failure",
+            ) as raised:
+                self.store.staged_transaction(
+                    lambda _state: ({"value": "after"}, None),
+                    stage=stage,
+                    rollback=rollback,
+                )
+
+        self.assertIs(write_error, raised.exception)
+        self.assertIs(
+            write_error,
+            temporary_paths.incomplete_cleanup_primary(write_error),
+        )
+        self.assertTrue(staged_path.is_file())
+        self.assertEqual(initial, self.store.read())
+        staged_path.unlink()
+
     def test_staged_transaction_preserves_write_failure_when_recheck_fails(
         self,
     ) -> None:
@@ -342,6 +380,10 @@ class CheckpointSecurityTests(unittest.TestCase):
         self.assertIs(read_error, raised.exception.__cause__)
         self.assertTrue(
             any("staged files retained" in note for note in raised.exception.__notes__)
+        )
+        self.assertIs(
+            write_error,
+            temporary_paths.incomplete_cleanup_primary(write_error),
         )
         stage.assert_called_once_with()
         rollback.assert_not_called()

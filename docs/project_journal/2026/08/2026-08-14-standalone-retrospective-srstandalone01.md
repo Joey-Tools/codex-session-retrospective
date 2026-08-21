@@ -2844,6 +2844,91 @@ superseded_by:
   `005f7cf54f96beb4a2bb629aebba29919c544ad71993e8a2d73d01fa8ae1c5b5`.
   Signing, exact-secret admission, the replacement local Codex processor,
   hosted CI, and current-head GitHub Codex evidence remain delivery gates.
+- The replacement local Codex processor over signed head `2f5537e8` found two
+  additional cleanup and startup-boundary issues. First, segmented source
+  acceptance could preserve only an exception note when exact spool removal or
+  staged-file rollback failed, so the CLI could return an ordinary input or
+  transition error while sensitive raw bytes remained outside the checkpoint.
+  Second, the public `start_run` wrapper reached production-path and Python
+  runtime probes before validating `shadow`, and its default identity behavior
+  could create identity state before the lifecycle layer rejected a non-boolean
+  value. The exact 86-commit, 85-parent-edge workspace used graph digest
+  `9311b23e9fd2c4f100631908be7f5bc28ff347d6a50e303742bd5e7aad3fb6a7`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed. All head-bound review
+  evidence for `2f5537e8` is stale.
+- The public wrapper now applies the shared strict boolean validator as its
+  first executable operation and forwards only that normalized value. Direct
+  wrapper regressions prove invalid integer and string values do not probe the
+  runtime or create an identity key or run directory. Segmented source
+  acceptance now protects missing-unit completion, transcript validation,
+  metadata derivation, acceptance staging, and checkpoint publication with
+  cleanup handling. Spool construction, descriptor release, materialization,
+  source rollback, checkpoint disposition failure, and checkpoint rollback all
+  attach the existing content-free sensitive-cleanup marker when removal cannot
+  be proved. The CLI therefore emits the non-retryable
+  `temporary_cleanup_incomplete` security result while preserving the original
+  input or transition error as bounded machine metadata. Adversarial tests
+  leave a real spool or staged file behind, prove the marker and machine
+  result, and then remove only the test-owned residual.
+- The complete Python 3.13.12 orchestrator module passes 136/136 in 545.833
+  seconds. Canonical discovery contains 1,877 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `2b973390e9fc799a89514622ae41a7c1f0370f8b632aa6bf7c0b4a3d406c25d7`.
+  Shard 0 passes 448/448 in 1,513.121 seconds, shard 1 passes 508/508 in
+  1,884.717 seconds, shard 2 passes 498/498 in 1,795.941 seconds, and shard 3
+  passes 423/423 in 1,742.978 seconds, for exact aggregate coverage of
+  1,877/1,877. Every bounded shard runner reached terminal exit zero.
+- The same tree passes module boundaries 19/19 with the exact branch inventory
+  reduced from 9,858 to 9,848 and `orchestrator_source.py` remaining below its
+  unchanged 2,150-line cap. It also passes checkpoint security 14/14, Darwin
+  security 14/14 in 59.042 seconds, CI contracts 33/33, Bootstrap contracts
+  12/12, and Skill contracts 5/5. Ruff 0.13.2 lint is clean for all `scripts/`
+  and `tests/`; all 10 changed Python files pass formatting, workflow syntax
+  passes `actionlint` 1.7.12, the generated bootstrap manifest is current, and
+  `git diff --check` is clean. Whole-tree formatting still reports five
+  inherited migration files that this correction does not modify. Two initial
+  focused commands used wrong unittest class names, one omitted the required
+  isolated runtime shape, and one direct isolated CLI file invocation bypassed
+  the repository package loader; all failed before exercising the intended
+  test and are explicitly non-counting. Signing, exact-secret admission, the
+  replacement local Codex processor, hosted CI, and current-head GitHub Codex
+  evidence remain delivery gates.
+- A final owner-side diff audit found one narrower form of the cleanup finding:
+  when exact spool removal itself was the first error, `discard()` closed its
+  custody state before the outer handler retried it, so no earlier primary
+  existed to receive the sensitive-cleanup marker. The terminal
+  `InvalidTransitionError` now carries that marker directly while preserving
+  its exact removal failure as the cause. A real retained-spool regression
+  proves the CLI emits `temporary_cleanup_incomplete` even without an earlier
+  input or transition error. The direct and composed cleanup regressions pass
+  3/3, and the complete orchestrator module passed 137/137 in 546.575 seconds
+  before a formatting-only source-line compression.
+- The first 1,878-test candidate attempt used canonical manifest digest
+  `341261bbe48d71d053ba90503d89169a15a4078cd9c1201d08fdc583747bd4fb`.
+  Its shard 0 and shard 1 passed, but shard 2 exposed that the three source
+  staging modules had grown to 778 lines against the unchanged 775-line gate.
+  The shard was interrupted once after that deterministic failure and is
+  non-counting. The implementation was compressed without changing the error
+  type, message, cleanup stage, cause, or the 775-line limit; focused module
+  boundary tests pass 2/2 and the three cleanup regressions pass 3/3.
+- The final Python 3.13.12 candidate retains 1,878 exact test IDs from 22
+  authenticated test sources under the same canonical manifest digest. Shard
+  0 passes 448/448 in 1,528.621 seconds, shard 1 passes 508/508 in 1,374.930
+  seconds, shard 2 passes 498/498 in 1,255.840 seconds, and shard 3 passes
+  424/424 in 1,215.219 seconds, for exact aggregate coverage of 1,878/1,878 in
+  5,374.610 seconds. Every final shard reached terminal exit zero without
+  skips. The independent Darwin security inventory passes 14/14 in 59.475
+  seconds. Final Ruff lint, changed-file formatting, `actionlint`, generated
+  bootstrap-manifest validation, project-journal validation, source-tree
+  bytecode exclusion, and `git diff --check` are clean. One project-journal
+  helper invocation omitted its required `--repo` argument and stopped at
+  usage output; the exact worktree-scoped validation then passed, so the first
+  invocation is non-counting. Signing, exact-secret admission, the final local
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain
+  delivery gates.
 
 ## Follow-up Work
 

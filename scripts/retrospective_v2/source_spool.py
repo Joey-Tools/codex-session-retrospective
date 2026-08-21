@@ -9,13 +9,14 @@ import os
 from pathlib import Path
 from typing import Any, Sequence
 
-from . import safe_io, source_staging
+from . import safe_io, source_staging, temporary_paths
 from .identity import IdentityKey
 from .orchestrator_core import RAW_INPUT_DIRECTORY
 from .orchestrator_support import InvalidTransitionError
 
 
 SOURCE_TRANSPORT_SPOOL_DIRECTORY = f"{RAW_INPUT_DIRECTORY}/source-spool-v1"
+_SPOOL_CLEANUP_STAGE = "source-transport-spool"
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,19 +217,25 @@ class StreamingRawPayloadStaging:
             try:
                 source_staging.rollback(materialized)
             except BaseException as rollback_error:
-                if hasattr(error, "add_note"):
-                    error.add_note(
-                        "streamed source payload rollback was incomplete; "
-                        f"{type(rollback_error).__name__}"
-                    )
+                temporary_paths.mark_incomplete_cleanup(
+                    error,
+                    stage="streamed-source-materialization-rollback",
+                )
+                error.add_note(
+                    "streamed source payload rollback was incomplete; "
+                    f"{type(rollback_error).__name__}"
+                )
             try:
                 self.discard()
             except BaseException as discard_error:
-                if hasattr(error, "add_note"):
-                    error.add_note(
-                        "source transport spool cleanup was incomplete; "
-                        f"{type(discard_error).__name__}"
-                    )
+                temporary_paths.mark_incomplete_cleanup(
+                    error,
+                    stage="streamed-source-spool",
+                )
+                error.add_note(
+                    "source transport spool cleanup was incomplete; "
+                    f"{type(discard_error).__name__}"
+                )
             raise
         return materialized
 
@@ -245,9 +252,10 @@ class StreamingRawPayloadStaging:
         error = self._close_all(error)
         self._closed = True
         if error is not None:
-            raise InvalidTransitionError(
-                "source transport spool cleanup could not prove exact removal"
-            ) from error
+            message = "source transport spool cleanup could not prove exact removal"
+            failure = InvalidTransitionError(message)
+            temporary_paths.mark_incomplete_cleanup(failure, stage=_SPOOL_CLEANUP_STAGE)
+            raise failure from error
 
     def _read_record(self, record: SpooledRawPayload) -> bytes:
         chunks: list[bytes] = []
@@ -285,11 +293,14 @@ class StreamingRawPayloadStaging:
             except FileNotFoundError:
                 pass
             except OSError as error:
-                if hasattr(primary, "add_note"):
-                    primary.add_note(
-                        "source transport spool cleanup failed during creation: "
-                        f"{type(error).__name__}"
-                    )
+                temporary_paths.mark_incomplete_cleanup(
+                    primary,
+                    stage="source-spool-creation",
+                )
+                primary.add_note(
+                    "source transport spool cleanup failed during creation: "
+                    f"{type(error).__name__}"
+                )
         self._close_all(primary)
         self._closed = True
 
@@ -318,8 +329,8 @@ def _record_error(
 ) -> BaseException:
     if primary is None:
         return secondary
-    if hasattr(primary, "add_note"):
-        primary.add_note(f"additional {label} failure: {type(secondary).__name__}")
+    temporary_paths.mark_incomplete_cleanup(primary, stage=label)
+    primary.add_note(f"additional {label} failure: {type(secondary).__name__}")
     return primary
 
 

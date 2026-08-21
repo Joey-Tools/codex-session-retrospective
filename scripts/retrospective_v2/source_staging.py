@@ -7,7 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Sequence
 
-from . import safe_io
+from . import safe_io, temporary_paths
 from .identity import IdentityKey
 from .orchestrator_core import RAW_INPUT_DIRECTORY
 from .orchestrator_support import InvalidTransitionError
@@ -127,11 +127,14 @@ def materialize(files: Sequence[PreparedFile]) -> MaterializedFiles:
         try:
             rollback(materialized)
         except BaseException as rollback_error:
-            if hasattr(error, "add_note"):
-                error.add_note(
-                    "staged source rollback was incomplete; "
-                    f"{type(rollback_error).__name__}"
-                )
+            temporary_paths.mark_incomplete_cleanup(
+                error,
+                stage="staged-source-materialization-rollback",
+            )
+            error.add_note(
+                "staged source rollback was incomplete; "
+                f"{type(rollback_error).__name__}"
+            )
         raise
     return materialized
 
@@ -161,4 +164,8 @@ def rollback(files: MaterializedFiles) -> None:
                     f"{type(failure).__name__}: {failure}"
                 )
     if primary is not None:
+        temporary_paths.mark_incomplete_cleanup(
+            primary,
+            stage="staged-source-rollback",
+        )
         raise primary

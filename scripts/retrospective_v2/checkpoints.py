@@ -12,6 +12,7 @@ from typing import Any, Callable, Generic, Mapping, TypeVar
 
 from . import contracts as common_contracts
 from . import safe_io as common_safe_io
+from . import temporary_paths
 from .identity import IdentityKey
 
 
@@ -313,11 +314,14 @@ class AtomicCheckpointStore:
                 try:
                     observed = self._read_unlocked(locked.directory_fd)
                 except BaseException as read_error:
-                    if hasattr(error, "add_note"):
-                        error.add_note(
-                            "staged checkpoint commit could not be re-read; "
-                            f"staged files retained ({type(read_error).__name__})"
-                        )
+                    temporary_paths.mark_incomplete_cleanup(
+                        error,
+                        stage="staged-checkpoint-disposition",
+                    )
+                    error.add_note(
+                        "staged checkpoint commit could not be re-read; "
+                        f"staged files retained ({type(read_error).__name__})"
+                    )
                     raise error from read_error
                 if observed.revision == next_revision and _states_equal(
                     observed.state, desired
@@ -330,19 +334,25 @@ class AtomicCheckpointStore:
                 if observed.revision != current.revision or not _states_equal(
                     observed.state, current.state
                 ):
-                    if hasattr(error, "add_note"):
-                        error.add_note(
-                            "staged checkpoint disposition is inconsistent; staged files retained"
-                        )
+                    temporary_paths.mark_incomplete_cleanup(
+                        error,
+                        stage="staged-checkpoint-disposition",
+                    )
+                    error.add_note(
+                        "staged checkpoint disposition is inconsistent; staged files retained"
+                    )
                     raise
                 try:
                     rollback(staged)
                 except BaseException as rollback_error:
-                    if hasattr(error, "add_note"):
-                        error.add_note(
-                            "staged checkpoint rollback failed; "
-                            f"files retained ({type(rollback_error).__name__})"
-                        )
+                    temporary_paths.mark_incomplete_cleanup(
+                        error,
+                        stage="staged-checkpoint-rollback",
+                    )
+                    error.add_note(
+                        "staged checkpoint rollback failed; "
+                        f"files retained ({type(rollback_error).__name__})"
+                    )
                 raise
             return TransactionResult(committed, value, True)
 

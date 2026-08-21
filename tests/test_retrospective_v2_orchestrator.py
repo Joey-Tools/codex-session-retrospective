@@ -44,6 +44,8 @@ from retrospective_v2 import (  # noqa: E402
     sharding,
     source_capacity,
     source_inputs,
+    source_spool,
+    temporary_paths,
     transport,
 )
 from retrospective_v2.checkpoints import (  # noqa: E402
@@ -74,6 +76,7 @@ from retrospective_v2.identity import (  # noqa: E402
 from retrospective_v2.export import export_retained_bundle  # noqa: E402
 import retrospective_v2.orchestrator as orchestrator_module  # noqa: E402
 import retrospective_v2.orchestrator_execution_contract as execution_contract_module  # noqa: E402
+import retrospective_v2.cli as cli_module  # noqa: E402
 from retrospective_v2.orchestrator import (  # noqa: E402
     MAX_SESSION_SHARDS_RECORD_DATA_FRAMES,
     PUBLISHER_FINGERPRINT,
@@ -1904,6 +1907,30 @@ class OrchestratorTests(unittest.TestCase):
                         shadow=invalid,
                     )
 
+    def test_public_start_run_rejects_invalid_shadow_before_side_effects(self) -> None:
+        for invalid in (1, "yes"):
+            identity_path = self.root / f"public-invalid-{invalid}.key"
+            run_dir = self.root / f"public-invalid-{invalid}"
+            with (
+                self.subTest(invalid=invalid),
+                mock.patch.object(
+                    transport,
+                    "source_transport_python_runtime_readiness",
+                ) as runtime_readiness,
+                self.assertRaisesRegex(
+                    InvalidInputError,
+                    "shadow must be a boolean",
+                ),
+            ):
+                orchestrator_module.start_run(
+                    run_dir,
+                    identity_path=identity_path,
+                    shadow=invalid,
+                )
+            runtime_readiness.assert_not_called()
+            self.assertFalse(identity_path.exists())
+            self.assertFalse(run_dir.exists())
+
     def test_public_engine_rejects_alternate_production_binding_paths(self) -> None:
         canonical_provider = self.root / "canonical-provider"
         canonical_marker = self.root / "canonical-marker.json"
@@ -2878,6 +2905,88 @@ class OrchestratorTests(unittest.TestCase):
             ).exists()
         )
 
+    def test_segmented_source_cleanup_failure_is_security_terminal(self) -> None:
+        limits = sharding.ShardLimits(
+            max_bytes=orchestrator_module.EXTRACTOR_SHARD_MAX_BYTES
+        )
+        coordinator = self.start_daily("transport-segment-cleanup-failure")
+        coordinator.advance()
+        lease = next(
+            item
+            for item in coordinator.status()["active_source_leases"]
+            if item["host"] == "local"
+        )
+        payload = b'{"timestamp":"2026-07-06T01:00:00Z"}\n'
+        manifest, records, source_ref = activity_manifest(lease, [payload])
+        request, frames = record_stream_frames(
+            records,
+            [payload],
+            limits,
+            token_seed="transport-segment-cleanup-failure",
+        )
+        real_unlink = os.unlink
+
+        def retain_spool(path, *args, **kwargs):
+            if isinstance(path, str) and path.startswith("source-spool-"):
+                raise OSError("injected exact spool unlink failure")
+            return real_unlink(path, *args, **kwargs)
+
+        with (
+            mock.patch.object(
+                source_inputs.SourcePayloadCollection,
+                "complete_missing",
+                side_effect=InvalidInputError("injected missing-unit validation"),
+            ),
+            mock.patch.object(source_spool.os, "unlink", side_effect=retain_spool),
+            self.assertRaisesRegex(
+                InvalidInputError,
+                "missing-unit validation",
+            ) as caught,
+        ):
+            coordinator.accept_source(
+                lease["lease_ref"],
+                manifest.to_dict(),
+                transport_receipt=authenticated_receipt(
+                    coordinator,
+                    lease,
+                    manifest,
+                    {records[0].unit_ref: payload},
+                ),
+                transport_segments={source_ref: ((frames, request),)},
+            )
+
+        spool_root = (
+            coordinator.run_dir / source_inputs.SOURCE_TRANSPORT_SPOOL_DIRECTORY
+        )
+        residual = tuple(spool_root.glob("source-spool-*.bin"))
+        self.assertEqual(1, len(residual))
+        self.assertIs(
+            caught.exception,
+            temporary_paths.incomplete_cleanup_primary(caught.exception),
+        )
+        machine_result = cli_module._failure_from_exception(
+            "accept-source",
+            caught.exception,
+        ).to_json()
+        self.assertEqual(
+            "temporary_cleanup_incomplete",
+            machine_result["error"]["code"],
+        )
+        self.assertFalse(machine_result["error"]["retryable"])
+        self.assertEqual(
+            {
+                "primary_error": {
+                    "code": "invalid_input",
+                    "exit_code": int(cli_module.ExitCode.INVALID_INPUT),
+                    "reason_code": "run_input_invalid",
+                },
+                "temporary_cleanup": "incomplete",
+            },
+            machine_result["result"],
+        )
+        for path in residual:
+            path.unlink()
+
     def test_segmented_source_capacity_blocks_before_transport_iteration(self) -> None:
         limits = sharding.ShardLimits(
             max_bytes=orchestrator_module.EXTRACTOR_SHARD_MAX_BYTES
@@ -3130,6 +3239,50 @@ class OrchestratorTests(unittest.TestCase):
         self.assertTrue((coordinator.run_dir / descriptor["relative_path"]).is_file())
         source_inputs.rollback(materialized)
         self.assertFalse(orphan_path.exists())
+
+    def test_streaming_source_spool_primary_cleanup_failure_is_security_terminal(
+        self,
+    ) -> None:
+        coordinator = self.start_daily("source-spool-primary-cleanup-failure")
+        spool = source_inputs.StreamingRawPayloadStaging(
+            coordinator.identity,
+            coordinator.run_dir,
+            max_bytes=16,
+            max_records=1,
+            spool_ref="primary-cleanup-failure",
+        )
+        spool.add("retained", b"retained")
+        residual = spool._path
+        real_unlink = os.unlink
+
+        def retain_spool(path, *args, **kwargs):
+            if path == spool._name:
+                raise OSError("injected exact spool unlink failure")
+            return real_unlink(path, *args, **kwargs)
+
+        with (
+            mock.patch.object(source_spool.os, "unlink", side_effect=retain_spool),
+            self.assertRaisesRegex(
+                InvalidTransitionError,
+                "cleanup could not prove exact removal",
+            ) as caught,
+        ):
+            spool.discard()
+
+        self.assertTrue(residual.is_file())
+        self.assertIs(
+            caught.exception,
+            temporary_paths.incomplete_cleanup_primary(caught.exception),
+        )
+        machine_result = cli_module._failure_from_exception(
+            "accept-source",
+            caught.exception,
+        ).to_json()
+        self.assertEqual(
+            "temporary_cleanup_incomplete",
+            machine_result["error"]["code"],
+        )
+        residual.unlink()
 
     def test_transport_replays_physical_offsets_not_record_identity_order(
         self,

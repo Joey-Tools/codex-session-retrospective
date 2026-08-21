@@ -532,8 +532,9 @@ def start_run(
     require_existing_identity: bool = False,
     **kwargs: Any,
 ) -> dict[str, Any]:
+    kwargs["shadow"] = require_boolean(kwargs.get("shadow", False), label="shadow")
     require_canonical_production_binding_paths(
-        shadow=kwargs.get("shadow", False),
+        shadow=kwargs["shadow"],
         provider_state=kwargs.get("provider_state"),
         production_marker=kwargs.get("production_marker"),
     )

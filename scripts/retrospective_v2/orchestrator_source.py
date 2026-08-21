@@ -739,9 +739,8 @@ class SourceCoordinationOperations(OrchestratorComponent):
         else:
             for unit_ref, payload in sorted(raw_values.items()):
                 payloads.add(unit_ref, payload)
-        payloads.complete_missing()
-
         try:
+            payloads.complete_missing()
             self._validate_received_transport_transcript(
                 normalized_lease,
                 transport,
@@ -764,16 +763,12 @@ class SourceCoordinationOperations(OrchestratorComponent):
                 payloads.payload_metadata,
                 accepted_requests,
             )
-        except BaseException as error:
-            payloads.discard_streamed(error)
-            raise
-        segment = source_inputs.segment_descriptor(
-            normalized_lease, transport, receipt, source_snapshot
-        )
-        segment_unit_eras, segment_session_eras = source_inputs.model_era_indexes(
-            payloads.model_era_evidence
-        )
-        try:
+            segment = source_inputs.segment_descriptor(
+                normalized_lease, transport, receipt, source_snapshot
+            )
+            segment_unit_eras, segment_session_eras = source_inputs.model_era_indexes(
+                payloads.model_era_evidence
+            )
             initial_legacy_payloads = source_payloads.merge_payload_indexes(
                 initial_cell.get("payloads", {})
             )

@@ -35,6 +35,7 @@ from retrospective_v2 import (  # noqa: E402
     source_capacity,
     source_inputs,
     source_payloads,
+    temporary_paths,
     transport,
 )
 import retrospective_v2.orchestrator as orchestrator_module  # noqa: E402
@@ -330,6 +331,10 @@ class SourceTransportProtocolTests(unittest.TestCase):
             any(
                 "rollback was incomplete" in note for note in caught.exception.__notes__
             )
+        )
+        self.assertIs(
+            caught.exception,
+            temporary_paths.incomplete_cleanup_primary(caught.exception),
         )
         self.assertTrue(prepared[0].path.is_file())
 

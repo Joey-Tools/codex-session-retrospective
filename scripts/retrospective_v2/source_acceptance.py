@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
-from . import catalog, safe_io
+from . import catalog, safe_io, temporary_paths
 from .identity import IdentityKey
 from .orchestrator_support import InvalidInputError
 from .source_spool import StreamingRawPayloadStaging
@@ -191,11 +191,14 @@ class SourcePayloadCollection:
         except BaseException as cleanup_error:
             if primary is None:
                 raise
-            if hasattr(primary, "add_note"):
-                primary.add_note(
-                    "segmented source spool cleanup was incomplete; "
-                    f"{type(cleanup_error).__name__}"
-                )
+            temporary_paths.mark_incomplete_cleanup(
+                primary,
+                stage="segmented-source-spool",
+            )
+            primary.add_note(
+                "segmented source spool cleanup was incomplete; "
+                f"{type(cleanup_error).__name__}"
+            )
 
     def materialize_with(
         self,
