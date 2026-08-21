@@ -1673,6 +1673,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         for email in (
             '"john doe"@example.com',
             '"john\\"doe"@example.com',
+            '"john doe"@example.xn--p1ai',
+            "alice@example.xn--p1ai",
             "alice@buildhost",
             "release.bot+alerts@localhost",
             "reviewer@internal-host",
@@ -1710,6 +1712,21 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 with self.assertRaisesRegex(
                     RetainedPrivacyError,
                     "personal identifier",
+                ):
+                    validate_retained_artifacts(email_tampered)
+
+            with self.subTest(email=email, phase="report"):
+                email_artifacts = assemble_retained_artifacts(
+                    run_state(), review_data()
+                )
+                email_tampered = dict(email_artifacts)
+                email_tampered["report.md"] += (
+                    f"\nNotify {email} before continuing.\n".encode("ascii")
+                )
+                refresh_bundle_digest(email_tampered)
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError,
+                    "forbidden locator",
                 ):
                     validate_retained_artifacts(email_tampered)
 

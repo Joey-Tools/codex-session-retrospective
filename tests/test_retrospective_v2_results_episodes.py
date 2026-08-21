@@ -2668,6 +2668,8 @@ class ResultValidationTests(unittest.TestCase):
         for email in (
             '"john doe"@example.com',
             '"john\\"doe"@example.com',
+            '"john doe"@example.xn--p1ai',
+            "alice@example.xn--p1ai",
             "alice@buildhost",
             "release.bot+alerts@localhost",
             "reviewer@internal-host",

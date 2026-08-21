@@ -111,7 +111,7 @@ EMAIL_RE = re.compile(
     rf"(?:{_EMAIL_QUOTED_LOCAL_PART_PATTERN_TEXT}|"
     rf"{_EMAIL_DOT_ATOM_LOCAL_PART_PATTERN_TEXT})@"
     r"(?:"
-    r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
+    rf"(?:{_FQDN_LABEL_PATTERN_TEXT}\.)+{_FQDN_ANY_SUFFIX_PATTERN_TEXT}"
     r"|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?![.:])"
     r")"
     r"(?![a-z0-9-])",

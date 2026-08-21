@@ -2531,6 +2531,36 @@ superseded_by:
   validator are clean. The final signed head, exact-secret admission, fresh
   local Codex processor, hosted CI, and current-head GitHub Codex evidence
   remain required before merge.
+- Signed head `f82edf1a` had clean exact-secret admission, then its fresh local
+  Codex processor found one P1 retained-privacy gap: the email grammar admitted
+  alphabetic domain suffixes but not an IDNA A-label such as `xn--p1ai`.
+  Ordinary and quoted-local punycode email addresses could therefore bypass
+  scanning, deterministic post-redaction, and retained validation. The exact
+  78-commit, 77-edge workspace postvalidated with graph digest
+  `18bda83a7538290b21e94791eaa01832b80ecc7cea568f634d0b0451c48c9673`;
+  trusted bundle digests remained unchanged, the reviewer closed, and the task
+  root was removed through the bounded cleanup helper.
+- Email domains now reuse the shared closed FQDN suffix grammar, including
+  bounded IDNA A-labels. Ordinary and quoted-local punycode cases are covered
+  across scanner, post-redaction, retained assembly and reread, and rendered
+  report validation. The result module passes 87/87, export/reporting passes
+  72/72, and module boundaries pass 19/19.
+- The superseding Python 3.13 inventory contains 1,856 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `aba584ef02578ca84d423d6431e52a395e3996186e34555651beca50e26912c6`.
+  Shard 0 passes 443/443 in 1,598.527 seconds, shard 1 passes 503/503 in
+  1,453.245 seconds, shard 2 passes 490/490 in 1,341.446 seconds, and shard 3
+  passes 420/420 in 1,290.600 seconds, for exact aggregate coverage of
+  1,856/1,856. Signing, exact-secret admission, the replacement fresh local
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain
+  delivery gates.
+- The superseding tree also passes the independent Darwin security inventory
+  14/14 in 83.515 seconds, CI contracts 33/33, and module, Skill, and Bootstrap
+  contracts 36/36. Ruff 0.13.2 lint and changed-file formatting, both current
+  workflows under `actionlint`, the generated bootstrap manifest, the official
+  OpenAI Skill validator, and project-journal validation are clean. A direct
+  invocation of the Darwin marker module selected zero tests and is explicitly
+  non-counting; the canonical Darwin runner supplied the result above.
 
 ## Follow-up Work
 

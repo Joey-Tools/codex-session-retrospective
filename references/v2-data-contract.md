@@ -442,8 +442,8 @@ three-group dotted forms such as `0011.2233.4455`; embedded, shortened, mixed,
 or extended tokens remain outside that grammar. MAC redaction precedes generic
 personal-number redaction so every accepted hardware-address shape uses the
 same deterministic placeholder. RFC-shaped email addresses with dot-atom or
-bounded printable quoted local parts and bounded single-label `account@host`
-identifiers are personal identifiers;
+bounded printable quoted local parts, including IDNA A-label domains, and
+bounded single-label `account@host` identifiers are personal identifiers;
 an immediately following colon keeps the complete SCP-style locator under the
 higher-priority URL rule. Typed references and hashes
 are exempt from source-literal
