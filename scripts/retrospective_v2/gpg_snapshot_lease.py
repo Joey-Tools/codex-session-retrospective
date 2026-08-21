@@ -173,10 +173,6 @@ def acquire_active_lease(
         return ActiveSnapshotLease(temporary, descriptor, identity)
     except BaseException as error:
         primary = error
-        temporary_paths.mark_incomplete_cleanup(
-            error,
-            stage="publisher-snapshot-lease-acquire",
-        )
         raise
     finally:
         if primary is not None:

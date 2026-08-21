@@ -2929,6 +2929,41 @@ superseded_by:
   invocation is non-counting. Signing, exact-secret admission, the final local
   Codex processor, hosted CI, and current-head GitHub Codex evidence remain
   delivery gates.
+- Signed head `b83704a1` had clean exact-secret admission, but its fresh local
+  Codex processor found one P2 classification defect. Snapshot-lease
+  acquisition marked every hardening, directory-fsync, locking, or
+  revalidation failure as `temporary_cleanup_incomplete` before the bound
+  temporary-directory owner had attempted removal. A later proved removal
+  could therefore still be reported as a non-retryable sensitive-cleanup
+  failure. The exact 87-commit, 86-parent-edge workspace used graph digest
+  `fc50094cee0d35c33dabdfbd02393b5538a0f90a627560ed8ba9d1b390412e3e`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed through the bounded
+  cleanup helper. All head-bound evidence for `b83704a1` is stale.
+- Lease acquisition now preserves its original setup error while descriptor
+  close and bound-directory removal remain the only owners that attach a
+  sensitive-cleanup marker when cleanup cannot be proved. The regression
+  injects both file-hardening and directory-fsync failures, proves the exact
+  bound child is gone and its root is empty, and proves the resulting error
+  chain has no cleanup-incomplete classification. The exact regression passes
+  1/1, the complete publication invariant class passes 63/63, and the two
+  affected module-boundary tests pass 2/2. One direct isolated test-file launch
+  failed before import because it bypassed the repository loader, and one
+  focused invocation used a nonexistent class name; both are non-counting.
+- The final Python 3.13.12 inventory contains 1,879 exact test IDs from 22
+  authenticated sources under manifest digest
+  `2ab83fa0150490634b47c3ddaa7cd15b256d118ac69a8e3b8f45dd436d05471d`.
+  Shard 0 passes 448/448 in 1,862.309 seconds, shard 1 passes 509/509 in
+  1,679.577 seconds, shard 2 passes 498/498 in 1,552.913 seconds, and shard 3
+  passes 424/424 in 1,498.512 seconds, for exact aggregate coverage of
+  1,879/1,879 without skips. The independent Darwin security inventory passes
+  14/14 in 67.240 seconds. Ruff 0.13.2 lint for all `scripts/` and `tests/`,
+  changed-file formatting, both current workflows under `actionlint`, the
+  generated bootstrap manifest, and `git diff --check` are clean. Signing,
+  exact-secret admission, the replacement local Codex processor, hosted CI,
+  and current-head GitHub Codex evidence remain delivery gates.
 
 ## Follow-up Work
 

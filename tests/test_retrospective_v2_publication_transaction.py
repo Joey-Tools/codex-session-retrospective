@@ -192,6 +192,63 @@ class _BoundedScandirFixture:
 
 
 class PublicationInvariantUnitTests(unittest.TestCase):
+    def test_lease_setup_failure_is_not_cleanup_failure_after_bound_removal(
+        self,
+    ) -> None:
+        failures = (
+            (
+                "hardening",
+                mock.patch.object(
+                    gpg_snapshot_lease.safe_io,
+                    "harden_created_owner_only_file_descriptor",
+                    side_effect=OSError(errno.EIO, "fixture hardening failed"),
+                ),
+            ),
+            (
+                "directory-fsync",
+                mock.patch.object(
+                    gpg_snapshot_lease.os,
+                    "fsync",
+                    side_effect=OSError(errno.EIO, "fixture fsync failed"),
+                ),
+            ),
+        )
+        for label, failure in failures:
+            with (
+                self.subTest(label=label),
+                tempfile.TemporaryDirectory(
+                    prefix="r-", dir=_publication_test_temp_parent()
+                ) as raw,
+            ):
+                root = Path(raw)
+                snapshot_root = root / "snapshots"
+                source_root = root / "source"
+                source_root.mkdir(mode=0o700)
+                temporary_path: Path | None = None
+                with (
+                    mock.patch.object(
+                        temporary_paths,
+                        "local_codex_root",
+                        return_value=source_root,
+                    ),
+                    self.assertRaises(OSError) as caught,
+                ):
+                    with temporary_paths.owner_only_temporary_directory(
+                        root=snapshot_root,
+                        prefix="g-",
+                    ) as temporary:
+                        temporary_path = temporary.path
+                        with failure:
+                            gpg_snapshot_lease.acquire_active_lease(temporary)
+
+                self.assertIsNotNone(temporary_path)
+                assert temporary_path is not None
+                self.assertFalse(temporary_path.exists())
+                self.assertEqual([], list(snapshot_root.iterdir()))
+                self.assertIsNone(
+                    temporary_paths.incomplete_cleanup_primary(caught.exception)
+                )
+
     def test_publication_index_ignores_ambient_temporary_roots(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as raw:
             root = Path(raw)
