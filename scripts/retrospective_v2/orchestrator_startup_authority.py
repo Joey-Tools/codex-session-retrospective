@@ -13,6 +13,12 @@ from .orchestrator_core import InvalidInputError
 from .orchestrator_support import publisher_readiness, publisher_sign_verify_canary
 
 
+def require_boolean(value: object, *, label: str) -> bool:
+    if not isinstance(value, bool):
+        raise InvalidInputError(f"{label} must be a boolean")
+    return value
+
+
 def require_canonical_production_binding_paths(
     *,
     shadow: object,

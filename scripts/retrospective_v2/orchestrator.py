@@ -78,6 +78,7 @@ from .orchestrator_projection import StateProjectionOperations
 from .orchestrator_startup_authority import (
     load_production_marker_for_publisher,
     publisher_readiness_report,
+    require_boolean,
     require_canonical_production_binding_paths,
 )
 from .transport_host_inventory import AuthenticatedHostInventory
@@ -107,6 +108,7 @@ def doctor(
 ) -> dict[str, Any]:
     """Run actual capability probes and return a safe readiness report."""
 
+    shadow = require_boolean(shadow, label="shadow")
     require_canonical_production_binding_paths(
         shadow=shadow,
         provider_state=provider_state,

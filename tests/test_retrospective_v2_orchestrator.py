@@ -1883,6 +1883,27 @@ class OrchestratorTests(unittest.TestCase):
         )
         self.assertEqual(2, validate_provider.call_count)
 
+    def test_doctor_and_start_require_boolean_shadow(self) -> None:
+        for invalid in (1, "yes"):
+            with self.subTest(entry="doctor", invalid=invalid):
+                with self.assertRaisesRegex(
+                    InvalidInputError,
+                    "shadow must be a boolean",
+                ):
+                    doctor(shadow=invalid)
+            with self.subTest(entry="start", invalid=invalid):
+                with self.assertRaisesRegex(
+                    InvalidInputError,
+                    "shadow must be a boolean",
+                ):
+                    self.coordinator(f"invalid-shadow-{invalid}").start(
+                        mode=RunMode.DAILY,
+                        start=WINDOW_START,
+                        end=DAILY_END,
+                        hosts=TEST_HOSTS,
+                        shadow=invalid,
+                    )
+
     def test_public_engine_rejects_alternate_production_binding_paths(self) -> None:
         canonical_provider = self.root / "canonical-provider"
         canonical_marker = self.root / "canonical-marker.json"

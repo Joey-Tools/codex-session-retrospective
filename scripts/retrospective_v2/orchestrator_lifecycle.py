@@ -72,6 +72,7 @@ from .orchestrator_support import (
 )
 from .orchestrator_startup_authority import (
     load_production_marker_for_publisher,
+    require_boolean,
     require_canonical_production_binding_paths,
 )
 
@@ -218,8 +219,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             raise InvalidInputError(f"unknown run mode: {mode!r}") from error
         if not isinstance(allow_partial, bool):
             raise InvalidInputError("allow_partial must be a boolean")
-        if not isinstance(shadow, bool):
-            raise InvalidInputError("shadow must be a boolean")
+        shadow = require_boolean(shadow, label="shadow")
         require_canonical_production_binding_paths(
             shadow=shadow,
             provider_state=provider_state,

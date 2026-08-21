@@ -2821,6 +2821,29 @@ superseded_by:
   check then passed. Signing, exact-secret admission, the final local Codex
   processor, hosted CI, and current-head GitHub Codex evidence remain delivery
   gates.
+- The final-head local Codex processor over signed head `96c8b6e9` found one
+  further P2 input-validation gap. `start` rejected non-boolean shadow values,
+  but `doctor` accepted truthy integers or strings and could skip production
+  marker validation; the provider-detail tuple could also raise `TypeError`
+  for those inputs. The exact 85-commit, 84-parent-edge workspace used graph
+  digest
+  `55dc3c60a8aa1722004e3d02f0166020b1590262178cae9d7b9c8a987a2d70f6`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed through the bounded
+  cleanup helper. All head-bound review evidence for `96c8b6e9` is stale.
+- Startup authority now owns one strict boolean validator shared by `doctor`
+  and `start`. Both entry points reject integer and string shadow values before
+  any readiness or production-path branch. Moving the existing `start` check
+  into that helper keeps the engine's exact 9,858-branch budget unchanged. The
+  focused doctor/start/provider set passes 3/3 in 0.729 seconds, the complete
+  134-test orchestrator module passes in 544.808 seconds, and module boundaries
+  pass 19/19. Canonical discovery now contains 1,874 exact test IDs from 22
+  sources under manifest digest
+  `005f7cf54f96beb4a2bb629aebba29919c544ad71993e8a2d73d01fa8ae1c5b5`.
+  Signing, exact-secret admission, the replacement local Codex processor,
+  hosted CI, and current-head GitHub Codex evidence remain delivery gates.
 
 ## Follow-up Work
 
