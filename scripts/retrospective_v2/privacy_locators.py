@@ -70,11 +70,25 @@ BARE_PRIVATE_LOCATOR_RE = re.compile(
     r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?:\d{1,5})"
     r"(?:/[^\s<>\"']*)?"
 )
+_FQDN_LABEL_PATTERN_TEXT = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+_FQDN_ANY_SUFFIX_PATTERN_TEXT = r"(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})"
+_FQDN_CONTROLLED_SUFFIX_PATTERN_TEXT = (
+    r"(?:aero|ai|app|au|biz|blog|br|ca|ch|cloud|cn|co|com|coop|de|dev|dk|"
+    r"edu|es|eu|example|fi|fr|gov|hk|ie|il|in|info|int|invalid|io|it|jp|"
+    r"kr|me|mil|mobi|museum|mx|name|net|nl|no|nz|online|onion|org|pl|pro|"
+    r"se|sg|site|tech|test|travel|tv|tw|uk|us|xyz|za|"
+    r"xn--[a-z0-9-]{2,59})"
+)
+# A bare dotted token is indistinguishable from a code identifier. Admit it
+# only for a controlled suffix or when a port/path makes it a locator; labeled
+# host/domain context is handled independently below.
 BARE_FQDN_RE = re.compile(
-    r"(?i)(?<![a-z0-9_@-])"
-    r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
-    r"(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})"
-    r"(?::\d{1,5})?(?:/[^\s<>\"']*)?(?![a-z0-9_-])"
+    r"(?i)(?<![a-z0-9_@-])(?:"
+    rf"(?:{_FQDN_LABEL_PATTERN_TEXT}\.)+"
+    rf"{_FQDN_CONTROLLED_SUFFIX_PATTERN_TEXT}"
+    rf"|(?:{_FQDN_LABEL_PATTERN_TEXT}\.)+"
+    rf"{_FQDN_ANY_SUFFIX_PATTERN_TEXT}(?=:\d{{1,5}}\b|/)"
+    r")(?::\d{1,5})?(?:/[^\s<>\"']*)?(?![a-z0-9_-])"
 )
 URI_LOCATOR_RE = re.compile(
     r"(?<![A-Za-z0-9+.-])(?<![^\W_])"
@@ -88,9 +102,14 @@ SCP_STYLE_LOCATOR_RE = re.compile(
     r":[^\s<>\"'`]*",
     re.ASCII | re.IGNORECASE,
 )
+_EMAIL_DOT_ATOM_LOCAL_PART_PATTERN_TEXT = r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+"
+_EMAIL_QUOTED_LOCAL_PART_PATTERN_TEXT = (
+    r'"(?:\\[\x20-\x7e]|[\x20-\x21\x23-\x5b\x5d-\x7e]){0,64}"'
+)
 EMAIL_RE = re.compile(
     r"(?<![a-z0-9.!#$%&'*+/=?^_`{|}~-])"
-    r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@"
+    rf"(?:{_EMAIL_QUOTED_LOCAL_PART_PATTERN_TEXT}|"
+    rf"{_EMAIL_DOT_ATOM_LOCAL_PART_PATTERN_TEXT})@"
     r"(?:"
     r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}"
     r"|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?![.:])"
@@ -848,7 +867,7 @@ PERSONAL_IDENTIFIER_GROUPS = {
     MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
 }
 LABELED_INTERNAL_HOST_RE = re.compile(
-    r"\b(?:host|hostname|node|server)\s*(?:=|:)\s*"
+    r"\b(?:domain|endpoint|host|hostname|node|server|website)\s*(?:=|:)\s*"
     r"(?!\[REDACTED)(?=[a-z0-9._-]*[a-z._-])"
     r"[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
     re.ASCII | re.IGNORECASE,
@@ -857,10 +876,28 @@ UNIX_PATH_RE = re.compile(
     r"(?<![A-Za-z0-9_])/(?!/)"
     r"[A-Za-z0-9._~+@%=-]+(?:/[A-Za-z0-9._~+@%=-]+)*"
 )
+_RELATIVE_PATH_SEGMENT_PATTERN_TEXT = r"[A-Za-z0-9_.~+@%=-]+"
+_RELATIVE_PATH_FILE_PATTERN_TEXT = (
+    r"(?:[A-Za-z0-9_~+@%=-][A-Za-z0-9_.~+@%=-]*"
+    r"\.[A-Za-z0-9][A-Za-z0-9_~+@%=-]{0,31}|"
+    r"\.[A-Za-z0-9][A-Za-z0-9_~+@%=-]{0,31})"
+)
+_RELATIVE_PATH_ROOT_PATTERN_TEXT = (
+    r"(?:artifacts?|docs?|lib|libs|modules?|packages?|repos?|scripts?|src|"
+    r"tests?|tmp|var|worktrees?)"
+)
 RELATIVE_PATH_RE = re.compile(
-    r"(?<![-A-Za-z0-9_.~+@%=/\\])(?:\.{1,2}[/\\])?"
-    r"(?:[A-Za-z0-9_.~+@%=-]+[/\\])+[A-Za-z0-9_.~+@%=-]+"
-    r"(?![A-Za-z0-9_.~+@%=-])"
+    r"(?<![-A-Za-z0-9_.~+@%=/\\])(?:"
+    rf"\.{{1,2}}[/\\](?:{_RELATIVE_PATH_SEGMENT_PATTERN_TEXT}[/\\])*"
+    rf"{_RELATIVE_PATH_SEGMENT_PATTERN_TEXT}"
+    rf"|(?:{_RELATIVE_PATH_SEGMENT_PATTERN_TEXT}[/\\])+"
+    rf"{_RELATIVE_PATH_FILE_PATTERN_TEXT}"
+    rf"|(?:{_RELATIVE_PATH_SEGMENT_PATTERN_TEXT}[/\\])*"
+    rf"{_RELATIVE_PATH_ROOT_PATTERN_TEXT}[/\\]"
+    rf"(?:{_RELATIVE_PATH_SEGMENT_PATTERN_TEXT}[/\\])*"
+    rf"{_RELATIVE_PATH_SEGMENT_PATTERN_TEXT}"
+    r")(?![A-Za-z0-9_.~+@%=-])",
+    re.ASCII | re.IGNORECASE,
 )
 HOME_PATH_RE = re.compile(
     r"(?<![A-Za-z0-9_])~[/\\]"

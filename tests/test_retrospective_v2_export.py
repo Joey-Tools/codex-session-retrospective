@@ -1671,6 +1671,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                     validate_retained_artifacts(scp_tampered)
 
         for email in (
+            '"john doe"@example.com',
+            '"john\\"doe"@example.com',
             "alice@buildhost",
             "release.bot+alerts@localhost",
             "reviewer@internal-host",
@@ -2098,6 +2100,15 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "The event occurred at 2026-08-20 12:34:56 UTC.",
             "Release 2026.08.20.1234 remains available.",
             "Release 1234.56.78.9012 remains available.",
+            "The input/output boundary was unclear.",
+            "The before/after comparison lacked evidence.",
+            "The source/target mapping was explicit.",
+            "The home/away comparison was irrelevant.",
+            "The read/write/execute policy was reviewed.",
+            "The json.loads call rejected the payload.",
+            "The package.json.loads call rejected the payload.",
+            "The config.toml setting was explicit.",
+            "The foo.bar attribute remained stable.",
             "Payment sent to DE88370400440532013000 before continuing",
             "Payment sent to XDE89370400440532013000 before continuing",
             "Payment sent to DE893704004405 before continuing",
@@ -2162,6 +2173,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "streetAddress: 123 Main Street",
             "Device MAC address: 00:1A:2B:3C:4D:5E",
             "Switch MAC address: 0011.2233.4455",
+            'Contact "john doe"@example.com before continuing.',
+            'Contact "john\\"doe"@example.com before continuing.',
             "Inspect identifier abcdefabcdefabcdefabcdef before continuing.",
             "Inspect identifier 01890f3e-7b12-7cc2-bf79-123456789abc.",
             f"Inspect identifier {'a' * 65}.",

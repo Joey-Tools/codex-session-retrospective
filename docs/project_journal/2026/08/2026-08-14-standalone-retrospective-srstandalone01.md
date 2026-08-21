@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-20
+updated: 2026-08-21
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -2499,6 +2499,38 @@ superseded_by:
   mirrors the enforced 17-module, 9,124/9,150 aggregate and affected
   single-file baselines. Admission and review evidence for `3b6f2749` are stale
   for delivery because this correction creates a successor head.
+- Signed head `67dacf78` passed its local full suite, exact-secret admission,
+  fresh local Codex processor, and hosted CI, but current-head GitHub Codex
+  found three retained-privacy precision gaps. Quoted RFC-style email local
+  parts such as `"john doe"@example.com` bypassed the shared detector, ordinary
+  slash compounds such as `input/output` were treated as relative paths, and
+  dotted code or filename text such as `json.loads`, `config.toml`, and
+  `foo.bar` was treated as a bare FQDN. Those head-bound results are stale.
+- The shared privacy owner now accepts bounded quoted email local parts,
+  including escaped quotes. Relative paths require an explicit dot prefix, a
+  file extension, or a controlled repository/path root. Bare FQDNs require a
+  controlled public suffix unless an explicit port or path supplies host
+  syntax; closed host labels preserve fail-closed handling for internal names
+  with unknown suffixes. Scanner, redactor, retained assembly and reread, and
+  rendered-report validation consume the same grammar. The complete affected
+  result and export modules pass 159/159 in 116.488 seconds.
+- Two four-shard attempts were deliberately stopped and are non-counting after
+  review showed that their intermediate path and FQDN grammars remained too
+  broad. Every exact runner was interrupted once and proved absent before the
+  final tree was frozen. The final canonical Python 3.13 inventory contains
+  1,856 exact test IDs from 22 authenticated source modules under manifest
+  digest `ad3f2d97af1adbebad47c36064614dce605824d94ee10cdbe85ce09c30573d65`.
+  Shard 0 passes 443/443 in 1,602.341 seconds, shard 1 passes 503/503 in
+  1,459.892 seconds, shard 2 passes 490/490 in 1,348.476 seconds, and shard 3
+  passes 420/420 in 1,301.493 seconds, for exact aggregate coverage of
+  1,856/1,856 on one frozen code-and-test tree.
+- The same tree passes the independent Darwin security inventory 14/14 in
+  68.466 seconds, CI contracts 33/33, and module, Skill, and Bootstrap
+  contracts 36/36. Ruff 0.13.2 lint and changed-file formatting, both current
+  workflows under `actionlint`, and the isolated official OpenAI Skill
+  validator are clean. The final signed head, exact-secret admission, fresh
+  local Codex processor, hosted CI, and current-head GitHub Codex evidence
+  remain required before merge.
 
 ## Follow-up Work
 

@@ -428,15 +428,22 @@ result-side projection contains only the extractor's schema-authorized
 `turns[].generalized_working_text`, both before and after deterministic
 post-redaction. Source values from 4 through 11 normalized characters use
 Unicode token-boundary matching, so a value such as `Acme` is removed from
-derived prose without treating `Acmeology` as the same source token. Bare FQDNs
-are redacted regardless of suffix; protocol URLs, private locators, paths, and
-bare hosts retain distinct deterministic precedence. Hardware addresses cover
+derived prose without treating `Acmeology` as the same source token. Bare
+domain locators are redacted when they carry an explicit port or path, end in
+the closed public, reserved, or private suffix set, or appear in controlled
+host, domain, or endpoint context. Ambiguous dotted tokens outside those rules
+remain reviewable code identifiers. Protocol URLs, private locators, paths,
+and bare hosts retain distinct deterministic precedence. Ambiguous slash-word
+compounds remain
+reviewable prose; relative paths require an explicit dot prefix, a common path
+root, or a filename extension. Hardware addresses cover
 only strict six-octet colon/hyphen forms with one delimiter or strict
 three-group dotted forms such as `0011.2233.4455`; embedded, shortened, mixed,
 or extended tokens remain outside that grammar. MAC redaction precedes generic
 personal-number redaction so every accepted hardware-address shape uses the
-same deterministic placeholder. RFC-shaped email addresses
-and bounded single-label `account@host` identifiers are personal identifiers;
+same deterministic placeholder. RFC-shaped email addresses with dot-atom or
+bounded printable quoted local parts and bounded single-label `account@host`
+identifiers are personal identifiers;
 an immediately following colon keeps the complete SCP-style locator under the
 higher-priority URL rule. Typed references and hashes
 are exempt from source-literal

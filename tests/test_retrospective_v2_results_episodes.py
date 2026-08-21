@@ -2666,6 +2666,8 @@ class ResultValidationTests(unittest.TestCase):
 
     def test_post_redaction_removes_single_label_host_emails(self) -> None:
         for email in (
+            '"john doe"@example.com',
+            '"john\\"doe"@example.com',
             "alice@buildhost",
             "release.bot+alerts@localhost",
             "reviewer@internal-host",
@@ -2695,6 +2697,44 @@ class ResultValidationTests(unittest.TestCase):
                     "personal_identifier",
                     {item.category for item in scan_for_leaks({"safe": invalid})},
                 )
+
+    def test_dotted_code_and_slash_compounds_remain_reviewable_prose(self) -> None:
+        safe_texts = (
+            "The input/output boundary was unclear.",
+            "The before/after comparison lacked evidence.",
+            "The source/target mapping was explicit.",
+            "The home/away comparison was irrelevant.",
+            "The read/write/execute policy was reviewed.",
+            "The json.loads call rejected the payload.",
+            "The package.json.loads call rejected the payload.",
+            "The config.toml setting was explicit.",
+            "The foo.bar attribute remained stable.",
+        )
+        for safe_text in safe_texts:
+            with self.subTest(safe_text=safe_text):
+                self.assertEqual((), scan_for_leaks({"text": safe_text}))
+
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = safe_text
+                result = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    safe_text,
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual((), scan_for_leaks(result))
+
+        for locator in (
+            "docs.example.com",
+            "company.technology:8443",
+            "jira.cisco.example",
+            "Domain: company.technology",
+            "src/a.py",
+            "docs/reference",
+            "team/docs/reference",
+        ):
+            with self.subTest(locator=locator):
+                self.assertTrue(scan_for_leaks({"text": f"Inspect {locator}."}))
 
     def test_uri_scheme_matching_does_not_unicode_casefold(self) -> None:
         for uri_like_text in (
