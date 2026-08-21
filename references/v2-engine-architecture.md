@@ -232,7 +232,10 @@ operation and retains the unproved object. These are cooperative ownership
 guarantees; an actively malicious same-UID process remains part of the host trust
 boundary. If an operation and sensitive temporary cleanup both fail, the outer
 primary carries a content-free cleanup marker so the CLI cannot classify the
-result as retryable.
+result as retryable. Specialized cleanup uncertainty also marks the bound child
+for recovery before control returns to the generic temporary-directory context.
+That context closes its descriptors but does not recursively remove the retained
+tree; only a later root-lock holder may recover it through the bounded inventory.
 
 The canary child receives `TEMP`, `TMP`, and `TMPDIR` bound to the exact
 descriptor-validated disposable workspace through the otherwise closed
@@ -483,9 +486,10 @@ support modules remain below 1,100 lines; the complete result-schema owner is
 2,356/2,500, and the dedicated synthesis-lineage owner is 226/250 after adding
 compact recursive commitments and
 revision-level recurrence proof. The global branch proxy is exactly
-9,735/9,735 nodes after adding digest-bound IANA root-suffix classification,
-and the shared process-group lifecycle owner is 290/300 lines after separating
-signal retirement from group-absence proof. These gates
+9,849/9,849 nodes after adding digest-bound IANA root-suffix classification and
+explicit sensitive-temporary retention, while the shared temporary-directory
+authority is 337/350 lines. The shared process-group lifecycle owner is 290/300
+lines after separating signal retirement from group-absence proof. These gates
 keep complete agent schemas, claim-size projection, source-byte provenance,
 semantic topic validation, and delegated remote transport in explicit owners
 instead of expanding the coordinator or reviving a second remote probe.

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import operator
 import os
 from pathlib import Path
@@ -113,6 +113,11 @@ def _close_descriptor(descriptor: int, *, primary: BaseException | None) -> None
         primary.add_note(f"temporary-directory descriptor close failed: {error}")
 
 
+@dataclass(slots=True)
+class _TemporaryRetention:
+    requested: bool = False
+
+
 @dataclass(frozen=True, slots=True)
 class BoundTemporaryDirectory:
     path: Path
@@ -120,6 +125,21 @@ class BoundTemporaryDirectory:
     _source_root: Path
     _root_fd: int
     _child_fd: int
+    _retention: _TemporaryRetention = field(
+        default_factory=_TemporaryRetention,
+        repr=False,
+        compare=False,
+    )
+
+    @property
+    def retained_for_recovery(self) -> bool:
+        return self._retention.requested
+
+    def retain_for_recovery(self, error: BaseException, *, stage: str) -> None:
+        """Prevent generic removal when specialized cleanup is unproved."""
+
+        self._retention.requested = True
+        mark_incomplete_cleanup(error, stage=stage)
 
     def revalidate(self) -> None:
         root = safe_io.validate_owner_only_directory_descriptor(
@@ -270,18 +290,34 @@ def owner_only_temporary_directory(
     finally:
         terminal_error: BaseException | None = None
         if binding is not None:
-            try:
-                _cleanup_bound_directory(binding)
-            except BaseException as cleanup_error:
+            if binding.retained_for_recovery:
                 if primary is None:
-                    mark_incomplete_cleanup(cleanup_error, stage="tree-removal")
-                    primary = cleanup_error
-                    terminal_error = cleanup_error
-                else:
-                    mark_incomplete_cleanup(primary, stage="tree-removal")
-                    primary.add_note(
-                        f"temporary-directory cleanup failed: {cleanup_error}"
+                    terminal_error = RuntimeError(
+                        "sensitive temporary directory was retained without an "
+                        "active failure"
                     )
+                    mark_incomplete_cleanup(
+                        terminal_error,
+                        stage="explicit-retention",
+                    )
+                    primary = terminal_error
+                else:
+                    primary.add_note(
+                        "sensitive temporary directory retained for bounded recovery"
+                    )
+            else:
+                try:
+                    _cleanup_bound_directory(binding)
+                except BaseException as cleanup_error:
+                    if primary is None:
+                        mark_incomplete_cleanup(cleanup_error, stage="tree-removal")
+                        primary = cleanup_error
+                        terminal_error = cleanup_error
+                    else:
+                        mark_incomplete_cleanup(primary, stage="tree-removal")
+                        primary.add_note(
+                            f"temporary-directory cleanup failed: {cleanup_error}"
+                        )
             try:
                 _close_descriptor(binding._child_fd, primary=primary)
             except BaseException as close_error:

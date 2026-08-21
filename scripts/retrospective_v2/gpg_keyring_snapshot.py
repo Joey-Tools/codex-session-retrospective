@@ -540,7 +540,7 @@ def _finish_snapshot_use(
     if not cleanup_errors:
         return
     primary = operation_error or cleanup_errors[0][1]
-    temporary_paths.mark_incomplete_cleanup(
+    temporary.retain_for_recovery(
         primary,
         stage="publisher-snapshot-finalization",
     )

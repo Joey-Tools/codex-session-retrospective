@@ -2663,6 +2663,47 @@ superseded_by:
   workstream. Signing, exact-secret admission, the replacement fresh local
   Codex processor, hosted CI, and current-head GitHub Codex evidence remain
   delivery gates.
+- The fresh local Codex processor over signed head `34f094c0` found one P1
+  recovery gap: when specialized publisher-snapshot finalization could not
+  reacquire root coordination or prove publisher-agent cleanup, it marked the
+  primary error but the outer generic temporary-directory context still
+  removed the sensitive snapshot tree. The exact 81-commit, 80-parent-edge
+  workspace used graph digest
+  `a7791180954fe013a79284bbe568596d4ca0302540f7a08e23d9ce1c44a13781`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and the task root was removed through the bounded cleanup
+  helper. All head-bound evidence for `34f094c0` is stale.
+- A bound temporary directory now has one explicit, mutable recovery-retention
+  decision. Publisher-snapshot finalization sets that decision before returning
+  to the generic context. The generic owner closes held descriptors but skips
+  recursive removal, preserving the exact child and active lease for a later
+  root-lock holder's bounded stale recovery. A retention request without an
+  active primary fails closed rather than returning success. Exact regressions
+  cover both root-coordination and publisher-agent failures, prove the key
+  directory and active lease survive the failed operation, and prove the next
+  startup recovers the same retained tree. The focused retention set passes
+  4/4 in 0.231 seconds, the publisher-canary path contracts pass 4/4, and module
+  boundaries pass 19/19.
+- The final Python 3.13.12 inventory contains 1,870 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `de3f825d6789c0a6ab9ec1487d9467b7637a30a058df0f791d2805c7fc6c0f1b`.
+  Shard 0 passes 448/448 in 1,724.884 seconds, shard 1 passes 506/506 in
+  1,578.021 seconds, shard 2 passes 495/495 in 1,460.118 seconds, and shard 3
+  passes 421/421 in 1,412.093 seconds, for exact aggregate coverage of
+  1,870/1,870. Every bounded supervisor reached terminal exit zero.
+- The same frozen tree passes the independent Darwin security inventory 14/14
+  in 59.399 seconds, module boundaries 19/19, CI contracts 33/33, Skill
+  contracts 5/5, and Bootstrap contracts 12/12. Ruff 0.13.2 lint and
+  changed-file formatting, both current workflows under `actionlint`, the
+  generated bootstrap manifest check, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check` are clean. Two malformed focused selectors failed before
+  selecting the intended tests, and one unquoted bytecode glob failed before
+  scanning; each is explicitly non-counting. Signing, exact-secret admission,
+  the replacement fresh local Codex processor, hosted CI, and current-head
+  GitHub Codex evidence remain delivery gates.
 
 ## Follow-up Work
 

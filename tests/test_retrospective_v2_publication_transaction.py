@@ -523,6 +523,88 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                         if stream is not None:
                             stream.close()
 
+    def test_snapshot_finalization_failure_is_retained_until_restart(self) -> None:
+        for failure_stage in ("root-coordination", "publisher-agent"):
+            with self.subTest(failure_stage=failure_stage):
+                with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+                    root = Path(raw)
+                    source = root / "publisher-keyring"
+                    source.mkdir(mode=0o700)
+                    _write_synthetic_publisher_keyring(source)
+                    snapshot_root = root / "snapshot-root"
+                    source_root = root / "source-root"
+                    source_root.mkdir(mode=0o700)
+                    retained: Path | None = None
+                    if failure_stage == "root-coordination":
+                        failure = mock.patch.object(
+                            temporary_recovery.RecoveryCoordinator,
+                            "acquire",
+                            side_effect=temporary_recovery.TemporaryRecoveryError(
+                                "fixture root coordination failed"
+                            ),
+                        )
+                    else:
+                        failure = mock.patch.object(
+                            gpg_keyring_snapshot,
+                            "_clean_snapshot_after_use",
+                            side_effect=gpg_keyring_snapshot.ConfigFreeKeyringError(
+                                "fixture publisher cleanup failed"
+                            ),
+                        )
+
+                    with (
+                        mock.patch.object(
+                            temporary_paths,
+                            "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                            snapshot_root,
+                        ),
+                        mock.patch.object(
+                            temporary_paths,
+                            "local_codex_root",
+                            return_value=source_root,
+                        ),
+                        failure,
+                        self.assertRaises(
+                            gpg_keyring_snapshot.ConfigFreeKeyringError
+                        ) as caught,
+                    ):
+                        with gpg_keyring_snapshot.config_free_keyring_snapshot(
+                            source
+                        ) as snapshot:
+                            retained = snapshot
+
+                    self.assertIsNotNone(retained)
+                    assert retained is not None
+                    self.assertTrue(retained.is_dir())
+                    self.assertTrue((retained / "private-keys-v1.d").is_dir())
+                    self.assertTrue(
+                        (retained / gpg_snapshot_lease.ACTIVE_LEASE_NAME).is_file()
+                    )
+                    self.assertIsNotNone(
+                        temporary_paths.incomplete_cleanup_primary(caught.exception)
+                    )
+
+                    with (
+                        mock.patch.object(
+                            temporary_paths,
+                            "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                            snapshot_root,
+                        ),
+                        mock.patch.object(
+                            temporary_paths,
+                            "local_codex_root",
+                            return_value=source_root,
+                        ),
+                    ):
+                        with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                            pass
+
+                    self.assertFalse(retained.exists())
+                    self.assertEqual(
+                        [".recovery.lock"],
+                        sorted(path.name for path in snapshot_root.iterdir()),
+                    )
+
     def test_recovery_rejects_a_symlinked_activity_lease(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as raw:
             root = Path(raw)
