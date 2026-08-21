@@ -359,10 +359,14 @@ def doctor(
         except (OSError, authority.AuthorityError) as error:
             record("durable_history_contract", False, type(error).__name__)
 
-    if shadow:
-        record("provider_binding", True, "not_applicable_for_shadow")
-    elif durable_history is None or resolved_identity is None or provider_state is None:
-        record("provider_binding", False, "production provider state is required")
+    if provider_state is None:
+        detail = (
+            "production provider state is required",
+            "not_applicable_for_shadow",
+        )[shadow]
+        record("provider_binding", shadow, detail)
+    elif durable_history is None or resolved_identity is None:
+        record("provider_binding", False, "durable history binding is required")
     else:
         try:
             authority.assert_provider_cache_matches(

@@ -2792,6 +2792,35 @@ superseded_by:
   Project-journal validation, signing, exact-secret admission, the replacement
   fresh local Codex processor, hosted CI, and current-head GitHub Codex evidence
   remain delivery gates.
+- The replacement local Codex processor over signed head `82e03e4d` found one
+  P2 readiness mismatch. Shadow `doctor` reported an explicitly supplied
+  provider cache as not applicable, while shadow `start` validated the same
+  cache against durable history and failed when it was missing, stale, or
+  malformed. The exact 84-commit, 83-parent-edge workspace used graph digest
+  `92c2764b9fae9b1df0fdba782542a5488c8ab7674b23ed16151e24b7c732c0d0`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed through the bounded
+  cleanup helper. All head-bound review evidence for `82e03e4d` is stale.
+- Shadow provider state remains optional, but `doctor` now validates every
+  explicitly supplied provider cache with the same durable-history binding as
+  `start`. An omitted shadow provider retains the established not-applicable
+  result; production still requires one. The paired stale-provider regression
+  proves both entry points fail closed through the same validator. The focused
+  pair passes 2/2 in 0.740 seconds, and the complete 133-test orchestrator
+  module passes in 548.788 seconds. Canonical discovery now contains 1,873
+  exact test IDs from 22 sources under manifest digest
+  `79de0299d076fb3d98d69aa4a4d1a1bd036f909ee78c1cd6d98b2a2887134ee3`.
+  The final tree also passes module boundaries 19/19, CI contracts 33/33,
+  Skill contracts 5/5, Bootstrap contracts 12/12, Ruff lint and formatting for
+  both changed Python files, the generated bootstrap-manifest check,
+  project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check`. One bootstrap-manifest invocation incorrectly supplied
+  an unsupported `--check` option and is non-counting; the documented default
+  check then passed. Signing, exact-secret admission, the final local Codex
+  processor, hosted CI, and current-head GitHub Codex evidence remain delivery
+  gates.
 
 ## Follow-up Work
 

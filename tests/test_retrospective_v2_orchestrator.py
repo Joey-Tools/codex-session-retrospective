@@ -1839,6 +1839,50 @@ class OrchestratorTests(unittest.TestCase):
                 **self.start_authority(),
             )
 
+    def test_shadow_doctor_validates_optional_provider_like_start(self) -> None:
+        provider = self.root / "stale-provider"
+        with mock.patch(
+            "retrospective_v2.orchestrator.authority.assert_provider_cache_matches",
+            side_effect=authority.AuthorityError("provider is stale"),
+        ) as validate_provider:
+            readiness = doctor(
+                identity_path=self.identity_path,
+                require_existing_identity=True,
+                provenance=execution_provenance(),
+                shadow=True,
+                history_repo=self.root / "history",
+                history_target_ref="refs/heads/main",
+                publisher_gpg_program=TEST_PUBLISHER_GPG,
+                provider_state=provider,
+                publisher_probe=lambda: {
+                    "fingerprint": PUBLISHER_FINGERPRINT,
+                    "ready": True,
+                },
+            )
+            with self.assertRaisesRegex(
+                RunConflictError,
+                "provider cache",
+            ):
+                self.coordinator("shadow-stale-provider").start(
+                    mode=RunMode.DAILY,
+                    start=WINDOW_START,
+                    end=DAILY_END,
+                    hosts=TEST_HOSTS,
+                    shadow=True,
+                    provider_state=provider,
+                    history_repo=self.root / "history",
+                    history_target_ref="refs/heads/main",
+                    publisher_gpg_program=TEST_PUBLISHER_GPG,
+                    provenance=execution_provenance(),
+                )
+
+        self.assertFalse(readiness["ok"])
+        self.assertEqual(
+            "AuthorityError",
+            readiness["checks"]["provider_binding"]["detail"],
+        )
+        self.assertEqual(2, validate_provider.call_count)
+
     def test_public_engine_rejects_alternate_production_binding_paths(self) -> None:
         canonical_provider = self.root / "canonical-provider"
         canonical_marker = self.root / "canonical-marker.json"
