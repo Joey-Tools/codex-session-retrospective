@@ -2700,6 +2700,19 @@ class ResultValidationTests(unittest.TestCase):
                     {item.category for item in scan_for_leaks({"safe": invalid})},
                 )
 
+    def test_iana_root_tld_snapshot_is_pinned(self) -> None:
+        privacy = result_validation_module.privacy_locators
+
+        self.assertEqual("2026082000", privacy.IANA_ROOT_TLD_SNAPSHOT_VERSION)
+        self.assertEqual(
+            "aa0a75a9860b2cba07d7fe8172f4546d981be3674bf6764fb0d5f39a45940d25",
+            privacy.IANA_ROOT_TLD_CANONICAL_SHA256,
+        )
+        self.assertEqual(1438, len(privacy._IANA_ROOT_TLDS))
+        self.assertIn("technology", privacy._IANA_ROOT_TLDS)
+        self.assertIn("xn--p1ai", privacy._IANA_ROOT_TLDS)
+        self.assertNotIn("notarealtld", privacy._IANA_ROOT_TLDS)
+
     def test_dotted_code_and_slash_compounds_remain_reviewable_prose(self) -> None:
         safe_texts = (
             "The input/output boundary was unclear.",
@@ -2711,6 +2724,8 @@ class ResultValidationTests(unittest.TestCase):
             "The package.json.loads call rejected the payload.",
             "The config.toml setting was explicit.",
             "The foo.bar attribute remained stable.",
+            "The foo.bar method remained stable.",
+            "The api.customer.notarealtld token remained ambiguous.",
         )
         for safe_text in safe_texts:
             with self.subTest(safe_text=safe_text):
@@ -2728,6 +2743,12 @@ class ResultValidationTests(unittest.TestCase):
 
         for locator in (
             "docs.example.com",
+            "customer.technology",
+            "api.customer.technology",
+            "api.customer.xn--p1ai",
+            "API.Customer.TECHNOLOGY",
+            "customer.technology method",
+            "foo.technology attribute",
             "company.technology:8443",
             "jira.cisco.example",
             "Domain: company.technology",

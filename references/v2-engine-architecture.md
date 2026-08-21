@@ -453,8 +453,9 @@ support modules remain below 1,100 lines; the complete result-schema owner is
 2,356/2,500, and the dedicated synthesis-lineage owner is 226/250 after adding
 compact recursive commitments and
 revision-level recurrence proof. The global branch proxy is exactly
-9,560/9,575 nodes, and the shared process-group lifecycle owner is 290/300
-lines after separating signal retirement from group-absence proof. These gates
+9,735/9,735 nodes after adding digest-bound IANA root-suffix classification,
+and the shared process-group lifecycle owner is 290/300 lines after separating
+signal retirement from group-absence proof. These gates
 keep complete agent schemas, claim-size projection, source-byte provenance,
 semantic topic validation, and delegated remote transport in explicit owners
 instead of expanding the coordinator or reviving a second remote probe.

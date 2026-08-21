@@ -716,7 +716,7 @@ def _validate_safe_string(value: str, *, path: str) -> None:
         raise RetainedPrivacyError(
             f"{path} contains a control or Unicode default-ignorable character"
         )
-    bare_fqdn = privacy_locators.BARE_FQDN_RE.search(value)
+    bare_fqdn = next(privacy_locators.bare_fqdn_matches(value), None)
     if (
         bare_fqdn is not None
         and ".artifact_inventory[" in path
@@ -764,7 +764,7 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
             privacy_locators.URI_LOCATOR_RE.search(value),
             privacy_locators.SCP_STYLE_LOCATOR_RE.search(value),
             privacy_locators.BARE_PRIVATE_LOCATOR_RE.search(value),
-            privacy_locators.BARE_FQDN_RE.search(value),
+            privacy_locators.contains_bare_fqdn(value),
             privacy_locators.contains_ip_address(value),
             privacy_locators.contains_personal_identifier(value),
             privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
@@ -3857,7 +3857,7 @@ def _validate_report_bytes(
             privacy_locators.URI_LOCATOR_RE.search(text),
             privacy_locators.SCP_STYLE_LOCATOR_RE.search(text),
             privacy_locators.BARE_PRIVATE_LOCATOR_RE.search(locator_scan_text),
-            privacy_locators.BARE_FQDN_RE.search(locator_scan_text),
+            privacy_locators.contains_bare_fqdn(locator_scan_text),
             privacy_locators.contains_ip_address(locator_scan_text),
             privacy_locators.contains_personal_identifier(text),
             privacy_locators.LABELED_INTERNAL_HOST_RE.search(text),

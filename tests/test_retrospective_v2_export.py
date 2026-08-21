@@ -1620,12 +1620,19 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         with self.assertRaisesRegex(RetainedPrivacyError, "URL"):
             assemble_retained_artifacts(run_state(), locator_review)
 
-        bare_locator_review = review_data()
-        bare_locator_review["turn_findings"][1]["rewritten_prompt"] = (
-            "Inspect jira.cisco.example before continuing."
-        )
-        with self.assertRaisesRegex(RetainedPrivacyError, "URL"):
-            assemble_retained_artifacts(run_state(), bare_locator_review)
+        for bare_locator in (
+            "jira.cisco.example",
+            "customer.technology",
+            "api.customer.technology",
+            "api.customer.xn--p1ai",
+        ):
+            with self.subTest(bare_locator=bare_locator, phase="assembly"):
+                bare_locator_review = review_data()
+                bare_locator_review["turn_findings"][1]["rewritten_prompt"] = (
+                    f"Inspect {bare_locator} before continuing."
+                )
+                with self.assertRaisesRegex(RetainedPrivacyError, "URL"):
+                    assemble_retained_artifacts(run_state(), bare_locator_review)
 
         for scp_locator in (
             "alice@buildbox:",
@@ -1791,21 +1798,31 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         self.assertEqual(syntax_text, syntax_high_impact["rewritten_prompt"])
         validate_retained_artifacts(syntax_artifacts)
 
-        artifacts = assemble_retained_artifacts(run_state(), review_data())
-        tampered = dict(artifacts)
-        rows = [
-            json.loads(line) for line in tampered["turn_findings.jsonl"].splitlines()
-        ]
-        high_impact = next(row for row in rows if row["disposition"] == "high_impact")
-        high_impact["rewritten_prompt"] = (
-            "Inspect jira.cisco.example before continuing."
-        )
-        tampered["turn_findings.jsonl"] = b"".join(
-            canonical_json_bytes(row) for row in rows
-        )
-        refresh_bundle_digest(tampered)
-        with self.assertRaisesRegex(RetainedPrivacyError, "URL"):
-            validate_retained_artifacts(tampered)
+        for bare_locator in (
+            "jira.cisco.example",
+            "customer.technology",
+            "api.customer.technology",
+            "api.customer.xn--p1ai",
+        ):
+            with self.subTest(bare_locator=bare_locator, phase="retained-reread"):
+                artifacts = assemble_retained_artifacts(run_state(), review_data())
+                tampered = dict(artifacts)
+                rows = [
+                    json.loads(line)
+                    for line in tampered["turn_findings.jsonl"].splitlines()
+                ]
+                high_impact = next(
+                    row for row in rows if row["disposition"] == "high_impact"
+                )
+                high_impact["rewritten_prompt"] = (
+                    f"Inspect {bare_locator} before continuing."
+                )
+                tampered["turn_findings.jsonl"] = b"".join(
+                    canonical_json_bytes(row) for row in rows
+                )
+                refresh_bundle_digest(tampered)
+                with self.assertRaisesRegex(RetainedPrivacyError, "URL"):
+                    validate_retained_artifacts(tampered)
 
         path_review = review_data()
         path_review["turn_findings"][1]["rewritten_prompt"] = (
@@ -1849,6 +1866,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             ("203.0.113.7", "Inspect 203.0.113.7."),
             ("::", "Inspect ::."),
             ("::", 'He wrote "Inspect ::."'),
+            ("customer.technology", "Inspect customer.technology."),
+            ("api.customer.technology", "Inspect api.customer.technology."),
+            ("api.customer.xn--p1ai", "Inspect api.customer.xn--p1ai."),
         ):
             with self.subTest(
                 network_locator=network_locator,
@@ -2126,6 +2146,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "The package.json.loads call rejected the payload.",
             "The config.toml setting was explicit.",
             "The foo.bar attribute remained stable.",
+            "The foo.bar method remained stable.",
+            "The api.customer.notarealtld token remained ambiguous.",
             "Payment sent to DE88370400440532013000 before continuing",
             "Payment sent to XDE89370400440532013000 before continuing",
             "Payment sent to DE893704004405 before continuing",

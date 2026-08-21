@@ -430,9 +430,13 @@ post-redaction. Source values from 4 through 11 normalized characters use
 Unicode token-boundary matching, so a value such as `Acme` is removed from
 derived prose without treating `Acmeology` as the same source token. Bare
 domain locators are redacted when they carry an explicit port or path, end in
-the closed public, reserved, or private suffix set, or appear in controlled
-host, domain, or endpoint context. Ambiguous dotted tokens outside those rules
-remain reviewable code identifiers. Protocol URLs, private locators, paths,
+the digest-bound IANA Root Zone TLD snapshot version 2026082000, use a closed
+reserved or private suffix, or appear in controlled host, domain, or endpoint
+context. A no-port token with an assigned root suffix remains reviewable only
+when every label belongs to the closed metasyntactic identifier set and an
+immediately following closed code-usage label identifies it as a code symbol;
+unassigned ambiguous dotted tokens also remain reviewable. Protocol URLs,
+private locators, paths,
 and bare hosts retain distinct deterministic precedence. Ambiguous slash-word
 compounds remain
 reviewable prose; relative paths require an explicit dot prefix, a common path

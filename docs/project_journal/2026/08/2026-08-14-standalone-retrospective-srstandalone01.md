@@ -2561,6 +2561,47 @@ superseded_by:
   OpenAI Skill validator, and project-journal validation are clean. A direct
   invocation of the Darwin marker module selected zero tests and is explicitly
   non-counting; the canonical Darwin runner supplied the result above.
+- The fresh local Codex processor over signed head `ea906546` found one P1
+  retained-privacy gap: bare FQDN recognition still depended on a manually
+  enumerated suffix subset, so an assigned root-zone name such as
+  `api.customer.technology` could bypass scanning, post-redaction, retained
+  assembly/reread, and report validation. The exact 79-commit, 78-edge
+  workspace postvalidated with graph digest
+  `54dd5bb1e3c2c107f0cb9a48a7d46086630bd8139e3077c545f5591363a31192`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Trusted bundle digests remained unchanged, the reviewer closed, and the task
+  root was removed through the bounded cleanup helper.
+- Bare FQDN classification now consumes the embedded IANA Root Zone TLD
+  snapshot version 2026082000. Its 1,438 unique sorted suffixes are bound to
+  canonical digest
+  `aa0a75a9860b2cba07d7fe8172f4546d981be3674bf6764fb0d5f39a45940d25`
+  and fail closed at import if the count, ordering, uniqueness, or digest
+  drifts. Explicit port/path forms and closed reserved/private suffixes remain
+  covered. An assigned-suffix token is exempted only when every label belongs
+  to the closed metasyntactic identifier set and an immediate code-usage
+  context is present, preserving `foo.bar attribute` without allowing
+  `customer.technology method` to escape. Focused cross-layer tests pass 4/4
+  in 65.400 seconds, the full result/reporting modules pass 160/160 in 118.001
+  seconds, the privacy contract audit passes 25/25, and module boundaries pass
+  19/19.
+- The final Python 3.13.12 inventory contains 1,857 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `6b6b4f5d740e7565a1c4b429199d9bed6153d5cb3143e514386909fc0159040c`.
+  Shard 0 passes 444/444 in 1,608.435 seconds, shard 1 passes 503/503 in
+  1,462.892 seconds, shard 2 passes 490/490 in 1,342.134 seconds, and shard 3
+  passes 420/420 in 1,298.136 seconds, for exact aggregate coverage of
+  1,857/1,857 with an empty combined error scan.
+- The same tree passes the independent Darwin security inventory 14/14 in
+  59.321 seconds and the CI, Skill, and Bootstrap contract matrix 50/50. Ruff
+  0.13.2 lint and changed-file formatting, both workflows under
+  `actionlint`, the generated bootstrap manifest check, the isolated official
+  OpenAI Skill validator, project-journal validation, source-tree bytecode
+  exclusion, and `git diff --check` are clean. One temporary focused runner
+  used a removed private test-inventory helper and failed before selecting a
+  test; the canonical isolated focused runner supplied the counted 4/4 result.
+  One bootstrap probe passed an unsupported `--check` flag and is likewise
+  non-counting; the supported no-argument check passed.
 
 ## Follow-up Work
 

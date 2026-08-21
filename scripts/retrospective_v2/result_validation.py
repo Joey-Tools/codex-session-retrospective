@@ -770,7 +770,7 @@ def scan_for_leaks(
             findings.add(LeakFinding("internal_url", path, match.start(), match.end()))
         for match in privacy_locators.BARE_PRIVATE_LOCATOR_RE.finditer(text):
             findings.add(LeakFinding("internal_url", path, match.start(), match.end()))
-        for match in privacy_locators.BARE_FQDN_RE.finditer(text):
+        for match in privacy_locators.bare_fqdn_matches(text):
             category = (
                 "internal_url" if _INTERNAL_HOST_RE.search(match.group(0)) else "url"
             )
@@ -859,7 +859,7 @@ def _post_redact_text(
     redacted = privacy_locators.redact_ip_addresses(redacted)
     for pattern in privacy_locators.PATH_LOCATOR_PATTERNS:
         redacted = pattern.sub("[REDACTED_PATH]", redacted)
-    redacted = privacy_locators.BARE_FQDN_RE.sub("[REDACTED_URL]", redacted)
+    redacted = privacy_locators.redact_bare_fqdns(redacted, "[REDACTED_URL]")
     if not reference_field:
         for pattern in privacy_locators.RAW_IDENTIFIER_PATTERNS:
             redacted = pattern.sub("[REDACTED_RAW_ID]", redacted)
