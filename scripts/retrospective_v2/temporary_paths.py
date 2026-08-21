@@ -32,6 +32,30 @@ _TEMPORARY_CLEANUP_ENTRIES = 64
 _TEMPORARY_CLEANUP_PATH_BYTES = 64 * 1024
 _TEMPORARY_CLEANUP_DEPTH = 4
 _TEMPORARY_CLEANUP_SECONDS = 30.0
+_TEMPORARY_CLEANUP_CAUSE_LIMIT = 16
+_TEMPORARY_CLEANUP_INCOMPLETE_ATTRIBUTE = "_retrospective_temporary_cleanup_incomplete"
+
+
+def mark_incomplete_cleanup(error: BaseException, *, stage: str) -> None:
+    """Attach a content-free sensitive temporary-cleanup marker."""
+
+    setattr(error, _TEMPORARY_CLEANUP_INCOMPLETE_ATTRIBUTE, True)
+    error.add_note(f"sensitive temporary cleanup incomplete at {stage}")
+
+
+def incomplete_cleanup_primary(error: BaseException) -> BaseException | None:
+    """Return the outer primary when nested temporary cleanup is incomplete."""
+
+    current: BaseException | None = error
+    visited: set[int] = set()
+    for _ in range(_TEMPORARY_CLEANUP_CAUSE_LIMIT):
+        if current is None or id(current) in visited:
+            return None
+        visited.add(id(current))
+        if getattr(current, _TEMPORARY_CLEANUP_INCOMPLETE_ATTRIBUTE, False) is True:
+            return error
+        current = current.__cause__ or current.__context__
+    return None
 
 
 def local_codex_root() -> Path:
@@ -83,6 +107,7 @@ def _close_descriptor(descriptor: int, *, primary: BaseException | None) -> None
     try:
         os.close(descriptor)
     except OSError as error:
+        mark_incomplete_cleanup(primary or error, stage="descriptor-close")
         if primary is None:
             raise
         primary.add_note(f"temporary-directory descriptor close failed: {error}")
@@ -249,9 +274,11 @@ def owner_only_temporary_directory(
                 _cleanup_bound_directory(binding)
             except BaseException as cleanup_error:
                 if primary is None:
+                    mark_incomplete_cleanup(cleanup_error, stage="tree-removal")
                     primary = cleanup_error
                     terminal_error = cleanup_error
                 else:
+                    mark_incomplete_cleanup(primary, stage="tree-removal")
                     primary.add_note(
                         f"temporary-directory cleanup failed: {cleanup_error}"
                     )
@@ -261,6 +288,7 @@ def owner_only_temporary_directory(
                 primary = close_error
                 terminal_error = close_error
         elif retained_name is not None and primary is not None:
+            mark_incomplete_cleanup(primary, stage="unproven-created-directory")
             primary.add_note(
                 "unproven temporary directory retained under its bound root: "
                 + retained_name

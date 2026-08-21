@@ -30,6 +30,7 @@ from retrospective_v2 import (  # noqa: E402
     authority,
     automation_cutover_files,
     process_lifecycle,
+    temporary_paths,
     transport,
     transport_source,
 )
@@ -3140,6 +3141,42 @@ class CliContractTests(unittest.TestCase):
                     "reason_code": "retained_export_io_failed",
                 },
                 "process_group_cleanup": "incomplete",
+            },
+            payload["result"],
+        )
+        self.assertNotIn(secret, json.dumps(payload, sort_keys=True))
+
+    def test_cli_surfaces_nested_sensitive_temporary_cleanup_failure(self) -> None:
+        secret = "private temporary cleanup detail"
+        primary = cli.export_api.RetainedExportError(secret)
+        temporary_paths.mark_incomplete_cleanup(
+            primary,
+            stage="tree-removal",
+        )
+        try:
+            raise cli.finalize_api.PublicationRejected(secret) from primary
+        except cli.finalize_api.PublicationRejected as wrapped:
+            result = cli._failure_from_exception("finalize", wrapped)
+
+        payload = result.to_json()
+        self.assertEqual(cli.ExitCode.SECURITY, result.exit_code)
+        self.assertEqual(
+            "temporary_cleanup_incomplete",
+            payload["error"]["code"],
+        )
+        self.assertEqual(
+            "repair_trust_boundary",
+            payload["error"]["recovery_action"],
+        )
+        self.assertFalse(payload["error"]["retryable"])
+        self.assertEqual(
+            {
+                "primary_error": {
+                    "code": "invalid_state",
+                    "exit_code": int(cli.ExitCode.INVALID_STATE),
+                    "reason_code": "publication_rejected",
+                },
+                "temporary_cleanup": "incomplete",
             },
             payload["result"],
         )

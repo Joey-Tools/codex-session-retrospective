@@ -126,6 +126,45 @@ class PublisherCanaryPathContractTests(unittest.TestCase):
             self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
             self.assertEqual([source_sentinel], list(source_root.iterdir()))
 
+    def test_primary_records_bound_temporary_cleanup_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            temporary_root = root / "temporary-root"
+            primary = RuntimeError("private primary detail")
+
+            with (
+                mock.patch.object(
+                    orchestrator_support.temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                mock.patch.object(
+                    orchestrator_support.temporary_paths,
+                    "_cleanup_bound_directory",
+                    side_effect=orchestrator_support.safe_io.UnsafePathError(
+                        "private cleanup detail"
+                    ),
+                ),
+                self.assertRaises(RuntimeError) as caught,
+            ):
+                with (
+                    orchestrator_support.temporary_paths.owner_only_temporary_directory(
+                        root=temporary_root,
+                        prefix="cleanup-test-",
+                    )
+                ):
+                    raise primary
+
+            self.assertIs(primary, caught.exception)
+            self.assertIsNotNone(
+                orchestrator_support.temporary_paths.incomplete_cleanup_primary(
+                    caught.exception
+                )
+            )
+            self.assertEqual(1, len(tuple(temporary_root.glob("cleanup-test-*"))))
+
 
 class PublisherCanaryProcessTests(unittest.TestCase):
     def setUp(self) -> None:
@@ -341,7 +380,10 @@ class PublisherCanaryProcessTests(unittest.TestCase):
         self.assertTrue(selected_material_changed["ready"])
         self.assertTrue(gpg_authority_changed["ready"])
         self.assertEqual(3, validate.call_count)
-        self.assertEqual([], list(self.keyring_root.iterdir()))
+        self.assertEqual(
+            [".recovery.lock"],
+            sorted(path.name for path in self.keyring_root.iterdir()),
+        )
 
     def test_readiness_validation_and_cache_share_one_snapshot_receipt(self) -> None:
         identity = {
@@ -383,7 +425,10 @@ class PublisherCanaryProcessTests(unittest.TestCase):
         self.assertEqual(1, validate.call_count)
         self.assertEqual(1, len(validated_snapshots))
         self.assertFalse(validated_snapshots[0].path.exists())
-        self.assertEqual([], list(self.keyring_root.iterdir()))
+        self.assertEqual(
+            [".recovery.lock"],
+            sorted(path.name for path in self.keyring_root.iterdir()),
+        )
 
     def _assert_spawned_children_absent(self, expected_count: int) -> None:
         pids = self._spawned_child_pids()
@@ -667,7 +712,10 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             self.assertNotEqual(str(self.source_root), selected_temp)
         self.assertEqual("unchanged", source_sentinel.read_text(encoding="ascii"))
         self.assertEqual([source_sentinel], list(self.source_root.iterdir()))
-        self.assertEqual([], list(self.keyring_root.iterdir()))
+        self.assertEqual(
+            [".recovery.lock"],
+            sorted(path.name for path in self.keyring_root.iterdir()),
+        )
 
     def test_canary_cold_start_uses_fixed_safe_io_probe_parent(self) -> None:
         source_sentinel = self.source_root / "source-sentinel"

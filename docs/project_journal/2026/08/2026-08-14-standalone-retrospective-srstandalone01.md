@@ -2602,6 +2602,67 @@ superseded_by:
   test; the canonical isolated focused runner supplied the counted 4/4 result.
   One bootstrap probe passed an unsupported `--check` flag and is likewise
   non-counting; the supported no-argument check passed.
+- The fresh local Codex processor over signed head `413c7bc4` found two
+  temporary-lifecycle gaps. Abnormal exit could retain publisher key snapshots
+  and live GPG processes indefinitely because startup had no stale recovery;
+  separately, an operation error plus temporary cleanup failure remained only
+  an exception note and could be reported as retryable. The exact reviewer
+  workspace postvalidated and was removed; all head-bound evidence is stale.
+- The follow-up adds one persistent owner-only recovery lock, bounded N+1 root
+  and snapshot inventories, exact `g-<64 lowercase hex>` names, descriptor-bound
+  stale-child recovery, strict known-socket policy, and bounded
+  `SCD KILLSCD` followed by `KILLAGENT`. Unknown entries, replacements, policy
+  drift, or cleanup uncertainty retain the object and block a new snapshot.
+  The root lock now covers only inventory, child creation, and final deletion;
+  each in-use child holds a separate owner-only `.active.lock` lease. Recovery
+  skips a proved busy lease and reclaims an unlocked crash-retained child, so
+  independent publisher operations can overlap without losing stale-recovery
+  authority.
+  Sensitive cleanup failures now produce a content-free, non-retryable
+  `temporary_cleanup_incomplete` CLI result while preserving only allowlisted
+  primary metadata.
+- Focused recovery tests pass 10/10 in 0.344 seconds, including two real
+  overlapping snapshot processes and a symlinked-lease rejection. The three
+  exact tests that previously collided under the lifecycle-wide root lock pass
+  3/3 in 94.512 seconds. Module-boundary tests pass 19/19. The
+  production recovery path also reclaimed the exact crash-retained
+  `/tmp/csr501/g-*` snapshot exposed by the interrupted canonical run: its bound
+  GPG-agent and scdaemon terminated, the stale child disappeared, and the fixed
+  root retained only `.recovery.lock`. Earlier direct-import and pycache-drift
+  attempts selected no valid canonical suite or changed their source authority
+  and are explicitly non-counting. Final canonical shard and review evidence
+  follows on the frozen successor tree.
+- The first four-shard run after stale recovery is also non-counting: shards 0
+  and 1 passed 447/447 and 505/505, while shards 2 and 3 reported three exact
+  config-free keyring failures caused by holding the recovery root lock across
+  the complete snapshot lifetime. Sequential reruns passed because they did not
+  exercise that concurrency. The active-lease design above closes the root
+  cause.
+- The first complete durable-publication run after the active-lease change is
+  non-counting: 89/91 tests passed and two tests exposed a shutdown race where
+  the bound GPG agent removed an optional socket between inventory and
+  revalidation. Recovery now accepts disappearance only for a socket whose
+  identity was already bound during that shutdown attempt; an unknown socket
+  or an observed replacement remains blocking. Both exact failed tests pass
+  2/2 in 150.136 seconds after the correction.
+- The final Python 3.13.12 inventory contains 1,869 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `f7865302894620aa7c149f1ae9b2667f24350c134ef32e67ec5713b2b6ba53e4`.
+  Shard 0 passes 447/447 in 1,729.066 seconds, shard 1 passes 506/506 in
+  1,585.872 seconds, shard 2 passes 495/495 in 1,461.386 seconds, and shard 3
+  passes 421/421 in 1,412.890 seconds, for exact aggregate coverage of
+  1,869/1,869. All four bounded supervisors reached terminal exit zero.
+- The same tree passes the independent Darwin security inventory 14/14 in
+  62.297 seconds, module boundaries 19/19, CI contracts 33/33, Skill contracts
+  5/5, and Bootstrap contracts 12/12. Ruff 0.13.2 lint and formatting for all
+  13 changed or new Python files, both workflows under `actionlint`, the
+  generated bootstrap manifest check, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check` are clean. A whole-repository format probe identified six
+  unchanged baseline files and is non-counting; none is modified by this
+  workstream. Signing, exact-secret admission, the replacement fresh local
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain
+  delivery gates.
 
 ## Follow-up Work
 

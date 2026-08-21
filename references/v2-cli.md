@@ -353,3 +353,11 @@ cleanup-only wrapper is unwrapped to its command primary, while a later
 command-level wrapper remains the authoritative primary. The result never
 exposes raw exception or process output. Operators must repair or prove the
 retained trust boundary before retrying.
+The same precedence applies when a descriptor-bound sensitive temporary root
+cannot be removed or closed. The CLI emits non-retryable
+`temporary_cleanup_incomplete`, preserves only the allowlisted outer primary
+code, reason code, and exit code, and reports `temporary_cleanup: incomplete`.
+Raw exception text, paths, key material, process output, and recovery directory
+names are never included. A result may report both process-group and temporary
+cleanup as incomplete; either condition requires repairing or proving the trust
+boundary before retry.

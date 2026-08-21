@@ -9,11 +9,15 @@ import hashlib
 import os
 from pathlib import Path
 import re
-import socket
 import stat
-import time
 
-from . import safe_io, temporary_paths
+from . import (
+    gpg_snapshot_lease,
+    gpg_snapshot_recovery,
+    safe_io,
+    temporary_paths,
+    temporary_recovery,
+)
 
 
 _KEYGRIP_FILE_RE = re.compile(r"[0-9A-F]{40}\.key\Z", re.ASCII | re.IGNORECASE)
@@ -21,17 +25,9 @@ _MAX_PUBLIC_KEYRING_BYTES = 16 * 1024 * 1024
 _MAX_TRUST_DATABASE_BYTES = 16 * 1024 * 1024
 _MAX_PRIVATE_KEY_BYTES = 1024 * 1024
 _MAX_PRIVATE_KEYS = 16
-_AGENT_SOCKET_NAMES = (
-    "S.gpg-agent",
-    "S.gpg-agent.browser",
-    "S.gpg-agent.extra",
-    "S.gpg-agent.ssh",
-)
-_MAX_ASSUAN_LINE_BYTES = 4096
-_AGENT_SHUTDOWN_SECONDS = 5.0
 _MAX_GPG_LOCK_BYTES = 1024
 _MAX_GPG_LOCK_FILES = 8
-_MAX_SNAPSHOT_TOP_LEVEL_ENTRIES = 32
+_MAX_SNAPSHOT_TOP_LEVEL_ENTRIES = gpg_snapshot_recovery.MAX_SNAPSHOT_TOP_LEVEL_ENTRIES
 _GPG_LOCK_NAME_RE = re.compile(
     r"\.\#lk0x[0-9A-Fa-f]{8,32}\.[A-Za-z0-9._-]{1,255}\.[1-9][0-9]{0,19}\Z",
     re.ASCII,
@@ -327,30 +323,6 @@ def _copy_config_free_keyring(
     return commitment.hexdigest()
 
 
-def _assuan_line(connection: socket.socket, *, deadline: float) -> bytes:
-    payload = bytearray()
-    while len(payload) <= _MAX_ASSUAN_LINE_BYTES:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise ConfigFreeKeyringError(
-                "publisher agent response exceeded its deadline"
-            )
-        connection.settimeout(remaining)
-        chunk = connection.recv(1)
-        if not chunk or chunk == b"\n":
-            return bytes(payload).rstrip(b"\r")
-        payload.extend(chunk)
-    raise ConfigFreeKeyringError("publisher agent response exceeds its byte limit")
-
-
-def _snapshot_agent_socket_paths(home: Path) -> tuple[Path, ...]:
-    return tuple(home / name for name in _AGENT_SOCKET_NAMES)
-
-
-def _snapshot_socket_entries(home: Path) -> tuple[Path, ...]:
-    return tuple(path for path in home.iterdir() if path.name.startswith("S."))
-
-
 def _is_gpg_lock_name(name: str) -> bool:
     return name == _GPG_AGENT_SENTINEL or _GPG_LOCK_NAME_RE.fullmatch(name) is not None
 
@@ -521,60 +493,65 @@ def _remove_gpg_lock_files(
         _close_gpg_locks(tuple(opened_locks), active_error=active_error)
 
 
-def _stop_config_free_agent(home: Path) -> None:
-    socket_paths = _snapshot_agent_socket_paths(home)
-    existing = tuple(path for path in socket_paths if path.exists())
-    primary = socket_paths[0]
-    if not existing:
-        return
-    if primary not in existing:
-        raise ConfigFreeKeyringError(
-            "publisher agent auxiliary socket exists without its primary socket"
-        )
-    primary_metadata = os.stat(primary, follow_symlinks=False)
-    if (
-        not stat.S_ISSOCK(primary_metadata.st_mode)
-        or primary_metadata.st_uid != os.getuid()
-        or stat.S_IMODE(primary_metadata.st_mode) & 0o077
-    ):
-        raise ConfigFreeKeyringError("publisher agent socket policy is invalid")
-    deadline = time.monotonic() + _AGENT_SHUTDOWN_SECONDS
-    try:
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-            connection.settimeout(max(0.0, deadline - time.monotonic()))
-            connection.connect(os.fspath(primary))
-            greeting = _assuan_line(connection, deadline=deadline)
-            if not greeting.startswith(b"OK"):
-                raise ConfigFreeKeyringError(
-                    "publisher agent returned an invalid greeting"
-                )
-            connection.sendall(b"KILLAGENT\n")
-            response = _assuan_line(connection, deadline=deadline)
-            if response and not response.startswith(b"OK"):
-                raise ConfigFreeKeyringError(
-                    "publisher agent rejected bounded shutdown"
-                )
-    except (OSError, TimeoutError) as exc:
-        raise ConfigFreeKeyringError(
-            "publisher agent could not be stopped safely"
-        ) from exc
-    while _snapshot_socket_entries(home):
-        if time.monotonic() >= deadline:
-            raise ConfigFreeKeyringError(
-                "publisher agent cleanup did not remove every socket"
-            )
-        time.sleep(0.01)
+def _recover_stale_snapshot(
+    temporary: temporary_paths.BoundTemporaryDirectory,
+) -> bool:
+    if not gpg_snapshot_lease.stale_snapshot_is_recoverable(temporary):
+        return False
+    gpg_snapshot_recovery.stop_agent(temporary, allow_stale_listener=True)
+    _remove_gpg_lock_files(temporary)
+    gpg_snapshot_recovery.remove_stale_sockets(temporary)
+    return True
 
 
 def _clean_snapshot_after_use(
     temporary: temporary_paths.BoundTemporaryDirectory,
 ) -> None:
-    _stop_config_free_agent(temporary.path)
+    gpg_snapshot_recovery.stop_agent(temporary)
     _remove_gpg_lock_files(temporary)
-    if _snapshot_socket_entries(temporary.path):
+    if gpg_snapshot_recovery.socket_names(temporary):
         raise ConfigFreeKeyringError(
             "config-free publisher agent cleanup is incomplete"
         )
+
+
+def _finish_snapshot_use(
+    temporary: temporary_paths.BoundTemporaryDirectory,
+    coordinator: temporary_recovery.RecoveryCoordinator,
+    lease: gpg_snapshot_lease.ActiveSnapshotLease,
+    *,
+    operation_error: BaseException | None,
+) -> None:
+    cleanup_errors: list[tuple[str, BaseException]] = []
+    try:
+        coordinator.acquire()
+    except BaseException as error:
+        cleanup_errors.append(("root-coordination", error))
+    try:
+        _clean_snapshot_after_use(temporary)
+        temporary.revalidate()
+    except BaseException as error:
+        cleanup_errors.append(("publisher-agent", error))
+    if not cleanup_errors:
+        try:
+            lease.release(primary=operation_error)
+        except BaseException as error:
+            cleanup_errors.append(("active-lease", error))
+    if not cleanup_errors:
+        return
+    primary = operation_error or cleanup_errors[0][1]
+    temporary_paths.mark_incomplete_cleanup(
+        primary,
+        stage="publisher-snapshot-finalization",
+    )
+    for stage, error in cleanup_errors:
+        if error is primary:
+            continue
+        primary.add_note(
+            f"publisher snapshot cleanup failed at {stage}: {type(error).__name__}"
+        )
+    if operation_error is None:
+        raise primary
 
 
 @contextmanager
@@ -597,42 +574,60 @@ def config_free_keyring_snapshot_receipt(
         source_identity = (source_metadata.st_dev, source_metadata.st_ino)
         _revalidate_keyring_directory(source_fd, source, source_identity)
         try:
-            with temporary_paths.owner_only_temporary_directory(
+            with temporary_recovery.serialized_stale_recovery(
                 root=temporary_paths.PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT,
                 prefix="g-",
-            ) as temporary:
-                source_commitment = _copy_config_free_keyring(
-                    source,
-                    source_fd,
-                    temporary.path,
-                )
-                temporary.revalidate()
-                if any(
-                    (temporary.path / name).exists()
-                    for name in ("common.conf", "gpg.conf", "gpg-agent.conf")
-                ):
-                    raise ConfigFreeKeyringError(
-                        "config-free publisher keyring contains a configuration file"
-                    )
-                operation_error: BaseException | None = None
+                recover=_recover_stale_snapshot,
+            ) as coordinator:
+                lease: gpg_snapshot_lease.ActiveSnapshotLease | None = None
+                snapshot_error: BaseException | None = None
                 try:
-                    yield ConfigFreeKeyringSnapshot(
-                        path=temporary.path,
-                        source_commitment=source_commitment,
-                    )
+                    with temporary_paths.owner_only_temporary_directory(
+                        root=temporary_paths.PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT,
+                        prefix="g-",
+                    ) as temporary:
+                        lease = gpg_snapshot_lease.acquire_active_lease(temporary)
+                        coordinator.release()
+                        operation_error: BaseException | None = None
+                        try:
+                            source_commitment = _copy_config_free_keyring(
+                                source,
+                                source_fd,
+                                temporary.path,
+                            )
+                            temporary.revalidate()
+                            if any(
+                                (temporary.path / name).exists()
+                                for name in (
+                                    "common.conf",
+                                    "gpg.conf",
+                                    "gpg-agent.conf",
+                                )
+                            ):
+                                raise ConfigFreeKeyringError(
+                                    "config-free publisher keyring contains a "
+                                    "configuration file"
+                                )
+                            yield ConfigFreeKeyringSnapshot(
+                                path=temporary.path,
+                                source_commitment=source_commitment,
+                            )
+                        except BaseException as error:
+                            operation_error = error
+                            raise
+                        finally:
+                            _finish_snapshot_use(
+                                temporary,
+                                coordinator,
+                                lease,
+                                operation_error=operation_error,
+                            )
                 except BaseException as error:
-                    operation_error = error
+                    snapshot_error = error
                     raise
                 finally:
-                    try:
-                        _clean_snapshot_after_use(temporary)
-                        temporary.revalidate()
-                    except BaseException as cleanup_error:
-                        if operation_error is None:
-                            raise
-                        operation_error.add_note(
-                            f"publisher snapshot cleanup failed: {cleanup_error}"
-                        )
+                    if lease is not None and not lease.closed:
+                        lease.close_after_tree_cleanup(primary=snapshot_error)
         except BaseException as error:
             active_error = error
             try:
@@ -644,7 +639,14 @@ def config_free_keyring_snapshot_receipt(
     except ConfigFreeKeyringError as exc:
         active_error = exc
         raise
-    except (OSError, ValueError, safe_io.UnsafePathError) as exc:
+    except (
+        OSError,
+        ValueError,
+        gpg_snapshot_lease.GpgSnapshotLeaseError,
+        gpg_snapshot_recovery.GpgSnapshotRecoveryError,
+        safe_io.UnsafePathError,
+        temporary_recovery.TemporaryRecoveryError,
+    ) as exc:
         active_error = exc
         raise ConfigFreeKeyringError(
             "config-free publisher keyring could not be materialized"

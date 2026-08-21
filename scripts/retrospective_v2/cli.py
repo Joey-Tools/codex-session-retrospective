@@ -27,7 +27,7 @@ from retrospective_v2 import identity as identity_api  # noqa: E402
 from retrospective_v2 import orchestrator as orchestrator_api  # noqa: E402
 from retrospective_v2 import publication_abort_replay  # noqa: E402
 from retrospective_v2 import publication_cli_adapter  # noqa: E402
-from retrospective_v2 import process_lifecycle  # noqa: E402
+from retrospective_v2 import process_lifecycle, temporary_paths  # noqa: E402
 from retrospective_v2 import reporting as reporting_api  # noqa: E402
 from retrospective_v2 import result_validation as result_validation_api  # noqa: E402
 from retrospective_v2 import safe_io  # noqa: E402
@@ -68,7 +68,7 @@ _REASON_CODE_ALLOWLIST = frozenset(
     publication_attempt_mismatch publication_authority_invalid
     publication_authority_missing publication_failed publication_not_resumable
     publication_rejected publication_transition_invalid raw_path_outside_run_cache
-    process_group_cleanup_incomplete
+    process_group_cleanup_incomplete temporary_cleanup_incomplete
     read_limit_exceeded readiness_failed retained_export_io_failed
     retained_inventory_invalid retained_payload_unavailable retained_privacy_failed
     run_input_invalid run_not_exportable run_not_started run_state_conflict
@@ -1891,29 +1891,38 @@ def _primary_failure_from_exception(command: str, error: Exception) -> CommandRe
 
 def _failure_from_exception(command: str, error: Exception) -> CommandResult:
     cleanup_primary = process_lifecycle.incomplete_process_group_cleanup_primary(error)
-    if cleanup_primary is None:
+    temporary_primary = temporary_paths.incomplete_cleanup_primary(error)
+    if cleanup_primary is None and temporary_primary is None:
         return _primary_failure_from_exception(command, error)
-    primary = _primary_failure_from_exception(
-        command,
-        cleanup_primary if isinstance(cleanup_primary, Exception) else error,
-    )
+    selected = cleanup_primary if cleanup_primary is not None else temporary_primary
+    selected_error = selected if isinstance(selected, Exception) else error
+    primary = _primary_failure_from_exception(command, selected_error)
     assert primary.error is not None
+    cleanup_status = {}
+    if cleanup_primary is not None:
+        cleanup_status["process_group_cleanup"] = "incomplete"
+    if temporary_primary is not None:
+        cleanup_status["temporary_cleanup"] = "incomplete"
+    cleanup_status["primary_error"] = {
+        "code": primary.error.code,
+        "exit_code": int(primary.exit_code),
+        "reason_code": primary.error.reason_code,
+    }
+    if cleanup_primary is not None:
+        code = "process_group_cleanup_incomplete"
+        message = "subprocess cleanup could not be proven complete"
+    else:
+        code = "temporary_cleanup_incomplete"
+        message = "sensitive temporary cleanup could not be proven complete"
     return CommandResult.failure(
         command,
         exit_code=ExitCode.SECURITY,
-        code="process_group_cleanup_incomplete",
-        message="subprocess cleanup could not be proven complete",
-        reason_code="process_group_cleanup_incomplete",
+        code=code,
+        message=message,
+        reason_code=code,
         recovery_action="repair_trust_boundary",
         retryable=False,
-        result={
-            "primary_error": {
-                "code": primary.error.code,
-                "exit_code": int(primary.exit_code),
-                "reason_code": primary.error.reason_code,
-            },
-            "process_group_cleanup": "incomplete",
-        },
+        result=cleanup_status,
     )
 
 

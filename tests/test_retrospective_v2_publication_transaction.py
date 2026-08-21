@@ -11,15 +11,18 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import selectors
 import shlex
 import shutil
 import signal
+import socket
 import stat
 import subprocess
 import sys
 import tempfile
 import threading
 import time
+from types import SimpleNamespace
 from typing import Mapping
 import unittest
 from unittest import mock
@@ -42,6 +45,8 @@ from retrospective_v2 import (  # noqa: E402
     finalize as finalize_module,
     git_safety,
     gpg_keyring_snapshot,
+    gpg_snapshot_lease,
+    gpg_snapshot_recovery,
     gpg_status,
     orchestrator as orchestrator_module,
     orchestrator_support,
@@ -56,6 +61,7 @@ from retrospective_v2 import (  # noqa: E402
     retained_export_coordination,
     safe_io,
     temporary_paths,
+    temporary_recovery,
     transport,
 )
 from retrospective_v2.contracts import (  # noqa: E402
@@ -142,6 +148,47 @@ def run_command(
         text=True,
         timeout=30,
     )
+
+
+def _read_process_line(
+    process: subprocess.Popen[str],
+    *,
+    timeout_seconds: float = 10.0,
+) -> str:
+    assert process.stdout is not None
+    with selectors.DefaultSelector() as selector:
+        selector.register(process.stdout, selectors.EVENT_READ)
+        if not selector.select(timeout_seconds):
+            raise AssertionError("fixture process did not publish its receipt")
+        line = process.stdout.readline()
+    if not line:
+        raise AssertionError("fixture process exited before publishing its receipt")
+    return line.rstrip("\r\n")
+
+
+class _BoundedScandirFixture:
+    def __init__(self, names: tuple[str, ...], *, max_reads: int) -> None:
+        self._names = names
+        self._max_reads = max_reads
+        self.reads = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args) -> None:
+        return None
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.reads >= self._max_reads:
+            raise AssertionError("directory inventory read beyond its N+1 bound")
+        if self.reads >= len(self._names):
+            raise StopIteration
+        name = self._names[self.reads]
+        self.reads += 1
+        return SimpleNamespace(name=name)
 
 
 class PublicationInvariantUnitTests(unittest.TestCase):
@@ -289,7 +336,457 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                     )
 
             self.assertFalse(snapshot_path.exists())
-            self.assertEqual([], list(snapshot_root.iterdir()))
+            self.assertEqual(
+                [".recovery.lock"],
+                sorted(path.name for path in snapshot_root.iterdir()),
+            )
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process cleanup")
+    def test_crash_retained_keyring_and_agent_are_recovered_on_restart(self) -> None:
+        with (
+            tempfile.TemporaryDirectory(
+                prefix="r-",
+                dir=_publication_test_temp_parent(),
+            ) as raw,
+            tempfile.TemporaryDirectory(prefix="r-", dir="/tmp") as snapshot_raw,
+        ):
+            root = Path(raw)
+            source = root / "k"
+            source.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(source)
+            snapshot_root = Path(snapshot_raw)
+            source_root = root / "c"
+            source_root.mkdir(mode=0o700)
+            holder: subprocess.Popen[str] | None = None
+            agent: subprocess.Popen[str] | None = None
+            try:
+                holder = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-B",
+                        "-S",
+                        os.fspath(ROOT / "tests/fixtures/hold_keyring_snapshot.py"),
+                        os.fspath(source),
+                        os.fspath(snapshot_root),
+                        os.fspath(source_root),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    start_new_session=True,
+                )
+                stale_path = Path(_read_process_line(holder))
+                self.assertTrue((stale_path / "private-keys-v1.d").is_dir())
+
+                agent = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-B",
+                        "-S",
+                        os.fspath(ROOT / "tests/fixtures/fake_gpg_agent.py"),
+                        os.fspath(stale_path),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    start_new_session=True,
+                )
+                self.assertEqual("ready", _read_process_line(agent))
+                self.assertTrue((stale_path / "S.gpg-agent").is_socket())
+                self.assertTrue((stale_path / "S.scdaemon").is_socket())
+
+                os.kill(holder.pid, signal.SIGKILL)
+                self.assertLess(holder.wait(timeout=5), 0)
+
+                with (
+                    mock.patch.object(
+                        temporary_paths,
+                        "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                        snapshot_root,
+                    ),
+                    mock.patch.object(
+                        temporary_paths,
+                        "local_codex_root",
+                        return_value=source_root,
+                    ),
+                ):
+                    with gpg_keyring_snapshot.config_free_keyring_snapshot(
+                        source
+                    ) as current:
+                        self.assertNotEqual(stale_path, current)
+                        self.assertTrue((current / "private-keys-v1.d").is_dir())
+
+                self.assertEqual(0, agent.wait(timeout=5))
+                self.assertFalse(stale_path.exists())
+                self.assertEqual(
+                    [".recovery.lock"],
+                    sorted(path.name for path in snapshot_root.iterdir()),
+                )
+            finally:
+                for process in (agent, holder):
+                    if process is not None and process.poll() is None:
+                        process.kill()
+                        process.wait(timeout=5)
+                    if process is not None:
+                        for stream in (process.stdout, process.stderr):
+                            if stream is not None:
+                                stream.close()
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX lease cleanup")
+    def test_active_keyring_snapshots_overlap_without_holding_the_root_lock(
+        self,
+    ) -> None:
+        with (
+            tempfile.TemporaryDirectory(
+                prefix="r-",
+                dir=_publication_test_temp_parent(),
+            ) as raw,
+            tempfile.TemporaryDirectory(prefix="r-", dir="/tmp") as snapshot_raw,
+        ):
+            root = Path(raw)
+            source = root / "k"
+            source.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(source)
+            snapshot_root = Path(snapshot_raw)
+            source_root = root / "c"
+            source_root.mkdir(mode=0o700)
+            holder: subprocess.Popen[str] | None = None
+            try:
+                holder = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-B",
+                        "-S",
+                        os.fspath(ROOT / "tests/fixtures/hold_keyring_snapshot.py"),
+                        os.fspath(source),
+                        os.fspath(snapshot_root),
+                        os.fspath(source_root),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    start_new_session=True,
+                )
+                active_path = Path(_read_process_line(holder))
+                self.assertTrue(
+                    (active_path / gpg_snapshot_lease.ACTIVE_LEASE_NAME).is_file()
+                )
+
+                with (
+                    mock.patch.object(
+                        temporary_paths,
+                        "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                        snapshot_root,
+                    ),
+                    mock.patch.object(
+                        temporary_paths,
+                        "local_codex_root",
+                        return_value=source_root,
+                    ),
+                    mock.patch.object(
+                        temporary_recovery,
+                        "_RECOVERY_LOCK_SECONDS",
+                        0.25,
+                    ),
+                ):
+                    with gpg_keyring_snapshot.config_free_keyring_snapshot(
+                        source
+                    ) as concurrent:
+                        self.assertNotEqual(active_path, concurrent)
+                        self.assertTrue(active_path.is_dir())
+                        self.assertTrue(
+                            (
+                                concurrent / gpg_snapshot_lease.ACTIVE_LEASE_NAME
+                            ).is_file()
+                        )
+                    self.assertTrue(active_path.is_dir())
+
+                    os.kill(holder.pid, signal.SIGKILL)
+                    self.assertLess(holder.wait(timeout=5), 0)
+                    with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                        pass
+
+                self.assertFalse(active_path.exists())
+                self.assertEqual(
+                    [".recovery.lock"],
+                    sorted(path.name for path in snapshot_root.iterdir()),
+                )
+            finally:
+                if holder is not None and holder.poll() is None:
+                    holder.kill()
+                    holder.wait(timeout=5)
+                if holder is not None:
+                    for stream in (holder.stdout, holder.stderr):
+                        if stream is not None:
+                            stream.close()
+
+    def test_recovery_rejects_a_symlinked_activity_lease(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            root = Path(raw)
+            source = root / "publisher-keyring"
+            source.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(source)
+            snapshot_root = root / "snapshot-root"
+            snapshot_root.mkdir(mode=0o700)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            stale = snapshot_root / ("g-" + "d" * 64)
+            stale.mkdir(mode=0o700)
+            outside = root / "outside-lock"
+            outside.write_bytes(b"outside")
+            outside.chmod(0o600)
+            (stale / gpg_snapshot_lease.ACTIVE_LEASE_NAME).symlink_to(outside)
+
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                self.assertRaises(
+                    gpg_keyring_snapshot.ConfigFreeKeyringError
+                ) as caught,
+            ):
+                with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                    self.fail("a symlinked activity lease was accepted")
+
+            self.assertTrue(stale.is_dir())
+            self.assertTrue((stale / gpg_snapshot_lease.ACTIVE_LEASE_NAME).is_symlink())
+            self.assertEqual(b"outside", outside.read_bytes())
+            self.assertIsNotNone(
+                temporary_paths.incomplete_cleanup_primary(caught.exception)
+            )
+
+    def test_restart_removes_a_bound_socket_with_no_live_listener(self) -> None:
+        with (
+            tempfile.TemporaryDirectory(
+                prefix="r-",
+                dir=_publication_test_temp_parent(),
+            ) as raw,
+            tempfile.TemporaryDirectory(prefix="r-", dir="/tmp") as snapshot_raw,
+        ):
+            root = Path(raw)
+            source = root / "k"
+            source.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(source)
+            snapshot_root = Path(snapshot_raw)
+            source_root = root / "c"
+            source_root.mkdir(mode=0o700)
+            stale = snapshot_root / ("g-" + "a" * 64)
+            stale.mkdir(mode=0o700)
+            socket_path = stale / "S.gpg-agent"
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(os.fspath(socket_path))
+                socket_path.chmod(0o600)
+
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+            ):
+                with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                    pass
+
+            self.assertFalse(stale.exists())
+            self.assertEqual(
+                [".recovery.lock"],
+                sorted(path.name for path in snapshot_root.iterdir()),
+            )
+
+    def test_recovery_rejects_an_unrecognized_root_entry_without_new_snapshot(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            root = Path(raw)
+            source = root / "publisher-keyring"
+            source.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(source)
+            snapshot_root = root / "snapshot-root"
+            snapshot_root.mkdir(mode=0o700)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            unexpected = snapshot_root / "unexpected"
+            unexpected.write_bytes(b"retained")
+            unexpected.chmod(0o600)
+
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                self.assertRaises(
+                    gpg_keyring_snapshot.ConfigFreeKeyringError
+                ) as caught,
+            ):
+                with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                    self.fail("an unrecognized recovery entry was accepted")
+
+            self.assertTrue(unexpected.is_file())
+            self.assertEqual([], list(snapshot_root.glob("g-*")))
+            self.assertIsNotNone(
+                temporary_paths.incomplete_cleanup_primary(caught.exception)
+            )
+
+    def test_recovery_rejects_an_unknown_agent_socket_without_new_snapshot(
+        self,
+    ) -> None:
+        with (
+            tempfile.TemporaryDirectory(dir=ROOT) as raw,
+            tempfile.TemporaryDirectory(prefix="r-", dir="/tmp") as snapshot_raw,
+        ):
+            root = Path(raw)
+            source = root / "publisher-keyring"
+            source.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(source)
+            snapshot_root = Path(snapshot_raw)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            stale = snapshot_root / ("g-" + "c" * 64)
+            stale.mkdir(mode=0o700)
+            unknown_socket = stale / "S.unknown-agent"
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(os.fspath(unknown_socket))
+                unknown_socket.chmod(0o600)
+
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                self.assertRaises(
+                    gpg_keyring_snapshot.ConfigFreeKeyringError
+                ) as caught,
+            ):
+                with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                    self.fail("an unknown agent socket was accepted")
+
+            self.assertTrue(stale.is_dir())
+            self.assertTrue(unknown_socket.is_socket())
+            self.assertIsNotNone(
+                temporary_paths.incomplete_cleanup_primary(caught.exception)
+            )
+
+    def test_recovery_root_inventory_stops_at_n_plus_one(self) -> None:
+        entries = _BoundedScandirFixture(
+            (
+                ".recovery.lock",
+                "g-" + "a" * 64,
+                "g-" + "b" * 64,
+                "must-not-be-read",
+            ),
+            max_reads=3,
+        )
+        with (
+            mock.patch.object(temporary_recovery.os, "scandir", return_value=entries),
+            mock.patch.object(temporary_recovery, "_RECOVERY_MAX_ENTRIES", 2),
+            self.assertRaisesRegex(
+                temporary_recovery.TemporaryRecoveryError,
+                "inventory is too large",
+            ),
+        ):
+            temporary_recovery._stale_names(91, prefix="g-")
+        self.assertEqual(3, entries.reads)
+
+    def test_snapshot_inventory_stops_at_n_plus_one(self) -> None:
+        entries = _BoundedScandirFixture(
+            ("pubring.kbx", "private-keys-v1.d", "S.gpg-agent", "must-not-be-read"),
+            max_reads=3,
+        )
+        temporary = mock.Mock(_child_fd=92)
+        with (
+            mock.patch.object(
+                gpg_snapshot_recovery.os,
+                "scandir",
+                return_value=entries,
+            ),
+            mock.patch.object(
+                gpg_snapshot_recovery,
+                "MAX_SNAPSHOT_TOP_LEVEL_ENTRIES",
+                2,
+            ),
+            self.assertRaisesRegex(
+                gpg_snapshot_recovery.GpgSnapshotRecoveryError,
+                "top-level inventory exceeds",
+            ),
+        ):
+            gpg_snapshot_recovery.socket_names(temporary)
+        self.assertEqual(3, entries.reads)
+
+    def test_recovery_never_deletes_a_replacement_stale_directory(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as raw:
+            root = Path(raw)
+            source = root / "publisher-keyring"
+            source.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(source)
+            snapshot_root = root / "snapshot-root"
+            snapshot_root.mkdir(mode=0o700)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            stale = snapshot_root / ("g-" + "b" * 64)
+            stale.mkdir(mode=0o700)
+            (stale / "original").write_bytes(b"original")
+            displaced = root / "displaced"
+
+            def replace_before_revalidation(_binding) -> None:
+                stale.rename(displaced)
+                stale.mkdir(mode=0o700)
+                (stale / "replacement").write_bytes(b"replacement")
+
+            with (
+                mock.patch.object(
+                    temporary_paths,
+                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                    snapshot_root,
+                ),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=source_root,
+                ),
+                mock.patch.object(
+                    gpg_keyring_snapshot,
+                    "_recover_stale_snapshot",
+                    side_effect=replace_before_revalidation,
+                ),
+                self.assertRaises(
+                    gpg_keyring_snapshot.ConfigFreeKeyringError
+                ) as caught,
+            ):
+                with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                    self.fail("a replaced recovery entry was accepted")
+
+            self.assertEqual(b"original", (displaced / "original").read_bytes())
+            self.assertEqual(b"replacement", (stale / "replacement").read_bytes())
+            self.assertIsNotNone(
+                temporary_paths.incomplete_cleanup_primary(caught.exception)
+            )
 
     def test_keyring_snapshot_rejects_private_inventory_churn(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as raw:
@@ -338,7 +835,10 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
                     self.fail("unstable private-key inventory was accepted")
 
-            self.assertEqual([], list(snapshot_root.iterdir()))
+            self.assertEqual(
+                [".recovery.lock"],
+                sorted(path.name for path in snapshot_root.iterdir()),
+            )
 
     def test_assuan_read_uses_one_monotonic_deadline(self) -> None:
         connection = mock.Mock()
@@ -346,19 +846,77 @@ class PublicationInvariantUnitTests(unittest.TestCase):
 
         with (
             mock.patch.object(
-                gpg_keyring_snapshot.time,
+                gpg_snapshot_recovery.time,
                 "monotonic",
                 side_effect=(10.0, 16.0),
             ),
             self.assertRaisesRegex(
-                gpg_keyring_snapshot.ConfigFreeKeyringError,
+                gpg_snapshot_recovery.GpgSnapshotRecoveryError,
                 "response exceeded its deadline",
             ),
         ):
-            gpg_keyring_snapshot._assuan_line(connection, deadline=15.0)
+            gpg_snapshot_recovery._assuan_line(connection, deadline=15.0)
 
         connection.settimeout.assert_called_once_with(5.0)
         connection.recv.assert_called_once_with(1)
+
+    def test_agent_shutdown_accepts_a_bound_socket_disappearing_after_inventory(
+        self,
+    ) -> None:
+        temporary = mock.Mock(
+            path=Path("/publisher-snapshot"),
+            _child_fd=92,
+        )
+        primary = (1, 2, os.getuid(), stat.S_IFSOCK | 0o600)
+        browser = (1, 3, os.getuid(), stat.S_IFSOCK | 0o600)
+        connection = mock.MagicMock()
+        socket_context = mock.MagicMock()
+        socket_context.__enter__.return_value = connection
+
+        with (
+            mock.patch.object(
+                gpg_snapshot_recovery,
+                "_socket_names",
+                side_effect=(
+                    ("S.gpg-agent", "S.gpg-agent.browser"),
+                    ("S.gpg-agent.browser",),
+                    (),
+                ),
+            ) as socket_names,
+            mock.patch.object(
+                gpg_snapshot_recovery,
+                "_socket_identity",
+                side_effect=(
+                    primary,
+                    browser,
+                    FileNotFoundError("expected shutdown disappearance"),
+                ),
+            ) as socket_identity,
+            mock.patch.object(
+                gpg_snapshot_recovery.socket,
+                "socket",
+                return_value=socket_context,
+            ),
+            mock.patch.object(
+                gpg_snapshot_recovery,
+                "_assuan_line",
+                return_value=b"OK",
+            ),
+            mock.patch.object(
+                gpg_snapshot_recovery,
+                "_send_assuan_command",
+            ) as send_command,
+        ):
+            gpg_snapshot_recovery.stop_agent(temporary)
+
+        self.assertEqual(3, socket_names.call_count)
+        self.assertEqual(3, socket_identity.call_count)
+        send_command.assert_called_once_with(
+            connection,
+            b"KILLAGENT\n",
+            deadline=mock.ANY,
+            allow_eof=True,
+        )
 
     def test_keyring_file_close_failure_preserves_primary_policy_error(self) -> None:
         with (
@@ -518,7 +1076,10 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                     os.link(lock, sentinel)
                     raise RuntimeError("fixture operation failed")
 
-            self.assertEqual([], list(snapshot_root.iterdir()))
+            self.assertEqual(
+                [".recovery.lock"],
+                sorted(path.name for path in snapshot_root.iterdir()),
+            )
 
     def test_abort_replay_response_uses_lifecycle_authority(self) -> None:
         def mark_finalized(*_args, **_kwargs):

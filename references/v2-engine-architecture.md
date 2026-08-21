@@ -214,6 +214,25 @@ before cleanup. A proved mismatch retains the unproven object instead of
 removing a replacement. These checks detect replacement but do not claim to
 defeat an actively malicious same-UID writer in the final revalidation-to-use
 syscall window; that writer remains part of the host trust boundary.
+Sensitive fixed roots that permit crash recovery keep one owner-only persistent
+recovery lock. That root lock covers bounded inventory, child creation, and the
+final deletion boundary; it is not held while an operation uses its child. Each
+active GPG snapshot instead holds an owner-only `.active.lock` lease created
+atomically through the bound child descriptor. Startup accepts only the exact
+`g-` prefix plus a 256-bit lowercase hexadecimal suffix, rebinds every child,
+and probes that child's exact lease while the root lock is held. A validated busy
+lease proves only that the child is active and is retained; an absent or
+successfully locked lease is stale and may be recovered. Before normal cleanup,
+the owner reacquires the root lock, revalidates and releases its lease, and then
+performs bounded descriptor-owned tree removal. A process crash releases the
+lease without deleting its child, so the next startup can stop the exact bound
+GPG agent and recover the stale tree. An unknown root entry, replacement,
+unreadable lease, access-policy mismatch, or cleanup uncertainty blocks the new
+operation and retains the unproved object. These are cooperative ownership
+guarantees; an actively malicious same-UID process remains part of the host trust
+boundary. If an operation and sensitive temporary cleanup both fail, the outer
+primary carries a content-free cleanup marker so the CLI cannot classify the
+result as retryable.
 
 The canary child receives `TEMP`, `TMP`, and `TMPDIR` bound to the exact
 descriptor-validated disposable workspace through the otherwise closed
@@ -371,13 +390,24 @@ and verification behavior.
 
 The snapshot owner shuts down any spawned agent through a bounded authenticated
 Assuan exchange on the owner-only primary socket; it does not add `gpgconf` or
-another ambient executable to the trust root. One monotonic deadline covers the
-connect, greeting, `KILLAGENT`, response, and socket-disappearance phases; a
-peer cannot multiply the bound by delivering one byte per read. Every `S.*`
-socket must disappear before descriptor-bound snapshot cleanup can succeed.
-Agent, socket, source binding, or cleanup uncertainty fails the
-otherwise-successful operation and is retained as secondary evidence when work
-has already failed.
+another ambient executable to the trust root. The exact socket allowlist is the
+four `S.gpg-agent*` endpoints plus `S.scdaemon`. When `S.scdaemon` exists, the
+owner first requires `SCD KILLSCD` to succeed, then sends `KILLAGENT`. One
+monotonic deadline covers connect, greeting, both commands and responses, and
+socket disappearance; a peer cannot multiply the bound by delivering one byte
+per read. Top-level inventory is capped while `scandir` is consumed. A known
+socket that appears or changes identity during shutdown, any unknown `S.*`
+entry, or any socket that survives the deadline fails closed.
+
+A process crash may leave both selected key bytes and live GPG processes in the
+fixed snapshot root. The next snapshot lifecycle holds the persistent recovery
+lock, binds every exact `g-<64 lowercase hex>` child, performs the same bounded
+agent/scdaemon shutdown, removes only strictly validated GPG lock shapes and
+stable known sockets, and then applies descriptor-bound bounded tree cleanup.
+An absent listener permits removal only after each known socket has stable
+identity and owner-only policy. Agent, socket, source binding, or cleanup
+uncertainty blocks creation of the next snapshot; it never silently abandons
+private key material under `/tmp`.
 If interruption leaves GPG's documented lock/sentinel hard-link shape, cleanup
 accepts only strict bounded lock names and proves regular-file identity, owner,
 non-writable access policy, ACL absence, and that every inode link is present
