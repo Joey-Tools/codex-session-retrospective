@@ -91,6 +91,7 @@ from .transport_remote_snapshot import (  # noqa: F401
     snapshot_remote_host_context_helper,
 )
 from .transport_remote import (  # noqa: F401
+    REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION,
     REMOTE_HOST_CONTEXT_COMMAND_TIMEOUT_SECONDS,
     REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH,
     REMOTE_HOST_CONTEXT_RETROSPECTIVE_COMMANDS,
@@ -104,6 +105,7 @@ from .transport_remote import (  # noqa: F401
     remote_host_context_host_inventory,
     remote_host_context_helper_commitment,
     remote_host_context_helper_path,
+    remote_host_context_account_snapshot,
     remote_host_context_snapshot_source_binding,
 )
 from .transport_host_inventory import (  # noqa: F401

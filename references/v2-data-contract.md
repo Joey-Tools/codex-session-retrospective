@@ -42,7 +42,15 @@ frozen helper provenance before snapshot preparation or lease creation. The
 installed helper location and the relay child's `HOME`, `USER`, and `LOGNAME`
 share one POSIX account-database authority. The account home is resolved from
 `getpwuid(getuid())` to an existing canonical absolute directory; ambient
-`HOME` cannot select helper bytes or the child account context. The
+`HOME` cannot select helper bytes or the child account context. A remote lease
+also commits an exact closed-schema account binding: account name and UID/GID,
+canonical home path, home object device/inode/generation, mode/owner/group,
+masked mutation-policy flags, and the bounded ACL digest. The independent worker
+parses that authenticated argv
+binding, re-resolves the account and home immediately before helper launch, and
+uses only the frozen account for `HOME`, `USER`, and `LOGNAME`. Account-record,
+home-object, or access-policy drift therefore fails before SSH credentials or
+configuration can be consumed; timestamp-only home churn is not mutation. The
 transport-program snapshot, remote-helper snapshot, bound empty transport output,
 and candidate checkpoint are capacity-checked and staged as one transaction;
 none of those files is materialized before the candidate checkpoint fits. The
@@ -422,7 +430,12 @@ post-redaction. Source values from 4 through 11 normalized characters use
 Unicode token-boundary matching, so a value such as `Acme` is removed from
 derived prose without treating `Acmeology` as the same source token. Bare FQDNs
 are redacted regardless of suffix; protocol URLs, private locators, paths, and
-bare hosts retain distinct deterministic precedence. RFC-shaped email addresses
+bare hosts retain distinct deterministic precedence. Hardware addresses cover
+only strict six-octet colon/hyphen forms with one delimiter or strict
+three-group dotted forms such as `0011.2233.4455`; embedded, shortened, mixed,
+or extended tokens remain outside that grammar. MAC redaction precedes generic
+personal-number redaction so every accepted hardware-address shape uses the
+same deterministic placeholder. RFC-shaped email addresses
 and bounded single-label `account@host` identifiers are personal identifiers;
 an immediately following colon keeps the complete SCP-style locator under the
 higher-priority URL rule. Typed references and hashes

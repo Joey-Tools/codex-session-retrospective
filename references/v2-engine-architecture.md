@@ -94,6 +94,14 @@ account-database binding. They resolve the current UID through `getpwuid`,
 canonicalize the declared absolute home, and derive both the helper path and
 child `HOME` from that result. Caller `HOME` therefore cannot redirect helper
 selection before the descriptor-authenticated snapshot is created.
+`transport_remote_account.py` serializes that account plus the home object's
+identity and access-policy receipt into one canonical lease argument. The
+worker revalidates the same account record, canonical home object, owner/mode/
+group policy, masked mutation flags, and ACL digest immediately before relay
+launch, then passes that
+snapshot explicitly to the sanitized environment builder. This closes the
+scheduler-to-worker account split without treating timestamps as identity or
+policy evidence.
 The bootstrap keeps the helper descriptor open through its bounded read and
 revalidates object identity plus owner/mode/link/size policy before executing
 the retained exact bytes. The same parent-only owner performs the legacy CLI

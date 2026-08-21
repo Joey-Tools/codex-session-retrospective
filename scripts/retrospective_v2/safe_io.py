@@ -530,6 +530,12 @@ def _validate_ancestor_directory(st: os.stat_result, path: Path) -> None:
         raise UnsafePathError(f"path ancestor is writable by another user: {path}")
 
 
+def directory_access_policy_flags(st: os.stat_result) -> int:
+    """Return only directory flags that change mutation authority."""
+
+    return int(getattr(st, "st_flags", 0)) & _ANCESTOR_ACCESS_POLICY_FLAG_MASK
+
+
 def _ancestor_access_policy_identity(st: os.stat_result) -> tuple[int, ...]:
     return (
         int(st.st_dev),
@@ -537,7 +543,7 @@ def _ancestor_access_policy_identity(st: os.stat_result) -> tuple[int, ...]:
         int(st.st_mode),
         int(st.st_uid),
         int(st.st_gid),
-        int(getattr(st, "st_flags", 0)) & _ANCESTOR_ACCESS_POLICY_FLAG_MASK,
+        directory_access_policy_flags(st),
         int(getattr(st, "st_gen", -1)),
     )
 
@@ -690,6 +696,7 @@ def _open_directory_chain(
     exact_mode: bool,
     create: bool,
     reject_symlink_ancestors: bool,
+    allow_bound_final_acl: bool = False,
 ) -> int:
     components = _normalize_component_sequence(list(path.parts[1:]))
     if not components:
@@ -778,11 +785,15 @@ def _open_directory_chain(
                     )
                     os.fsync(directory_fd)
                 elif is_final:
-                    metadata = validate_owner_only_directory_descriptor(
-                        child_fd,
-                        path,
-                        exact_mode=exact_mode,
-                    )
+                    if allow_bound_final_acl:
+                        _validate_directory_stat(metadata, path, exact_mode=exact_mode)
+                        _validate_ancestor_directory_descriptor(child_fd, path)
+                    else:
+                        metadata = validate_owner_only_directory_descriptor(
+                            child_fd,
+                            path,
+                            exact_mode=exact_mode,
+                        )
                 if not is_final:
                     child_policy = _validate_ancestor_directory_descriptor(
                         child_fd,
@@ -830,6 +841,22 @@ def open_owner_controlled_directory(
         exact_mode=False,
         create=False,
         reject_symlink_ancestors=True,
+    )
+    return normalized, descriptor
+
+
+def open_owner_controlled_directory_with_bound_acl(
+    path: str | os.PathLike[str],
+) -> tuple[Path, int]:
+    """Open an owner-controlled directory while preserving a safe ACL receipt."""
+
+    normalized = _normalized_path(path)
+    descriptor = _open_directory_chain(
+        normalized,
+        exact_mode=False,
+        create=False,
+        reject_symlink_ancestors=True,
+        allow_bound_final_acl=True,
     )
     return normalized, descriptor
 

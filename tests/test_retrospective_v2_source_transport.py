@@ -44,6 +44,7 @@ from retrospective_v2 import (  # noqa: E402
     transport_program,
     transport_program_components,
     transport_remote,
+    transport_remote_account,
     transport_remote_snapshot,
     transport_resume,
     transport_snapshot,
@@ -725,6 +726,13 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 )
             )
         return arguments
+
+    def _remote_account_arguments(self) -> tuple[str, str]:
+        account = transport_remote_account.remote_host_context_account_snapshot()
+        return (
+            transport.REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION,
+            account.to_argument(),
+        )
 
     def _direct_source_lease(
         self,
@@ -1433,6 +1441,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         arguments.extend(
             (
+                *self._remote_account_arguments(),
                 "--remote-helper",
                 str(snapshot),
                 "--remote-helper-commitment",
@@ -1490,6 +1499,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         arguments.extend(
             (
+                *self._remote_account_arguments(),
                 "--remote-helper",
                 str(self.root / "original-helper.py"),
                 "--remote-helper-commitment",
@@ -1721,7 +1731,11 @@ class SourceTransportProtocolTests(unittest.TestCase):
 
         def inspect_relay(argv, *, max_output_bytes, account) -> None:
             nonlocal observed_snapshot
-            self.assertEqual(2, len(account))
+            self.assertEqual(os.getuid(), account.account_uid)
+            self.assertEqual(
+                Path(pwd.getpwuid(os.getuid()).pw_dir).resolve(strict=True),
+                account.home_path,
+            )
             observed_snapshot = Path(argv[10])
             self.assertNotEqual(helper, observed_snapshot)
             self.assertEqual(helper.read_bytes(), observed_snapshot.read_bytes())
@@ -1842,29 +1856,31 @@ class SourceTransportProtocolTests(unittest.TestCase):
         spool_root = self.root / "account-helper-spool-root"
         account = types.SimpleNamespace(
             pw_name="retrospective-test",
+            pw_uid=os.getuid(),
+            pw_gid=os.getgid(),
             pw_dir=str(account_home),
-        )
-        changed_home = self.root / "changed-account-home"
-        changed_home.mkdir(mode=0o700)
-        changed_account = types.SimpleNamespace(
-            pw_name="changed-account",
-            pw_dir=str(changed_home),
         )
         source_before = account_helper.read_bytes()
         source_metadata_before = account_helper.stat()
+        with mock.patch.object(
+            transport_remote_account.pwd, "getpwuid", return_value=account
+        ):
+            account_snapshot = (
+                transport_remote_account.remote_host_context_account_snapshot()
+            )
         self.assertEqual(
             account_helper.resolve(strict=True),
             transport_remote._remote_host_context_helper_path_for_account(
-                (account.pw_name, account_home.resolve(strict=True))
+                account_snapshot
             ),
         )
 
         with (
             mock.patch.dict(os.environ, {"HOME": str(poisoned_home)}, clear=True),
             mock.patch.object(
-                transport_remote.pwd,
+                transport_remote_account.pwd,
                 "getpwuid",
-                side_effect=(account, changed_account),
+                return_value=account,
             ) as getpwuid,
             mock.patch.object(
                 transport_remote_snapshot.temporary_paths,
@@ -1901,7 +1917,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             ),
             (home, user, logname),
         )
-        self.assertEqual(1, getpwuid.call_count)
+        self.assertEqual(2, getpwuid.call_count)
         self.assertFalse(poison_executed.exists())
         self.assertEqual(source_before, account_helper.read_bytes())
         source_metadata_after = account_helper.stat()
@@ -1924,12 +1940,34 @@ class SourceTransportProtocolTests(unittest.TestCase):
         valid_home = self.root / "valid-account-home"
         valid_home.mkdir(mode=0o700)
         invalid_accounts = (
-            types.SimpleNamespace(pw_name="", pw_dir=str(valid_home)),
-            types.SimpleNamespace(pw_name="invalid\nname", pw_dir=str(valid_home)),
-            types.SimpleNamespace(pw_name="valid", pw_dir="relative-home"),
-            types.SimpleNamespace(pw_name="valid", pw_dir=f"{valid_home}\n"),
+            types.SimpleNamespace(
+                pw_name="",
+                pw_uid=os.getuid(),
+                pw_gid=os.getgid(),
+                pw_dir=str(valid_home),
+            ),
+            types.SimpleNamespace(
+                pw_name="invalid\nname",
+                pw_uid=os.getuid(),
+                pw_gid=os.getgid(),
+                pw_dir=str(valid_home),
+            ),
             types.SimpleNamespace(
                 pw_name="valid",
+                pw_uid=os.getuid(),
+                pw_gid=os.getgid(),
+                pw_dir="relative-home",
+            ),
+            types.SimpleNamespace(
+                pw_name="valid",
+                pw_uid=os.getuid(),
+                pw_gid=os.getgid(),
+                pw_dir=f"{valid_home}\n",
+            ),
+            types.SimpleNamespace(
+                pw_name="valid",
+                pw_uid=os.getuid(),
+                pw_gid=os.getgid(),
                 pw_dir=str(self.root / "missing-account-home"),
             ),
         )
@@ -1938,13 +1976,92 @@ class SourceTransportProtocolTests(unittest.TestCase):
             with (
                 self.subTest(account=account),
                 mock.patch.object(
-                    transport_remote.pwd,
+                    transport_remote_account.pwd,
                     "getpwuid",
                     return_value=account,
                 ),
                 self.assertRaisesRegex(RuntimeError, "account (identity|home)"),
             ):
                 transport_remote_snapshot.remote_host_context_helper_path()
+
+    def test_remote_account_binding_rejects_execution_time_account_drift(
+        self,
+    ) -> None:
+        for mutation in ("account", "home_object", "home_policy"):
+            with self.subTest(mutation=mutation):
+                home = self.root / f"bound-account-home-{mutation}"
+                home.mkdir(mode=0o700)
+                account = types.SimpleNamespace(
+                    pw_name="bound-account",
+                    pw_uid=os.getuid(),
+                    pw_gid=os.getgid(),
+                    pw_dir=str(home),
+                )
+                with mock.patch.object(
+                    transport_remote_account.pwd,
+                    "getpwuid",
+                    return_value=account,
+                ):
+                    frozen = (
+                        transport_remote_account.remote_host_context_account_snapshot()
+                    )
+                parsed = (
+                    transport_remote_account.parse_remote_host_context_account_binding(
+                        frozen.to_argument()
+                    )
+                )
+                current_account = account
+                if mutation == "account":
+                    changed_home = self.root / "changed-bound-account-home"
+                    changed_home.mkdir(mode=0o700, exist_ok=True)
+                    current_account = types.SimpleNamespace(
+                        pw_name="changed-account",
+                        pw_uid=os.getuid(),
+                        pw_gid=os.getgid(),
+                        pw_dir=str(changed_home),
+                    )
+                elif mutation == "home_object":
+                    home.rename(home.with_name(f"{home.name}-original"))
+                    home.mkdir(mode=0o700)
+                else:
+                    home.chmod(0o770)
+
+                with (
+                    mock.patch.object(
+                        transport_remote_account.pwd,
+                        "getpwuid",
+                        return_value=current_account,
+                    ),
+                    mock.patch.object(transport_remote.subprocess, "Popen") as popen,
+                    self.assertRaisesRegex(
+                        transport.TransportValidationError,
+                        "account or home binding changed",
+                    ),
+                ):
+                    transport_remote._relay_remote_host_context_command(
+                        ("never-launched",),
+                        max_output_bytes=1,
+                        account=parsed,
+                    )
+                popen.assert_not_called()
+
+    def test_remote_account_binding_ignores_home_timestamp_churn(self) -> None:
+        home = self.root / "timestamp-account-home"
+        home.mkdir(mode=0o700)
+        account = types.SimpleNamespace(
+            pw_name="timestamp-account",
+            pw_uid=os.getuid(),
+            pw_gid=os.getgid(),
+            pw_dir=str(home),
+        )
+        with mock.patch.object(
+            transport_remote_account.pwd,
+            "getpwuid",
+            return_value=account,
+        ):
+            frozen = transport_remote_account.remote_host_context_account_snapshot()
+            os.utime(home, ns=(home.stat().st_atime_ns, home.stat().st_mtime_ns + 1))
+            frozen.revalidate()
 
     def test_remote_session_relay_validates_paired_target_without_exporting_it(
         self,
@@ -2020,6 +2137,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             target,
             "--session-selector-commitment",
             selector,
+            *self._remote_account_arguments(),
             "--remote-helper",
             str(snapshot),
             "--remote-helper-commitment",
@@ -2036,9 +2154,10 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         observed_command: tuple[str, ...] | None = None
 
-        def relay(command, *, max_output_bytes, validator, publisher) -> None:
+        def relay(command, *, max_output_bytes, account, validator, publisher) -> None:
             nonlocal observed_command
             observed_command = tuple(command)
+            self.assertEqual(os.getuid(), account.account_uid)
             self.assertGreater(max_output_bytes, len(payload))
             with tempfile.TemporaryFile(mode="w+b") as output:
                 output.write(payload)
@@ -2113,6 +2232,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         arguments.extend(
             (
+                *self._remote_account_arguments(),
                 "--remote-helper",
                 str(snapshot),
                 "--remote-helper-commitment",
@@ -3059,6 +3179,16 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 self.assertEqual("local", local_lease.host)
                 lease_view = self._first_lease(coordinator)
             lease = transport.TransportLease.from_dict(lease_view["transport_lease"])
+            account_index = lease.command_argv.index(
+                transport.REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION
+            )
+            bound_account = (
+                transport_remote_account.parse_remote_host_context_account_binding(
+                    lease.command_argv[account_index + 1]
+                )
+            )
+            self.assertEqual(os.getuid(), bound_account.account_uid)
+            self.assertEqual(Path.home().resolve(strict=True), bound_account.home_path)
             completed = subprocess.run(
                 list(lease.command_argv),
                 check=True,

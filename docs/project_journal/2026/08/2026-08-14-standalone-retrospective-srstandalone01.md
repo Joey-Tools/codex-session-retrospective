@@ -2424,6 +2424,71 @@ superseded_by:
   under `actionlint`, the generated bootstrap manifest check, the isolated
   official OpenAI Skill validator, project-journal validation, source-tree
   bytecode exclusion, and `git diff --check`.
+- The fresh local Codex processor over signed head `0f9fdc45` found two
+  actionable gaps. Remote source leases froze helper bytes but did not carry
+  the scheduler-time account/home authority into the independent worker, and
+  the shared privacy grammar did not recognize strict dotted hardware
+  addresses such as `0011.2233.4455`. That review workspace postvalidated with
+  its original 75-commit, 74-edge graph and config receipts; the trusted bundle
+  digests remained unchanged, the agent closed, and the exact task root was
+  removed. The head's clean exact-secret admission and prior test evidence are
+  stale for delivery because the findings require a substantive successor.
+- `transport_remote_account.py` now owns a closed canonical account binding.
+  Scheduling commits account name and UID/GID plus the canonical home object's
+  device/inode/generation, mode/owner/group, masked mutation-policy flags, and
+  exact bounded ACL digest in the authenticated command and lease. The worker
+  re-resolves and compares the
+  binding immediately before launch and passes that same snapshot explicitly
+  to the relay environment. Account-record changes, same-path home replacement,
+  and access-policy changes stop before `Popen`; timestamp-only home churn is a
+  tested benign transition. The installed helper remains a separate run-owned
+  content snapshot.
+- The shared MAC grammar now covers strict colon/hyphen octets and strict
+  three-by-four dotted groups while rejecting embedded, short, mixed, and
+  extended shapes. MAC substitution precedes generic personal-number
+  substitution, and extraction scan, deterministic redaction, retained-value,
+  and complete `report.md` validation use the same owner. Nine exact focused
+  regressions pass 9/9. A 249-test affected-module run exposed only two stale
+  test-contract assertions; after those were repaired, their exact regressions
+  plus timestamp churn pass 4/4. Full successor-tree evidence follows below.
+- The first four-shard attempt after these fixes was stopped once per shard and
+  is non-counting: shard 0 immediately proved that the generated startup
+  manifest did not yet include the new worker module, while the other shards
+  were still running. The generated manifest was refreshed through its
+  canonical writer and its three exact bootstrap regressions pass 3/3 before
+  the counted run began.
+- An intermediate counted Python 3.13.12 inventory contains 1,855 exact test
+  IDs from 22
+  authenticated test modules under manifest digest
+  `0586747e7012683e3b167237c5e9a1c4a6eb8259609a041fb32c0d93f7bbbb56`.
+  Shard 0 passes 443/443 in 1,751.808 seconds, shard 1 passes 502/502 in
+  1,602.268 seconds, shard 2 passes 490/490 in 1,481.212 seconds, and shard 3
+  passes 420/420 in 1,424.039 seconds, for exact aggregate coverage of
+  1,855/1,855 on one frozen code-and-test tree. A subsequent final-diff audit
+  narrowed home flags to the existing mutation-policy mask and explicitly
+  rejected relative account-database homes, so this complete result is valid
+  for its intermediate tree but stale for final delivery.
+- That intermediate tree passes the independent Darwin security inventory
+  14/14 in 62.226 seconds, CI contracts 33/33, skill contracts 5/5, Ruff lint
+  and changed-file formatting, the canonical bootstrap-manifest check, both
+  current workflows under `actionlint`, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check`.
+- The final Python 3.13.12 inventory contains 1,855 exact test IDs from 22
+  authenticated test modules under manifest digest
+  `f0a41401235b1c00aa5e1061fba2d041f33cf8c2a0e38e979ec6253145298a59`.
+  Shard 0 passes 443/443 in 1,602.272 seconds, shard 1 passes 502/502 in
+  1,461.888 seconds, shard 2 passes 490/490 in 1,347.049 seconds, and shard 3
+  passes 420/420 in 1,296.144 seconds. The aggregate is 1,855/1,855 on the
+  final frozen code-and-test tree; no interrupted or intermediate run is
+  counted toward this result.
+- The final tree also passes the independent Darwin security inventory 14/14
+  in 59.404 seconds, CI contracts 33/33 in 2.258 seconds, Skill contracts 5/5,
+  and Bootstrap contracts 12/12. Ruff 0.13.2 lint and changed/new-file
+  formatting, both current workflows under `actionlint`, the generated
+  bootstrap manifest check, the isolated official OpenAI Skill validator,
+  project-journal validation, source-tree bytecode exclusion, and `git diff
+  --check` are clean.
 
 ## Follow-up Work
 

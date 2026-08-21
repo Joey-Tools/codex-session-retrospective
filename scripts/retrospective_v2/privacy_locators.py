@@ -910,10 +910,14 @@ IPV6_CANDIDATE_RE = re.compile(
     r")(?=$|[^0-9A-Za-z.]|\.(?=$|[^0-9A-Za-z.]))"
 )
 MAC_ADDRESS_RE = re.compile(
-    r"(?<![0-9A-Za-z])(?<![0-9A-Fa-f]:)(?<![0-9A-Fa-f]-)"
+    r"(?<![0-9A-Za-z])(?:"
+    r"(?<![0-9A-Fa-f]:)(?<![0-9A-Fa-f]-)"
     r"[0-9A-Fa-f]{2}(?P<mac_separator>[:-])"
     r"(?:[0-9A-Fa-f]{2}(?P=mac_separator)){4}[0-9A-Fa-f]{2}"
-    r"(?![0-9A-Za-z])(?![:-][0-9A-Fa-f]{2})",
+    r"(?![:-][0-9A-Fa-f]{2})|"
+    r"(?<![0-9A-Fa-f]\.)[0-9A-Fa-f]{4}"
+    r"(?:\.[0-9A-Fa-f]{4}){2}(?!\.[0-9A-Fa-f])"
+    r")(?![0-9A-Za-z])",
     re.ASCII,
 )
 _PRIVATE_KEY_LABEL_PATTERN_TEXT = (
@@ -1936,7 +1940,7 @@ def redact_personal_identifiers(value: str) -> str:
 
 
 def redact_mac_addresses(value: str) -> str:
-    """Redact strict colon- or hyphen-delimited MAC addresses."""
+    """Redact strict octet- or dotted-group MAC addresses."""
 
     return MAC_ADDRESS_RE.sub("[REDACTED_INTERNAL_ADDRESS]", value)
 

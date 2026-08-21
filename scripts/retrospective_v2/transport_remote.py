@@ -9,7 +9,6 @@ import codecs
 import hmac
 import os
 import pathlib
-import pwd
 import selectors
 import subprocess
 import sys
@@ -30,6 +29,12 @@ try:
         _parse_authenticated_helper_contract,
     )
     from .transport_program_components import _program_component
+    from .transport_remote_account import (
+        REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION,  # noqa: F401
+        RemoteHostContextAccountSnapshot,
+        parse_remote_host_context_account_binding,  # noqa: F401
+        remote_host_context_account_snapshot,
+    )
     from .transport_snapshot import (
         REMOTE_HELPER_EXIT_AUTHENTICATION,
         REMOTE_HELPER_EXIT_EXECUTION,
@@ -51,6 +56,12 @@ except (ImportError, ModuleNotFoundError):
         _parse_authenticated_helper_contract,
     )
     from transport_program_components import _program_component  # type: ignore[no-redef]
+    from transport_remote_account import (  # type: ignore[no-redef]
+        REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION,  # noqa: F401
+        RemoteHostContextAccountSnapshot,
+        parse_remote_host_context_account_binding,  # noqa: F401
+        remote_host_context_account_snapshot,
+    )
     from transport_snapshot import (  # type: ignore[no-redef]
         REMOTE_HELPER_EXIT_AUTHENTICATION,
         REMOTE_HELPER_EXIT_EXECUTION,
@@ -81,50 +92,17 @@ class RemoteTransportExecutionError(RuntimeError):
     """Raised when authenticated helper code violates its execution contract."""
 
 
-def _remote_host_context_account() -> tuple[str, pathlib.Path]:
-    try:
-        account = pwd.getpwuid(os.getuid())
-    except (KeyError, OSError) as exc:
-        raise RuntimeError("remote-host-context account identity unavailable") from exc
-    account_name = account.pw_name
-    raw_home = account.pw_dir
-    if (
-        not isinstance(account_name, str)
-        or not account_name
-        or "\x00" in account_name
-        or "\r" in account_name
-        or "\n" in account_name
-        or not isinstance(raw_home, str)
-        or not raw_home
-        or "\x00" in raw_home
-        or "\r" in raw_home
-        or "\n" in raw_home
-    ):
-        raise RuntimeError("remote-host-context account identity unavailable")
-    declared_home = pathlib.Path(raw_home)
-    if not declared_home.is_absolute():
-        raise RuntimeError("remote-host-context account home is invalid")
-    try:
-        account_home = declared_home.resolve(strict=True)
-        if not account_home.is_dir():
-            raise RuntimeError("remote-host-context account home is invalid")
-    except OSError as exc:
-        raise RuntimeError("remote-host-context account home is invalid") from exc
-    return account_name, account_home
-
-
 def _remote_host_context_helper_path_for_account(
-    account: tuple[str, pathlib.Path],
+    account: RemoteHostContextAccountSnapshot,
 ) -> pathlib.Path:
-    _account_name, account_home = account
-    return account_home.joinpath(*REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH.parts)
+    return account.home_path.joinpath(*REMOTE_HOST_CONTEXT_HELPER_RELATIVE_PATH.parts)
 
 
 def remote_host_context_helper_path(
-    *, account: tuple[str, pathlib.Path] | None = None
+    *, account: RemoteHostContextAccountSnapshot | None = None
 ) -> pathlib.Path:
     return _remote_host_context_helper_path_for_account(
-        _remote_host_context_account() if account is None else account
+        remote_host_context_account_snapshot() if account is None else account
     )
 
 
@@ -301,19 +279,17 @@ def _remote_host_context_command(
 
 
 def _remote_host_context_environment(
-    *, account: tuple[str, pathlib.Path] | None = None
+    *, account: RemoteHostContextAccountSnapshot | None = None
 ) -> dict[str, str]:
-    account_name, account_home = (
-        _remote_host_context_account() if account is None else account
-    )
+    selected = remote_host_context_account_snapshot() if account is None else account
 
     environment = {
-        "HOME": str(account_home),
+        "HOME": selected.home,
         "LANG": "C",
         "LC_ALL": "C",
-        "LOGNAME": account_name,
+        "LOGNAME": selected.account_name,
         "PATH": REMOTE_HOST_CONTEXT_FIXED_PATH,
-        "USER": account_name,
+        "USER": selected.account_name,
     }
     for key in REMOTE_HOST_CONTEXT_AUTH_ENVIRONMENT_KEYS:
         value = os.environ.get(key)
@@ -395,12 +371,16 @@ def _relay_remote_host_context_command(
     validator: Callable[[Any], None] | None = None,
     stream_filter: Any | None = None,
     publisher: Callable[[Any], None] | None = None,
-    account: tuple[str, pathlib.Path] | None = None,
+    account: RemoteHostContextAccountSnapshot | None = None,
 ) -> None:
     """Run the canonical helper with bounded, content-free failure handling."""
 
     if max_output_bytes < 1:
         raise RuntimeError("remote-host-context output envelope is invalid")
+    selected_account = (
+        remote_host_context_account_snapshot() if account is None else account
+    )
+    selected_account.revalidate()
     signal_retirement = process_lifecycle.GroupSignalRetirement()
     selector: selectors.BaseSelector | None = None
     active_error: BaseException | None = None
@@ -410,7 +390,7 @@ def _relay_remote_host_context_command(
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
-            env=_remote_host_context_environment(account=account),
+            env=_remote_host_context_environment(account=selected_account),
             close_fds=True,
             start_new_session=os.name == "posix",
         )

@@ -831,6 +831,7 @@ def _post_redact_text(
         replacement,
     ) in privacy_locators.CREDENTIAL_REDACTION_PATTERNS:
         redacted = pattern.sub(replacement, redacted)
+    redacted = privacy_locators.redact_mac_addresses(redacted)
     # Source-overlap markers must never split an already identified personal value.
     redacted = privacy_locators.redact_personal_identifiers(redacted)
     redacted = source_overlap.redact_normalized_matches(
@@ -855,7 +856,6 @@ def _post_redact_text(
     redacted = privacy_locators.LABELED_INTERNAL_HOST_RE.sub(
         "[REDACTED_INTERNAL_HOST]", redacted
     )
-    redacted = privacy_locators.redact_mac_addresses(redacted)
     redacted = privacy_locators.redact_ip_addresses(redacted)
     for pattern in privacy_locators.PATH_LOCATOR_PATTERNS:
         redacted = pattern.sub("[REDACTED_PATH]", redacted)

@@ -337,6 +337,7 @@ TRANSPORT_MODULES = {
     "transport_program.py",
     "transport_program_components.py",
     "transport_remote.py",
+    "transport_remote_account.py",
     "transport_remote_snapshot.py",
     "transport_resume.py",
     "transport_session_shards.py",
@@ -346,24 +347,25 @@ TRANSPORT_MODULES = {
 }
 
 TRANSPORT_LINE_INVENTORY = {
-    "transport.py": 266,
+    "transport.py": 268,
     "transport_auth.py": 147,
     "transport_capture.py": 1_024,
-    "transport_contracts.py": 1_106,
+    "transport_contracts.py": 1_107,
     "transport_discovery.py": 240,
     "transport_host_inventory.py": 551,
     "transport_paths.py": 100,
     "transport_program.py": 389,
     "transport_program_components.py": 207,
-    "transport_remote.py": 559,
+    "transport_remote.py": 539,
+    "transport_remote_account.py": 262,
     "transport_remote_snapshot.py": 185,
     "transport_resume.py": 235,
     "transport_session_shards.py": 1_650,
     "transport_snapshot.py": 243,
-    "transport_source.py": 1_940,
+    "transport_source.py": 1_956,
     "transport_worker.py": 21,
 }
-TRANSPORT_AGGREGATE_LINE_LIMIT = 8_875
+TRANSPORT_AGGREGATE_LINE_LIMIT = 9_150
 
 BOUNDED_MODULE_LINES = {
     "executable_authority.py": 350,
@@ -454,6 +456,7 @@ BOUNDED_MODULE_LINES = {
     "transport_program.py": 450,
     "transport_program_components.py": 225,
     "transport_remote.py": 575,
+    "transport_remote_account.py": 275,
     "transport_remote_snapshot.py": 200,
     "transport_resume.py": 250,
     "transport_session_shards.py": 1_650,
@@ -1220,7 +1223,7 @@ spec.loader.exec_module(module)
         }
         self.assertEqual(TRANSPORT_MODULES, set(TRANSPORT_LINE_INVENTORY))
         self.assertEqual(TRANSPORT_LINE_INVENTORY, observed)
-        self.assertEqual(8_863, sum(observed.values()))
+        self.assertEqual(9_124, sum(observed.values()))
         self.assertLessEqual(
             sum(observed.values()),
             TRANSPORT_AGGREGATE_LINE_LIMIT,
@@ -1269,8 +1272,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_698, branch_total)
-        self.assertLessEqual(branch_total, 9_698)
+        self.assertEqual(9_728, branch_total)
+        self.assertLessEqual(branch_total, 9_728)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 
@@ -1315,7 +1318,7 @@ spec.loader.exec_module(module)
         manifest = tuple(transport.SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST)
         self.assertEqual(manifest, transport.SOURCE_TRANSPORT_PROGRAM_MODULE_ALLOWLIST)
         self.assertEqual(len(manifest), len(set(manifest)))
-        self.assertLessEqual(len(manifest), 16)
+        self.assertLessEqual(len(manifest), 17)
         self.assertNotIn("reporting.py", manifest)
         self.assertFalse(set(manifest) & PUBLICATION_MODULES)
         self.assertFalse(set(manifest) & ORCHESTRATOR_MODULES)

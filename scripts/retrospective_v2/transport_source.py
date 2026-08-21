@@ -64,9 +64,11 @@ try:
         ROOT_ROLLOUT_RELATIVE_RE,
     )
     from .transport_remote import (
+        REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION,
         RemoteTransportUnavailableError,
         _relay_remote_host_context_command,
         _remote_host_context_command,
+        parse_remote_host_context_account_binding,
         remote_host_context_snapshot_source_binding,
     )
     from .transport_resume import (
@@ -123,9 +125,11 @@ except (ImportError, ModuleNotFoundError):
         ROOT_ROLLOUT_RELATIVE_RE,
     )
     from transport_remote import (  # type: ignore[no-redef]
+        REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION,
         RemoteTransportUnavailableError,
         _relay_remote_host_context_command,
         _remote_host_context_command,
+        parse_remote_host_context_account_binding,
         remote_host_context_snapshot_source_binding,
     )
     from transport_resume import (  # type: ignore[no-redef]
@@ -1659,6 +1663,7 @@ def _parse_private_transport_worker_arguments(
     parser.add_argument("--session-selector-commitment")
     parser.add_argument("--remote-helper")
     parser.add_argument("--remote-helper-commitment")
+    parser.add_argument(REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION)
     parser.add_argument(SOURCE_TRANSPORT_SOURCE_ROOT_OPTION, required=True)
     parser.add_argument(SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION, required=True)
     args = parser.parse_args(argv)
@@ -1796,6 +1801,7 @@ def _private_source_transport_bound_arguments(
         or SOURCE_TRANSPORT_EXECUTION_ARGV_OPTION in arguments
         or "--remote-helper" in arguments
         or "--remote-helper-commitment" in arguments
+        or REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION in arguments
     ):
         raise TransportValidationError("private source scan arguments are invalid")
     command_prefix = (
@@ -1867,7 +1873,11 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
     arguments = _validate_actual_execution_argv(supplied)
     args = _parse_private_transport_worker_arguments(arguments)
     if args.host == "local":
-        if args.remote_helper is not None or args.remote_helper_commitment is not None:
+        if (
+            args.remote_helper is not None
+            or args.remote_helper_commitment is not None
+            or args.remote_account_binding is not None
+        ):
             raise TransportValidationError(
                 "local source transport cannot bind a remote helper"
             )
@@ -1877,10 +1887,15 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
             host=args.host,
         )
         return _source_transport_scan(args, scan_context=scan_context)
-    if args.remote_helper is None or args.remote_helper_commitment is None:
+    if None in (
+        args.remote_helper,
+        args.remote_helper_commitment,
+        args.remote_account_binding,
+    ):
         raise TransportValidationError(
             "remote source transport helper binding is incomplete"
         )
+    account = parse_remote_host_context_account_binding(args.remote_account_binding)
     route, codex_root = remote_host_context_snapshot_source_binding(
         args.remote_helper,
         args.remote_helper_commitment,
@@ -1924,6 +1939,7 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
         _relay_remote_host_context_command(
             command,
             max_output_bytes=wire_limit,
+            account=account,
             validator=lambda output: _validate_source_transport_relay(args, output),
             publisher=lambda output: _publish_bound_source_transport_relay(
                 args,

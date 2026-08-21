@@ -651,9 +651,10 @@ class StageSchedulingOperations(OrchestratorComponent):
                 raise source_transport.TransportValidationError(
                     "remote source host has a non-remote frozen route"
                 )
+            account = source_transport.remote_host_context_account_snapshot()
             helper_snapshot, helper_commitment = (
                 source_transport.snapshot_remote_host_context_helper(
-                    source_transport.remote_host_context_helper_path(),
+                    source_transport.remote_host_context_helper_path(account=account),
                     self.run_dir / RAW_INPUT_DIRECTORY / "source-program-snapshots",
                     expected_source_commitment=remote_helper_source_commitment,
                     stage_file=lambda path, payload: self._stage_prepared_file(
@@ -665,6 +666,8 @@ class StageSchedulingOperations(OrchestratorComponent):
             )
             command.extend(
                 (
+                    source_transport.REMOTE_HOST_CONTEXT_ACCOUNT_BINDING_OPTION,
+                    account.to_argument(),
                     "--remote-helper",
                     str(helper_snapshot),
                     "--remote-helper-commitment",

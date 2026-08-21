@@ -64,6 +64,7 @@ SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST = (
     "transport_paths.py",
     "transport_program_components.py",
     "transport_remote.py",
+    "transport_remote_account.py",
     "transport_resume.py",
     "transport_snapshot.py",
     "transport_source.py",

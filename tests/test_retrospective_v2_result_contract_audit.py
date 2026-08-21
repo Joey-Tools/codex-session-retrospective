@@ -1564,6 +1564,11 @@ class AuditedResultContractTests(unittest.TestCase):
                 "[REDACTED_INTERNAL_ADDRESS]",
             ),
             (
+                "Switch MAC address: 0011.2233.4455",
+                "internal_host",
+                "[REDACTED_INTERNAL_ADDRESS]",
+            ),
+            (
                 "Inspect identifier abcdefabcdefabcdefabcdef before continuing.",
                 "raw_id",
                 "[REDACTED_RAW_ID]",
@@ -1628,6 +1633,9 @@ class AuditedResultContractTests(unittest.TestCase):
             "short MAC 00:1A:2B:3C:4D",
             "embedded MAC x00:1A:2B:3C:4D:5E",
             "long hardware id 00-1A-2B-3C-4D-5E-6F",
+            "short dotted MAC 0011.2233",
+            "embedded dotted MAC x0011.2233.4455",
+            "long dotted MAC 0011.2233.4455.6677",
         ):
             with self.subTest(safe_text=safe_text):
                 self.assertEqual((), scan_for_leaks({"summary": safe_text}))
@@ -1652,6 +1660,7 @@ class AuditedResultContractTests(unittest.TestCase):
             "Connect to build-node-7:8080.",
             "Connect to server9:8080.",
             "Device MAC address: 00-1A-2B-3C-4D-5E",
+            "Switch MAC address: 0011.2233.4455",
         ):
             with self.subTest(private_text=private_text):
                 self.assertNotEqual((), scan_for_leaks({"summary": private_text}))
