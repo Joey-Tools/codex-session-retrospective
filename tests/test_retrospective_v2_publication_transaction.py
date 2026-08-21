@@ -506,13 +506,13 @@ class PublicationInvariantUnitTests(unittest.TestCase):
 
                     os.kill(holder.pid, signal.SIGKILL)
                     self.assertLess(holder.wait(timeout=5), 0)
-                    with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
-                        pass
+                    with self.assertRaises(gpg_keyring_snapshot.ConfigFreeKeyringError):
+                        with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                            self.fail("an unproved pre-agent crash was recovered")
 
-                self.assertFalse(active_path.exists())
-                self.assertEqual(
-                    [".recovery.lock"],
-                    sorted(path.name for path in snapshot_root.iterdir()),
+                self.assertTrue(active_path.is_dir())
+                self.assertFalse(
+                    (active_path / gpg_snapshot_recovery.CLEANUP_PROOF_NAME).exists()
                 )
             finally:
                 if holder is not None and holder.poll() is None:
@@ -580,11 +580,16 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                     self.assertTrue(
                         (retained / gpg_snapshot_lease.ACTIVE_LEASE_NAME).is_file()
                     )
+                    proof = retained / gpg_snapshot_recovery.CLEANUP_PROOF_NAME
+                    self.assertEqual(
+                        failure_stage == "root-coordination",
+                        proof.is_file(),
+                    )
                     self.assertIsNotNone(
                         temporary_paths.incomplete_cleanup_primary(caught.exception)
                     )
 
-                    with (
+                    recovery_context = (
                         mock.patch.object(
                             temporary_paths,
                             "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
@@ -595,15 +600,33 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                             "local_codex_root",
                             return_value=source_root,
                         ),
-                    ):
-                        with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
-                            pass
-
-                    self.assertFalse(retained.exists())
-                    self.assertEqual(
-                        [".recovery.lock"],
-                        sorted(path.name for path in snapshot_root.iterdir()),
                     )
+                    with recovery_context[0], recovery_context[1]:
+                        if failure_stage == "root-coordination":
+                            with gpg_keyring_snapshot.config_free_keyring_snapshot(
+                                source
+                            ):
+                                pass
+                        else:
+                            with self.assertRaises(
+                                gpg_keyring_snapshot.ConfigFreeKeyringError
+                            ):
+                                with gpg_keyring_snapshot.config_free_keyring_snapshot(
+                                    source
+                                ):
+                                    self.fail(
+                                        "an unproved publisher cleanup was recovered"
+                                    )
+
+                    if failure_stage == "root-coordination":
+                        self.assertFalse(retained.exists())
+                        self.assertEqual(
+                            [".recovery.lock"],
+                            sorted(path.name for path in snapshot_root.iterdir()),
+                        )
+                    else:
+                        self.assertTrue(retained.is_dir())
+                        self.assertFalse(proof.exists())
 
     def test_recovery_rejects_a_symlinked_activity_lease(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as raw:
@@ -647,7 +670,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 temporary_paths.incomplete_cleanup_primary(caught.exception)
             )
 
-    def test_restart_removes_a_bound_socket_with_no_live_listener(self) -> None:
+    def test_restart_retains_socket_that_can_listen_after_refusal(self) -> None:
         with (
             tempfile.TemporaryDirectory(
                 prefix="r-",
@@ -669,26 +692,28 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 listener.bind(os.fspath(socket_path))
                 socket_path.chmod(0o600)
 
-            with (
-                mock.patch.object(
-                    temporary_paths,
-                    "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
-                    snapshot_root,
-                ),
-                mock.patch.object(
-                    temporary_paths,
-                    "local_codex_root",
-                    return_value=source_root,
-                ),
-            ):
-                with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
-                    pass
+                with (
+                    mock.patch.object(
+                        temporary_paths,
+                        "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                        snapshot_root,
+                    ),
+                    mock.patch.object(
+                        temporary_paths,
+                        "local_codex_root",
+                        return_value=source_root,
+                    ),
+                    self.assertRaises(gpg_keyring_snapshot.ConfigFreeKeyringError),
+                ):
+                    with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                        self.fail("a refused socket authorized stale cleanup")
 
-            self.assertFalse(stale.exists())
-            self.assertEqual(
-                [".recovery.lock"],
-                sorted(path.name for path in snapshot_root.iterdir()),
-            )
+                listener.listen(4)
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                    probe.settimeout(1)
+                    probe.connect(os.fspath(socket_path))
+                self.assertTrue(stale.is_dir())
+                self.assertTrue(socket_path.is_socket())
 
     def test_restart_retains_a_live_scdaemon_when_primary_is_stale(self) -> None:
         with (
@@ -994,46 +1019,87 @@ class PublicationInvariantUnitTests(unittest.TestCase):
         connection.settimeout.assert_called_once_with(5.0)
         connection.recv.assert_called_once_with(1)
 
-    def test_stale_socket_removal_rechecks_every_auxiliary_listener(self) -> None:
-        with (
-            tempfile.TemporaryDirectory(dir=ROOT) as raw,
-            tempfile.TemporaryDirectory(prefix="r-", dir="/tmp") as snapshot_raw,
-        ):
-            root = Path(raw)
-            snapshot_root = Path(snapshot_raw)
-            source_root = root / "source-root"
-            source_root.mkdir(mode=0o700)
-            with mock.patch.object(
-                temporary_paths,
-                "local_codex_root",
-                return_value=source_root,
-            ):
-                with temporary_paths.owner_only_temporary_directory(
-                    root=snapshot_root,
-                    prefix="g-",
-                ) as temporary:
-                    primary = temporary.path / "S.gpg-agent"
-                    scdaemon = temporary.path / "S.scdaemon"
-                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stale:
-                        stale.bind(os.fspath(primary))
-                        primary.chmod(0o600)
-                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
-                        listener.bind(os.fspath(scdaemon))
-                        scdaemon.chmod(0o600)
-                        listener.listen(4)
-                        with self.assertRaisesRegex(
-                            gpg_snapshot_recovery.GpgSnapshotRecoveryError,
-                            "live auxiliary agent listener",
-                        ):
-                            gpg_snapshot_recovery.remove_stale_sockets(temporary)
-                        self.assertTrue(primary.is_socket())
-                        self.assertTrue(scdaemon.is_socket())
+    def test_cleanup_proof_requires_exact_owner_only_regular_file(self) -> None:
+        for condition in ("valid", "malformed", "mode", "replaced", "symlink"):
+            with self.subTest(condition=condition):
+                with (
+                    tempfile.TemporaryDirectory(dir=ROOT) as raw,
+                    tempfile.TemporaryDirectory(
+                        prefix="r-", dir="/tmp"
+                    ) as snapshot_raw,
+                ):
+                    root = Path(raw)
+                    snapshot_root = Path(snapshot_raw)
+                    source_root = root / "source-root"
+                    source_root.mkdir(mode=0o700)
+                    with mock.patch.object(
+                        temporary_paths,
+                        "local_codex_root",
+                        return_value=source_root,
+                    ):
+                        with temporary_paths.owner_only_temporary_directory(
+                            root=snapshot_root,
+                            prefix="g-",
+                        ) as temporary:
+                            proof = (
+                                temporary.path
+                                / gpg_snapshot_recovery.CLEANUP_PROOF_NAME
+                            )
+                            if condition == "valid":
+                                gpg_snapshot_recovery.record_cleanup_proof(temporary)
+                                self.assertTrue(
+                                    gpg_snapshot_recovery.cleanup_proof_exists(
+                                        temporary
+                                    )
+                                )
+                                continue
+                            if condition == "replaced":
+                                gpg_snapshot_recovery.record_cleanup_proof(temporary)
+                                payload = proof.read_bytes()
+                                displaced = temporary.path / "displaced-proof"
+                                original_read = safe_io._read_bounded_descriptor_pass
+                                pass_count = 0
 
-                    gpg_snapshot_recovery.remove_stale_sockets(temporary)
-                    self.assertEqual(
-                        (),
-                        gpg_snapshot_recovery.socket_names(temporary),
-                    )
+                                def replace_after_first_read(*args, **kwargs):
+                                    nonlocal pass_count
+                                    result = original_read(*args, **kwargs)
+                                    pass_count += 1
+                                    if pass_count == 1:
+                                        proof.rename(displaced)
+                                        proof.write_bytes(payload)
+                                        proof.chmod(0o600)
+                                    return result
+
+                                with (
+                                    mock.patch.object(
+                                        safe_io,
+                                        "_read_bounded_descriptor_pass",
+                                        side_effect=replace_after_first_read,
+                                    ),
+                                    self.assertRaises(
+                                        gpg_snapshot_recovery.GpgSnapshotRecoveryError
+                                    ),
+                                ):
+                                    gpg_snapshot_recovery.cleanup_proof_exists(
+                                        temporary
+                                    )
+                                continue
+                            if condition == "symlink":
+                                outside = root / "outside-proof"
+                                outside.write_bytes(b"outside\n")
+                                outside.chmod(0o600)
+                                proof.symlink_to(outside)
+                            else:
+                                proof.write_bytes(b"invalid\n")
+                                proof.chmod(0o644 if condition == "mode" else 0o600)
+                            with self.assertRaises(
+                                gpg_snapshot_recovery.GpgSnapshotRecoveryError
+                            ):
+                                gpg_snapshot_recovery.cleanup_proof_exists(temporary)
+                            if proof.is_symlink():
+                                proof.unlink()
+                            elif proof.exists():
+                                proof.chmod(0o600)
 
     def test_agent_shutdown_accepts_a_bound_socket_disappearing_after_inventory(
         self,

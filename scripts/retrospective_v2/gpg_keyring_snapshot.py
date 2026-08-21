@@ -498,9 +498,19 @@ def _recover_stale_snapshot(
 ) -> bool:
     if not gpg_snapshot_lease.stale_snapshot_is_recoverable(temporary):
         return False
-    gpg_snapshot_recovery.stop_agent(temporary, allow_stale_listener=True)
+    if gpg_snapshot_recovery.cleanup_proof_exists(temporary):
+        if gpg_snapshot_recovery.socket_names(temporary):
+            raise ConfigFreeKeyringError(
+                "proved publisher snapshot contains an agent socket"
+            )
+        return True
+    gpg_snapshot_recovery.stop_agent(temporary, require_shutdown_proof=True)
     _remove_gpg_lock_files(temporary)
-    gpg_snapshot_recovery.remove_stale_sockets(temporary)
+    if gpg_snapshot_recovery.socket_names(temporary):
+        raise ConfigFreeKeyringError(
+            "recovered publisher snapshot retains an agent socket"
+        )
+    gpg_snapshot_recovery.record_cleanup_proof(temporary)
     return True
 
 
@@ -513,6 +523,7 @@ def _clean_snapshot_after_use(
         raise ConfigFreeKeyringError(
             "config-free publisher agent cleanup is incomplete"
         )
+    gpg_snapshot_recovery.record_cleanup_proof(temporary)
 
 
 def _finish_snapshot_use(

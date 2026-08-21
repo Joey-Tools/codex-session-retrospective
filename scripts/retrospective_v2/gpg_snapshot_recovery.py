@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import errno
 import os
 import socket
 import stat
 import time
 
-from . import temporary_paths
+from . import safe_io, temporary_paths
 
 
 _AGENT_SOCKET_NAMES = (
@@ -19,6 +18,8 @@ _AGENT_SOCKET_NAMES = (
     "S.scdaemon",
 )
 MAX_SNAPSHOT_TOP_LEVEL_ENTRIES = 32
+CLEANUP_PROOF_NAME = ".agent-cleanup.proved"
+_CLEANUP_PROOF_PAYLOAD = b"codex-session-retrospective-gpg-cleanup-v1\n"
 _MAX_ASSUAN_LINE_BYTES = 4096
 _AGENT_SHUTDOWN_SECONDS = 5.0
 
@@ -93,48 +94,19 @@ def _socket_identity(
     return metadata.st_dev, metadata.st_ino, metadata.st_uid, metadata.st_mode
 
 
-def _require_no_live_listeners(
-    temporary: temporary_paths.BoundTemporaryDirectory,
-    identities: dict[str, tuple[int, int, int, int]],
-    *,
-    deadline: float,
-) -> None:
-    for name in identities:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise GpgSnapshotRecoveryError(
-                "publisher agent listener proof exceeded its deadline"
-            )
-        try:
-            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-                connection.settimeout(remaining)
-                connection.connect(os.fspath(temporary.path / name))
-        except OSError as error:
-            if error.errno == errno.ECONNREFUSED:
-                continue
-            raise GpgSnapshotRecoveryError(
-                "publisher agent listener absence could not be proved"
-            ) from error
-        raise GpgSnapshotRecoveryError(
-            "publisher snapshot retains a live auxiliary agent listener"
-        )
-    temporary.revalidate()
-    for name, identity in identities.items():
-        if _socket_identity(temporary, name) != identity:
-            raise GpgSnapshotRecoveryError(
-                "publisher agent socket changed during listener proof"
-            )
-
-
 def stop_agent(
     temporary: temporary_paths.BoundTemporaryDirectory,
     *,
-    allow_stale_listener: bool = False,
+    require_shutdown_proof: bool = False,
 ) -> None:
     """Stop one bound snapshot agent and prove that its sockets disappeared."""
 
     names = _socket_names(temporary)
     if not names:
+        if require_shutdown_proof:
+            raise GpgSnapshotRecoveryError(
+                "publisher agent shutdown cannot be proved without its socket"
+            )
         return
     primary = _AGENT_SOCKET_NAMES[0]
     if primary not in names:
@@ -166,17 +138,6 @@ def stop_agent(
                 allow_eof=True,
             )
     except (OSError, TimeoutError) as exc:
-        if (
-            allow_stale_listener
-            and isinstance(exc, OSError)
-            and exc.errno == errno.ECONNREFUSED
-        ):
-            _require_no_live_listeners(
-                temporary,
-                identities,
-                deadline=deadline,
-            )
-            return
         raise GpgSnapshotRecoveryError(
             "publisher agent could not be stopped safely"
         ) from exc
@@ -204,27 +165,92 @@ def stop_agent(
         time.sleep(0.01)
 
 
-def remove_stale_sockets(
+def cleanup_proof_exists(
+    temporary: temporary_paths.BoundTemporaryDirectory,
+) -> bool:
+    """Validate the persistent proof emitted by the cleanup owner."""
+
+    temporary.revalidate()
+    try:
+        payload = safe_io.read_bounded_bytes_at(
+            temporary._child_fd,
+            CLEANUP_PROOF_NAME,
+            display_path=temporary.path / CLEANUP_PROOF_NAME,
+            max_bytes=len(_CLEANUP_PROOF_PAYLOAD),
+            require_owner_only=True,
+        )
+    except FileNotFoundError:
+        return False
+    except (OSError, safe_io.ReadLimitExceeded, safe_io.UnsafePathError) as error:
+        raise GpgSnapshotRecoveryError(
+            "publisher snapshot cleanup proof is unreadable or unsafe"
+        ) from error
+    if payload != _CLEANUP_PROOF_PAYLOAD:
+        raise GpgSnapshotRecoveryError(
+            "publisher snapshot cleanup proof content is invalid"
+        )
+    temporary.revalidate()
+    return True
+
+
+def record_cleanup_proof(
     temporary: temporary_paths.BoundTemporaryDirectory,
 ) -> None:
-    """Remove only stable, known sockets after a stale listener is absent."""
+    """Persist exact owner-only evidence after lifecycle cleanup succeeds."""
 
-    names = _socket_names(temporary)
-    identities = {name: _socket_identity(temporary, name) for name in names}
-    _require_no_live_listeners(
-        temporary,
-        identities,
-        deadline=time.monotonic() + _AGENT_SHUTDOWN_SECONDS,
-    )
-    for name in names:
-        if _socket_identity(temporary, name) != identities[name]:
-            raise GpgSnapshotRecoveryError(
-                "stale publisher snapshot agent socket changed before cleanup"
-            )
-        os.unlink(name, dir_fd=temporary._child_fd)
-    if names:
+    if _socket_names(temporary):
+        raise GpgSnapshotRecoveryError(
+            "publisher snapshot cleanup proof cannot precede socket cleanup"
+        )
+    path = temporary.path / CLEANUP_PROOF_NAME
+    try:
+        descriptor = os.open(
+            CLEANUP_PROOF_NAME,
+            os.O_RDWR
+            | os.O_CREAT
+            | os.O_EXCL
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            safe_io.OWNER_FILE_MODE,
+            dir_fd=temporary._child_fd,
+        )
+    except OSError as error:
+        raise GpgSnapshotRecoveryError(
+            "publisher snapshot cleanup proof could not be created"
+        ) from error
+    primary: BaseException | None = None
+    try:
+        safe_io.harden_created_owner_only_file_descriptor(descriptor, path)
+        offset = 0
+        while offset < len(_CLEANUP_PROOF_PAYLOAD):
+            written = os.write(descriptor, _CLEANUP_PROOF_PAYLOAD[offset:])
+            if written <= 0:
+                raise OSError("cleanup proof write made no progress")
+            offset += written
+        os.fsync(descriptor)
+        safe_io.validate_owner_only_file_descriptor(
+            descriptor,
+            path,
+            directory_fd=temporary._child_fd,
+            name=CLEANUP_PROOF_NAME,
+        )
         os.fsync(temporary._child_fd)
-    temporary.revalidate()
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        try:
+            os.close(descriptor)
+        except OSError as error:
+            if primary is None:
+                raise GpgSnapshotRecoveryError(
+                    "publisher snapshot cleanup proof descriptor could not close"
+                ) from error
+            primary.add_note("publisher snapshot cleanup proof close failed")
+    if not cleanup_proof_exists(temporary):
+        raise GpgSnapshotRecoveryError(
+            "publisher snapshot cleanup proof could not be authenticated"
+        )
 
 
 def socket_names(

@@ -236,11 +236,15 @@ result as retryable. Specialized cleanup uncertainty also marks the bound child
 for recovery before control returns to the generic temporary-directory context.
 That context closes its descriptors but does not recursively remove the retained
 tree; only a later root-lock holder may recover it through the bounded inventory.
-If the primary GPG-agent socket refuses a recovery connection, every known
-auxiliary socket is independently connection-probed under one deadline. Any live
-or unprovable auxiliary listener retains the complete snapshot and blocks
-recovery. Socket removal repeats that proof before unlinking any member, then
-revalidates each bound socket identity immediately before removal.
+Recovery never treats an absent socket or a refused connection as durable
+listener-absence evidence. A stale snapshot can be removed only after a bounded
+Assuan shutdown removes every bound socket, or after the normal cleanup owner
+has persisted an exact owner-only `.agent-cleanup.proved` marker after agent,
+socket, and lock cleanup. The marker is read twice through the bound child
+descriptor with exact content, identity, link-count, mode, and ACL validation.
+Missing, malformed, replaced, unreadable, or policy-drifted proof retains the
+complete snapshot and blocks recovery. A same-UID process remains part of the
+documented host trust boundary.
 
 The canary child receives `TEMP`, `TMP`, and `TMPDIR` bound to the exact
 descriptor-validated disposable workspace through the otherwise closed

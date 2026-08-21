@@ -2747,6 +2747,51 @@ superseded_by:
   production code; both are explicitly non-counting. Signing, exact-secret
   admission, the replacement fresh local Codex processor, hosted CI, and
   current-head GitHub Codex evidence remain delivery gates.
+- The replacement fresh local Codex processor over signed head `3c10105e`
+  found a deeper P1 in the listener-probe correction. `ECONNREFUSED` proves
+  only one instant: the same bound Unix socket can begin listening without an
+  inode, mode, or owner change after the final probe and before unlink. The
+  exact workspace contained 83 commits and 82 parent edges under graph digest
+  `c087f2915ddb6ad80e7be38852fa98ca4b76f3e708e058cdbe22efd5c6ceafcd`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed. All head-bound
+  evidence for `3c10105e` is stale.
+- Recovery no longer converts a refused or absent socket into deletion
+  authority. Without prior proof, a stale snapshot must complete the real
+  bounded Assuan shutdown and observe every bound socket disappear. Normal
+  cleanup and successful recovery remove GPG locks, confirm the empty socket
+  inventory, then create exact owner-only `.agent-cleanup.proved` bytes through
+  the held child descriptor and durably re-read them. A valid marker permits a
+  later root-lock holder to remove a cleanup-complete retained tree. Missing,
+  malformed, symlinked, replaced, unreadable, or access-policy-drifted proof
+  blocks recovery, as does a pre-agent crash with neither a marker nor a socket
+  that can complete Assuan shutdown. A publisher-agent cleanup failure never
+  emits the marker. Real regressions prove that a refused bound socket can
+  begin listening after recovery fails without being unlinked, while a live
+  scdaemon and every unproved snapshot remain retained.
+- The final Python 3.13.12 inventory remains 1,872 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `bbdd0cffe527ea884b2857ce70104d17eb1a6dca47a3d083c1010a6395ca20fe`.
+  Shard 0 passes 448/448 in 1,643.871 seconds, shard 1 passes 507/507 in
+  1,492.648 seconds, shard 2 passes 496/496 in 1,374.246 seconds, and shard 3
+  passes 421/421 in 1,327.314 seconds, for exact aggregate coverage of
+  1,872/1,872. Every bounded supervisor reached terminal exit zero. The
+  focused publication invariant class passes 62/62, including five cleanup
+  proof variants, and module boundaries pass 19/19.
+- The same tree passes the independent Darwin security inventory 14/14 in
+  60.427 seconds, CI contracts 33/33, Skill contracts 5/5, and Bootstrap
+  contracts 12/12. Ruff 0.13.2 lint for `scripts/` and `tests/`, changed-file
+  formatting, both current workflows under bounded `actionlint`, the generated
+  bootstrap manifest check, the isolated official OpenAI Skill validator,
+  source-tree bytecode exclusion, and `git diff --check` are clean. One direct
+  CI-contract invocation omitted `-I` and exercised only the entrance guard;
+  one initial Darwin run lost its caller session ID and was allowed to terminate
+  before the bounded replacement started. Both are explicitly non-counting.
+  Project-journal validation, signing, exact-secret admission, the replacement
+  fresh local Codex processor, hosted CI, and current-head GitHub Codex evidence
+  remain delivery gates.
 
 ## Follow-up Work
 

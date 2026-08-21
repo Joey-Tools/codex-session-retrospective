@@ -371,7 +371,7 @@ BOUNDED_MODULE_LINES = {
     "executable_authority.py": 350,
     "gpg_keyring_snapshot.py": 700,
     "gpg_snapshot_lease.py": 275,
-    "gpg_snapshot_recovery.py": 250,
+    "gpg_snapshot_recovery.py": 275,
     "gpg_status.py": 200,
     "cli.py": 2_000,
     "implementation_authority.py": 600,
@@ -1275,8 +1275,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_856, branch_total)
-        self.assertLessEqual(branch_total, 9_856)
+        self.assertEqual(9_858, branch_total)
+        self.assertLessEqual(branch_total, 9_858)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 
