@@ -2489,6 +2489,16 @@ superseded_by:
   bootstrap manifest check, the isolated official OpenAI Skill validator,
   project-journal validation, source-tree bytecode exclusion, and `git diff
   --check` are clean.
+- The fresh local Codex processor over signed head `3b6f2749` found one P2
+  documentation-contract mismatch: the normative architecture guide still
+  described the pre-account-binding transport module count and line budgets.
+  The lane postvalidated with its original 76-commit, 75-edge graph and config
+  receipts; the trusted control bundle remained at digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  the reviewer closed, and the exact task root was removed. The guide now
+  mirrors the enforced 17-module, 9,124/9,150 aggregate and affected
+  single-file baselines. Admission and review evidence for `3b6f2749` are stale
+  for delivery because this correction creates a successor head.
 
 ## Follow-up Work
 

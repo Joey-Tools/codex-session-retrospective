@@ -434,16 +434,17 @@ stability similarly compares only BSD immutable, append, nounlink, restricted,
 and datavault flags plus the normalized descriptor ACL policy; `UF_HIDDEN` and
 other presentation flags are not access policy.
 
-The transport slice remains independently bounded after this hardening: 8,791
-physical lines across an 8,800-line aggregate limit. One exact 16-module
+The transport slice remains independently bounded after this hardening: 9,124
+physical lines across a 9,150-line aggregate limit. One exact 17-module
 inventory and its aggregate are enforced together, so omitting a transport
-module cannot create a false budget pass. The facade remains 266 lines;
+module cannot create a false budget pass. The facade remains 268/275 lines;
 `transport_host_inventory.py` is 551/560 lines,
-`transport_remote.py` is 508/550 lines, the parent snapshot/legacy owner is
-175/200 lines, the executable bootstrap owner is 243/250 lines, and the source
-worker owner is 1,948/1,950 lines after adding the authenticated host/command
-contract and closed failure-class relay. Retrospective still contains no SSH
-host table or transport implementation.
+`transport_remote.py` is 539/575 lines, the account/home authority owner is
+262/275 lines, the parent snapshot/legacy owner is 185/200 lines, the
+executable bootstrap owner is 243/250 lines, and the source worker owner is
+1,956/1,960 lines after adding the authenticated host/command contract and
+closed failure-class relay. Retrospective still contains no SSH host table or
+transport implementation.
 
 The orchestrator foundation remains below its aggregate limit. The seven agent
 support modules remain below 1,100 lines; the complete result-schema owner is
