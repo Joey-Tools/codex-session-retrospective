@@ -236,6 +236,11 @@ result as retryable. Specialized cleanup uncertainty also marks the bound child
 for recovery before control returns to the generic temporary-directory context.
 That context closes its descriptors but does not recursively remove the retained
 tree; only a later root-lock holder may recover it through the bounded inventory.
+If the primary GPG-agent socket refuses a recovery connection, every known
+auxiliary socket is independently connection-probed under one deadline. Any live
+or unprovable auxiliary listener retains the complete snapshot and blocks
+recovery. Socket removal repeats that proof before unlinking any member, then
+revalidates each bound socket identity immediately before removal.
 
 The canary child receives `TEMP`, `TMP`, and `TMPDIR` bound to the exact
 descriptor-validated disposable workspace through the otherwise closed
@@ -486,10 +491,12 @@ support modules remain below 1,100 lines; the complete result-schema owner is
 2,356/2,500, and the dedicated synthesis-lineage owner is 226/250 after adding
 compact recursive commitments and
 revision-level recurrence proof. The global branch proxy is exactly
-9,849/9,849 nodes after adding digest-bound IANA root-suffix classification and
-explicit sensitive-temporary retention, while the shared temporary-directory
-authority is 337/350 lines. The shared process-group lifecycle owner is 290/300
-lines after separating signal retirement from group-absence proof. These gates
+9,856/9,856 nodes after adding digest-bound IANA root-suffix classification,
+explicit sensitive-temporary retention, and auxiliary GPG-listener proof. The
+shared temporary-directory authority is 337/350 lines, while the bounded GPG
+snapshot recovery owner is 235/250 lines. The shared process-group lifecycle
+owner is 290/300 lines after separating signal retirement from group-absence
+proof. These gates
 keep complete agent schemas, claim-size projection, source-byte provenance,
 semantic topic validation, and delegated remote transport in explicit owners
 instead of expanding the coordinator or reviving a second remote probe.

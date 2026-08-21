@@ -2704,6 +2704,49 @@ superseded_by:
   scanning; each is explicitly non-counting. Signing, exact-secret admission,
   the replacement fresh local Codex processor, hosted CI, and current-head
   GitHub Codex evidence remain delivery gates.
+- Signed head `48e90fd8` passed exact-secret admission, then its fresh local
+  Codex processor found one P1 recovery gap. When the primary `S.gpg-agent`
+  socket refused a connection but an independently listening `S.scdaemon`
+  socket remained, stale recovery treated the snapshot as listener-free,
+  unlinked every socket, and could delete the tree while leaving the auxiliary
+  process and smart-card session alive. The exact 82-commit, 81-parent-edge
+  workspace used graph digest
+  `ba097f72c26fc09d39d697e9dc78dcffabe4371fc3174ec950a075516dda4e7d`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and the task root was removed through the bounded cleanup
+  helper. All head-bound evidence for `48e90fd8` is stale.
+- Stale recovery now connection-probes every identity-bound known agent socket
+  under one monotonic deadline when the primary refuses a connection. A live,
+  timed-out, unreadable, replaced, or otherwise unprovable auxiliary listener
+  retains the complete snapshot and blocks the new operation. The socket
+  removal owner repeats the complete listener-absence proof before unlinking
+  any member, then revalidates each identity immediately before removal. Real
+  Unix-socket regressions prove that a live `S.scdaemon` survives both startup
+  recovery and direct pre-unlink cleanup while an ordinary stale primary remains
+  recoverable. The focused recovery set passes 4/4 in 0.176 seconds, the full
+  publication invariant class passes 62/62 in 3.031 seconds, and module
+  boundaries pass 19/19.
+- The final Python 3.13.12 inventory contains 1,872 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `6be0958f1237e20580a63488130aab324cbb3d2bc05536d342282f71b74a7f45`.
+  Shard 0 passes 448/448 in 1,623.840 seconds, shard 1 passes 507/507 in
+  1,480.513 seconds, shard 2 passes 496/496 in 1,365.717 seconds, and shard 3
+  passes 421/421 in 1,321.138 seconds, for exact aggregate coverage of
+  1,872/1,872. Every bounded supervisor reached terminal exit zero.
+- The same frozen tree passes the independent Darwin security inventory 14/14
+  in 59.488 seconds, module boundaries 19/19, CI contracts 33/33, Skill
+  contracts 5/5, and Bootstrap contracts 12/12. Ruff 0.13.2 lint and
+  changed-file formatting, both current workflows under `actionlint`, the
+  generated bootstrap manifest check, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check` are clean. One direct isolated unittest selector failed
+  before import because it bypassed the repository loader, and the first direct
+  pre-unlink fixture exceeded Darwin's AF_UNIX path limit before exercising
+  production code; both are explicitly non-counting. Signing, exact-secret
+  admission, the replacement fresh local Codex processor, hosted CI, and
+  current-head GitHub Codex evidence remain delivery gates.
 
 ## Follow-up Work
 

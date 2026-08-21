@@ -690,6 +690,58 @@ class PublicationInvariantUnitTests(unittest.TestCase):
                 sorted(path.name for path in snapshot_root.iterdir()),
             )
 
+    def test_restart_retains_a_live_scdaemon_when_primary_is_stale(self) -> None:
+        with (
+            tempfile.TemporaryDirectory(dir=ROOT) as raw,
+            tempfile.TemporaryDirectory(prefix="r-", dir="/tmp") as snapshot_raw,
+        ):
+            root = Path(raw)
+            source = root / "publisher-keyring"
+            source.mkdir(mode=0o700)
+            _write_synthetic_publisher_keyring(source)
+            snapshot_root = Path(snapshot_raw)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            stale = snapshot_root / ("g-" + "d" * 64)
+            stale.mkdir(mode=0o700)
+            primary = stale / "S.gpg-agent"
+            scdaemon = stale / "S.scdaemon"
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stale_primary:
+                stale_primary.bind(os.fspath(primary))
+                primary.chmod(0o600)
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                listener.bind(os.fspath(scdaemon))
+                scdaemon.chmod(0o600)
+                listener.listen(4)
+
+                with (
+                    mock.patch.object(
+                        temporary_paths,
+                        "PUBLISHER_KEYRING_SNAPSHOT_TEMP_ROOT",
+                        snapshot_root,
+                    ),
+                    mock.patch.object(
+                        temporary_paths,
+                        "local_codex_root",
+                        return_value=source_root,
+                    ),
+                    self.assertRaises(
+                        gpg_keyring_snapshot.ConfigFreeKeyringError
+                    ) as caught,
+                ):
+                    with gpg_keyring_snapshot.config_free_keyring_snapshot(source):
+                        self.fail("a live auxiliary listener was abandoned")
+
+                self.assertTrue(stale.is_dir())
+                self.assertTrue(primary.is_socket())
+                self.assertTrue(scdaemon.is_socket())
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as probe:
+                    probe.settimeout(1)
+                    probe.connect(os.fspath(scdaemon))
+                self.assertIsNotNone(
+                    temporary_paths.incomplete_cleanup_primary(caught.exception)
+                )
+
     def test_recovery_rejects_an_unrecognized_root_entry_without_new_snapshot(
         self,
     ) -> None:
@@ -941,6 +993,47 @@ class PublicationInvariantUnitTests(unittest.TestCase):
 
         connection.settimeout.assert_called_once_with(5.0)
         connection.recv.assert_called_once_with(1)
+
+    def test_stale_socket_removal_rechecks_every_auxiliary_listener(self) -> None:
+        with (
+            tempfile.TemporaryDirectory(dir=ROOT) as raw,
+            tempfile.TemporaryDirectory(prefix="r-", dir="/tmp") as snapshot_raw,
+        ):
+            root = Path(raw)
+            snapshot_root = Path(snapshot_raw)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            with mock.patch.object(
+                temporary_paths,
+                "local_codex_root",
+                return_value=source_root,
+            ):
+                with temporary_paths.owner_only_temporary_directory(
+                    root=snapshot_root,
+                    prefix="g-",
+                ) as temporary:
+                    primary = temporary.path / "S.gpg-agent"
+                    scdaemon = temporary.path / "S.scdaemon"
+                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stale:
+                        stale.bind(os.fspath(primary))
+                        primary.chmod(0o600)
+                    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+                        listener.bind(os.fspath(scdaemon))
+                        scdaemon.chmod(0o600)
+                        listener.listen(4)
+                        with self.assertRaisesRegex(
+                            gpg_snapshot_recovery.GpgSnapshotRecoveryError,
+                            "live auxiliary agent listener",
+                        ):
+                            gpg_snapshot_recovery.remove_stale_sockets(temporary)
+                        self.assertTrue(primary.is_socket())
+                        self.assertTrue(scdaemon.is_socket())
+
+                    gpg_snapshot_recovery.remove_stale_sockets(temporary)
+                    self.assertEqual(
+                        (),
+                        gpg_snapshot_recovery.socket_names(temporary),
+                    )
 
     def test_agent_shutdown_accepts_a_bound_socket_disappearing_after_inventory(
         self,

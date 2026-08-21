@@ -93,6 +93,39 @@ def _socket_identity(
     return metadata.st_dev, metadata.st_ino, metadata.st_uid, metadata.st_mode
 
 
+def _require_no_live_listeners(
+    temporary: temporary_paths.BoundTemporaryDirectory,
+    identities: dict[str, tuple[int, int, int, int]],
+    *,
+    deadline: float,
+) -> None:
+    for name in identities:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise GpgSnapshotRecoveryError(
+                "publisher agent listener proof exceeded its deadline"
+            )
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(remaining)
+                connection.connect(os.fspath(temporary.path / name))
+        except OSError as error:
+            if error.errno == errno.ECONNREFUSED:
+                continue
+            raise GpgSnapshotRecoveryError(
+                "publisher agent listener absence could not be proved"
+            ) from error
+        raise GpgSnapshotRecoveryError(
+            "publisher snapshot retains a live auxiliary agent listener"
+        )
+    temporary.revalidate()
+    for name, identity in identities.items():
+        if _socket_identity(temporary, name) != identity:
+            raise GpgSnapshotRecoveryError(
+                "publisher agent socket changed during listener proof"
+            )
+
+
 def stop_agent(
     temporary: temporary_paths.BoundTemporaryDirectory,
     *,
@@ -138,6 +171,11 @@ def stop_agent(
             and isinstance(exc, OSError)
             and exc.errno == errno.ECONNREFUSED
         ):
+            _require_no_live_listeners(
+                temporary,
+                identities,
+                deadline=deadline,
+            )
             return
         raise GpgSnapshotRecoveryError(
             "publisher agent could not be stopped safely"
@@ -172,10 +210,14 @@ def remove_stale_sockets(
     """Remove only stable, known sockets after a stale listener is absent."""
 
     names = _socket_names(temporary)
+    identities = {name: _socket_identity(temporary, name) for name in names}
+    _require_no_live_listeners(
+        temporary,
+        identities,
+        deadline=time.monotonic() + _AGENT_SHUTDOWN_SECONDS,
+    )
     for name in names:
-        before = _socket_identity(temporary, name)
-        after = _socket_identity(temporary, name)
-        if before != after:
+        if _socket_identity(temporary, name) != identities[name]:
             raise GpgSnapshotRecoveryError(
                 "stale publisher snapshot agent socket changed before cleanup"
             )
