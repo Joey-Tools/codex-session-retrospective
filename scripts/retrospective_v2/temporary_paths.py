@@ -81,7 +81,7 @@ def local_codex_root() -> Path:
 def require_run_directory_outside_sources(run_dir: str | Path) -> Path:
     """Reject a run directory that can contain or enter local session sources."""
 
-    lexical_run_dir = Path(os.path.abspath(os.fspath(run_dir)))
+    lexical_run_dir = Path(os.path.abspath(os.fspath(Path(run_dir).expanduser())))
     source_root = local_codex_root()
     _require_root_outside_source(lexical_run_dir, source_root / "sessions")
     _require_root_outside_source(lexical_run_dir, source_root / "archived_sessions")

@@ -6647,6 +6647,50 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         self.assertEqual(lease.lease_ref, preparation.lease_ref)
 
+    def test_transport_program_import_ignores_temporary_environment(self) -> None:
+        source_root = self.root / "poisoned-program-temporary-root"
+        source_root.mkdir(mode=0o700)
+        sentinel = source_root / "rollout.jsonl"
+        sentinel.write_text("unchanged\n", encoding="ascii")
+        before = source_root.stat()
+        program = (
+            "import pathlib,sys,tempfile\n"
+            "tempfile.gettempdir=lambda:(_ for _ in ()).throw("
+            "RuntimeError('temporary environment was consulted'))\n"
+            f"sys.path.insert(0,{str(SCRIPTS)!r})\n"
+            "from retrospective_v2 import transport_program\n"
+            "print(transport_program.SOURCE_TRANSPORT_SNAPSHOT_CACHE)\n"
+        )
+        environment = {
+            "HOME": pwd.getpwuid(os.getuid()).pw_dir,
+            "LANG": "C",
+            "LC_ALL": "C",
+            "PATH": "/usr/bin:/bin",
+            "TEMP": str(source_root),
+            "TMP": str(source_root),
+            "TMPDIR": str(source_root),
+        }
+
+        completed = subprocess.run(
+            [sys.executable, "-I", "-B", "-S", "-c", program],
+            capture_output=True,
+            env=environment,
+            text=True,
+            timeout=10,
+        )
+
+        self.assertEqual(0, completed.returncode, completed.stderr)
+        expected = Path("/tmp") / (
+            f"codex-session-retrospective-{os.getuid()}/source-transport-snapshot"
+        )
+        self.assertEqual(f"{expected}\n", completed.stdout)
+        after = source_root.stat()
+        self.assertEqual(
+            (before.st_mtime_ns, before.st_ctime_ns),
+            (after.st_mtime_ns, after.st_ctime_ns),
+        )
+        self.assertEqual([sentinel], list(source_root.iterdir()))
+
     def test_source_command_survives_python_alias_replacement(self) -> None:
         self._write_sources("python-alias")
         alias = self.root / "python3.13-alias"

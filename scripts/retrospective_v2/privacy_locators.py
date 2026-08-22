@@ -307,7 +307,7 @@ SCP_STYLE_LOCATOR_RE = re.compile(
     r"[A-Z0-9._%+-]+@"
     r"(?:\[[0-9A-F:.%_-]+\]|"
     r"[A-Z0-9](?:[A-Z0-9.-]{0,251}[A-Z0-9])?)"
-    r":[^\s<>\"'`]*",
+    r":[^\s<>\"'`]+",
     re.ASCII | re.IGNORECASE,
 )
 _EMAIL_DOT_ATOM_LOCAL_PART_PATTERN_TEXT = r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+"
@@ -330,6 +330,28 @@ _PACKAGE_RELEASE_TAG_RE = re.compile(
     r"v?[0-9]+(?:[-_][a-z0-9.-]+)?)\Z",
     re.ASCII | re.IGNORECASE,
 )
+_PACKAGE_NAME_PATTERN_TEXT = r"[a-z0-9](?:[a-z0-9._-]{0,212}[a-z0-9])?"
+_PACKAGE_NAME_RE = re.compile(
+    _PACKAGE_NAME_PATTERN_TEXT + r"\Z",
+    re.ASCII | re.IGNORECASE,
+)
+_SCOPED_PACKAGE_NAME_RE = re.compile(
+    rf"{_PACKAGE_NAME_PATTERN_TEXT}/{_PACKAGE_NAME_PATTERN_TEXT}\Z",
+    re.ASCII | re.IGNORECASE,
+)
+_PACKAGE_COORDINATE_PREFIX_RE = re.compile(
+    r"\b(?:add|added|adding|install|installed|installing|pin|pinned|pinning|"
+    r"upgrade|upgraded|upgrading)[ \t]+\Z",
+    re.ASCII | re.IGNORECASE,
+)
+_PACKAGE_TEST_PREFIX_RE = re.compile(
+    r"\b(?:test|tested|testing)[ \t]+\Z", re.ASCII | re.IGNORECASE
+)
+_PACKAGE_COORDINATE_SUFFIX_RE = re.compile(
+    r"\A[ \t]+(?:dependency|package|release|tag|test|upgrade|version)\b",
+    re.ASCII | re.IGNORECASE,
+)
+_PACKAGE_COORDINATE_COLON_RE = re.compile(r"\A:(?=[ \t]|\Z)", re.ASCII)
 _EXPLICIT_EMAIL_CONTEXT_RE = re.compile(
     r"(?:\b(?:contact|e-?mail|email|mailbox|recipient|sender)\b"
     r"(?:[ \t]+(?:address|is|was))?[ \t]*(?::|=|to)?[ \t]*|"
@@ -533,6 +555,7 @@ _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
 _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"
     r"mrn|medical[_ -]?record(?:[_ -]?(?:number|no|id))?|"
+    r"patient[_ -]?(?:id|identifier)|"
     r"national[_ -]?(?:insurance|identity)(?:[_ -]?(?:number|no|id))?|"
     r"(?:tax(?:payer)?[_ -]?(?:identification|id))(?:[_ -]?(?:number|no))?|"
     r"passport(?:[_ -]?(?:number|no|id))?|"
@@ -542,6 +565,7 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:bank[_ -]?)?account[_ -]?(?:number|no)|"
     r"routing[_ -]?(?:number|no)|iban|"
     r"(?-i:(?:socialSecurityNumber|medicalRecord(?:Number|Id)|"
+    r"patient(?:Id|Identifier)|"
     r"nationalInsuranceNumber|nationalId|taxId|"
     r"passport(?:Number|Id)|driversLicenseNumber|creditCard(?:Number)?|"
     r"debitCard(?:Number)?|paymentCard(?:Number)?|cardNumber|"
@@ -1969,6 +1993,50 @@ def _email_match_is_valid(match: re.Match[str]) -> bool:
                 match.string[context_start : match.start()]
             )
             is not None,
+            not any(
+                (
+                    all(
+                        (
+                            _PACKAGE_NAME_RE.fullmatch(
+                                match.group(0).rsplit("@", 1)[0]
+                            ),
+                            any(
+                                (
+                                    _PACKAGE_COORDINATE_PREFIX_RE.search(
+                                        match.string[context_start : match.start()]
+                                    ),
+                                    _PACKAGE_COORDINATE_SUFFIX_RE.match(
+                                        match.string[match.end() : match.end() + 64]
+                                    ),
+                                    all(
+                                        (
+                                            _PACKAGE_TEST_PREFIX_RE.search(
+                                                match.string[
+                                                    context_start : match.start()
+                                                ]
+                                            ),
+                                            _PACKAGE_COORDINATE_COLON_RE.match(
+                                                match.string[
+                                                    match.end() : match.end() + 64
+                                                ]
+                                            ),
+                                        )
+                                    ),
+                                )
+                            ),
+                        )
+                    ),
+                    all(
+                        (
+                            _SCOPED_PACKAGE_NAME_RE.fullmatch(
+                                match.group(0).rsplit("@", 1)[0]
+                            ),
+                            match.string[max(0, match.start() - 1) : match.start()]
+                            == "@",
+                        )
+                    ),
+                )
+            ),
         )
     )
 

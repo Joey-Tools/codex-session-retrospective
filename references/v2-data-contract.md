@@ -51,8 +51,11 @@ binding, re-resolves the account and home immediately before helper launch, and
 uses only the frozen account for `HOME`, `USER`, and `LOGNAME`. Account-record,
 home-object, or access-policy drift therefore fails before SSH credentials or
 configuration can be consumed; timestamp-only home churn is not mutation. The
-transport-program snapshot, remote-helper snapshot, bound empty transport output,
-and candidate checkpoint are capacity-checked and staged as one transaction;
+transport-program bootstrap default is an owner-only cache beneath the fixed
+`/tmp/codex-session-retrospective-<uid>` tree and never comes from `TEMP`,
+`TMP`, `TMPDIR`, or Python's cached temp-root selection. The transport-program
+snapshot, remote-helper snapshot, bound empty transport output, and candidate
+checkpoint are capacity-checked and staged as one transaction;
 none of those files is materialized before the candidate checkpoint fits. The
 worker receives only the snapshot path and SHA-256 commitment. Its isolated
 `-I -B` bootstrap opens the snapshot with no-follow descriptor checks, verifies

@@ -248,9 +248,12 @@ documented host trust boundary.
 
 The canary child receives `TEMP`, `TMP`, and `TMPDIR` bound to the exact
 descriptor-validated disposable workspace through the otherwise closed
-subprocess environment. The remote snapshot, transport spools, and publication
-index likewise ignore ambient temporary-directory selection. Host variables
-therefore cannot redirect any of these writes into session or archive sources.
+subprocess environment. The source-transport bootstrap cache is fixed below
+`/tmp/codex-session-retrospective-<uid>/source-transport-snapshot`; its module
+does not consult ambient temporary-directory variables during import. The remote
+snapshot, transport spools, and publication index likewise ignore ambient
+temporary-directory selection. Host variables therefore cannot redirect any of
+these writes into session or archive sources.
 The secure-I/O
 capability probe that can run before temporary-root creation also uses the fixed
 `/tmp` parent rather than ambient temporary-directory selection.

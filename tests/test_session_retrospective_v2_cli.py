@@ -1901,6 +1901,31 @@ class CliContractTests(unittest.TestCase):
                     self.assertEqual("unsafe_path", result.error.reason_code)
                     start_run.assert_not_called()
 
+        tilde_arguments = list(self.shadow_start_arguments())
+        tilde_arguments[tilde_arguments.index(str(self.run_dir))] = "~/expanded-run"
+        with (
+            mock.patch.dict(os.environ, {"HOME": str(self.root)}),
+            mock.patch.object(
+                cli.temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+            mock.patch.object(
+                cli.orchestrator_api,
+                "start_run",
+                return_value={"stage": "source_catalog"},
+            ) as start_run,
+        ):
+            result = self.parse_dispatch(*tilde_arguments)
+        self.assertTrue(result.ok, result.error)
+        self.assertEqual(self.root / "expanded-run", start_run.call_args.args[0])
+
+        empty_arguments = list(self.shadow_start_arguments())
+        empty_arguments[empty_arguments.index(str(self.run_dir))] = ""
+        with self.assertRaises(cli.CliContractError) as captured:
+            self.parse_dispatch(*empty_arguments)
+        self.assertEqual("invalid_path", captured.exception.code)
+
         self.assertEqual("active\n", active_sentinel.read_text(encoding="ascii"))
         self.assertEqual("archived\n", archived_sentinel.read_text(encoding="ascii"))
         self.assertFalse((sessions / "new-run").exists())

@@ -300,7 +300,7 @@ def build_parser() -> MachineArgumentParser:
     )
     start_parser.add_argument("--start", required=True)
     start_parser.add_argument("--end", required=True)
-    start_parser.add_argument("--run-dir", required=True)
+    start_parser.add_argument("--run-dir", required=True, type=_absolute_path)
     start_parser.add_argument("--run-config", required=True)
     start_parser.add_argument("--allow-partial", action="store_true")
     start_parser.add_argument("--backfill-of")
@@ -318,7 +318,7 @@ def build_parser() -> MachineArgumentParser:
     status_parser = subparsers.add_parser("status", add_help=False, allow_abbrev=False)
     _add_help(status_parser)
     _add_identity_arguments(status_parser)
-    status_parser.add_argument("--run-dir", required=True)
+    status_parser.add_argument("--run-dir", required=True, type=_absolute_path)
     status_parser.add_argument("--claim-job-ref")
     status_parser.add_argument("--claim-attempt-ref")
     status_parser.add_argument("--dispatcher-ref")
@@ -334,7 +334,7 @@ def build_parser() -> MachineArgumentParser:
     )
     _add_help(source_parser)
     _add_identity_arguments(source_parser)
-    source_parser.add_argument("--run-dir", required=True)
+    source_parser.add_argument("--run-dir", required=True, type=_absolute_path)
     source_parser.add_argument("--lease-ref", required=True)
     source_parser.add_argument("--transport-stream-file", required=True)
     source_parser.add_argument(
@@ -350,7 +350,7 @@ def build_parser() -> MachineArgumentParser:
     )
     _add_help(agent_parser)
     _add_identity_arguments(agent_parser)
-    agent_parser.add_argument("--run-dir", required=True)
+    agent_parser.add_argument("--run-dir", required=True, type=_absolute_path)
     agent_parser.add_argument("--job-ref", required=True)
     agent_parser.add_argument("--attempt-ref", required=True)
     agent_parser.add_argument("--claim-ref", required=True)
@@ -362,7 +362,7 @@ def build_parser() -> MachineArgumentParser:
     )
     _add_help(advance_parser)
     _add_identity_arguments(advance_parser)
-    advance_parser.add_argument("--run-dir", required=True)
+    advance_parser.add_argument("--run-dir", required=True, type=_absolute_path)
     advance_parser.add_argument("--holdout-host")
     advance_parser.add_argument(
         "--holdout-reason",
@@ -372,7 +372,7 @@ def build_parser() -> MachineArgumentParser:
     export_parser = subparsers.add_parser("export", add_help=False, allow_abbrev=False)
     _add_help(export_parser)
     _add_identity_arguments(export_parser)
-    export_parser.add_argument("--run-dir", required=True)
+    export_parser.add_argument("--run-dir", required=True, type=_absolute_path)
     export_parser.add_argument("--output", required=True)
     prior_group = export_parser.add_mutually_exclusive_group()
     prior_group.add_argument("--prior-period")
@@ -384,7 +384,7 @@ def build_parser() -> MachineArgumentParser:
     )
     _add_help(finalize_parser)
     _add_identity_arguments(finalize_parser)
-    finalize_parser.add_argument("--run-dir", required=True)
+    finalize_parser.add_argument("--run-dir", required=True, type=_absolute_path)
 
     return parser
 

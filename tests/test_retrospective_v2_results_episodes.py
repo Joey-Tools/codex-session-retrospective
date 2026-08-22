@@ -1846,6 +1846,9 @@ class ResultValidationTests(unittest.TestCase):
             "medical_record_no: 12345678",
             "medicalRecordId: 12345678",
             "MRN: 12345678",
+            "Patient ID: 12345678",
+            "patient_identifier: 12345678",
+            "patientIdentifier: 12345678",
         ):
             with self.subTest(medical_record=medical_record):
                 self.assertEqual(
@@ -2667,7 +2670,6 @@ class ResultValidationTests(unittest.TestCase):
 
     def test_post_redaction_removes_scp_locators_with_non_git_usernames(self) -> None:
         for locator in (
-            "alice@buildbox:",
             "alice@buildbox:repo",
             "reviewer@internal-host:projects/session-retrospective",
         ):
@@ -2723,6 +2725,28 @@ class ResultValidationTests(unittest.TestCase):
                     {item.category for item in scan_for_leaks({"safe": invalid})},
                 )
 
+        for narrative_email in (
+            "Owner alice@dev approved it.",
+            "alice@latest was referenced.",
+            "Owner alice@123 approved it.",
+            "We tested alice@dev without package syntax.",
+        ):
+            with self.subTest(narrative_email=narrative_email):
+                self.assertIn(
+                    "personal_identifier",
+                    {
+                        item.category
+                        for item in scan_for_leaks({"unsafe": narrative_email})
+                    },
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = narrative_email
+                result = validate_extractor_result(value, ALL_REFS)
+                self.assertIn(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result["turns"][0]["generalized_working_text"],
+                )
+
         for labeled_email in ("Email: react@latest", "Notify foo@next"):
             with self.subTest(labeled_email=labeled_email):
                 self.assertIn(
@@ -2751,6 +2775,8 @@ class ResultValidationTests(unittest.TestCase):
             "The react@latest upgrade failed.",
             "The foo@next dependency remained pinned.",
             "The @scope/react@canary test was explicit.",
+            "Upgrade react@latest: it fixes the issue.",
+            "We tested foo@next: this failed.",
             "The input/output boundary was unclear.",
             "The before/after comparison lacked evidence.",
             "The source/target mapping was explicit.",

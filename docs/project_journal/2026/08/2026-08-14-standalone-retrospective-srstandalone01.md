@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-21
+updated: 2026-08-22
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -3000,6 +3000,57 @@ superseded_by:
   required owner-controlled copied interpreter and one isolated unittest
   command could not import the repository package; both stopped before valid
   gate execution and are non-counting.
+- A clean-context Codex CLI processor of signed head `717c258b` found one P1
+  retained-privacy defect: the package release-tag exception accepted ambiguous
+  single-label addresses such as `alice@dev`, `alice@latest`, and `alice@123`
+  without positive package-coordinate syntax. The independently materialized
+  89-commit, 88-parent-edge workspace used graph digest
+  `c36e136f2d8bb23108018769015ab0687f2bc0b92c26c39d65f5b27f69661d39`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted control digests remained unchanged, and
+  the exact reviewer task root was removed. All head-bound review evidence for
+  `717c258b` is stale.
+- Current-head GitHub Codex review of `717c258b` found four additional input
+  boundaries: `Patient ID` and `Patient identifier` were not treated as
+  personal identifiers; a package tag followed by punctuation-only `:` could
+  be consumed as an empty SCP-style path; all seven `--run-dir` consumers had
+  lost the established empty/NUL/tilde path normalization; and source transport
+  selected its bootstrap cache from ambient temporary-directory state during
+  import. The follow-up detects the patient labels in spaced, separated, and
+  camel-case forms, requires an actual SCP path character, applies package-tag
+  exemption only with positive package syntax, and routes every run-directory
+  argument through the shared absolute-path parser. The transport cache is a
+  fixed per-UID path beneath `/tmp/codex-session-retrospective-<uid>` and no
+  longer imports or consults `tempfile`.
+- Focused end-to-end privacy, path, and import regressions pass 7/7 in 65.486
+  seconds. Module boundaries pass 19/19 with the exact 9,848 branch inventory
+  unchanged, and CI contracts pass 33/33. Ruff 0.13.2 lint for all `scripts/`
+  and `tests/`, formatting for all eight changed Python files, both workflows
+  under `actionlint`, the generated bootstrap manifest, and `git diff --check`
+  are clean. One intermediate scoped-package test failed before the positive
+  context grammar was completed, and one already-running four-shard attempt
+  was interrupted after that source change; both are explicitly non-counting.
+- The first final four-shard environment placed `TMPDIR` inside this linked
+  worktree. Because the worktree itself is below `codex-workspace/.codex-local`,
+  the export-location negative fixture no longer represented an outside path;
+  its one failed shard and the other three successful shards are non-counting.
+  A diagnostic rerun with an external temporary root but the ambient Homebrew
+  Python was also non-counting: executable authority correctly rejected that
+  interpreter's writable ancestry. The exact failed export test then passed
+  with both required properties: an external owner-only temporary root and the
+  owner-controlled copied Python.
+- The final Python 3.13.12 inventory contains 1,881 exact test IDs from 22
+  authenticated sources under manifest digest
+  `67f64560c9d2f825467012025e5c93f0fbfffff8d54497fdcfe13fcf23316b22`.
+  Shard 0 passes 448/448 in 1,600.022 seconds, shard 1 passes 509/509 in
+  1,455.100 seconds, shard 2 passes 499/499 in 1,335.697 seconds, and shard 3
+  passes 425/425 in 1,293.586 seconds, for exact aggregate coverage of
+  1,881/1,881 without skips. Every bounded shard runner reached terminal exit
+  zero. The independent Darwin security inventory passes 14/14 in 58.748
+  seconds. Signing, exact-secret admission, the replacement clean-context
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain
+  delivery gates.
 
 ## Follow-up Work
 

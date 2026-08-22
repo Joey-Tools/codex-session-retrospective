@@ -1635,7 +1635,6 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                     assemble_retained_artifacts(run_state(), bare_locator_review)
 
         for scp_locator in (
-            "alice@buildbox:",
             "alice@buildbox:repo",
             "reviewer@internal-host:projects/session-retrospective",
         ):
@@ -2005,6 +2004,13 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "medical_record_no: 12345678",
             "medicalRecordId: 12345678",
             "MRN: 12345678",
+            "Patient ID: 12345678",
+            "patient_identifier: 12345678",
+            "patientIdentifier: 12345678",
+            "Owner alice@dev approved it.",
+            "alice@latest was referenced.",
+            "Owner alice@123 approved it.",
+            "We tested alice@dev without package syntax.",
             "IBAN: GB00 TEST 0000 0000 0000 00",
             "Payment sent to DE89370400440532013000 before continuing",
             "Payment sent to GB82 WEST 1234 5698 7654 32 before continuing",
@@ -2144,6 +2150,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "The react@latest upgrade failed.",
             "The foo@next dependency remained pinned.",
             "The @scope/react@canary test was explicit.",
+            "Upgrade react@latest: it fixes the issue.",
+            "We tested foo@next: this failed.",
             "The input/output boundary was unclear.",
             "The before/after comparison lacked evidence.",
             "The source/target mapping was explicit.",

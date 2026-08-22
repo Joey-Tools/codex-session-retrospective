@@ -7,7 +7,6 @@ import hashlib
 import os
 import pathlib
 import sys
-import tempfile
 from typing import Callable, Mapping, Sequence
 
 try:
@@ -44,8 +43,9 @@ SOURCE_TRANSPORT_BASE_PYTHON_FLAGS = (
 )
 SOURCE_TRANSPORT_SNAPSHOT_SCHEMA = "source_transport_worker_snapshot_v2"
 SOURCE_TRANSPORT_MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024
-SOURCE_TRANSPORT_SNAPSHOT_CACHE = pathlib.Path(tempfile.gettempdir()) / (
-    f"codex-session-retrospective-v2-program-{os.getuid()}"
+SOURCE_TRANSPORT_SNAPSHOT_CACHE = (
+    pathlib.Path("/tmp")
+    / f"codex-session-retrospective-{os.getuid()}/source-transport-snapshot"
 )
 
 
