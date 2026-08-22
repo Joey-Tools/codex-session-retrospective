@@ -616,6 +616,35 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                 gpg_program=self.gpg_program,
             )
 
+    def test_reap_retry_consumes_only_the_original_deadline_budget(self) -> None:
+        process = mock.Mock(spec=subprocess.Popen)
+        process.args = ("synthetic-child",)
+        process.wait.side_effect = (
+            subprocess.TimeoutExpired(process.args, 1.0),
+            subprocess.TimeoutExpired(process.args, 0.25),
+        )
+
+        with (
+            mock.patch.object(
+                orchestrator_support.process_lifecycle.time,
+                "monotonic",
+                side_effect=(10.0, 10.0, 10.75),
+            ),
+            self.assertRaisesRegex(RuntimeError, "could not be reaped"),
+        ):
+            orchestrator_support.process_lifecycle.reap_after_termination(
+                process,
+                timeout_seconds=1.0,
+                error_type=RuntimeError,
+                error_message="leader could not be reaped",
+            )
+
+        self.assertEqual(
+            [mock.call(timeout=1.0), mock.call(timeout=0.25)],
+            process.wait.call_args_list,
+        )
+        process.kill.assert_called_once_with()
+
     def test_canary_accepts_signing_subkey_bound_to_primary(self) -> None:
         self.gpg_mode.write_text("subkey_validsig", encoding="ascii")
 

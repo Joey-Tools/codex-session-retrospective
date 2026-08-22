@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-22
+updated: 2026-08-23
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -3185,6 +3185,46 @@ superseded_by:
   affected-module aggregation omitted `-I` and was rejected by the fixed
   runtime-isolation gate. The accepted final shard runner bounds only its log
   sink, enforces `-I -B -S`, and contains the complete updated source manifest.
+- A clean-context Codex CLI review of signed head `9dd0cb95` found three final
+  public-boundary defects: direct orchestrator construction and lifecycle start
+  could bypass source/history separation, terminal path components containing
+  spaces could leak a suffix after redaction, and leader reap retry could spend
+  the full timeout twice. The review used an independently materialized and
+  postvalidated workspace under the trusted installed review bundle; its task
+  root was removed after terminal findings were captured.
+- The public orchestrator constructor now rejects run directories overlapping
+  local session sources, and lifecycle start validates the history repository
+  before state access. POSIX, home-relative, Windows, and UNC privacy grammars
+  consume complete spaced terminal components. Process reaping now shares one
+  absolute deadline across the initial wait and post-kill wait. Focused
+  regressions pass 2/2, the result/episode module passes 93/93, orchestrator
+  support passes 27/27, orchestrator passes 140/140, export passes 72/72,
+  module boundaries pass 19/19, CI contracts pass 33/33, and bootstrap tests
+  pass 12/12. The exact engine branch inventory is 9,853 under the unchanged
+  9,858 cap, and `orchestrator.py` remains below its 800-line ceiling at 798.
+- Two final-gate attempts are explicitly non-counting. One frozen four-shard
+  run was interrupted after a style-only source edit invalidated its tree; the
+  bounded interruption left one exact owner-private GPG fixture root, which
+  was proved process- and socket-free and removed without deleting its shared
+  parent. The next 1,894-test run reached three clean shard terminals but found
+  one deterministic mock-clock fixture error in the fourth shard after the
+  shared reap deadline added two explicit clock observations. The corrected
+  five-sample clock sequence preserves the intended group-absence timeout and
+  passes both exact deadline regressions. An extra direct unittest aggregation
+  that omitted `-I -S` was rejected by runtime self-checks and is also
+  non-counting; the same CI and boundary modules pass through their required
+  isolated entrypoints.
+- The final Python 3.13.0 inventory contains 1,894 exact test IDs from 22
+  authenticated sources under manifest digest
+  `66d467561ff2b4d61a088b9ebf42578d8bfa47729a6d8726e52958080014468d`.
+  Shard 0 passes 450/450 in 1,697.110 seconds, shard 1 passes 513/513 in
+  1,548.860 seconds, shard 2 passes 503/503 in 1,423.227 seconds, and shard 3
+  passes 428/428 in 1,393.377 seconds, for exact aggregate coverage of
+  1,894/1,894 without skips. The independent Darwin security inventory passes
+  14/14 in 58.666 seconds. Ruff 0.13.2 lint and changed-file formatting, both
+  workflows under `actionlint`, the generated bootstrap manifest, the official
+  OpenAI Skill validator, source-tree bytecode exclusion, and `git diff
+  --check` are clean.
 
 ## Follow-up Work
 

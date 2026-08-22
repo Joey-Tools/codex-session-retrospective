@@ -2996,6 +2996,25 @@ class ResultValidationTests(unittest.TestCase):
                 self.assertEqual(text, "Read [REDACTED_PATH] before continuing.")
                 self.assertEqual(scan_for_leaks(result), ())
 
+    def test_post_redaction_covers_paths_with_spaced_terminal_components(
+        self,
+    ) -> None:
+        for source_path in (
+            "/Users/alice/My Private Folder",
+            "~/My Private Folder",
+            r"C:\Users\alice\My Private Folder",
+            r"\\server\share\My Private Folder",
+        ):
+            with self.subTest(source_path=source_path):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = f"Read {source_path}"
+
+                result = validate_extractor_result(value, ALL_REFS)
+
+                text = result["turns"][0]["generalized_working_text"]
+                self.assertEqual(text, "Read [REDACTED_PATH]")
+                self.assertEqual(scan_for_leaks(result), ())
+
     def test_post_redaction_covers_relative_source_paths(self) -> None:
         for source_path in ("src/a.py", "./src/a.py", "../src/a.py", r"src\a.py"):
             with self.subTest(source_path=source_path):

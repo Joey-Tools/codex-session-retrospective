@@ -1898,6 +1898,77 @@ class OrchestratorTests(unittest.TestCase):
 
         self.assertFalse(run_dir.exists())
 
+    def test_public_start_run_rejects_run_directory_inside_session_sources(
+        self,
+    ) -> None:
+        account_home = self.root / "run-source-account-home"
+        codex_root = account_home / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+        run_dir = sessions / "retrospective-run"
+
+        with (
+            mock.patch.object(
+                temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+            mock.patch.object(
+                orchestrator_module.source_transport,
+                "source_transport_python_runtime_readiness",
+                return_value={},
+            ),
+            self.assertRaisesRegex(
+                safe_io.UnsafePathError,
+                "runtime temporary root overlaps",
+            ),
+        ):
+            orchestrator_module.start_run(
+                run_dir,
+                identity_path=self.identity_path,
+                require_existing_identity=True,
+                shadow=True,
+                history_repo=self.root / "safe-history",
+            )
+
+        self.assertFalse(run_dir.exists())
+
+    def test_public_lifecycle_start_rejects_history_source_overlap_before_state(
+        self,
+    ) -> None:
+        account_home = self.root / "lifecycle-source-account-home"
+        codex_root = account_home / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+        coordinator = self.coordinator("direct-lifecycle-history-overlap")
+        start_authority = self.start_authority()
+        start_authority["history_repo"] = sessions / "history.git"
+
+        with (
+            mock.patch.object(
+                temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+            self.assertRaisesRegex(
+                safe_io.UnsafePathError,
+                "history repository overlaps",
+            ),
+        ):
+            coordinator.start(
+                mode=RunMode.DAILY,
+                start=WINDOW_START,
+                end=DAILY_END,
+                hosts=TEST_HOSTS,
+                **start_authority,
+            )
+
+        self.assertFalse(coordinator.store.path.exists())
+
     def test_shadow_doctor_validates_optional_provider_like_start(self) -> None:
         provider = self.root / "stale-provider"
         with mock.patch(

@@ -2531,7 +2531,7 @@ class PublicationInvariantUnitTests(unittest.TestCase):
             mock.patch.object(
                 process_lifecycle.time,
                 "monotonic",
-                side_effect=(0.0, 0.1, 2.0),
+                side_effect=(0.0, 0.1, 0.1, 0.1, 2.0),
             ),
             self.assertRaisesRegex(RuntimeError, "closure is unproven"),
         ):

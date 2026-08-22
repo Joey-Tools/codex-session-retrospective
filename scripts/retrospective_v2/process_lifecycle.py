@@ -74,8 +74,16 @@ def reap_after_termination(
 ) -> int:
     """Reap a previously terminated leader without another group signal."""
 
+    deadline = time.monotonic() + timeout_seconds
+
+    def remaining_seconds() -> float:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise error_type(error_message)
+        return remaining
+
     try:
-        return process.wait(timeout=timeout_seconds)
+        return process.wait(timeout=remaining_seconds())
     except OSError as error:
         raise error_type(error_message) from error
     except subprocess.TimeoutExpired:
@@ -84,7 +92,7 @@ def reap_after_termination(
         except OSError:
             pass
         try:
-            return process.wait(timeout=timeout_seconds)
+            return process.wait(timeout=remaining_seconds())
         except (OSError, subprocess.TimeoutExpired) as error:
             raise error_type(error_message) from error
 

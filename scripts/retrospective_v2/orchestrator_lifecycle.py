@@ -16,6 +16,7 @@ from . import (
     executable_authority,
     export as retained_export_api,
     finalize,
+    history_paths,
     publication_abort_authority,
     publication_claims,
     raw_cleanup_state,
@@ -229,7 +230,7 @@ class RunLifecycleOperations(OrchestratorComponent):
             raise InvalidInputError(
                 "start requires the configured durable history repository and ref"
             )
-        history_path = Path(history_repo).expanduser().absolute()
+        history_path = history_paths.require_repository(history_repo)
         if not isinstance(history_target_ref, str) or not history_target_ref:
             raise InvalidInputError("history_target_ref is invalid")
         if publisher_gpg_program is None:

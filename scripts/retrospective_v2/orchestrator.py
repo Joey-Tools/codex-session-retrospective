@@ -15,6 +15,7 @@ from . import (
     history_paths,
     safe_io,
     sharding,
+    temporary_paths as temp_paths,
     transport as source_transport,
 )
 from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
@@ -421,7 +422,7 @@ class RetrospectiveOrchestrator:
         shard_limits: sharding.ShardLimits | None = None,
         host_inventory_provider: Callable[[], AuthenticatedHostInventory] | None = None,
     ) -> None:
-        resolved_run_dir = Path(run_dir).expanduser().absolute()
+        resolved_run_dir = temp_paths.require_run_directory_outside_sources(run_dir)
         expected_key_id = (
             store.key_id if store is not None else _checkpoint_key_id(resolved_run_dir)
         )
@@ -431,10 +432,7 @@ class RetrospectiveOrchestrator:
                 if require_existing_identity
                 else IdentityKey.load_or_create
             )
-            resolved_identity = loader(
-                identity_path,
-                expected_key_id=expected_key_id,
-            )
+            resolved_identity = loader(identity_path, expected_key_id=expected_key_id)
         else:
             if expected_key_id is not None and identity.key_id != expected_key_id:
                 raise IdentityKeyMismatchError(
