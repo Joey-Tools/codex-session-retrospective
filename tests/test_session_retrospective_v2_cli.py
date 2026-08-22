@@ -1932,6 +1932,111 @@ class CliContractTests(unittest.TestCase):
         self.assertFalse((archived_sessions / "new-run").exists())
         self.assertFalse((outside / "new-run").exists())
 
+    def test_export_destination_cannot_overlap_local_session_sources(self) -> None:
+        self.real_coordinator(self.run_dir, activity=False)
+        home = self.root / "home"
+        codex_root = home / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True)
+        archived.mkdir()
+        alias = self.root / "sessions-alias"
+        alias.symlink_to(sessions, target_is_directory=True)
+        cases = (
+            (
+                "active",
+                str(sessions / "thread" / ".codex-local" / "retained-v2"),
+            ),
+            (
+                "archived",
+                str(archived / "thread" / ".codex-local" / "retained-v2"),
+            ),
+            (
+                "tilde",
+                "~/.codex/sessions/thread/.codex-local/retained-v2",
+            ),
+            (
+                "resolved-alias",
+                str(alias / "thread" / ".codex-local" / "retained-v2"),
+            ),
+        )
+        common = (
+            "export",
+            "--identity-path",
+            str(self.identity_path),
+            "--require-existing-identity",
+            "--run-dir",
+            str(self.run_dir),
+        )
+
+        with (
+            mock.patch.dict(os.environ, {"HOME": str(home)}),
+            mock.patch.object(
+                cli.temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+        ):
+            for label, output in cases:
+                with self.subTest(case=label):
+                    result = self.parse_dispatch(*common, "--output", output)
+                    self.assertEqual(cli.ExitCode.SECURITY, result.exit_code)
+                    self.assertEqual("security_error", result.error.code)
+                    self.assertEqual("unsafe_path", result.error.reason_code)
+
+        self.assertFalse(
+            (self.run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME).exists()
+        )
+        self.assertFalse((self.run_dir / cli.EXPORT_DESCRIPTOR_NAME).exists())
+        self.assertFalse((self.run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME).exists())
+
+    def test_export_descriptor_replay_rejects_session_source_destination(
+        self,
+    ) -> None:
+        coordinator = self.real_coordinator(self.run_dir, activity=False)
+        codex_root = self.root / "codex-home"
+        sessions = codex_root / "sessions"
+        sessions.mkdir(parents=True)
+        unsafe_output = sessions / "thread" / ".codex-local" / "retained-v2"
+        safe_output = self.root / ".codex-local" / "retained-v2"
+        safe_io.atomic_create_json(
+            self.run_dir / cli.LEGACY_EXPORT_DESCRIPTOR_NAME,
+            {
+                "bundle_digest": "a" * 64,
+                "output": str(
+                    cli.export_api.normalize_retained_export_destination(unsafe_output)
+                ),
+                "publication_role": "standalone",
+                "retention_deadline": coordinator.export_retention_deadline(),
+                "schema": cli.EXPORT_DESCRIPTOR_SCHEMA,
+            },
+        )
+
+        with mock.patch.object(
+            cli.temporary_paths,
+            "local_codex_root",
+            return_value=codex_root,
+        ):
+            result = self.parse_dispatch(
+                "export",
+                "--identity-path",
+                str(self.identity_path),
+                "--require-existing-identity",
+                "--run-dir",
+                str(self.run_dir),
+                "--output",
+                str(safe_output),
+            )
+
+        self.assertEqual(cli.ExitCode.SECURITY, result.exit_code)
+        self.assertEqual("security_error", result.error.code)
+        self.assertEqual("unsafe_path", result.error.reason_code)
+        self.assertFalse(safe_output.exists())
+        self.assertFalse(
+            (self.run_dir / cli.export_cli_api.EXPORT_DESTINATION_CLAIM_NAME).exists()
+        )
+        self.assertFalse((self.run_dir / cli.EXPORT_DESCRIPTOR_NAME).exists())
+
     def test_shadow_start_requires_explicit_existing_identity_without_default_write(
         self,
     ) -> None:

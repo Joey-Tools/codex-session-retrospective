@@ -402,6 +402,49 @@ class SessionRetrospectiveTests(unittest.TestCase):
         MODULE.PATH_REF_KEY = None
         self._key_tmp.cleanup()
 
+    def test_transient_output_cannot_overlap_local_session_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            home = Path(raw) / "home"
+            codex_root = home / ".codex"
+            sessions = codex_root / "sessions"
+            archived = codex_root / "archived_sessions"
+            sessions.mkdir(parents=True)
+            archived.mkdir()
+            outputs = (
+                sessions
+                / "active-thread"
+                / ".codex-local"
+                / "session-retrospective"
+                / "run",
+                archived
+                / "archived-thread"
+                / ".codex-local"
+                / "session-retrospective"
+                / "run",
+                Path("~/.codex/sessions/tilde-thread/.codex-local/")
+                / "session-retrospective"
+                / "run",
+            )
+            with (
+                mock.patch.object(
+                    MODULE.temporary_paths,
+                    "local_codex_root",
+                    return_value=codex_root,
+                ),
+                mock.patch.dict(os.environ, {"HOME": str(home)}),
+            ):
+                for output in outputs:
+                    with self.subTest(output=output):
+                        with self.assertRaisesRegex(
+                            SystemExit, "must not overlap session sources"
+                        ):
+                            MODULE.ensure_safe_output_dir(output)
+
+                allowed = (
+                    home / "work" / ".codex-local" / "session-retrospective" / "run"
+                )
+                self.assertEqual(allowed, MODULE.ensure_safe_output_dir(allowed))
+
     def test_filename_parsers_support_current_and_legacy_rollouts(self) -> None:
         current = Path("rollout-2026-05-07T13-24-44-019d-uuid.jsonl")
         current_without_suffix = Path("rollout-2026-05-07T13-24-44.jsonl")

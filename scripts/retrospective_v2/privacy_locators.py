@@ -320,42 +320,9 @@ EMAIL_RE = re.compile(
     rf"{_EMAIL_DOT_ATOM_LOCAL_PART_PATTERN_TEXT})@"
     r"(?P<email_domain>"
     rf"(?:{_FQDN_LABEL_PATTERN_TEXT}\.)+{_FQDN_ANY_SUFFIX_PATTERN_TEXT}"
-    r"|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?![.:])"
+    r"|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?!\.)(?!:[^\s<>\"'`])"
     r")"
     r"(?![a-z0-9-])",
-    re.ASCII | re.IGNORECASE,
-)
-_PACKAGE_RELEASE_TAG_RE = re.compile(
-    r"(?:alpha|beta|canary|dev|experimental|latest|legacy|next|nightly|rc|stable|"
-    r"v?[0-9]+(?:[-_][a-z0-9.-]+)?)\Z",
-    re.ASCII | re.IGNORECASE,
-)
-_PACKAGE_NAME_PATTERN_TEXT = r"[a-z0-9](?:[a-z0-9._-]{0,212}[a-z0-9])?"
-_PACKAGE_NAME_RE = re.compile(
-    _PACKAGE_NAME_PATTERN_TEXT + r"\Z",
-    re.ASCII | re.IGNORECASE,
-)
-_SCOPED_PACKAGE_NAME_RE = re.compile(
-    rf"{_PACKAGE_NAME_PATTERN_TEXT}/{_PACKAGE_NAME_PATTERN_TEXT}\Z",
-    re.ASCII | re.IGNORECASE,
-)
-_PACKAGE_COORDINATE_PREFIX_RE = re.compile(
-    r"\b(?:add|added|adding|install|installed|installing|pin|pinned|pinning|"
-    r"upgrade|upgraded|upgrading)[ \t]+\Z",
-    re.ASCII | re.IGNORECASE,
-)
-_PACKAGE_TEST_PREFIX_RE = re.compile(
-    r"\b(?:test|tested|testing)[ \t]+\Z", re.ASCII | re.IGNORECASE
-)
-_PACKAGE_COORDINATE_SUFFIX_RE = re.compile(
-    r"\A[ \t]+(?:dependency|package|release|tag|test|upgrade|version)\b",
-    re.ASCII | re.IGNORECASE,
-)
-_PACKAGE_COORDINATE_COLON_RE = re.compile(r"\A:(?=[ \t]|\Z)", re.ASCII)
-_EXPLICIT_EMAIL_CONTEXT_RE = re.compile(
-    r"(?:\b(?:contact|e-?mail|email|mailbox|recipient|sender)\b"
-    r"(?:[ \t]+(?:address|is|was))?[ \t]*(?::|=|to)?[ \t]*|"
-    r"\b(?:notify|send|write)[ \t]+(?:to[ \t]+)?)\Z",
     re.ASCII | re.IGNORECASE,
 )
 INTERNATIONAL_PHONE_RE = re.compile(
@@ -377,6 +344,10 @@ _DATE_PREFIXED_NUMERIC_RE = re.compile(
 _DOTTED_NUMERIC_VERSION_RE = re.compile(
     r"[0-9]+(?:\.[0-9]+){3,}",
     re.ASCII,
+)
+_DOTTED_VERSION_CONTEXT_RE = re.compile(
+    r"\b(?:release|version)[ \t]+\Z",
+    re.ASCII | re.IGNORECASE,
 )
 _PHONE_FIELD_PATTERN_TEXT = (
     r"\b(?:(?:call|phone|tel|telephone|mobile)"
@@ -1375,7 +1346,9 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"secret[\s_-]?access[\s_-]?key|access[\s_-]?token|"
     r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
     r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?code|"
-    r"passwd|pwd|(?-i:PIN)|"
+    r"passwd|pwd|(?-i:PIN)|otp|"
+    r"(?:mfa|2fa|two[ \t_-]?factor)[ \t_-]?code|"
+    r"(?:recovery|backup)[ \t_-]?code|"
     r"credential|token|" + _COMPACT_TOKEN_KEY_PATTERN_TEXT + r")"
 )
 _CREDENTIAL_FIELD_PATTERN_TEXT = (
@@ -1384,11 +1357,13 @@ _CREDENTIAL_FIELD_PATTERN_TEXT = (
     + r"['\"]?"
 )
 _LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
-    r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|ApiKey|AccessKey|PrivateKey)"
+    r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|Otp|OTP|MfaCode|MFACode|"
+    r"TwoFactorCode|RecoveryCode|BackupCode|ApiKey|AccessKey|PrivateKey)"
 )
 _PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
-    r"(?:Credential|Secret|Password|Passphrase|Passcode|PIN|Pin|APIKey|ApiKey|"
-    r"AccessKey|PrivateKey|"
+    r"(?:Credential|Secret|Password|Passphrase|Passcode|PIN|Pin|Otp|OTP|MfaCode|"
+    r"MFACode|TwoFactorCode|RecoveryCode|BackupCode|APIKey|ApiKey|AccessKey|"
+    r"PrivateKey|"
     r"(?:Access|API|Api|Auth|Authorization|Client|Refresh|ID|Id|Session|"
     r"CSRF|Csrf|XSRF|Xsrf)Token)"
 )
@@ -1645,9 +1620,22 @@ def _is_ip_token(value: str, *, version: int) -> bool:
         return False
 
 
+def _ipv4_match_is_valid(match: re.Match[str]) -> bool:
+    context_start = max(0, match.start() - 64)
+    return all(
+        (
+            _is_ip_token(match.group(0), version=4),
+            _DOTTED_VERSION_CONTEXT_RE.search(
+                match.string[context_start : match.start()]
+            )
+            is None,
+        )
+    )
+
+
 def ipv4_matches(value: str) -> Iterator[re.Match[str]]:
     for match in IPV4_CANDIDATE_RE.finditer(value):
-        if _is_ip_token(match.group(0), version=4):
+        if _ipv4_match_is_valid(match):
             yield match
 
 
@@ -1982,63 +1970,8 @@ def _bare_phone_match_is_valid(match: re.Match[str]) -> bool:
     )
 
 
-def _email_match_is_valid(match: re.Match[str]) -> bool:
-    domain = match.group("email_domain")
-    context_start = max(0, match.start() - 64)
-    return any(
-        (
-            "." in domain,
-            _PACKAGE_RELEASE_TAG_RE.fullmatch(domain) is None,
-            _EXPLICIT_EMAIL_CONTEXT_RE.search(
-                match.string[context_start : match.start()]
-            )
-            is not None,
-            not any(
-                (
-                    all(
-                        (
-                            _PACKAGE_NAME_RE.fullmatch(
-                                match.group(0).rsplit("@", 1)[0]
-                            ),
-                            any(
-                                (
-                                    _PACKAGE_COORDINATE_PREFIX_RE.search(
-                                        match.string[context_start : match.start()]
-                                    ),
-                                    _PACKAGE_COORDINATE_SUFFIX_RE.match(
-                                        match.string[match.end() : match.end() + 64]
-                                    ),
-                                    all(
-                                        (
-                                            _PACKAGE_TEST_PREFIX_RE.search(
-                                                match.string[
-                                                    context_start : match.start()
-                                                ]
-                                            ),
-                                            _PACKAGE_COORDINATE_COLON_RE.match(
-                                                match.string[
-                                                    match.end() : match.end() + 64
-                                                ]
-                                            ),
-                                        )
-                                    ),
-                                )
-                            ),
-                        )
-                    ),
-                    all(
-                        (
-                            _SCOPED_PACKAGE_NAME_RE.fullmatch(
-                                match.group(0).rsplit("@", 1)[0]
-                            ),
-                            match.string[max(0, match.start() - 1) : match.start()]
-                            == "@",
-                        )
-                    ),
-                )
-            ),
-        )
-    )
+def _email_match_is_valid(_match: re.Match[str]) -> bool:
+    return True
 
 
 def _retain_every_match(_match: re.Match[str]) -> bool:
@@ -2298,7 +2231,7 @@ def contains_path_locator(value: str) -> bool:
 def redact_ip_addresses(value: str) -> str:
     redacted = IPV4_CANDIDATE_RE.sub(
         lambda match: "[REDACTED_IP_ADDRESS]"
-        if _is_ip_token(match.group(0), version=4)
+        if _ipv4_match_is_valid(match)
         else match.group(0),
         value,
     )

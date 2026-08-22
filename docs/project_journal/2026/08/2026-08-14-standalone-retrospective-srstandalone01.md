@@ -3051,6 +3051,56 @@ superseded_by:
   seconds. Signing, exact-secret admission, the replacement clean-context
   Codex processor, hosted CI, and current-head GitHub Codex evidence remain
   delivery gates.
+- The clean-context Codex processor for signed head `c52c6883` found two
+  retained-boundary defects. The v2 export guard authenticated the requested
+  output but did not apply the same local-session source exclusion to every
+  replayed destination claim or descriptor, and natural-language package
+  heuristics allowed syntactically ambiguous single-label `name@tag` values to
+  bypass personal-identifier redaction. Current-head GitHub Codex review found
+  four additional defects: `Tool response:` escaped the raw tool-payload
+  marker; OTP, MFA, 2FA, recovery-code, and backup-code labels were not all
+  classified as credential material; dotted release versions could be confused
+  with IPv4 addresses while an actual release-server address still needed
+  redaction; and the migration-only v1 transient output guard did not exclude
+  active or archived session source roots. All head-bound evidence for
+  `c52c6883` is stale.
+- The shared locator policy now treats every syntactic single-label
+  `name@tag` form in retained prose as a personal identifier, including
+  package-looking values, while structured package coordinates must use
+  schema-constrained fields or placeholders. Credential labels cover the
+  spaced, snake-case, lower-camel, Pascal-case, and acronym forms for one-time,
+  multifactor, recovery, and backup codes. An immediate explicit `release` or
+  `version` context preserves a valid four-or-more-component dotted version;
+  unrelated IPv4 text, including `release server 1.2.3.4`, remains redacted.
+  Raw-payload screening recognizes tool and command responses. Both the v1
+  transient output path and every v2 export destination claim, including
+  persisted descriptor replay, apply the same lexical and resolved
+  bidirectional exclusion against local active and archived session roots
+  before creating or mutating output state.
+- Focused privacy/reporting tests pass 4/4 in 101.101 seconds, result-validation
+  tests pass 3/3 in 0.268 seconds, and v1/v2 output-guard tests pass 3/3 in
+  11.511 seconds. The complete affected export, result/episode, and v2 CLI
+  modules pass 236/236 in 358.390 seconds; the exact v1 output regression plus
+  module-boundary and CI contracts pass 53/53 in 3.687 seconds. Module
+  boundaries retain the exact 9,848-branch inventory. One first shard attempt
+  was interrupted after an accidental whole-file formatter touched the legacy
+  v1 monolith; those unrelated formatting changes were restored before the
+  narrow import and guard were reapplied, so that interrupted attempt is
+  non-counting.
+- The final Python 3.13.12 inventory contains 1,886 exact test IDs from 22
+  authenticated sources under manifest digest
+  `4d28cae5155b89bbfeac63042c6dd0443160161e0f49626eda19d7fbfb08a61d`.
+  Shard 0 passes 448/448 in 1,488.461 seconds, shard 1 passes 510/510 in
+  1,354.165 seconds, shard 2 passes 502/502 in 1,242.319 seconds, and shard 3
+  passes 426/426 in 1,194.575 seconds, for exact aggregate coverage of
+  1,886/1,886 in 5,279.520 seconds without skips. The independent Darwin
+  security inventory passes 14/14 in 58.805 seconds. Ruff 0.13.2 lint for all
+  `scripts/` and `tests/`, formatting for the seven applicable changed Python
+  files, both workflows under actionlint 1.7.12, the generated bootstrap
+  manifest, the official OpenAI Skill validator, source-tree bytecode
+  exclusion, and `git diff --check` are clean. Signing, exact-secret admission,
+  the final clean-context Codex processor, hosted CI, and current-head GitHub
+  Codex evidence remain delivery gates.
 
 ## Follow-up Work
 

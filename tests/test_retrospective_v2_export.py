@@ -1738,12 +1738,15 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
 
         for network_locator in (
             "localhost",
+            "1.2.3.4",
             "10.0.0.1",
             "203.0.113.7",
             "2001:db8::1",
             "::",
         ):
             contexts = [f"Inspect {network_locator} before continuing."]
+            if network_locator == "1.2.3.4":
+                contexts.append("The release server was 1.2.3.4.")
             if network_locator == "::":
                 contexts.append('He wrote "Inspect ::."')
             for context in contexts:
@@ -1796,6 +1799,26 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         )
         self.assertEqual(syntax_text, syntax_high_impact["rewritten_prompt"])
         validate_retained_artifacts(syntax_artifacts)
+
+        for version_text in (
+            "The release used version 1.2.3.4 before rollback.",
+            "Release 1.2.3.4 completed.",
+        ):
+            with self.subTest(version_text=version_text):
+                version_review = review_data()
+                version_review["turn_findings"][1]["rewritten_prompt"] = version_text
+                version_artifacts = assemble_retained_artifacts(
+                    run_state(), version_review
+                )
+                validate_retained_artifacts(version_artifacts)
+                version_rows = [
+                    json.loads(line)
+                    for line in version_artifacts["turn_findings.jsonl"].splitlines()
+                ]
+                version_high_impact = next(
+                    row for row in version_rows if row["disposition"] == "high_impact"
+                )
+                self.assertEqual(version_text, version_high_impact["rewritten_prompt"])
 
         for bare_locator in (
             "jira.cisco.example",
@@ -2011,6 +2034,13 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "alice@latest was referenced.",
             "Owner alice@123 approved it.",
             "We tested alice@dev without package syntax.",
+            "Installed alice@dev dependency.",
+            "The alice@stable release failed.",
+            "The react@latest upgrade failed.",
+            "The foo@next dependency remained pinned.",
+            "The @scope/react@canary test was explicit.",
+            "Upgrade react@latest: it fixes the issue.",
+            "We tested foo@next: this failed.",
             "IBAN: GB00 TEST 0000 0000 0000 00",
             "Payment sent to DE89370400440532013000 before continuing",
             "Payment sent to GB82 WEST 1234 5698 7654 32 before continuing",
@@ -2147,11 +2177,6 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "The event occurred at 2026-08-20 12:34:56 UTC.",
             "Release 2026.08.20.1234 remains available.",
             "Release 1234.56.78.9012 remains available.",
-            "The react@latest upgrade failed.",
-            "The foo@next dependency remained pinned.",
-            "The @scope/react@canary test was explicit.",
-            "Upgrade react@latest: it fixes the issue.",
-            "We tested foo@next: this failed.",
             "The input/output boundary was unclear.",
             "The before/after comparison lacked evidence.",
             "The source/target mapping was explicit.",
@@ -2324,9 +2349,18 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "pass-code: 839201",
             "pass_code: 839201",
             "PIN: 8392",
+            "OTP: 123456",
+            "MFA code: 123456",
+            "2FA code: 123456",
+            "two-factor code: 123456",
+            "Recovery code: RECOVERY-TEST-0000",
+            "Backup code: BACKUP-TEST-0000",
             "keyPassphrase: purple",
             "devicePasscode: 839201",
             "userPin: 8392",
+            "deviceOtp: 123456",
+            "AccountMFACode: 123456",
+            "UserRecoveryCode: RECOVERY-TEST-0000",
             f"UserPassword = {SYNTHETIC_BEARER_TOKEN}",
             f"DatabaseSecret was {SYNTHETIC_BEARER_TOKEN}",
             f"UserPIN = {SYNTHETIC_BEARER_TOKEN}",
@@ -2526,6 +2560,7 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         probes = (
             "Original prompt: delete all records now.",
             "Tool output: status=failed.",
+            "Tool response: proprietary payload.",
             "Terminal output: proprietary payload.",
             "Console output: proprietary payload.",
             "Shell output: proprietary payload.",

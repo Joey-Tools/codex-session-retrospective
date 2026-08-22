@@ -27,7 +27,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from retrospective_v2 import legacy_history_git  # noqa: E402
+from retrospective_v2 import legacy_history_git, safe_io, temporary_paths  # noqa: E402
 from retrospective_v2.authority_errors import HistoryValidationError  # noqa: E402
 
 
@@ -1016,6 +1016,12 @@ def ensure_safe_output_dir(path: Path) -> Path:
     ):
         raise SystemExit("output directory for transient artifacts must be under .codex-local/session-retrospective")
     reject_symlink_ancestors(expanded, label="output directory for transient artifacts")
+    try:
+        temporary_paths.require_run_directory_outside_sources(expanded)
+    except safe_io.UnsafePathError as error:
+        raise SystemExit(
+            "output directory for transient artifacts must not overlap session sources"
+        ) from error
     parts = expanded.resolve(strict=False).parts
     for index in range(len(parts) - len(SAFE_OUTPUT_PARTS) + 1):
         if parts[index : index + len(SAFE_OUTPUT_PARTS)] == SAFE_OUTPUT_PARTS:

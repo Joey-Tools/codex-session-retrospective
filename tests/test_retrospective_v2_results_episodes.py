@@ -2220,6 +2220,60 @@ class ResultValidationTests(unittest.TestCase):
             with self.subTest(safe_text=safe_text):
                 self.assertEqual((), scan_for_leaks(safe_text))
 
+    def test_post_redaction_removes_one_time_and_recovery_codes(self) -> None:
+        for source in (
+            "OTP: 123456",
+            "MFA code: 123456",
+            "2FA code: 123456",
+            "two_factor_code: 123456",
+            "Recovery code: RECOVERY-TEST-0000",
+            "Backup code: BACKUP-TEST-0000",
+            "deviceOtp: 123456",
+            "AccountMFACode: 123456",
+            "UserRecoveryCode: RECOVERY-TEST-0000",
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    "credential",
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+                result = validate_extractor_result(value, ALL_REFS)
+                self.assertEqual(
+                    "[REDACTED_CREDENTIAL]",
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual((), scan_for_leaks(result))
+
+    def test_post_redaction_preserves_explicit_dotted_versions(self) -> None:
+        for source in (
+            "The release used version 1.2.3.4 before rollback.",
+            "Release 1.2.3.4 completed.",
+        ):
+            with self.subTest(source=source):
+                self.assertEqual((), scan_for_leaks(source))
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+                result = validate_extractor_result(value, ALL_REFS)
+                self.assertEqual(
+                    source,
+                    result["turns"][0]["generalized_working_text"],
+                )
+
+        unsafe = "The release server was 1.2.3.4."
+        self.assertIn(
+            "ip_address",
+            {finding.category for finding in scan_for_leaks(unsafe)},
+        )
+        value = extractor_result()
+        value["turns"][0]["generalized_working_text"] = unsafe
+        result = validate_extractor_result(value, ALL_REFS)
+        self.assertEqual(
+            "The release server was [REDACTED_IP_ADDRESS].",
+            result["turns"][0]["generalized_working_text"],
+        )
+
     def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
         jwt_segment = "".join(("eyJ", "A" * 8))
         stateless_github = "".join(
@@ -2730,6 +2784,13 @@ class ResultValidationTests(unittest.TestCase):
             "alice@latest was referenced.",
             "Owner alice@123 approved it.",
             "We tested alice@dev without package syntax.",
+            "Installed alice@dev dependency.",
+            "The alice@stable release failed.",
+            "The react@latest upgrade failed.",
+            "The foo@next dependency remained pinned.",
+            "The @scope/react@canary test was explicit.",
+            "Upgrade react@latest: it fixes the issue.",
+            "We tested foo@next: this failed.",
         ):
             with self.subTest(narrative_email=narrative_email):
                 self.assertIn(
@@ -2772,11 +2833,6 @@ class ResultValidationTests(unittest.TestCase):
 
     def test_dotted_code_and_slash_compounds_remain_reviewable_prose(self) -> None:
         safe_texts = (
-            "The react@latest upgrade failed.",
-            "The foo@next dependency remained pinned.",
-            "The @scope/react@canary test was explicit.",
-            "Upgrade react@latest: it fixes the issue.",
-            "We tested foo@next: this failed.",
             "The input/output boundary was unclear.",
             "The before/after comparison lacked evidence.",
             "The source/target mapping was explicit.",

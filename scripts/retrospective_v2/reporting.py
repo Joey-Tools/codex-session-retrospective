@@ -277,7 +277,7 @@ _OPAQUE_REF_RE = re.compile(
 _HEX_64_RE = re.compile(r"[0-9a-f]{64}\Z")
 _SOURCE_TEXT_MARKER_RE = re.compile(
     r"(?i)(?:\b(?:raw|original|verbatim)[ _-]+(?:prompt|request|message|input|text)\b|"
-    r"\b(?:tool|command)[ _-]+(?:output|result)\b|"
+    r"\b(?:tool|command)[ _-]+(?:output|response|result)\b|"
     r"\b(?:terminal|console|shell)[ _-]+output\b[ \t]*(?:=|:)|"
     r"\b(?:stdout|stderr|transcript)\b|"
     r"(?:^|\s)(?:user|assistant|system|tool)\s*:|\b(?:please|can you|could you|"

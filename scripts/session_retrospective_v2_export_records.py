@@ -9,7 +9,7 @@ import re
 from typing import Any, NoReturn
 import unicodedata
 
-from retrospective_v2 import contracts, export as export_api, safe_io
+from retrospective_v2 import contracts, export as export_api, safe_io, temporary_paths
 
 
 EXPORT_DESTINATION_CLAIM_SCHEMA = "cli_export_destination_claim_v2"
@@ -88,6 +88,7 @@ def reject_destination(
 
 
 def destination_claim(output: Path, publication_role: str) -> dict[str, str]:
+    output = temporary_paths.require_run_directory_outside_sources(output)
     return {
         "output": str(output),
         "publication_role": publication_role,
