@@ -1932,6 +1932,70 @@ class CliContractTests(unittest.TestCase):
         self.assertFalse((archived_sessions / "new-run").exists())
         self.assertFalse((outside / "new-run").exists())
 
+    def test_history_repository_cannot_overlap_local_session_sources(self) -> None:
+        account_home = self.root / "account-home"
+        codex_root = account_home / ".codex"
+        sessions = codex_root / "sessions"
+        archived_sessions = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived_sessions.mkdir(mode=0o700)
+        active_sentinel = sessions / "rollout-active.jsonl"
+        archived_sentinel = archived_sessions / "rollout-archived.jsonl"
+        active_sentinel.write_text("active\n", encoding="ascii")
+        archived_sentinel.write_text("archived\n", encoding="ascii")
+        outside = self.root / "outside"
+        outside.mkdir(mode=0o700)
+        lexical_escape = sessions / "escape"
+        lexical_escape.symlink_to(outside, target_is_directory=True)
+        resolved_alias = self.root / "sessions-alias"
+        resolved_alias.symlink_to(sessions, target_is_directory=True)
+        safe_sibling = codex_root / "session-retrospective-history"
+        cases = (
+            ("active-child", sessions / "history.git", False),
+            ("archived-child", archived_sessions / "history.git", False),
+            ("resolved-alias", resolved_alias / "history.git", False),
+            ("lexical-escape", lexical_escape / "history.git", False),
+            ("source-parent", codex_root, False),
+            ("canonical-tilde", "~/.codex/sessions/history.git", False),
+            ("safe-sibling", safe_sibling, True),
+        )
+
+        with mock.patch.dict(os.environ, {"HOME": str(outside)}):
+            for label, history_repo, accepted in cases:
+                arguments = list(self.shadow_start_arguments())
+                history_index = arguments.index("--history-repo") + 1
+                arguments[history_index] = str(history_repo)
+                with (
+                    self.subTest(case=label),
+                    mock.patch.object(
+                        cli.temporary_paths,
+                        "local_codex_root",
+                        return_value=codex_root,
+                    ),
+                    mock.patch.object(
+                        cli.orchestrator_api,
+                        "start_run",
+                        return_value={"stage": "source_catalog"},
+                    ) as start_run,
+                ):
+                    result = self.parse_dispatch(*arguments)
+
+                    if accepted:
+                        self.assertTrue(result.ok, result.error)
+                        self.assertEqual(
+                            safe_sibling,
+                            start_run.call_args.kwargs["history_repo"],
+                        )
+                    else:
+                        self.assertEqual(cli.ExitCode.SECURITY, result.exit_code)
+                        self.assertEqual("security_error", result.error.code)
+                        self.assertEqual("unsafe_path", result.error.reason_code)
+                        start_run.assert_not_called()
+
+        self.assertEqual("active\n", active_sentinel.read_text(encoding="ascii"))
+        self.assertEqual("archived\n", archived_sentinel.read_text(encoding="ascii"))
+        self.assertEqual([], list(outside.iterdir()))
+
     def test_export_destination_cannot_overlap_local_session_sources(self) -> None:
         self.real_coordinator(self.run_dir, activity=False)
         home = self.root / "home"

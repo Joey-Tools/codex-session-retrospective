@@ -27,7 +27,7 @@ from retrospective_v2 import identity as identity_api  # noqa: E402
 from retrospective_v2 import orchestrator as orchestrator_api  # noqa: E402
 from retrospective_v2 import publication_abort_replay  # noqa: E402
 from retrospective_v2 import publication_cli_adapter  # noqa: E402
-from retrospective_v2 import process_lifecycle, temporary_paths  # noqa: E402
+from retrospective_v2 import history_paths, process_lifecycle, temporary_paths  # noqa: E402
 from retrospective_v2 import reporting as reporting_api  # noqa: E402
 from retrospective_v2 import result_validation as result_validation_api  # noqa: E402
 from retrospective_v2 import safe_io  # noqa: E402
@@ -681,7 +681,7 @@ def command_doctor(args: argparse.Namespace) -> CommandResult:
             require_existing_identity=True,
             shadow=args.shadow,
             provenance=provenance,
-            history_repo=_absolute_path(args.history_repo),
+            history_repo=args.history_repo,
             history_target_ref=args.history_target_ref,
             publisher_gpg_program=_absolute_path(args.publisher_gpg_program),
             provider_state=provider_state,
@@ -700,7 +700,7 @@ def command_doctor(args: argparse.Namespace) -> CommandResult:
 
 
 def command_start(args: argparse.Namespace) -> CommandResult:
-    run_dir = temporary_paths.require_run_directory_outside_sources(args.run_dir)
+    run_dir, history_repo = history_paths.start_paths(args.run_dir, args.history_repo)
     identity_path = _command_identity_path(args, startup=True)
     provenance = _read_json_object(args.run_config, max_bytes=MAX_DESCRIPTOR_BYTES)
     successor = None
@@ -758,7 +758,7 @@ def command_start(args: argparse.Namespace) -> CommandResult:
         if (
             args.start != successor["window"]["start"]
             or args.end != successor["window"]["end"]
-            or str(_absolute_path(args.history_repo)) != successor["history_repo"]
+            or str(history_repo) != successor["history_repo"]
             or args.history_target_ref != successor["history_target_ref"]
             or normalized_provenance != successor["provenance"]
         ):
@@ -866,7 +866,7 @@ def command_start(args: argparse.Namespace) -> CommandResult:
         hosts=((successor["host"],) if successor else args.hosts),
         session_target=args.session_target,
         session_target_selector=args.session_target_selector,
-        history_repo=_absolute_path(args.history_repo),
+        history_repo=history_repo,
         history_target_ref=args.history_target_ref,
         publisher_gpg_program=_absolute_path(args.publisher_gpg_program),
         provider_state=provider_state,

@@ -3145,6 +3145,47 @@ superseded_by:
   Codex processor, hosted CI, and current-head GitHub Codex evidence remain the
   delivery gates.
 
+- Current-head GitHub Codex review of signed head `a3e37cca` found four more
+  retained-boundary gaps: `Input:`, `Request:`, and their user-qualified forms
+  escaped source-payload screening; subject-qualified `identifier` fields
+  escaped personal-identifier policy; apostrophes and commas could leave path
+  suffixes after redaction; and the durable history repository could overlap
+  or alias active or archived session source roots. A local clean-context Codex
+  processor had started against the independently materialized exact range
+  when those findings arrived. It was interrupted once without an accepted
+  terminal artifact, postvalidated clean with unchanged trusted-control
+  digests, and left no task root or reviewer process. That lane is stale and
+  non-counting.
+- The follow-up recognizes the complete controlled input/request label family,
+  applies the shared personal policy to snake, spaced, and camel-case subject
+  identifiers, and consumes legal apostrophe and comma punctuation in POSIX,
+  home, Windows, and UNC path locators. The new `history_paths` policy is the
+  single deterministic owner for bidirectional lexical/resolved separation and
+  canonical-account-home expansion. CLI `start`, `doctor`, and public
+  `start_run` all apply it before readiness can pass or run state can be
+  created. The generated implementation-authority manifest includes that new
+  production module, while CLI, orchestrator, and temporary-path modules remain
+  at their existing 2,000, 800, and 350-line ceilings. The exact engine branch
+  inventory is 9,851 and the 9,858 cap is unchanged.
+- Focused finding and architecture regressions pass 26/26 in 83.954 seconds;
+  bootstrap startup and generated-manifest regressions pass 3/3; module
+  boundaries pass 19/19. The final Python 3.13.0 inventory contains 1,890 exact
+  test IDs from 22 authenticated sources under manifest digest
+  `396f7f1c90c01994a0f5298e99893c52886be8aa7356d91f84ebb4d1d69e0748`.
+  Shard 0 passes 450/450 in 1,695.192 seconds, shard 1 passes 512/512 in
+  1,535.212 seconds, shard 2 passes 502/502 in 1,415.022 seconds, and shard 3
+  passes 426/426 in 1,376.930 seconds, for exact aggregate coverage of
+  1,890/1,890 with an empty error scan. The independent Darwin security
+  inventory passes 14/14 in 56.808 seconds. Ruff lint and changed-file
+  formatting, both workflows under `actionlint`, and the generated bootstrap
+  manifest are clean.
+- Three harness attempts are explicitly non-counting: the first propagated a
+  4 MiB log limit into one deliberate oversized-file fixture; a later frozen
+  shard exposed the missing implementation-authority manifest entry; and one
+  affected-module aggregation omitted `-I` and was rejected by the fixed
+  runtime-isolation gate. The accepted final shard runner bounds only its log
+  sink, enforces `-I -B -S`, and contains the complete updated source manifest.
+
 ## Follow-up Work
 
 1. Register `Joey-Tools/codex-session-retrospective` in `codex-workspace` after

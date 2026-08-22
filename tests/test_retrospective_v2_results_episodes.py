@@ -1857,6 +1857,28 @@ class ResultValidationTests(unittest.TestCase):
                         medical_record
                     ),
                 )
+        for subject_identifier in (
+            "Customer identifier: CUST-12345",
+            "User identifier: alice-12345",
+            "Account identifier: A1234567",
+            "customerIdentifier: CUST-12345",
+            "userIdentifier: alice-12345",
+            "accountIdentifier: A1234567",
+        ):
+            with self.subTest(subject_identifier=subject_identifier):
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result_validation_module.privacy_locators.redact_personal_identifiers(
+                        subject_identifier
+                    ),
+                )
+                self.assertEqual(
+                    {"personal_identifier"},
+                    {
+                        finding.category
+                        for finding in scan_for_leaks({"text": subject_identifier})
+                    },
+                )
         for safe_pin_text in (
             "Inspect pin=GPIO17 before continuing.",
             "Run with --pin requests==2.32.5.",
@@ -2955,8 +2977,11 @@ class ResultValidationTests(unittest.TestCase):
     ) -> None:
         for source_path in (
             "/Users/alice/My Private Folder/secrets",
+            "/Users/alice/John's Private Folder/secrets",
+            "/Users/alice/Finance, Legal/secrets",
             "~/My Private Folder/secrets",
             r"C:\Users\alice\My Private Folder\secrets",
+            r"C:\Users\alice\John's Private Folder\secrets",
             r"\\server\share\My Private Folder\secrets",
         ):
             with self.subTest(source_path=source_path):

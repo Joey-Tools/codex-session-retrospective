@@ -1842,6 +1842,62 @@ class OrchestratorTests(unittest.TestCase):
                 **self.start_authority(),
             )
 
+    def test_doctor_and_start_run_reject_history_source_overlap_before_state(
+        self,
+    ) -> None:
+        account_home = self.root / "account-home"
+        codex_root = account_home / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+        history_repo = "~/.codex/sessions/history.git"
+        run_dir = self.root / "overlap-rejected-run"
+        poisoned_home = self.root / "poisoned-home"
+        poisoned_home.mkdir(mode=0o700)
+
+        with (
+            mock.patch.dict(os.environ, {"HOME": str(poisoned_home)}),
+            mock.patch.object(
+                temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+        ):
+            readiness = doctor(
+                identity_path=self.identity_path,
+                require_existing_identity=True,
+                provenance=execution_provenance(),
+                shadow=True,
+                history_repo=history_repo,
+                history_target_ref="refs/heads/main",
+                publisher_gpg_program=TEST_PUBLISHER_GPG,
+                publisher_probe=lambda: {
+                    "fingerprint": PUBLISHER_FINGERPRINT,
+                    "ready": True,
+                },
+            )
+            self.assertFalse(readiness["ok"])
+            self.assertFalse(readiness["checks"]["history_source_separation"]["ok"])
+            self.assertEqual(
+                "UnsafePathError",
+                readiness["checks"]["history_source_separation"]["detail"],
+            )
+
+            with self.assertRaisesRegex(
+                safe_io.UnsafePathError,
+                "history repository overlaps",
+            ):
+                orchestrator_module.start_run(
+                    run_dir,
+                    identity_path=self.identity_path,
+                    require_existing_identity=True,
+                    shadow=True,
+                    history_repo=history_repo,
+                )
+
+        self.assertFalse(run_dir.exists())
+
     def test_shadow_doctor_validates_optional_provider_like_start(self) -> None:
         provider = self.root / "stale-provider"
         with mock.patch(

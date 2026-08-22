@@ -121,6 +121,7 @@ else:
         "gpg_snapshot_recovery.py",
         "gpg_status.py",
         "history_graph.py",
+        "history_paths.py",
         "identity.py",
         "implementation_authority.py",
         "legacy_history_git.py",

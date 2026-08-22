@@ -551,10 +551,10 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + _PERSONAL_SUBJECT_PATTERN_TEXT
     + _PERSONAL_POSSESSIVE_PATTERN_TEXT
     + r"[_ -]?"
-    r"(?:id|address|" + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT + r")|"
+    r"(?:id|identifier|address|" + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT + r")|"
     r"(?-i:"
     + _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT
-    + r"(?:Id|Address|DOB|Dob|DateOfBirth))|"
+    + r"(?:Id|Identifier|Address|DOB|Dob|DateOfBirth))|"
     r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
     r"shipping|tenant|user)[_ -]?address|"
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
@@ -1084,7 +1084,7 @@ LABELED_INTERNAL_HOST_RE = re.compile(
     r"[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
     re.ASCII | re.IGNORECASE,
 )
-_ABSOLUTE_PATH_ATOM_PATTERN_TEXT = r"[A-Za-z0-9._~+@%=-]+"
+_ABSOLUTE_PATH_ATOM_PATTERN_TEXT = r"[A-Za-z0-9._~+@%=',\u2019-]+"
 _ABSOLUTE_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT = (
     rf"{_ABSOLUTE_PATH_ATOM_PATTERN_TEXT}"
     rf"(?:[ \t]+{_ABSOLUTE_PATH_ATOM_PATTERN_TEXT})*"
@@ -1122,7 +1122,7 @@ HOME_PATH_RE = re.compile(
     rf"(?:(?:{_ABSOLUTE_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}[/\\])*"
     rf"{_ABSOLUTE_PATH_ATOM_PATTERN_TEXT})?"
 )
-_WINDOWS_PATH_ATOM_PATTERN_TEXT = r"[^\\\s\"'<>:|?*]+"
+_WINDOWS_PATH_ATOM_PATTERN_TEXT = r"[^\\\s\"<>:|?*]+"
 _WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT = (
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
     rf"(?:[ \t]+{_WINDOWS_PATH_ATOM_PATTERN_TEXT})*"

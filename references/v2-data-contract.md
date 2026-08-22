@@ -407,6 +407,13 @@ source acceptance.
   `archived_sessions/` source root. `start` performs this check before creating
   checkpoint, lock, raw-input, or sidecar state. A sibling owner-private run
   cache beneath `~/.codex/session-retrospective/` remains valid.
+- `doctor`, CLI `start`, and the public `start_run` facade apply the same
+  bidirectional lexical and resolved-path separation to the durable history
+  repository before readiness can pass or run state can be created. A history
+  repository inside, above, or aliased into either source root is rejected; a
+  sibling repository remains valid. Bare `~` is resolved from the canonical
+  account home rather than ambient `HOME`, so environment poisoning cannot
+  redirect this comparison.
 - Successful publication removes raw shards. Blocked raw state expires within
   seven days and remains an explicit recoverability/coverage outcome.
 
@@ -448,7 +455,9 @@ private locators, paths,
 and bare hosts retain distinct deterministic precedence. Ambiguous slash-word
 compounds remain
 reviewable prose; relative paths require an explicit dot prefix, a common path
-root, or a filename extension. Hardware addresses cover
+root, or a filename extension. Absolute, home, drive, and UNC locators consume
+spaced intermediate components plus legal apostrophe and comma punctuation so
+redaction cannot leave a residual directory suffix. Hardware addresses cover
 only strict six-octet colon/hyphen forms with one delimiter or strict
 three-group dotted forms such as `0011.2233.4455`; embedded, shortened, mixed,
 or extended tokens remain outside that grammar. MAC redaction precedes generic
@@ -465,6 +474,11 @@ identifiers; structured package coordinates must use schema-constrained fields
 or placeholders instead of natural-language exceptions. Labeled medical
 record numbers (`medical record number`, `MRN`, and controlled snake/camel
 forms) use the shared personal-identifier policy;
+subject-qualified `identifier` fields such as `customer identifier` and closed
+camel-case equivalents use that same policy. Controlled `prompt`, `input`, and
+`request` labels, including their `user`-qualified forms, are source-payload
+markers only when followed by `:` or `=`; unlabeled derived prose remains
+reviewable.
 an immediately following colon keeps the complete SCP-style locator under the
 higher-priority URL rule. Typed references and hashes
 are exempt from source-literal

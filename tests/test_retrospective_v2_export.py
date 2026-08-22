@@ -1856,7 +1856,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         for local_path in (
             "/root/acme/customer.txt",
             "/Users/alice/My Private Folder/secrets",
+            "/Users/alice/John's Private Folder/secrets",
+            "/Users/alice/Finance, Legal/secrets",
             r"C:\Users\alice\My Private Folder\secrets",
+            r"C:\Users\alice\John's Private Folder\secrets",
             r"\\server\share\My Private Folder\secrets",
         ):
             with self.subTest(local_path=local_path, phase="assembly"):
@@ -1966,6 +1969,12 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "The customer's name is Alice Smith",
             "The customer address was 123 Main Street",
             "The employee DOB set to 1990-01-02",
+            "Customer identifier: CUST-12345",
+            "User identifier: alice-12345",
+            "Account identifier: A1234567",
+            "customerIdentifier: CUST-12345",
+            "userIdentifier: alice-12345",
+            "accountIdentifier: A1234567",
             "Full name is Alice Smith",
             "Full name is Smith, John",
             "First name was Alice",
@@ -2602,7 +2611,11 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         probes = (
             "Original prompt: delete all records now.",
             "Prompt: proprietary payload.",
+            "Input: proprietary payload.",
+            "Request: proprietary payload.",
             "User prompt: proprietary payload.",
+            "User input: proprietary payload.",
+            "User request: proprietary payload.",
             "Tool output: status=failed.",
             "Tool response: proprietary payload.",
             "Terminal output: proprietary payload.",
@@ -2640,6 +2653,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Review shell output handling.",
             "Improve tool response formatting.",
             "The tool response was delayed.",
+            "Improve user input handling.",
+            "Clarify the user request before execution.",
         ):
             with self.subTest(safe_prose=safe_prose):
                 safe_review = review_data()

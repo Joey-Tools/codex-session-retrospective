@@ -12,6 +12,7 @@ from . import (
     authority,
     executable_authority,
     finalize,
+    history_paths,
     safe_io,
     sharding,
     transport as source_transport,
@@ -114,12 +115,13 @@ def doctor(
         provider_state=provider_state,
         production_marker=production_marker,
     )
-
     results: dict[str, dict[str, Any]] = {}
 
     def record(name: str, ok: bool, detail: str) -> None:
         results[name] = {"detail": detail, "ok": bool(ok)}
 
+    history_path, history_detail = history_paths.readiness(history_repo)
+    record("history_source_separation", history_path is not None, history_detail)
     try:
         python_runtime = source_transport.source_transport_python_runtime_readiness(
             expected_executable=authority.installed_runtime_python_path()
@@ -270,7 +272,7 @@ def doctor(
     elif (
         resolved_identity is None
         or normalized_provenance is None
-        or history_repo is None
+        or history_path is None
         or not isinstance(history_target_ref, str)
         or not history_target_ref
         or production_marker is None
@@ -294,7 +296,7 @@ def doctor(
                 production_marker,
                 identity=resolved_identity,
                 canonical_hosts=canonical_hosts,
-                history_repo=history_repo,
+                history_repo=history_path,
                 target_ref=history_target_ref,
                 configuration_root=normalized_provenance["configuration_root"],
                 configuration_ref=configuration_ref,
@@ -329,7 +331,7 @@ def doctor(
     history_binding: str | None = None
     if (
         resolved_identity is None
-        or history_repo is None
+        or history_path is None
         or not isinstance(history_target_ref, str)
         or not history_target_ref
         or publisher_program is None
@@ -344,7 +346,7 @@ def doctor(
     else:
         try:
             durable_history = authority.load_durable_history(
-                Path(history_repo).expanduser().absolute(),
+                history_path,
                 history_target_ref,
                 identity=resolved_identity,
                 expected_fingerprint=publisher_fingerprint,
@@ -353,7 +355,7 @@ def doctor(
                 expected_gpg_authority_sha256=publisher_authority_sha256,
             )
             history_binding = authority.history_repository_binding(
-                Path(history_repo).expanduser().absolute(),
+                history_path,
                 history_target_ref,
                 identity=resolved_identity,
             )
@@ -538,6 +540,8 @@ def start_run(
         provider_state=kwargs.get("provider_state"),
         production_marker=kwargs.get("production_marker"),
     )
+    if (history_repo := kwargs.get("history_repo")) is not None:
+        kwargs["history_repo"] = history_paths.require_repository(history_repo)
     try:
         source_transport.source_transport_python_runtime_readiness(
             expected_executable=authority.installed_runtime_python_path()
