@@ -1746,7 +1746,14 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         ):
             contexts = [f"Inspect {network_locator} before continuing."]
             if network_locator == "1.2.3.4":
-                contexts.append("The release server was 1.2.3.4.")
+                contexts.extend(
+                    (
+                        "The release server was 1.2.3.4.",
+                        "The release used version 1.2.3.4 before rollback.",
+                        "Release 1.2.3.4 completed.",
+                        "Connect to version 1.2.3.4 before continuing.",
+                    )
+                )
             if network_locator == "::":
                 contexts.append('He wrote "Inspect ::."')
             for context in contexts:
@@ -1801,8 +1808,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         validate_retained_artifacts(syntax_artifacts)
 
         for version_text in (
-            "The release used version 1.2.3.4 before rollback.",
-            "Release 1.2.3.4 completed.",
+            "The release used version v1.2.3.4 before rollback.",
+            "Release v1.2.3.4 completed.",
         ):
             with self.subTest(version_text=version_text):
                 version_review = review_data()
@@ -1846,12 +1853,39 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 with self.assertRaisesRegex(RetainedPrivacyError, "URL"):
                     validate_retained_artifacts(tampered)
 
-        path_review = review_data()
-        path_review["turn_findings"][1]["rewritten_prompt"] = (
-            "Inspect /root/acme/customer.txt before continuing."
-        )
-        with self.assertRaisesRegex(RetainedPrivacyError, "local path"):
-            assemble_retained_artifacts(run_state(), path_review)
+        for local_path in (
+            "/root/acme/customer.txt",
+            "/Users/alice/My Private Folder/secrets",
+            r"C:\Users\alice\My Private Folder\secrets",
+            r"\\server\share\My Private Folder\secrets",
+        ):
+            with self.subTest(local_path=local_path, phase="assembly"):
+                path_review = review_data()
+                path_review["turn_findings"][1]["rewritten_prompt"] = (
+                    f"Inspect {local_path} before continuing."
+                )
+                with self.assertRaisesRegex(RetainedPrivacyError, "local path"):
+                    assemble_retained_artifacts(run_state(), path_review)
+
+            with self.subTest(local_path=local_path, phase="reread"):
+                path_artifacts = assemble_retained_artifacts(run_state(), review_data())
+                path_tampered = dict(path_artifacts)
+                path_rows = [
+                    json.loads(line)
+                    for line in path_tampered["turn_findings.jsonl"].splitlines()
+                ]
+                path_high_impact = next(
+                    row for row in path_rows if row["disposition"] == "high_impact"
+                )
+                path_high_impact["rewritten_prompt"] = (
+                    f"Inspect {local_path} before continuing."
+                )
+                path_tampered["turn_findings.jsonl"] = b"".join(
+                    canonical_json_bytes(row) for row in path_rows
+                )
+                refresh_bundle_digest(path_tampered)
+                with self.assertRaisesRegex(RetainedPrivacyError, "local path"):
+                    validate_retained_artifacts(path_tampered)
 
         for field in (
             "problem_statement",
@@ -2179,6 +2213,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Release 1234.56.78.9012 remains available.",
             "The input/output boundary was unclear.",
             "The before/after comparison lacked evidence.",
+            "Improve tool response formatting.",
+            "The tool response was delayed.",
             "The source/target mapping was explicit.",
             "The home/away comparison was irrelevant.",
             "The read/write/execute policy was reviewed.",
@@ -2232,14 +2268,20 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
     ) -> None:
         values = (
             "home path ~/private/file.txt",
+            "home path ~/My Private Folder/secrets",
             "drive path C:\\private\\file.txt",
+            r"drive path C:\Users\alice\My Private Folder\secrets",
             "host path \\\\server\\share",
+            r"host path \\server\share\My Private Folder\secrets",
             "session id: abcdef12",
+            "session identifier: 01JABCDEFGHJKMNPQRSTVWXYZ0",
             "thread ref: abcdef12",
+            "thread identifier: opaque-thread-12345",
             "conversation id: abcdef12",
             "turn id: abcdef12",
             "message id: raw_123456",
             "tool call id: abcdef12",
+            "tool call identifier: call_ABCDEFG123456",
             "request id: abcdef12",
             "run id: abcdef12",
             "job id: abcdef12",
@@ -2559,6 +2601,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
     ) -> None:
         probes = (
             "Original prompt: delete all records now.",
+            "Prompt: proprietary payload.",
+            "User prompt: proprietary payload.",
             "Tool output: status=failed.",
             "Tool response: proprietary payload.",
             "Terminal output: proprietary payload.",
@@ -2594,6 +2638,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Improve terminal output formatting.",
             "The console output was too noisy.",
             "Review shell output handling.",
+            "Improve tool response formatting.",
+            "The tool response was delayed.",
         ):
             with self.subTest(safe_prose=safe_prose):
                 safe_review = review_data()

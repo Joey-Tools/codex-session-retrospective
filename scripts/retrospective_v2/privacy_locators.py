@@ -345,10 +345,6 @@ _DOTTED_NUMERIC_VERSION_RE = re.compile(
     r"[0-9]+(?:\.[0-9]+){3,}",
     re.ASCII,
 )
-_DOTTED_VERSION_CONTEXT_RE = re.compile(
-    r"\b(?:release|version)[ \t]+\Z",
-    re.ASCII | re.IGNORECASE,
-)
 _PHONE_FIELD_PATTERN_TEXT = (
     r"\b(?:(?:call|phone|tel|telephone|mobile)"
     r"(?:[ _-]?(?:number|no))?|contact(?:[ _-]?(?:phone|number|no))?)"
@@ -1088,9 +1084,15 @@ LABELED_INTERNAL_HOST_RE = re.compile(
     r"[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
     re.ASCII | re.IGNORECASE,
 )
+_ABSOLUTE_PATH_ATOM_PATTERN_TEXT = r"[A-Za-z0-9._~+@%=-]+"
+_ABSOLUTE_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT = (
+    rf"{_ABSOLUTE_PATH_ATOM_PATTERN_TEXT}"
+    rf"(?:[ \t]+{_ABSOLUTE_PATH_ATOM_PATTERN_TEXT})*"
+)
 UNIX_PATH_RE = re.compile(
     r"(?<![A-Za-z0-9_])/(?!/)"
-    r"[A-Za-z0-9._~+@%=-]+(?:/[A-Za-z0-9._~+@%=-]+)*"
+    rf"(?:{_ABSOLUTE_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}/)*"
+    rf"{_ABSOLUTE_PATH_ATOM_PATTERN_TEXT}"
 )
 _RELATIVE_PATH_SEGMENT_PATTERN_TEXT = r"[A-Za-z0-9_.~+@%=-]+"
 _RELATIVE_PATH_FILE_PATTERN_TEXT = (
@@ -1117,17 +1119,29 @@ RELATIVE_PATH_RE = re.compile(
 )
 HOME_PATH_RE = re.compile(
     r"(?<![A-Za-z0-9_])~[/\\]"
-    r"(?:[A-Za-z0-9._~+@%=-]+(?:[/\\][A-Za-z0-9._~+@%=-]+)*)?"
+    rf"(?:(?:{_ABSOLUTE_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}[/\\])*"
+    rf"{_ABSOLUTE_PATH_ATOM_PATTERN_TEXT})?"
+)
+_WINDOWS_PATH_ATOM_PATTERN_TEXT = r"[^\\\s\"'<>:|?*]+"
+_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT = (
+    rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
+    rf"(?:[ \t]+{_WINDOWS_PATH_ATOM_PATTERN_TEXT})*"
 )
 WINDOWS_PATH_RE = re.compile(
-    r"\b[A-Z]:\\(?:[^\\\s\"'<>:|?*]+(?:\\[^\\\s\"'<>:|?*]+)*)?",
+    r"\b[A-Z]:\\"
+    rf"(?:(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT})?",
     re.ASCII | re.IGNORECASE,
 )
-UNC_PATH_RE = re.compile(r"\\\\[^\\\s]+\\[^\s\"'<>:|?*]+")
+UNC_PATH_RE = re.compile(
+    rf"\\\\{_WINDOWS_PATH_ATOM_PATTERN_TEXT}\\"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
+)
 PATH_LOCATOR_PATTERNS = (
     RELATIVE_PATH_RE,
-    UNIX_PATH_RE,
     HOME_PATH_RE,
+    UNIX_PATH_RE,
     WINDOWS_PATH_RE,
     UNC_PATH_RE,
 )
@@ -1143,7 +1157,7 @@ LONG_HEX_ID_RE = re.compile(
 )
 RAW_ID_LABEL_RE = re.compile(
     r"\b(?:session|thread|conversation|turn|message|tool[_ -]?call|request|"
-    r"run|job|attempt)[_ -]?(?:id|ref)\s*(?:=|:|#)\s*"
+    r"run|job|attempt)[_ -]?(?:id|ref|identifier)\s*(?:=|:|#)\s*"
     r"(?![a-z][a-z0-9_]*_ref_v2:)[A-Za-z0-9._:-]{6,}",
     re.ASCII | re.IGNORECASE,
 )
@@ -1621,16 +1635,7 @@ def _is_ip_token(value: str, *, version: int) -> bool:
 
 
 def _ipv4_match_is_valid(match: re.Match[str]) -> bool:
-    context_start = max(0, match.start() - 64)
-    return all(
-        (
-            _is_ip_token(match.group(0), version=4),
-            _DOTTED_VERSION_CONTEXT_RE.search(
-                match.string[context_start : match.start()]
-            )
-            is None,
-        )
-    )
+    return _is_ip_token(match.group(0), version=4)
 
 
 def ipv4_matches(value: str) -> Iterator[re.Match[str]]:

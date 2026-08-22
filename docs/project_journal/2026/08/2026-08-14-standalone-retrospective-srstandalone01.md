@@ -3101,6 +3101,49 @@ superseded_by:
   exclusion, and `git diff --check` are clean. Signing, exact-secret admission,
   the final clean-context Codex processor, hosted CI, and current-head GitHub
   Codex evidence remain delivery gates.
+- Current-head GitHub Codex review of signed head `2bb47cb5` found five retained
+  privacy gaps: natural-language `version` or `release` context could exempt a
+  real IPv4 address; tool-response markers rejected harmless meta prose while
+  bare `Prompt:` and `User prompt:` payload labels escaped; absolute paths with
+  a spaced intermediate component retained their suffix; and labeled raw IDs
+  using `identifier` escaped the shared detector. A clean-context Codex CLI
+  review had already started in an independently materialized and validated
+  workspace when those current-head findings arrived. It was interrupted once,
+  produced no terminal review artifact, postvalidated clean, left the trusted
+  bundle unchanged, and had its exact task root removed. The lane is stale and
+  non-counting; no partial output was reused.
+- The shared locator policy now treats every syntactically valid IPv4-shaped
+  four-part token as an address regardless of nearby natural-language context;
+  retained dotted versions use an unambiguous `v1.2.3.4` form or structured
+  data. Tool and command output/response/result markers require `:` or `=`, so
+  meta descriptions remain valid, while bare `Prompt:` and `User prompt:`
+  labels fail the final retained-content policy. POSIX, home-relative, Windows,
+  and UNC locators consume horizontally spaced intermediate components through
+  their following path separator and prefer the home-path grammar before the
+  generic Unix grammar. Session, thread, and tool-call `identifier` labels now
+  use the same raw-ID redaction and retained-validation policy as `id` and
+  `ref`. This supersedes the earlier natural-language dotted-version exception.
+- Focused finding regressions pass 6/6 in 10.594 seconds. The complete affected
+  result/episode and export modules pass 164/164 in 131.452 seconds, the
+  independent result-contract audit passes 25/25 in 2.841 seconds, and module
+  boundaries plus CI contracts pass 52/52 in 3.636 seconds with the exact
+  9,848-branch inventory unchanged. The first focused run passed 5/6 but exposed
+  the more-specific home-path ordering defect; that run is non-counting and the
+  corrected six-test rerun is the accepted evidence.
+- The final Python 3.13.12 inventory contains 1,888 exact test IDs from 22
+  authenticated sources under manifest digest
+  `a43e3c1794b623d8511f2705ddd69b45f77acb9894e5c2e98c44366d7c6ac7e9`.
+  Shard 0 passes 449/449 in 1,622.277 seconds, shard 1 passes 511/511 in
+  1,481.704 seconds, shard 2 passes 502/502 in 1,362.351 seconds, and shard 3
+  passes 426/426 in 1,321.045 seconds, for exact aggregate coverage of
+  1,888/1,888 in 5,787.377 seconds without skips. The independent Darwin
+  security inventory passes 14/14 in 68.694 seconds. Ruff 0.13.2 lint for all
+  `scripts/` and `tests/`, formatting for all four changed Python files,
+  actionlint 1.7.12 for both workflows, the generated bootstrap manifest, and
+  the official OpenAI Skill validator are clean. Journal validation,
+  `git diff --check`, signing, exact-secret admission, the final clean-context
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain the
+  delivery gates.
 
 ## Follow-up Work
 

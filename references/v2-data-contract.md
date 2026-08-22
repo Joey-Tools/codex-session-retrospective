@@ -456,6 +456,10 @@ personal-number redaction so every accepted hardware-address shape uses the
 same deterministic placeholder. RFC-shaped email addresses with dot-atom or
 bounded printable quoted local parts, including IDNA A-label domains, and
 bounded single-label `account@host` identifiers are personal identifiers.
+Every syntactically valid IPv4-shaped four-part dotted token is an address even
+when nearby prose says `version` or `release`; retained version prose must use
+an unambiguous form such as `v1.2.3.4`, a schema-constrained field, or a
+placeholder instead of a natural-language exception.
 Retained prose also treats package-shaped `name@tag` values as personal
 identifiers; structured package coordinates must use schema-constrained fields
 or placeholders instead of natural-language exceptions. Labeled medical

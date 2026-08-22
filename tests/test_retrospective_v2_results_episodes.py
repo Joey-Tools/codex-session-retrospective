@@ -2246,10 +2246,10 @@ class ResultValidationTests(unittest.TestCase):
                 )
                 self.assertEqual((), scan_for_leaks(result))
 
-    def test_post_redaction_preserves_explicit_dotted_versions(self) -> None:
+    def test_post_redaction_preserves_only_unambiguous_dotted_versions(self) -> None:
         for source in (
-            "The release used version 1.2.3.4 before rollback.",
-            "Release 1.2.3.4 completed.",
+            "The release used version v1.2.3.4 before rollback.",
+            "Release v1.2.3.4 completed.",
         ):
             with self.subTest(source=source):
                 self.assertEqual((), scan_for_leaks(source))
@@ -2261,18 +2261,47 @@ class ResultValidationTests(unittest.TestCase):
                     result["turns"][0]["generalized_working_text"],
                 )
 
-        unsafe = "The release server was 1.2.3.4."
-        self.assertIn(
-            "ip_address",
-            {finding.category for finding in scan_for_leaks(unsafe)},
-        )
-        value = extractor_result()
-        value["turns"][0]["generalized_working_text"] = unsafe
-        result = validate_extractor_result(value, ALL_REFS)
-        self.assertEqual(
-            "The release server was [REDACTED_IP_ADDRESS].",
-            result["turns"][0]["generalized_working_text"],
-        )
+        for unsafe in (
+            "The release server was 1.2.3.4.",
+            "The release used version 1.2.3.4 before rollback.",
+            "Release 1.2.3.4 completed.",
+            "Connect to version 54.23.12.1 before continuing.",
+        ):
+            with self.subTest(unsafe=unsafe):
+                self.assertIn(
+                    "ip_address",
+                    {finding.category for finding in scan_for_leaks(unsafe)},
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = unsafe
+                result = validate_extractor_result(value, ALL_REFS)
+                self.assertIn(
+                    "[REDACTED_IP_ADDRESS]",
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual((), scan_for_leaks(result))
+
+    def test_post_redaction_removes_labeled_identifier_forms(self) -> None:
+        for source in (
+            "Session identifier: 01JABCDEFGHJKMNPQRSTVWXYZ0",
+            "Thread identifier: opaque-thread-12345",
+            "Tool call identifier: call_ABCDEFG123456",
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    "raw_id",
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+
+                result = validate_extractor_result(value, ALL_REFS)
+
+                self.assertEqual(
+                    "[REDACTED_RAW_ID]",
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual((), scan_for_leaks(result))
 
     def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
         jwt_segment = "".join(("eyJ", "A" * 8))
@@ -2908,6 +2937,27 @@ class ResultValidationTests(unittest.TestCase):
             "/root/acme/customer.txt",
             "/usr/local/share/private.dat",
             "/workspace/project/review.log",
+        ):
+            with self.subTest(source_path=source_path):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = (
+                    f"Read {source_path} before continuing."
+                )
+
+                result = validate_extractor_result(value, ALL_REFS)
+
+                text = result["turns"][0]["generalized_working_text"]
+                self.assertEqual(text, "Read [REDACTED_PATH] before continuing.")
+                self.assertEqual(scan_for_leaks(result), ())
+
+    def test_post_redaction_covers_paths_with_spaced_intermediate_components(
+        self,
+    ) -> None:
+        for source_path in (
+            "/Users/alice/My Private Folder/secrets",
+            "~/My Private Folder/secrets",
+            r"C:\Users\alice\My Private Folder\secrets",
+            r"\\server\share\My Private Folder\secrets",
         ):
             with self.subTest(source_path=source_path):
                 value = extractor_result()
