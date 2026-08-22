@@ -1059,6 +1059,16 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
             (
+                "Medical record number: 12345678",
+                "12345678 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "MRN: 12345678",
+                "12345678 was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
                 "Payment sent to DE89370400440532013000 before continuing.",
                 "DE89370400440532013000 was referenced",
                 "[REDACTED_PERSONAL_IDENTIFIER] was referenced",
@@ -1829,6 +1839,19 @@ class ResultValidationTests(unittest.TestCase):
                     "[REDACTED_PERSONAL_IDENTIFIER]",
                     result_validation_module.privacy_locators.redact_personal_identifiers(
                         birth_date
+                    ),
+                )
+        for medical_record in (
+            "Medical record number: 12345678",
+            "medical_record_no: 12345678",
+            "medicalRecordId: 12345678",
+            "MRN: 12345678",
+        ):
+            with self.subTest(medical_record=medical_record):
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result_validation_module.privacy_locators.redact_personal_identifiers(
+                        medical_record
                     ),
                 )
         for safe_pin_text in (
@@ -2700,6 +2723,16 @@ class ResultValidationTests(unittest.TestCase):
                     {item.category for item in scan_for_leaks({"safe": invalid})},
                 )
 
+        for labeled_email in ("Email: react@latest", "Notify foo@next"):
+            with self.subTest(labeled_email=labeled_email):
+                self.assertIn(
+                    "personal_identifier",
+                    {
+                        item.category
+                        for item in scan_for_leaks({"unsafe": labeled_email})
+                    },
+                )
+
     def test_iana_root_tld_snapshot_is_pinned(self) -> None:
         privacy = result_validation_module.privacy_locators
 
@@ -2715,6 +2748,9 @@ class ResultValidationTests(unittest.TestCase):
 
     def test_dotted_code_and_slash_compounds_remain_reviewable_prose(self) -> None:
         safe_texts = (
+            "The react@latest upgrade failed.",
+            "The foo@next dependency remained pinned.",
+            "The @scope/react@canary test was explicit.",
             "The input/output boundary was unclear.",
             "The before/after comparison lacked evidence.",
             "The source/target mapping was explicit.",

@@ -700,11 +700,9 @@ def command_doctor(args: argparse.Namespace) -> CommandResult:
 
 
 def command_start(args: argparse.Namespace) -> CommandResult:
+    run_dir = temporary_paths.require_run_directory_outside_sources(args.run_dir)
     identity_path = _command_identity_path(args, startup=True)
-    provenance = _read_json_object(
-        args.run_config,
-        max_bytes=MAX_DESCRIPTOR_BYTES,
-    )
+    provenance = _read_json_object(args.run_config, max_bytes=MAX_DESCRIPTOR_BYTES)
     successor = None
     if (
         args.shadow
@@ -735,8 +733,10 @@ def command_start(args: argparse.Namespace) -> CommandResult:
                     "one completed partial run"
                 ),
             )
-        partial_run_dir = _absolute_path(args.shadow_successor_of)
-        if partial_run_dir == _absolute_path(args.run_dir):
+        partial_run_dir = temporary_paths.require_run_directory_outside_sources(
+            args.shadow_successor_of
+        )
+        if partial_run_dir == run_dir:
             raise CliContractError(
                 exit_code=ExitCode.INVALID_INPUT,
                 code="invalid_shadow_successor",
@@ -851,7 +851,7 @@ def command_start(args: argparse.Namespace) -> CommandResult:
     )
     provider_state, production_marker = _startup_production_binding_paths(args)
     result = orchestrator_api.start_run(
-        _absolute_path(args.run_dir),
+        run_dir,
         identity_path=identity_path,
         require_existing_identity=True,
         mode=args.mode,
@@ -880,7 +880,7 @@ def command_start(args: argparse.Namespace) -> CommandResult:
 
 def command_status(args: argparse.Namespace) -> CommandResult:
     result = orchestrator_api.status(
-        _absolute_path(args.run_dir),
+        temporary_paths.require_run_directory_outside_sources(args.run_dir),
         claim_job_ref=args.claim_job_ref,
         claim_attempt_ref=args.claim_attempt_ref,
         dispatcher_ref=args.dispatcher_ref,
@@ -1114,7 +1114,7 @@ def _session_shards_transcript_cli_error(
 
 
 def command_accept_source(args: argparse.Namespace) -> CommandResult:
-    run_dir = _absolute_path(args.run_dir)
+    run_dir = temporary_paths.require_run_directory_outside_sources(args.run_dir)
     transport_path = _run_raw_input_path(run_dir, args.transport_stream_file)
     preparation = orchestrator_api.prepare_source(
         run_dir,
@@ -1174,7 +1174,7 @@ def command_accept_source(args: argparse.Namespace) -> CommandResult:
 def command_accept_agent_result(args: argparse.Namespace) -> CommandResult:
     result_path = _absolute_path(args.result)
     sink = orchestrator_api.resolve_agent_result_sink(
-        _absolute_path(args.run_dir),
+        temporary_paths.require_run_directory_outside_sources(args.run_dir),
         args.job_ref,
         args.attempt_ref,
         claim_ref=args.claim_ref,
@@ -1192,7 +1192,7 @@ def command_accept_agent_result(args: argparse.Namespace) -> CommandResult:
     )
     if observation.payload is None:
         result = orchestrator_api.reject_agent_result_payload(
-            _absolute_path(args.run_dir),
+            temporary_paths.require_run_directory_outside_sources(args.run_dir),
             args.job_ref,
             args.attempt_ref,
             claim_ref=args.claim_ref,
@@ -1208,7 +1208,7 @@ def command_accept_agent_result(args: argparse.Namespace) -> CommandResult:
         result_manifest = _decode_bound_agent_result(observation.payload)
     except _BoundAgentResultDecodeError as error:
         result = orchestrator_api.reject_agent_result_payload(
-            _absolute_path(args.run_dir),
+            temporary_paths.require_run_directory_outside_sources(args.run_dir),
             args.job_ref,
             args.attempt_ref,
             claim_ref=args.claim_ref,
@@ -1220,7 +1220,7 @@ def command_accept_agent_result(args: argparse.Namespace) -> CommandResult:
         )
         return CommandResult.success("accept-agent-result", _mapping_result(result))
     result = orchestrator_api.accept_agent_result(
-        _absolute_path(args.run_dir),
+        temporary_paths.require_run_directory_outside_sources(args.run_dir),
         args.job_ref,
         args.attempt_ref,
         result_manifest,
@@ -1241,13 +1241,13 @@ def command_advance(args: argparse.Namespace) -> CommandResult:
         )
     if args.holdout_host is None:
         result = orchestrator_api.advance(
-            _absolute_path(args.run_dir),
+            temporary_paths.require_run_directory_outside_sources(args.run_dir),
             identity_path=_command_identity_path(args),
             require_existing_identity=True,
         )
     else:
         result = orchestrator_api.holdout_host(
-            _absolute_path(args.run_dir),
+            temporary_paths.require_run_directory_outside_sources(args.run_dir),
             args.holdout_host,
             reason=args.holdout_reason,
             identity_path=_command_identity_path(args),
@@ -1343,7 +1343,7 @@ def _claim_export_destination(
 
 
 def command_export(args: argparse.Namespace) -> CommandResult:
-    run_dir = _absolute_path(args.run_dir)
+    run_dir = temporary_paths.require_run_directory_outside_sources(args.run_dir)
     output = _absolute_path(args.output)
     orchestrator = orchestrator_api.RetrospectiveOrchestrator(
         run_dir,
@@ -1496,7 +1496,7 @@ def _command_finalize_once(
     *,
     terminal_only: bool = False,
 ) -> CommandResult | None:
-    run_dir = _absolute_path(args.run_dir)
+    run_dir = temporary_paths.require_run_directory_outside_sources(args.run_dir)
     identity_path = _command_identity_path(args)
     if identity_path is None:
         identity_path = identity_api.identity_key_path().absolute()

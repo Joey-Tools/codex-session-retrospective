@@ -1848,6 +1848,65 @@ class CliContractTests(unittest.TestCase):
                 self.assertEqual(expected_code, result.error.code)
                 start_run.assert_not_called()
 
+    def test_run_directory_cannot_overlap_local_session_sources(self) -> None:
+        codex_root = self.root / "codex-home"
+        sessions = codex_root / "sessions"
+        archived_sessions = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived_sessions.mkdir(mode=0o700)
+        active_sentinel = sessions / "rollout-active.jsonl"
+        archived_sentinel = archived_sessions / "rollout-archived.jsonl"
+        active_sentinel.write_text("active\n", encoding="ascii")
+        archived_sentinel.write_text("archived\n", encoding="ascii")
+        outside = self.root / "outside"
+        outside.mkdir(mode=0o700)
+        lexical_escape = sessions / "escape"
+        lexical_escape.symlink_to(outside, target_is_directory=True)
+        resolved_alias = self.root / "sessions-alias"
+        resolved_alias.symlink_to(sessions, target_is_directory=True)
+        safe_sibling = codex_root / "session-retrospective" / "run"
+        cases = (
+            ("active-child", sessions / "new-run", False),
+            ("archived-child", archived_sessions / "new-run", False),
+            ("resolved-alias", resolved_alias / "new-run", False),
+            ("lexical-escape", lexical_escape / "new-run", False),
+            ("source-parent", codex_root, False),
+            ("safe-sibling", safe_sibling, True),
+        )
+
+        for label, run_dir, accepted in cases:
+            arguments = list(self.shadow_start_arguments())
+            arguments[arguments.index(str(self.run_dir))] = str(run_dir)
+            with (
+                self.subTest(case=label),
+                mock.patch.object(
+                    cli.temporary_paths,
+                    "local_codex_root",
+                    return_value=codex_root,
+                ),
+                mock.patch.object(
+                    cli.orchestrator_api,
+                    "start_run",
+                    return_value={"stage": "source_catalog"},
+                ) as start_run,
+            ):
+                result = self.parse_dispatch(*arguments)
+
+                if accepted:
+                    self.assertTrue(result.ok, result.error)
+                    start_run.assert_called_once()
+                else:
+                    self.assertEqual(cli.ExitCode.SECURITY, result.exit_code)
+                    self.assertEqual("security_error", result.error.code)
+                    self.assertEqual("unsafe_path", result.error.reason_code)
+                    start_run.assert_not_called()
+
+        self.assertEqual("active\n", active_sentinel.read_text(encoding="ascii"))
+        self.assertEqual("archived\n", archived_sentinel.read_text(encoding="ascii"))
+        self.assertFalse((sessions / "new-run").exists())
+        self.assertFalse((archived_sessions / "new-run").exists())
+        self.assertFalse((outside / "new-run").exists())
+
     def test_shadow_start_requires_explicit_existing_identity_without_default_write(
         self,
     ) -> None:

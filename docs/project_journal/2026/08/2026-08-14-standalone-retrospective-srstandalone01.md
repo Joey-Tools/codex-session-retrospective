@@ -2965,6 +2965,42 @@ superseded_by:
   exact-secret admission, the replacement local Codex processor, hosted CI,
   and current-head GitHub Codex evidence remain delivery gates.
 
+- Current-head GitHub Codex review of signed head `b4a9b69c` found three
+  additional boundary defects: labeled MRN values were not classified as
+  personal identifiers; single-label package release forms such as
+  `react@latest` were misclassified as e-mail addresses; and a caller could
+  select a run directory inside, above, or aliased to the local active or
+  archived session source roots. The shared privacy grammar now covers
+  controlled MRN labels, package release tags remain reviewable only outside
+  explicit e-mail/contact context, and every CLI run-directory consumer uses
+  one lexical/resolved bidirectional source-overlap guard before state access
+  or creation. Adversarial tests preserve source sentinels across direct,
+  parent, resolved-alias, and lexical-symlink overlap attempts while accepting
+  the canonical sibling run cache.
+- The first 1,880-test shard attempt exposed the unchanged module-boundary
+  budgets before reaching terminal coverage: branch inventory rose from 9,848
+  to 9,854, `cli.py` reached 2,004 lines, and `temporary_paths.py` reached 365
+  lines. All four shard processes were interrupted once and that attempt is
+  non-counting. The implementation now reuses and strengthens the existing
+  temporary/source-root guard, performs the package-tag decision without new
+  AST branches, and validates `start`'s run directory once at command entry.
+  No budget was relaxed: module boundaries pass 19/19 with exact 9,848 branch
+  inventory, `cli.py` at 2,000 lines, and `temporary_paths.py` at 350 lines.
+- The final Python 3.13.12 inventory contains 1,880 exact test IDs from 22
+  authenticated sources under manifest digest
+  `640e0c5d10e37112f7afd33e14d9caaaadb0779eb8a314328b0b5cb77a3ea9cc`.
+  Shard 0 passes 448/448 in 1,785.828 seconds, shard 1 passes 509/509 in
+  1,645.230 seconds, shard 2 passes 498/498 in 1,519.957 seconds, and shard 3
+  passes 425/425 in 1,465.264 seconds, for exact aggregate coverage of
+  1,880/1,880 without skips. The independent Darwin security inventory passes
+  14/14 in 83.826 seconds; focused finding regressions pass 5/5; CI contracts
+  pass 33/33; Ruff 0.13.2 lint, changed-file formatting, both workflows under
+  `actionlint`, the generated bootstrap manifest, and `git diff --check` are
+  clean. One direct CI-contract run used the Homebrew symlink instead of the
+  required owner-controlled copied interpreter and one isolated unittest
+  command could not import the repository package; both stopped before valid
+  gate execution and are non-counting.
+
 ## Follow-up Work
 
 1. Register `Joey-Tools/codex-session-retrospective` in `codex-workspace` after

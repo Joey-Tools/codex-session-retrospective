@@ -318,11 +318,22 @@ EMAIL_RE = re.compile(
     r"(?<![a-z0-9.!#$%&'*+/=?^_`{|}~-])"
     rf"(?:{_EMAIL_QUOTED_LOCAL_PART_PATTERN_TEXT}|"
     rf"{_EMAIL_DOT_ATOM_LOCAL_PART_PATTERN_TEXT})@"
-    r"(?:"
+    r"(?P<email_domain>"
     rf"(?:{_FQDN_LABEL_PATTERN_TEXT}\.)+{_FQDN_ANY_SUFFIX_PATTERN_TEXT}"
     r"|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?![.:])"
     r")"
     r"(?![a-z0-9-])",
+    re.ASCII | re.IGNORECASE,
+)
+_PACKAGE_RELEASE_TAG_RE = re.compile(
+    r"(?:alpha|beta|canary|dev|experimental|latest|legacy|next|nightly|rc|stable|"
+    r"v?[0-9]+(?:[-_][a-z0-9.-]+)?)\Z",
+    re.ASCII | re.IGNORECASE,
+)
+_EXPLICIT_EMAIL_CONTEXT_RE = re.compile(
+    r"(?:\b(?:contact|e-?mail|email|mailbox|recipient|sender)\b"
+    r"(?:[ \t]+(?:address|is|was))?[ \t]*(?::|=|to)?[ \t]*|"
+    r"\b(?:notify|send|write)[ \t]+(?:to[ \t]+)?)\Z",
     re.ASCII | re.IGNORECASE,
 )
 INTERNATIONAL_PHONE_RE = re.compile(
@@ -521,6 +532,7 @@ _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
 )
 _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"
+    r"mrn|medical[_ -]?record(?:[_ -]?(?:number|no|id))?|"
     r"national[_ -]?(?:insurance|identity)(?:[_ -]?(?:number|no|id))?|"
     r"(?:tax(?:payer)?[_ -]?(?:identification|id))(?:[_ -]?(?:number|no))?|"
     r"passport(?:[_ -]?(?:number|no|id))?|"
@@ -529,7 +541,8 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"card[_ -]?(?:number|no)|"
     r"(?:bank[_ -]?)?account[_ -]?(?:number|no)|"
     r"routing[_ -]?(?:number|no)|iban|"
-    r"(?-i:(?:socialSecurityNumber|nationalInsuranceNumber|nationalId|taxId|"
+    r"(?-i:(?:socialSecurityNumber|medicalRecord(?:Number|Id)|"
+    r"nationalInsuranceNumber|nationalId|taxId|"
     r"passport(?:Number|Id)|driversLicenseNumber|creditCard(?:Number)?|"
     r"debitCard(?:Number)?|paymentCard(?:Number)?|cardNumber|"
     r"bankAccountNumber|accountNumber|routingNumber)))"
@@ -1945,6 +1958,21 @@ def _bare_phone_match_is_valid(match: re.Match[str]) -> bool:
     )
 
 
+def _email_match_is_valid(match: re.Match[str]) -> bool:
+    domain = match.group("email_domain")
+    context_start = max(0, match.start() - 64)
+    return any(
+        (
+            "." in domain,
+            _PACKAGE_RELEASE_TAG_RE.fullmatch(domain) is None,
+            _EXPLICIT_EMAIL_CONTEXT_RE.search(
+                match.string[context_start : match.start()]
+            )
+            is not None,
+        )
+    )
+
+
 def _retain_every_match(_match: re.Match[str]) -> bool:
     return True
 
@@ -1967,6 +1995,7 @@ _PERSONAL_MATCH_FILTERS = {
     BARE_PAYMENT_CARD_RE: _payment_card_match_is_valid,
     BARE_IBAN_RE: _iban_match_is_valid,
     BARE_GROUPED_IBAN_RE: _iban_match_is_valid,
+    EMAIL_RE: _email_match_is_valid,
     PHONE_RE: _bare_phone_match_is_valid,
 }
 

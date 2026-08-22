@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-import operator
 import os
 from pathlib import Path
 import pwd
@@ -79,14 +78,28 @@ def local_codex_root() -> Path:
     return root
 
 
+def require_run_directory_outside_sources(run_dir: str | Path) -> Path:
+    """Reject a run directory that can contain or enter local session sources."""
+
+    lexical_run_dir = Path(os.path.abspath(os.fspath(run_dir)))
+    source_root = local_codex_root()
+    _require_root_outside_source(lexical_run_dir, source_root / "sessions")
+    _require_root_outside_source(lexical_run_dir, source_root / "archived_sessions")
+    return lexical_run_dir
+
+
 def _require_root_outside_source(temporary_root: Path, source_root: Path) -> None:
     lexical_temporary_root = Path(os.path.abspath(os.fspath(temporary_root)))
     lexical_source_root = Path(os.path.abspath(os.fspath(source_root)))
-    overlap = operator.or_(
-        lexical_temporary_root.is_relative_to(lexical_source_root),
-        lexical_temporary_root.resolve(strict=False).is_relative_to(
-            lexical_source_root.resolve(strict=False)
-        ),
+    resolved_temporary_root = lexical_temporary_root.resolve(strict=False)
+    resolved_source_root = lexical_source_root.resolve(strict=False)
+    overlap = any(
+        (
+            lexical_temporary_root.is_relative_to(lexical_source_root),
+            lexical_source_root.is_relative_to(lexical_temporary_root),
+            resolved_temporary_root.is_relative_to(resolved_source_root),
+            resolved_source_root.is_relative_to(resolved_temporary_root),
+        )
     )
     if overlap:
         raise safe_io.UnsafePathError(
