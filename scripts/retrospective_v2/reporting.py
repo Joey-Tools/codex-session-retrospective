@@ -275,15 +275,12 @@ _OPAQUE_REF_RE = re.compile(
     r"(?:[a-z][a-z0-9_]*_ref_v2|source_snapshot_v2):[0-9a-f]{64}\Z"
 )
 _HEX_64_RE = re.compile(r"[0-9a-f]{64}\Z")
-_SOURCE_TEXT_MARKER_RE = re.compile(
-    r"(?i)(?:\b(?:raw|original|verbatim)[ _-]+(?:prompt|request|message|input|text)\b|"
-    r"\b(?:prompt|input|request|user[ _-]+(?:prompt|input|request))\b"
-    r"[ \t]*(?:=|:)|"
-    r"\b(?:tool|command)[ _-]+(?:output|response|result)\b[ \t]*(?:=|:)|"
-    r"\b(?:terminal|console|shell)[ _-]+output\b[ \t]*(?:=|:)|"
-    r"\b(?:stdout|stderr|transcript)\b|"
-    r"(?:^|\s)(?:user|assistant|system|tool)\s*:|\b(?:please|can you|could you|"
-    r"would you|i need|i want|my request|your response)\b)"
+_SOURCE_TEXT_SHAPE_RE = re.compile(
+    r"(?i)(?:\b(?:raw|original|verbatim)[ _-]+"
+    r"(?:prompt|request|message|input|text)\b|"
+    r"(?:^|\s)(?:user|assistant|system|tool)\s*:|"
+    r"\b(?:please|can you|could you|would you|i need|i want|"
+    r"my request|your response)\b)"
 )
 _SOURCE_PAYLOAD_SHAPE_RE = re.compile(
     r"(?:^\s*(?:\{|\[|```|>>>|\$\s)|\b[A-Za-z_][A-Za-z0-9_]*=[^\s]+)"
@@ -733,7 +730,7 @@ def _validate_safe_string(value: str, *, path: str) -> None:
             bare_fqdn,
             privacy_locators.contains_ip_address(value),
             privacy_locators.contains_personal_identifier(value),
-            privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
+            privacy_locators.contains_internal_host(value),
             privacy_locators.contains_mac_address(value),
             privacy_locators.contains_path_locator(value),
             next(privacy_locators.noncanonical_redacted_placeholder_spans(value), None),
@@ -769,7 +766,7 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
             privacy_locators.contains_bare_fqdn(value),
             privacy_locators.contains_ip_address(value),
             privacy_locators.contains_personal_identifier(value),
-            privacy_locators.LABELED_INTERNAL_HOST_RE.search(value),
+            privacy_locators.contains_internal_host(value),
             privacy_locators.contains_mac_address(value),
             privacy_locators.contains_path_locator(value),
             next(privacy_locators.noncanonical_redacted_placeholder_spans(value), None),
@@ -779,7 +776,9 @@ def _validate_reviewed_prose(value: Any, *, path: str) -> None:
             f"{path} contains a URL, personal identifier, IP address, local path, or noncanonical placeholder"
         )
     if (
-        _SOURCE_TEXT_MARKER_RE.search(value)
+        privacy_locators.ORIGINAL_PROMPT_PAYLOAD_RE.search(value)
+        or privacy_locators.TOOL_OUTPUT_PAYLOAD_RE.search(value)
+        or _SOURCE_TEXT_SHAPE_RE.search(value)
         or _SOURCE_PAYLOAD_SHAPE_RE.search(value)
         or privacy_locators.contains_raw_identifier(value)
         or privacy_locators.CODE_FENCE_RE.search(value)
@@ -3862,7 +3861,7 @@ def _validate_report_bytes(
             privacy_locators.contains_bare_fqdn(locator_scan_text),
             privacy_locators.contains_ip_address(locator_scan_text),
             privacy_locators.contains_personal_identifier(text),
-            privacy_locators.LABELED_INTERNAL_HOST_RE.search(text),
+            privacy_locators.contains_internal_host(text),
             privacy_locators.contains_mac_address(text),
             privacy_locators.contains_path_locator(text),
             privacy_locators.CODE_FENCE_RE.search(text),

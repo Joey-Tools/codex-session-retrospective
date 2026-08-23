@@ -241,9 +241,33 @@ _FQDN_LABEL_PATTERN_TEXT = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
 _FQDN_ANY_SUFFIX_PATTERN_TEXT = r"(?:[a-z]{2,63}|xn--[a-z0-9-]{2,59})"
 _FQDN_RESERVED_SUFFIXES = frozenset(("example", "invalid", "onion", "test"))
 _FQDN_METASYNTAX_LABELS = frozenset(("bar", "baz", "foo", "quux", "qux"))
+_SOURCE_FILE_SUFFIXES = frozenset(
+    (
+        "c",
+        "cc",
+        "cpp",
+        "go",
+        "h",
+        "hpp",
+        "java",
+        "js",
+        "jsx",
+        "m",
+        "mm",
+        "php",
+        "pl",
+        "py",
+        "rb",
+        "rs",
+        "sh",
+        "swift",
+        "ts",
+        "tsx",
+    )
+)
 _FQDN_CODE_CONTEXT_RE = re.compile(
-    r"[ \t]+(?:attribute|call|class|constant|enum|field|function|method|"
-    r"module|package|property|setting|symbol|type|variable)\b",
+    r"[ \t]+(?:attribute|behavior|call|class|constant|enum|field|function|"
+    r"handling|method|module|package|property|setting|symbol|type|variable)\b",
     re.ASCII | re.IGNORECASE,
 )
 _BARE_FQDN_CANDIDATE_RE = re.compile(
@@ -270,11 +294,12 @@ def bare_fqdn_matches(value: str) -> Iterator[re.Match[str]]:
             and suffix not in _FQDN_RESERVED_SUFFIXES
         ):
             continue
-        if (
-            not explicit_locator_shape
-            and labels <= _FQDN_METASYNTAX_LABELS
-            and _FQDN_CODE_CONTEXT_RE.match(value, match.end()) is not None
-        ):
+        code_context = _FQDN_CODE_CONTEXT_RE.match(value, match.end()) is not None
+        code_shape = True in (
+            labels <= _FQDN_METASYNTAX_LABELS,
+            suffix in _SOURCE_FILE_SUFFIXES,
+        )
+        if not explicit_locator_shape and code_context and code_shape:
             continue
         yield match
 
@@ -506,8 +531,13 @@ _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT = (
     r"organization|Organization|person|Person|tenant|Tenant|user|User)"
 )
 _PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
+_MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT = (
+    r"mother(?:['\u2019]s|s)?[_ -]+maiden[_ -]+name"
+)
 _PERSONAL_NAME_FIELD_PATTERN_TEXT = (
-    r"(?:nickname|surname|(?:(?:display|family|first|full|given|last|legal|"
+    r"(?:"
+    + _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT
+    + r"|nickname|surname|(?:(?:display|family|first|full|given|last|legal|"
     r"maiden|middle|preferred)[_ -]+)?name)"
 )
 _PERSONAL_CONTEXTUAL_NAME_FIELD_PATTERN_TEXT = (
@@ -524,6 +554,10 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"
     r"mrn|medical[_ -]?record(?:[_ -]?(?:number|no|id))?|"
     r"patient[_ -]?(?:id|identifier)|"
+    r"insurance[_ -]+(?:policy|member)"
+    r"(?:[_ -]+(?:number|no|id|identifier))?|"
+    r"health[_ -]+plan[_ -]+beneficiary"
+    r"(?:[_ -]+(?:number|no|id|identifier))?|"
     r"national[_ -]?(?:insurance|identity)(?:[_ -]?(?:number|no|id))?|"
     r"(?:tax(?:payer)?[_ -]?(?:identification|id))(?:[_ -]?(?:number|no))?|"
     r"passport(?:[_ -]?(?:number|no|id))?|"
@@ -534,6 +568,8 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"routing[_ -]?(?:number|no)|iban|"
     r"(?-i:(?:socialSecurityNumber|medicalRecord(?:Number|Id)|"
     r"patient(?:Id|Identifier)|"
+    r"insurance(?:Policy|Member)(?:Number|No|Id|Identifier)|"
+    r"healthPlanBeneficiary(?:Number|No|Id|Identifier)|"
     r"nationalInsuranceNumber|nationalId|taxId|"
     r"passport(?:Number|Id)|driversLicenseNumber|creditCard(?:Number)?|"
     r"debitCard(?:Number)?|paymentCard(?:Number)?|cardNumber|"
@@ -776,7 +812,9 @@ NARRATIVE_LABELED_PERSONAL_NAME_VALUE_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 _UNAMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
-    r"\b(?:surname|(?:family|first|full|given|last|legal|maiden|middle|preferred)"
+    r"\b(?:"
+    + _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT
+    + r"|surname|(?:family|first|full|given|last|legal|maiden|middle|preferred)"
     r"[_ -]+name|(?-i:(?:family|first|full|given|last|legal|maiden|middle|"
     r"preferred|Family|First|Full|Given|Last|Legal|Maiden|Middle|Preferred)Name))"
 )
@@ -784,7 +822,9 @@ _AMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
     r"\b(?:nickname|display[_ -]+name|(?-i:(?:display|Display)Name))"
 )
 _BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
-    r"\b(?:nickname|surname|(?:display|family|first|full|given|last|legal|maiden|"
+    r"\b(?:"
+    + _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT
+    + r"|nickname|surname|(?:display|family|first|full|given|last|legal|maiden|"
     r"middle|preferred)[_ -]+name|(?-i:(?:display|family|first|full|given|last|"
     r"legal|maiden|middle|preferred|Display|Family|First|Full|Given|Last|Legal|"
     r"Maiden|Middle|Preferred)Name))"
@@ -1047,6 +1087,32 @@ PERSONAL_LABELED_VALUE_PATTERNS = (
     MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE,
     MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE,
 )
+_COORDINATE_NUMBER_PATTERN_TEXT = r"[+-]?(?:[0-9]{1,3}(?:\.[0-9]{1,15})?|\.[0-9]{1,15})"
+LABELED_COORDINATE_PAIR_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<personal>"
+    r"(?:gps|home|location)[_ -]+coordinates?"
+    r"[ \t]*(?:=|:)[ \t]*"
+    r"(?P<latitude>"
+    + _COORDINATE_NUMBER_PATTERN_TEXT
+    + r")[ \t]*,[ \t]*(?P<longitude>"
+    + _COORDINATE_NUMBER_PATTERN_TEXT
+    + r"))(?=$|[^0-9.])",
+    re.ASCII | re.IGNORECASE,
+)
+LABELED_LATITUDE_LONGITUDE_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?P<personal>"
+    r"latitude[ \t]*(?:=|:)[ \t]*(?P<latitude>"
+    + _COORDINATE_NUMBER_PATTERN_TEXT
+    + r")[ \t]*(?:,[ \t]*|[ \t]+(?:and[ \t]+)?)"
+    r"longitude[ \t]*(?:=|:)[ \t]*(?P<longitude>"
+    + _COORDINATE_NUMBER_PATTERN_TEXT
+    + r"))(?=$|[^0-9.])",
+    re.ASCII | re.IGNORECASE,
+)
+COORDINATE_PATTERNS = (
+    LABELED_COORDINATE_PAIR_RE,
+    LABELED_LATITUDE_LONGITUDE_RE,
+)
 _NON_ADDRESS_PERSONAL_LABELED_VALUE_PATTERNS = tuple(
     filter(
         lambda pattern: pattern
@@ -1078,11 +1144,21 @@ PERSONAL_IDENTIFIER_GROUPS = {
     MARKDOWN_COMPLETE_LABELED_PERSONAL_NAME_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_BARE_LABELED_NAME_VALUE_RE: "personal",
     MARKDOWN_COMPLETE_BARE_LABELED_ADDRESS_VALUE_RE: "personal",
+    **dict.fromkeys(COORDINATE_PATTERNS, "personal"),
 }
 LABELED_INTERNAL_HOST_RE = re.compile(
     r"\b(?:domain|endpoint|host|hostname|node|server|website)\s*(?:=|:)\s*"
     r"(?!\[REDACTED)(?=[a-z0-9._-]*[a-z._-])"
     r"[a-z0-9][a-z0-9._-]*(?::\d{1,5})?",
+    re.ASCII | re.IGNORECASE,
+)
+CONTEXTUAL_SHORT_INTERNAL_HOST_RE = re.compile(
+    r"\b(?:connect(?:ed|ing)?[ \t]+to|"
+    r"(?:redis|service|database|endpoint|server|host)"
+    r"[ \t]+(?:at|on|to|used|uses))[ \t]+"
+    r"(?P<locator>(?=[a-z0-9]{2,63}:)(?=[a-z0-9]*[0-9])"
+    r"[a-z][a-z0-9]{1,62}:[0-9]{1,5}"
+    r"(?:/[^\s<>\"'`]*[^\s<>\"'`.,;:!?])?)",
     re.ASCII | re.IGNORECASE,
 )
 # A rooted path supplies the structural context needed to admit any printable
@@ -1313,6 +1389,51 @@ RAW_ID_LABEL_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 RAW_IDENTIFIER_PATTERNS = (UUID_RE, LONG_HEX_ID_RE, RAW_ID_LABEL_RE)
+_SOURCE_PROMPT_LABEL_PATTERN_TEXT = (
+    r"(?:"
+    r"(?:raw|original|verbatim)[ _-]+(?:prompt|request|message|input|text)|"
+    r"prompt|input|request|"
+    r"(?:user|assistant|system|developer)[ _-]+"
+    r"(?:message|prompt|input|request)"
+    r")"
+)
+_SOURCE_TOOL_OUTPUT_LABEL_PATTERN_TEXT = (
+    r"(?:"
+    r"(?:tool|command)[ _-]+(?:output|response|result)|"
+    r"(?:terminal|console|shell)[ _-]+output|stdout|stderr|transcript"
+    r")"
+)
+_SOURCE_PAYLOAD_LABEL_PATTERN_TEXT = (
+    r"(?:"
+    + _SOURCE_PROMPT_LABEL_PATTERN_TEXT
+    + r"|"
+    + _SOURCE_TOOL_OUTPUT_LABEL_PATTERN_TEXT
+    + r")"
+)
+_SOURCE_PAYLOAD_BOUNDARY_LABEL_PATTERN_TEXT = (
+    r"(?:" + _SOURCE_PAYLOAD_LABEL_PATTERN_TEXT + r"|output)"
+)
+
+
+def _source_payload_pattern(label_pattern: str) -> re.Pattern[str]:
+    return re.compile(
+        r"(?<![A-Za-z0-9_])['\"]?(?:"
+        + label_pattern
+        + r")[\"']?[ \t]*(?:=|:)[ \t]*(?!\[REDACTED(?:_[A-Z0-9]+)*\]\s*$)"
+        r"[^\r\n]+?"
+        r"(?=(?:[ \t]+['\"]?"
+        + _SOURCE_PAYLOAD_BOUNDARY_LABEL_PATTERN_TEXT
+        + r")[\"']?[ \t]*(?:=|:)|$)",
+        re.ASCII | re.IGNORECASE,
+    )
+
+
+ORIGINAL_PROMPT_PAYLOAD_RE = _source_payload_pattern(_SOURCE_PROMPT_LABEL_PATTERN_TEXT)
+TOOL_OUTPUT_PAYLOAD_RE = _source_payload_pattern(_SOURCE_TOOL_OUTPUT_LABEL_PATTERN_TEXT)
+SOURCE_PAYLOAD_REDACTION_PATTERNS = (
+    ("original_prompt", ORIGINAL_PROMPT_PAYLOAD_RE, "[REDACTED_ORIGINAL_PROMPT]"),
+    ("tool_output", TOOL_OUTPUT_PAYLOAD_RE, "[REDACTED_TOOL_OUTPUT]"),
+)
 CODE_FENCE_RE = re.compile(r"```[\s\S]*?(?:```|\Z)")
 IPV4_CANDIDATE_RE = re.compile(
     r"(?<![0-9A-Za-z.])"
@@ -1512,6 +1633,9 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
     r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?code|"
     r"passwd|pwd|(?-i:PIN)|otp|"
+    r"(?:cvv|cvc|cid)(?:[ \t_-]?(?:number|code))?|"
+    r"card[ \t_-]?(?:security|verification)[ \t_-]?(?:code|value)|"
+    r"(?:security(?:[ \t_-]?question)?|recovery)[ \t_-]?answer|"
     r"(?:mfa|2fa|two[ \t_-]?factor)[ \t_-]?code|"
     r"(?:recovery|backup)[ \t_-]?code|"
     r"credential|token|" + _COMPACT_TOKEN_KEY_PATTERN_TEXT + r")"
@@ -1729,6 +1853,9 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
         _CREDENTIAL_NARRATIVE_VALUE_RE,
         "[REDACTED_CREDENTIAL]",
     ),
+)
+DETERMINISTIC_REDACTION_PATTERNS = (
+    CREDENTIAL_REDACTION_PATTERNS + SOURCE_PAYLOAD_REDACTION_PATTERNS
 )
 
 
@@ -2105,6 +2232,15 @@ def _payment_card_match_is_valid(match: re.Match[str]) -> bool:
     return (checksum % 10, len(set(digits)) > 1) == (0, True)
 
 
+def _coordinate_match_is_valid(match: re.Match[str]) -> bool:
+    latitude = float(match.group("latitude"))
+    longitude = float(match.group("longitude"))
+    return (-90.0 <= latitude <= 90.0, -180.0 <= longitude <= 180.0) == (
+        True,
+        True,
+    )
+
+
 def _iban_match_is_valid(match: re.Match[str]) -> bool:
     candidate = match.group("personal").replace(" ", "").replace("\t", "").upper()
     if _IBAN_LENGTH_BY_COUNTRY.get(candidate[:2]) != len(candidate):
@@ -2152,6 +2288,7 @@ _PERSONAL_MATCH_FILTERS = {
     BARE_PAYMENT_CARD_RE: _payment_card_match_is_valid,
     BARE_IBAN_RE: _iban_match_is_valid,
     BARE_GROUPED_IBAN_RE: _iban_match_is_valid,
+    **dict.fromkeys(COORDINATE_PATTERNS, _coordinate_match_is_valid),
     EMAIL_RE: _email_match_is_valid,
     PHONE_RE: _bare_phone_match_is_valid,
 }
@@ -2233,6 +2370,18 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
             _filtered_personal_matches(BARE_GROUPED_IBAN_RE, value),
         ),
     )
+    coordinate_matches = chain.from_iterable(
+        map(
+            lambda pattern: _filtered_personal_matches(pattern, value),
+            COORDINATE_PATTERNS,
+        )
+    )
+    coordinate_values = chain.from_iterable(
+        map(
+            lambda match: (match.group("latitude"), match.group("longitude")),
+            coordinate_matches,
+        )
+    )
     normalized = chain(
         credential_assignment_values,
         credential_narrative_values,
@@ -2240,6 +2389,7 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
         name_values,
         contextual_phone_values,
         bare_sensitive_number_values,
+        coordinate_values,
     )
     return chain(
         filter(
@@ -2319,6 +2469,7 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
         BARE_IBAN_RE,
         BARE_GROUPED_IBAN_RE,
         *PERSONAL_LABELED_VALUE_PATTERNS,
+        *COORDINATE_PATTERNS,
     ):
         for match in _filtered_personal_matches(pattern, value):
             group = PERSONAL_IDENTIFIER_GROUPS.get(pattern, 0)
@@ -2355,6 +2506,35 @@ def contains_mac_address(value: str) -> bool:
     return MAC_ADDRESS_RE.search(value) is not None
 
 
+def internal_host_spans(value: str) -> tuple[tuple[int, int], ...]:
+    """Return labeled and context-proven single-label host locator spans."""
+
+    spans = list(
+        map(lambda match: match.span(), LABELED_INTERNAL_HOST_RE.finditer(value))
+    )
+    spans.extend(
+        map(
+            lambda match: match.span("locator"),
+            CONTEXTUAL_SHORT_INTERNAL_HOST_RE.finditer(value),
+        )
+    )
+    return tuple(sorted(spans))
+
+
+def contains_internal_host(value: str) -> bool:
+    return bool(internal_host_spans(value))
+
+
+def redact_internal_hosts(value: str) -> str:
+    return functools.reduce(
+        lambda current, span: current[: span[0]]
+        + "[REDACTED_INTERNAL_HOST]"
+        + current[span[1] :],
+        reversed(internal_host_spans(value)),
+        value,
+    )
+
+
 def personal_identifier_values(value: str) -> Iterator[str]:
     return map(lambda span: value[slice(*span)], personal_identifier_spans(value))
 
@@ -2388,6 +2568,24 @@ def _merge_path_locator_span(
     return (merged + (span,), merged[:-1] + (combined,))[span[0] < previous[1]]
 
 
+_FINAL_PATH_COMPONENT_BOUNDARY_RE = re.compile(
+    r"(?:[;:!?](?=[ \t])|[ \t]+(?:(?=\[REDACTED(?:_[A-Z0-9]+)*\])|"
+    r"(?=(?:after|before|because|during|then|unless|until|when|while)\b)))",
+    re.ASCII,
+)
+
+
+def _trim_path_locator_span(value: str, start: int, end: int) -> tuple[int, int]:
+    candidate = value[start:end]
+    final_component_start = max(candidate.rfind("/"), candidate.rfind("\\")) + 1
+    final_component = candidate[final_component_start:]
+    bounded_component = _FINAL_PATH_COMPONENT_BOUNDARY_RE.split(
+        final_component,
+        maxsplit=1,
+    )[0]
+    return start, start + final_component_start + len(bounded_component)
+
+
 def path_locator_spans(value: str) -> tuple[tuple[int, int], ...]:
     """Return merged path spans found against the unchanged input text."""
 
@@ -2396,21 +2594,17 @@ def path_locator_spans(value: str) -> tuple[tuple[int, int], ...]:
     bounded_ends: dict[int, int] = {}
     for pattern in _STRUCTURALLY_BOUNDED_PATH_LOCATOR_PATTERNS:
         for match in pattern.finditer(value):
-            bounded_ends[match.start()] = max(
-                bounded_ends.get(match.start(), match.end()),
-                match.end(),
+            start, end = _trim_path_locator_span(value, *match.span())
+            bounded_ends[start] = max(
+                bounded_ends.get(start, end),
+                end,
             )
-    candidates = sorted(
-        (
-            (
-                match.start(),
-                min(match.end(), bounded_ends.get(match.start(), match.end())),
-            )
-            for pattern in PATH_LOCATOR_PATTERNS
-            for match in pattern.finditer(value)
-        ),
-        key=lambda span: (span[0], -span[1]),
-    )
+    candidates: list[tuple[int, int]] = []
+    for pattern in PATH_LOCATOR_PATTERNS:
+        for match in pattern.finditer(value):
+            start, end = _trim_path_locator_span(value, *match.span())
+            candidates.append((start, min(end, bounded_ends.get(start, end))))
+    candidates.sort(key=lambda span: (span[0], -span[1]))
     return functools.reduce(
         _merge_path_locator_span,
         candidates,

@@ -1935,6 +1935,54 @@ class OrchestratorTests(unittest.TestCase):
 
         self.assertFalse(run_dir.exists())
 
+    def test_public_constructor_rejects_identity_paths_inside_session_sources(
+        self,
+    ) -> None:
+        account_home = self.root / "identity-source-account-home"
+        codex_root = account_home / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+        poisoned_home = sessions / "active-thread"
+        poisoned_home.mkdir(mode=0o700)
+
+        cases = (
+            ("explicit", sessions / "run-record" / "identity-v2.key", account_home),
+            (
+                "default-home",
+                None,
+                poisoned_home,
+            ),
+        )
+        for label, identity_path, home in cases:
+            run_dir = self.root / f"identity-overlap-{label}"
+            expected_path = (
+                identity_path
+                if identity_path is not None
+                else poisoned_home / ".codex/session-retrospective/identity-v2.key"
+            )
+            with (
+                self.subTest(case=label),
+                mock.patch.dict(os.environ, {"HOME": str(home)}),
+                mock.patch.object(
+                    temporary_paths,
+                    "local_codex_root",
+                    return_value=codex_root,
+                ),
+                self.assertRaisesRegex(
+                    safe_io.UnsafePathError,
+                    "runtime temporary root overlaps",
+                ),
+            ):
+                RetrospectiveOrchestrator(
+                    run_dir,
+                    identity_path=identity_path,
+                )
+
+            self.assertFalse(expected_path.exists())
+            self.assertFalse(run_dir.exists())
+
     def test_public_lifecycle_start_rejects_history_source_overlap_before_state(
         self,
     ) -> None:

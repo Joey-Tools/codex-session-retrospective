@@ -2207,6 +2207,166 @@ class ResultValidationTests(unittest.TestCase):
             (),
         )
 
+    def test_source_payload_labels_share_scan_and_redaction_policy(self) -> None:
+        for source, category, replacement in (
+            (
+                "User input: proprietary payload.",
+                "original_prompt",
+                "[REDACTED_ORIGINAL_PROMPT]",
+            ),
+            (
+                "User message: proprietary payload.",
+                "original_prompt",
+                "[REDACTED_ORIGINAL_PROMPT]",
+            ),
+            (
+                "System message: proprietary payload.",
+                "original_prompt",
+                "[REDACTED_ORIGINAL_PROMPT]",
+            ),
+            (
+                "Developer message: proprietary payload.",
+                "original_prompt",
+                "[REDACTED_ORIGINAL_PROMPT]",
+            ),
+            (
+                "stdout: proprietary payload.",
+                "tool_output",
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    category,
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(
+                    replacement, result_validation_module.post_redact(source)
+                )
+                self.assertEqual((), scan_for_leaks(replacement))
+
+        for safe_prose in (
+            "Improve user input handling.",
+            "The stdout parser dropped the final line.",
+            "Improve stderr handling in the wrapper.",
+            "The transcript validator was too strict.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertEqual((), scan_for_leaks(safe_prose))
+                self.assertEqual(
+                    safe_prose,
+                    result_validation_module.post_redact(safe_prose),
+                )
+
+    def test_review_sensitive_fields_share_scan_and_redaction_policy(self) -> None:
+        for source, category, replacement in (
+            (
+                "Mother's maiden name: Alice Smith",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Insurance policy number: POL-12345678",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Insurance member ID: H123456789",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Health plan beneficiary number: H123456789",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "GPS coordinates: 37.7749, -122.4194",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Latitude: 37.7749, Longitude: -122.4194",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            ("Security answer: blue-sparrow-47", "credential", "[REDACTED_CREDENTIAL]"),
+            ("Recovery answer: blue-sparrow-47", "credential", "[REDACTED_CREDENTIAL]"),
+            ("CVV: 123", "credential", "[REDACTED_CREDENTIAL]"),
+            ("Card verification value: 123", "credential", "[REDACTED_CREDENTIAL]"),
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    category,
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(
+                    replacement, result_validation_module.post_redact(source)
+                )
+
+        for invalid_coordinate in (
+            "GPS coordinates: 90.0001, 0",
+            "GPS coordinates: 0, -180.0001",
+            "Latitude: 91, Longitude: 10",
+        ):
+            with self.subTest(invalid_coordinate=invalid_coordinate):
+                self.assertNotIn(
+                    "personal_identifier",
+                    {
+                        finding.category
+                        for finding in scan_for_leaks(invalid_coordinate)
+                    },
+                )
+
+    def test_contextual_internal_hosts_and_path_boundaries_are_precise(self) -> None:
+        for source, expected in (
+            (
+                "Connect to db01:5432 before retrying.",
+                "Connect to [REDACTED_INTERNAL_HOST] before retrying.",
+            ),
+            (
+                "Redis at cache01:6379 failed.",
+                "Redis at [REDACTED_INTERNAL_HOST] failed.",
+            ),
+            (
+                "The service used prod1:8443/api.",
+                "The service used [REDACTED_INTERNAL_HOST].",
+            ),
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    "internal_host",
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(expected, result_validation_module.post_redact(source))
+
+        for source, expected in (
+            (
+                "Read /tmp/file before continuing",
+                "Read [REDACTED_PATH] before continuing",
+            ),
+            (
+                "Read /tmp/foo; then improve parser.py behavior.",
+                "Read [REDACTED_PATH]; then improve parser.py behavior.",
+            ),
+            (
+                "Open /Users/alice/John's Private Folder/secrets before continuing.",
+                "Open [REDACTED_PATH] before continuing.",
+            ),
+        ):
+            with self.subTest(source=source):
+                self.assertEqual(expected, result_validation_module.post_redact(source))
+
+        for safe_prose in (
+            "Map name:123 in the parser.",
+            "Visit parser.py before continuing.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertNotIn(
+                    "internal_host",
+                    {finding.category for finding in scan_for_leaks(safe_prose)},
+                )
+
     def test_changed_camelcase_credential_label_is_redacted_below_overlap_window(
         self,
     ) -> None:

@@ -758,7 +758,7 @@ def scan_for_leaks(
             category,
             pattern,
             _replacement,
-        ) in privacy_locators.CREDENTIAL_REDACTION_PATTERNS:
+        ) in privacy_locators.DETERMINISTIC_REDACTION_PATTERNS:
             for match in pattern.finditer(text):
                 findings.add(LeakFinding(category, path, match.start(), match.end()))
         for match in privacy_locators.URI_LOCATOR_RE.finditer(text):
@@ -775,8 +775,8 @@ def scan_for_leaks(
                 "internal_url" if _INTERNAL_HOST_RE.search(match.group(0)) else "url"
             )
             findings.add(LeakFinding(category, path, match.start(), match.end()))
-        for match in privacy_locators.LABELED_INTERNAL_HOST_RE.finditer(text):
-            findings.add(LeakFinding("internal_host", path, match.start(), match.end()))
+        for start, end in privacy_locators.internal_host_spans(text):
+            findings.add(LeakFinding("internal_host", path, start, end))
         for match in privacy_locators.MAC_ADDRESS_RE.finditer(text):
             findings.add(LeakFinding("internal_host", path, match.start(), match.end()))
         for match in privacy_locators.ipv4_matches(text):
@@ -828,7 +828,7 @@ def _post_redact_text(
         _category,
         pattern,
         replacement,
-    ) in privacy_locators.CREDENTIAL_REDACTION_PATTERNS:
+    ) in privacy_locators.DETERMINISTIC_REDACTION_PATTERNS:
         redacted = pattern.sub(replacement, redacted)
     redacted = privacy_locators.redact_mac_addresses(redacted)
     # Source-overlap markers must never split an already identified personal value.
@@ -852,15 +852,13 @@ def _post_redact_text(
     redacted = privacy_locators.SCP_STYLE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     redacted = privacy_locators.URI_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
     redacted = privacy_locators.BARE_PRIVATE_LOCATOR_RE.sub("[REDACTED_URL]", redacted)
-    redacted = privacy_locators.LABELED_INTERNAL_HOST_RE.sub(
-        "[REDACTED_INTERNAL_HOST]", redacted
-    )
+    redacted = privacy_locators.redact_internal_hosts(redacted)
     redacted = privacy_locators.redact_ip_addresses(redacted)
-    redacted = privacy_locators.redact_path_locators(redacted)
-    redacted = privacy_locators.redact_bare_fqdns(redacted, "[REDACTED_URL]")
     if not reference_field:
         for pattern in privacy_locators.RAW_IDENTIFIER_PATTERNS:
             redacted = pattern.sub("[REDACTED_RAW_ID]", redacted)
+    redacted = privacy_locators.redact_path_locators(redacted)
+    redacted = privacy_locators.redact_bare_fqdns(redacted, "[REDACTED_URL]")
     redacted = privacy_locators.CODE_FENCE_RE.sub("[REDACTED_CODE]", redacted)
     return redacted
 

@@ -1972,6 +1972,20 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Inspect [REDACTED_PATH] before continuing.",
         )
 
+    def test_path_redaction_preserves_following_review_prose(self) -> None:
+        source_text = "Read /tmp/foo; then improve parser.py behavior."
+        redacted_text = post_redact(source_text)
+        self.assertEqual(
+            "Read [REDACTED_PATH]; then improve parser.py behavior.",
+            redacted_text,
+        )
+
+        path_review = review_data()
+        path_review["turn_findings"][1]["rewritten_prompt"] = redacted_text
+        validate_retained_artifacts(
+            assemble_retained_artifacts(run_state(), path_review)
+        )
+
     def test_retained_validation_rejects_shared_personal_identifier_families(
         self,
     ) -> None:
@@ -2001,6 +2015,12 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Customer identifier: CUST-12345",
             "User identifier: alice-12345",
             "Account identifier: A1234567",
+            "Mother's maiden name: Alice Smith",
+            "Insurance policy number: POL-12345678",
+            "Insurance member ID: H123456789",
+            "Health plan beneficiary number: H123456789",
+            "GPS coordinates: 37.7749, -122.4194",
+            "Latitude: 37.7749, Longitude: -122.4194",
             "customerIdentifier: CUST-12345",
             "userIdentifier: alice-12345",
             "accountIdentifier: A1234567",
@@ -2332,6 +2352,7 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "The response embeds ```secret_code inline.",
             "Inspect host: build-node-7 before continuing.",
             "Connect to build-node-7:8080 before continuing.",
+            "Connect to db01:5432 before continuing.",
             "Street address: 123 Main Street",
             "streetAddress: 123 Main Street",
             "Device MAC address: 00:1A:2B:3C:4D:5E",
@@ -2439,6 +2460,14 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "two-factor code: 123456",
             "Recovery code: RECOVERY-TEST-0000",
             "Backup code: BACKUP-TEST-0000",
+            "Security answer: blue-sparrow-47",
+            "Security question answer: blue-sparrow-47",
+            "Recovery answer: blue-sparrow-47",
+            "CVV: 123",
+            "CVC: 456",
+            "CID: 789",
+            "Card security code: 789",
+            "Card verification value: 123",
             "keyPassphrase: purple",
             "devicePasscode: 839201",
             "userPin: 8392",
@@ -2649,6 +2678,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "User prompt: proprietary payload.",
             "User input: proprietary payload.",
             "User request: proprietary payload.",
+            "User message: proprietary payload.",
+            "System message: proprietary payload.",
+            "Developer message: proprietary payload.",
             "Tool output: status=failed.",
             "Tool response: proprietary payload.",
             "Terminal output: proprietary payload.",
@@ -2688,6 +2720,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "The tool response was delayed.",
             "Improve user input handling.",
             "Clarify the user request before execution.",
+            "The stdout parser dropped the final line.",
+            "Improve stderr handling in the wrapper.",
+            "The transcript validator was too strict.",
         ):
             with self.subTest(safe_prose=safe_prose):
                 safe_review = review_data()

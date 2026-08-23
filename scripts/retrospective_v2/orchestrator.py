@@ -78,6 +78,7 @@ from .orchestrator_components import (
 from .orchestrator_context import Clock, OrchestratorContext
 from .orchestrator_projection import StateProjectionOperations
 from .orchestrator_startup_authority import (
+    load_identity,
     load_production_marker_for_publisher,
     publisher_readiness_report,
     require_boolean,
@@ -427,12 +428,11 @@ class RetrospectiveOrchestrator:
             store.key_id if store is not None else _checkpoint_key_id(resolved_run_dir)
         )
         if identity is None:
-            loader = (
-                IdentityKey.load
-                if require_existing_identity
-                else IdentityKey.load_or_create
+            resolved_identity = load_identity(
+                identity_path,
+                require_existing=require_existing_identity,
+                expected_key_id=expected_key_id,
             )
-            resolved_identity = loader(identity_path, expected_key_id=expected_key_id)
         else:
             if expected_key_id is not None and identity.key_id != expected_key_id:
                 raise IdentityKeyMismatchError(

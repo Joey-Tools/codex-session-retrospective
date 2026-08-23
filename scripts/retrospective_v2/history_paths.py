@@ -33,6 +33,8 @@ def require_repository(value: str | os.PathLike[str]) -> Path:
 
     source_root = temporary_paths.local_codex_root()
     raw_value = os.fspath(value)
+    if not raw_value:
+        raise ValueError("history repository path must not be empty")
     expanded = Path(
         _ACCOUNT_HOME_RE.sub(os.fspath(source_root.parent), raw_value, count=1)
     ).expanduser()

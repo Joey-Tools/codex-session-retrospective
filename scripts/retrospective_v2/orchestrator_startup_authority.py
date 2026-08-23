@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-from . import authority, executable_authority
-from .identity import IdentityKey
+from . import authority, executable_authority, temporary_paths
+from .identity import IdentityKey, identity_key_path
 from .orchestrator_core import InvalidInputError
 from .orchestrator_support import publisher_readiness, publisher_sign_verify_canary
 
@@ -17,6 +17,21 @@ def require_boolean(value: object, *, label: str) -> bool:
     if not isinstance(value, bool):
         raise InvalidInputError(f"{label} must be a boolean")
     return value
+
+
+def load_identity(
+    identity_path: str | os.PathLike[str] | None,
+    *,
+    require_existing: bool,
+    expected_key_id: str | None,
+) -> IdentityKey:
+    """Load an identity only after its path is proved outside source trees."""
+    loader = IdentityKey.load if require_existing else IdentityKey.load_or_create
+    selected_path = identity_key_path() if identity_path is None else identity_path
+    return loader(
+        temporary_paths.require_run_directory_outside_sources(selected_path),
+        expected_key_id=expected_key_id,
+    )
 
 
 def require_canonical_production_binding_paths(

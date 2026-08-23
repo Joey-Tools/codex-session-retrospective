@@ -3404,6 +3404,45 @@ superseded_by:
   14/14 in 59.010 seconds. Repository-wide Ruff, changed-file formatting, both
   workflows under `actionlint`, the generated bootstrap manifest, and the
   official OpenAI Skill validator are clean.
+- The PR review gate later exposed 17 unresolved historical findings against
+  the complete branch: four already-fixed source-path and identifier findings
+  plus gaps for explicit source-payload labels, retained technical prose,
+  mother's maiden name, insurance identifiers, exact coordinates, recovery
+  answers, card verification values, contextual short internal hosts, empty
+  history paths, identity-key source overlap, and path/prose boundaries. The
+  implementation now shares one closed source-payload policy between leak
+  scanning, deterministic redaction, and retained validation; adds the exact
+  personal and credential field families; validates coordinate ranges; and
+  keeps ordinary stdout/stderr/transcript and source-file prose retainable.
+  Identity loading proves the selected explicit or default path is outside
+  active and archived session trees before creating a key, and an empty
+  history repository argument fails before current-directory normalization.
+- Path redaction now stops a final component at proved sentence and narrative
+  boundaries or an existing canonical redaction marker. Raw IDs are redacted
+  before path replacement so a broad path candidate cannot erase independent
+  audit placeholders. Explicit Prompt and Output payloads on the same line are
+  independently bounded and retain both source-category placeholders.
+- The first 1,902-test inventory under digest
+  `3ac081225f435ad81d59d75bab1714f28652e715635f78e52cbda294c1cef935`
+  is non-counting. Two shards passed 429/429 and 517/517; one shard reported
+  only the existing architecture budgets after the new logic raised the branch
+  inventory and two module sizes; the remaining shard found that source-label
+  and path ordering could erase raw-ID and tool-output placeholders. The
+  follow-up moved startup identity selection to its existing authority owner,
+  made the privacy extensions data-driven, preserved the unchanged 9,858
+  branch ceiling, and added the mixed-placeholder regression.
+- The final Python 3.13.12 inventory contains 1,902 exact test IDs from 22
+  authenticated sources under manifest digest
+  `e9693c28cdce3cf311b3ef5333c15c746e898127b463053975d89ebff8de2634`.
+  Shards 0 through 3 pass 451/451 in 1,755.025 seconds, 517/517 in 1,596.470
+  seconds, 505/505 in 1,471.615 seconds, and 429/429 in 1,433.975 seconds,
+  for exact aggregate coverage of 1,902/1,902 without skips. The independent
+  Darwin security inventory passes 14/14 in 63.230 seconds. CI contracts pass
+  33/33; Ruff lint and changed-file formatting, both workflows under
+  `actionlint`, and `git diff --check` are clean. The architecture inventory is
+  exactly 9,858 branches under the unchanged 9,858 ceiling; `orchestrator.py`
+  is 798 lines, `orchestrator_startup_authority.py` is 164 lines, and
+  `temporary_paths.py` remains at its unchanged 350-line cap.
 
 ## Follow-up Work
 

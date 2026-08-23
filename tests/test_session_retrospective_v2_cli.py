@@ -29,6 +29,7 @@ import session_retrospective_v2 as cli  # noqa: E402
 from retrospective_v2 import (  # noqa: E402
     authority,
     automation_cutover_files,
+    history_paths,
     process_lifecycle,
     temporary_paths,
     transport,
@@ -1991,6 +1992,22 @@ class CliContractTests(unittest.TestCase):
                         self.assertEqual("security_error", result.error.code)
                         self.assertEqual("unsafe_path", result.error.reason_code)
                         start_run.assert_not_called()
+
+            empty_arguments = list(self.shadow_start_arguments())
+            history_index = empty_arguments.index("--history-repo") + 1
+            empty_arguments[history_index] = ""
+            with mock.patch.object(
+                cli.orchestrator_api,
+                "start_run",
+            ) as start_run:
+                result = self.parse_dispatch(*empty_arguments)
+            self.assertEqual(cli.ExitCode.INVALID_INPUT, result.exit_code)
+            self.assertEqual("invalid_input", result.error.code)
+            self.assertEqual("invalid_input", result.error.reason_code)
+            start_run.assert_not_called()
+
+        with self.assertRaisesRegex(ValueError, "must not be empty"):
+            history_paths.require_repository("")
 
         self.assertEqual("active\n", active_sentinel.read_text(encoding="ascii"))
         self.assertEqual("archived\n", archived_sentinel.read_text(encoding="ascii"))
