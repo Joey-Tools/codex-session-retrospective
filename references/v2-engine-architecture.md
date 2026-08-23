@@ -175,13 +175,16 @@ module cannot fall through to repository or installed-package bytes. Discovered
 source locators must satisfy the closed grammar and be UTF-8 encodable. A
 filesystem name that cannot be represented becomes an explicit
 `source_locator_unrepresentable` gap rather than crashing discovery or being
-silently omitted. Source rereads compare the selected protected properties:
-object identity, normalized descriptor ACL policy, selected BSD access-policy
-flags, and the exact scanned byte-range digest. The candidate token and every
-scan proof sample bind that ACL policy; an ACL grant or revoke during scanning
-therefore produces `source_changed_during_scan`. Timestamp-only churn is benign,
-while content, identity, or access-policy drift remains an explicit
-source-stability gap.
+silently omitted. Discovered source candidates must be single-link regular
+files; a multi-link object becomes an explicit
+`source_hardlink_not_supported` gap before any occurrence identity is issued.
+Source rereads compare the selected protected properties: object identity,
+normalized descriptor ACL policy, selected BSD access-policy flags, and the
+exact scanned byte-range digest. The candidate token and every scan proof
+sample bind both the ACL policy and selected BSD flags; a grant, revoke, or
+policy-flag change during scanning therefore produces a source-stability gap.
+Timestamp-only churn is benign, while content, identity, or access-policy drift
+remains explicit.
 
 The remote relay, publication/history subprocess owners, and publisher canary
 keep their leaders unreaped until post-output work is terminal. They share one

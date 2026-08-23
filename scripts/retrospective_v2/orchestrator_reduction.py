@@ -162,6 +162,7 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             model_eras_by_session,
         ) = self._accepted_source_inputs(state)
 
+        catalog.SourceCatalog.create(transport_manifests)
         all_records = [
             record for manifest in transport_manifests for record in manifest.records
         ]

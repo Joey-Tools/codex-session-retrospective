@@ -439,10 +439,8 @@ class SourceCoordinationOperations(OrchestratorComponent):
         records_by_ref: dict[str, catalog.CatalogRecord] = {}
         for record in records:
             existing = records_by_ref.get(record.unit_ref)
-            if existing is not None and existing != record:
-                raise InvalidInputError(
-                    "source occurrence identity has conflicting records"
-                )
+            if existing is not None:
+                raise InvalidInputError("source occurrence identity is not unique")
             records_by_ref[record.unit_ref] = record
         records = sorted(
             records_by_ref.values(),

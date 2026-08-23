@@ -55,6 +55,9 @@ def _source_transport_candidate_token(
     access_policy_sha256: str = "sha256:" + hashlib.sha256(b"").hexdigest(),
 ) -> str:
     generation, birthtime_ns = _source_object_generation(metadata)
+    policy_flags = (
+        int(getattr(metadata, "st_flags", 0)) & _SOURCE_ACCESS_POLICY_FLAG_MASK
+    )
     return _canonical_commitment(
         {
             "birthtime_ns": birthtime_ns,
@@ -64,7 +67,8 @@ def _source_transport_candidate_token(
             "gid": metadata.st_gid,
             "inode": metadata.st_ino,
             "mode": metadata.st_mode,
-            "schema": "source_transport_candidate_v5",
+            "policy_flags": policy_flags,
+            "schema": "source_transport_candidate_v6",
             "uid": metadata.st_uid,
         }
     )

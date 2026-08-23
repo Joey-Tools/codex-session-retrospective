@@ -99,6 +99,9 @@ from retrospective_v2.orchestrator import (  # noqa: E402
 from retrospective_v2.orchestrator_scheduler import (  # noqa: E402
     StageSchedulingOperations,
 )
+from retrospective_v2.orchestrator_reduction import (  # noqa: E402
+    HierarchicalReductionOperations,
+)
 from retrospective_v2.orchestrator_core import (  # noqa: E402
     LEGACY_SHADOW_CLEANUP_ROOTS,
     REQUIRED_SOURCE_KINDS,
@@ -881,6 +884,47 @@ class OrchestratorTests(unittest.TestCase):
         for patcher in reversed(self.authority_patches):
             patcher.stop()
         self.temporary_directory.cleanup()
+
+    def test_catalog_freeze_rejects_cross_manifest_unit_ref_collision(self) -> None:
+        host_ref = typed_ref(RefType.HOST, "local")
+        lease = {
+            "host": "local",
+            "host_ref": host_ref,
+            "source_kind": SourceKind.ACTIVE_ROLLOUT.value,
+            "window": {"end": WINDOW_END, "start": WINDOW_START},
+        }
+        active, active_records, _source_ref = activity_manifest(lease, [b"active"])
+        archived_lease = dict(lease, source_kind=SourceKind.ARCHIVED_ROLLOUT.value)
+        archived, archived_records, _source_ref = activity_manifest(
+            archived_lease,
+            [b"archived"],
+        )
+        duplicate = replace(
+            archived_records[0],
+            unit_ref=active_records[0].unit_ref,
+        )
+        archived = replace(
+            archived,
+            records=(duplicate,),
+            snapshot_commitment=catalog.snapshot_commitment_for_records((duplicate,)),
+        )
+        operations = mock.Mock()
+        operations._accepted_source_inputs.return_value = (
+            [active, archived],
+            {},
+            {},
+            {},
+        )
+
+        with self.assertRaisesRegex(
+            catalog.CatalogValidationError,
+            "duplicate unit_ref",
+        ):
+            HierarchicalReductionOperations._freeze_catalog_and_materialize(
+                operations,
+                {},
+                raw_stages=[],
+            )
 
     @contextmanager
     def agent_task_transaction(self, coordinator: RetrospectiveOrchestrator):

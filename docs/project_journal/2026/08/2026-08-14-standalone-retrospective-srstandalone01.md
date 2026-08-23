@@ -3503,6 +3503,50 @@ superseded_by:
   inventory passes 14/14 in 58.963 seconds. Ruff lint and format checks,
   both workflows under `actionlint`, tracked bytecode exclusion, and
   `git diff --check` are clean.
+- A clean-context Codex CLI review of signed head `bf016083` found two source
+  identity P1 defects. Hard-linked active or archived rollout paths could
+  share a source occurrence reference and later be collapsed or corrupt the
+  cross-manifest projection. The source candidate token also omitted selected
+  BSD access-policy flags, so a flag change after discovery could escape the
+  terminal token comparison. The independent workspace bound 101 commits and
+  100 parent edges under graph digest
+  `4aa671e5e0792c87e58966f4e50346f07ba747bf144462e374a1a19dca94c0b5`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Materialization and postvalidation receipts matched, the trusted 30-file
+  control manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  the Python 3.13.12 digest remained
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`,
+  and the reviewer process and exact task root were proved absent after safe
+  cleanup.
+- Source discovery now accepts only single-link regular source candidates and
+  emits the explicit `source_hardlink_not_supported` gap before assigning an
+  occurrence identity. Per-capture and continuation assembly reject every
+  duplicate unit reference, including byte-identical records, and reduction
+  validates the complete multi-manifest catalog before projecting records by
+  reference. Candidate-token schema v6 binds the masked BSD policy flags in
+  addition to object identity and normalized ACL policy. Regressions cover
+  active/active and active/archived hard links, direct cross-manifest unit-ref
+  collisions, synthetic policy-token drift, and a real Darwin `chflags`
+  mutation in the terminal revalidation window.
+- Finding-focused source and orchestration regressions pass 4/4. Module
+  boundaries pass 19/19 with the exact 9,858-branch inventory, transport
+  aggregate 9,130 under the unchanged 9,150 limit, and `transport_source.py`
+  at 1,958 lines under its 1,960 limit. CI contracts pass 33/33, and the
+  independent Darwin security inventory passes 14/14 in 58.762 seconds.
+  One direct CI-contract invocation omitted the required `-I -S` launcher
+  flags and is explicitly non-counting; the canonical isolated invocation is
+  the accepted evidence.
+- The final Python 3.13.12 inventory contains 1,908 exact test IDs from 22
+  authenticated sources under manifest digest
+  `7ad48adc81bf3969e609a162de6ba2512c7b87fa92e001ae7ab35e0696936732`.
+  Shards 0 through 3 pass 453/453 in 1,463.511 seconds, 517/517 in 1,322.549
+  seconds, 508/508 in 1,272.180 seconds, and 430/430 in 1,221.590 seconds,
+  for exact aggregate coverage of 1,908/1,908 in 5,279.830 seconds without
+  skips. Repository-wide Ruff 0.13.2 lint, changed-file formatting, both
+  workflows under `actionlint` 1.7.12, the generated bootstrap manifest, and
+  the official OpenAI Skill validator are clean on the same source tree.
 
 ## Follow-up Work
 

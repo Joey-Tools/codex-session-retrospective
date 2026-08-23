@@ -3868,6 +3868,53 @@ class SourceTransportProtocolTests(unittest.TestCase):
             terminal["reason"],
         )
 
+    def test_rollout_hardlinks_are_explicit_gaps(self) -> None:
+        active_day = self.codex_root / "sessions/2026/07/06"
+        active_day.mkdir(parents=True, mode=0o700)
+        active = active_day / "rollout-primary.jsonl"
+        active.write_bytes(self._line("hardlink", kind="session_meta"))
+        active_alias = active_day / "rollout-alias.jsonl"
+        os.link(active, active_alias)
+
+        active_frames = self._direct_source_frames(
+            "active-hardlinks",
+            source_kind="active_rollout",
+            max_records=16,
+        )
+
+        self.assertEqual("gap", active_frames[-1]["status"])
+        self.assertEqual(
+            "source_hardlink_not_supported",
+            active_frames[-1]["reason"],
+        )
+        self.assertFalse(active_frames[-1]["complete"])
+
+        active_alias.unlink()
+        archived = self.codex_root.joinpath(
+            "archived_sessions/2026/07/06/rollout-archived-link.jsonl"
+        )
+        archived.parent.mkdir(parents=True, mode=0o700)
+        os.link(active, archived)
+        active_frames = self._direct_source_frames(
+            "active-archive-hardlink-active",
+            source_kind="active_rollout",
+            max_records=16,
+        )
+        archived_frames = self._direct_source_frames(
+            "active-archive-hardlink-archived",
+            source_kind="archived_rollout",
+            max_records=16,
+        )
+
+        self.assertEqual(
+            ["source_hardlink_not_supported", "source_hardlink_not_supported"],
+            [active_frames[-1]["reason"], archived_frames[-1]["reason"]],
+        )
+        self.assertEqual(
+            ["gap", "gap"],
+            [active_frames[-1]["status"], archived_frames[-1]["status"]],
+        )
+
     def test_active_rollout_directory_change_before_terminal_is_a_gap(self) -> None:
         day = self.codex_root / "sessions/2026/07/06"
         day.mkdir(parents=True, mode=0o700)
@@ -4170,10 +4217,11 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual("source_enumeration_failed", frames[-1]["reason"])
         self.assertFalse(frames[-1]["complete"])
 
-    def test_candidate_token_binds_generation_and_birthtime(self) -> None:
+    def test_candidate_token_binds_generation_birthtime_and_policy_flags(self) -> None:
         baseline = types.SimpleNamespace(
             st_birthtime=1234.5,
             st_dev=1,
+            st_flags=0,
             st_gen=7,
             st_gid=20,
             st_ino=2,
@@ -4187,6 +4235,12 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertNotEqual(
             transport_source._source_transport_candidate_token(baseline),
             transport_source._source_transport_candidate_token(replacement),
+        )
+        policy_change = types.SimpleNamespace(**vars(baseline))
+        policy_change.st_flags = transport_resume._SOURCE_ACCESS_POLICY_FLAG_MASK
+        self.assertNotEqual(
+            transport_source._source_transport_candidate_token(baseline),
+            transport_source._source_transport_candidate_token(policy_change),
         )
 
     def test_candidate_open_is_inside_the_discovery_deadline(self) -> None:
@@ -5577,6 +5631,38 @@ class SourceTransportProtocolTests(unittest.TestCase):
         )
         self.assertFalse(transport_resume._SOURCE_ACCESS_POLICY_FLAG_MASK & hidden)
         self.assertTrue(transport_resume._SOURCE_ACCESS_POLICY_FLAG_MASK & immutable)
+
+        source = self.codex_root / "history.jsonl"
+        source.write_bytes(self._line("terminal-policy-flags"))
+        original_flags = source.stat().st_flags
+        original_revalidate = (
+            transport_source.transport_discovery.revalidate_directory_snapshots
+        )
+        changed = False
+
+        def chflags_then_revalidate(*args, **kwargs) -> None:
+            nonlocal changed
+            os.chflags(source, original_flags | immutable)
+            changed = True
+            original_revalidate(*args, **kwargs)
+
+        try:
+            with mock.patch.object(
+                transport_source.transport_discovery,
+                "revalidate_directory_snapshots",
+                side_effect=chflags_then_revalidate,
+            ):
+                frames = self._direct_source_frames(
+                    "terminal-policy-flags",
+                    source_kind="history",
+                    max_records=16,
+                )
+        finally:
+            os.chflags(source, original_flags)
+
+        self.assertTrue(changed)
+        self.assertEqual("gap", frames[-1]["status"])
+        self.assertEqual("source_enumeration_changed", frames[-1]["reason"])
 
     def test_source_scan_rejects_access_policy_change(self) -> None:
         source = self.codex_root / "history.jsonl"

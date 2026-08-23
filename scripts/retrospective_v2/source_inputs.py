@@ -327,8 +327,10 @@ def aggregate_segments(
     for manifest in manifests:
         for record in manifest.records:
             existing = records_by_ref.get(record.unit_ref)
-            if existing is not None and existing != record:
-                raise InvalidTransitionError("source continuation records conflict")
+            if existing is not None:
+                raise InvalidTransitionError(
+                    "source continuation unit_ref is not unique"
+                )
             records_by_ref[record.unit_ref] = record
     records = sorted(records_by_ref.values(), key=catalog.catalog_record_sort_key)
     status = final.status

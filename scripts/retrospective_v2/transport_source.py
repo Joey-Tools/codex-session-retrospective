@@ -647,6 +647,8 @@ def _source_transport_candidate_paths(
             metadata, access_policy_sha256 = (
                 transport_resume._source_transport_file_observation(descriptor)
             )
+            if metadata.st_nlink != 1:
+                raise DiscoveryStop("source_hardlink_not_supported")
             budget.checkpoint()
         seen.add(relative)
         candidates.append((root / relative, relative))
