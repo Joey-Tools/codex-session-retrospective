@@ -1949,7 +1949,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
 
     def test_overlapping_absolute_path_redaction_is_safe_to_retain(self) -> None:
         source_text = (
-            "Inspect /Users/alice/Jane Smith Folder/Customer Notes.txt "
+            "Inspect /Users/alice/Jane (Smith) & [Partners] Folder/"
+            "Customer [Draft] & Notes.txt "
             "before continuing."
         )
         redacted_text = post_redact(source_text)

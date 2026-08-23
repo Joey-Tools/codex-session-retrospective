@@ -2980,11 +2980,17 @@ class ResultValidationTests(unittest.TestCase):
             "/Users/alice/John's Private Folder/secrets",
             "/Users/alice/Finance, Legal/secrets",
             "/Users/alice/Jane Smith Folder/Customer Notes.txt",
+            "/Users/alice/Jane (Smith) & [Partners] Folder/Customer [Draft] & Notes.txt",
+            (
+                '/Users/alice/Jane "Smith" {#1}?!|<> Folder/'
+                'Customer "Draft" {#1}?!|<> Notes.txt'
+            ),
             "~/My Private Folder/secrets",
             "~/private/customer.txt",
             "~/private/Customer Notes.txt",
             "~/private/Customer.v1 Notes.txt",
             "~/Jane Smith Folder/Customer Notes.txt",
+            "~/Jane (Smith) & [Partners] Folder/Customer [Draft] & Notes.txt",
             r"C:\Users\alice\My Private Folder\secrets",
             r"C:\Users\alice\John's Private Folder\secrets",
             r"C:\private\customer.txt",
@@ -3044,6 +3050,7 @@ class ResultValidationTests(unittest.TestCase):
             "src/My Private Notes.txt",
             "src/Release.v1 Private Notes.txt",
             "src/My Private Folder/secrets.txt",
+            "src/Jane (Smith) & [Partners] Folder/Customer [Draft] & Notes.txt",
             "./My Private Notes.txt",
             r"src\My Private Notes.txt",
         ):

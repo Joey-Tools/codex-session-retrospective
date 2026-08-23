@@ -3327,6 +3327,44 @@ superseded_by:
   a symlinked Python and a copied Python beneath world-writable `/private/tmp`;
   those environment-shape attempts are non-counting. The accepted runs use the
   owner-controlled worktree runtime and the canonical shard entrypoint.
+- A clean-context Codex CLI review of signed head `5d0adf77` found one P1
+  retained-path defect. The POSIX path atom excluded parentheses and square
+  brackets, so `/Users/alice/Jane (Smith) Folder/Customer Notes.txt` became
+  `[REDACTED_PATH] (Smith) [REDACTED_PATH]`; the shared leak scanner and final
+  retained validator both accepted the exposed middle component. The
+  independent workspace bound 96 commits and 95 parent edges under graph
+  digest `19ee9fd7970576d9deee417748826bc55031ca2c0f570dd7c1e7a1beda9f7fc4`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Postvalidation reproduced those receipts, the trusted 30-file control
+  manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  and the exact reviewer task root was removed after process absence was
+  proved.
+- Structurally bounded POSIX, home-relative, and relative components now admit
+  every printable non-separator character while ambiguous terminal forms keep
+  a closed punctuation set. Slash separators, known relative roots, or a
+  complete file extension therefore prove the broader component endpoint
+  without allowing URI query syntax or following prose to expand an ambiguous
+  path. Regressions cover parentheses, square brackets, ampersands, quotes,
+  braces, shell punctuation, the shared leak scan, and final retained artifact
+  assembly and reread. An initial unrestricted terminal-atom attempt caused
+  two deterministic URI/raw-ID false positives and is non-counting. The
+  corrected tree passes result/episode tests 93/93, export tests 73/73, module
+  boundaries 19/19, CI contracts 33/33, and Ruff lint and format checks for the
+  changed Python files.
+- The final Python 3.13.12 inventory remains 1,895 exact test IDs from 22
+  authenticated sources under manifest digest
+  `00a685cb464baa2bf59f03d9b0c53b96306621308f15451fc163b72c9de8f9de`.
+  Shard 0 passes 450/450 in 1,686.200 seconds, shard 1 passes 513/513 in
+  1,537.580 seconds, shard 2 passes 504/504 in 1,419.455 seconds, and shard 3
+  passes 428/428 in 1,376.940 seconds, for exact aggregate coverage of
+  1,895/1,895 in 6,020.175 seconds without skips. The final-tree Darwin
+  security inventory passes 14/14 in 59.125 seconds. Repository-wide Ruff
+  lint, changed-file formatting, both workflows under `actionlint`, the
+  generated bootstrap manifest, the official OpenAI Skill validator, project
+  journal validation, tracked bytecode exclusion, and `git diff --check` are
+  clean.
 
 ## Follow-up Work
 
