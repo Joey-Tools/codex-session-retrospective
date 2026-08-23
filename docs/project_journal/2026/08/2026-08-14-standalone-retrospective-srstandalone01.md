@@ -3473,6 +3473,36 @@ superseded_by:
   inventory passes 14/14 in 62.442 seconds. Repository-wide Ruff and
   changed-file formatting, both workflows under `actionlint`, the project
   journal validator, and `git diff --check` are clean.
+- The provider then reported five source-boundary and retained-privacy gaps,
+  followed by one publication-recovery gap. Direct `doctor` identity loading,
+  retained export staging, and publication journal open/inspection now prove
+  their selected directories are outside active and archived session roots
+  before any key, lock, journal, or output artifact is created. Retained
+  privacy classification now recognizes `Prompt text`, employee or customer
+  `number`/`no`, and lower- or mixed-case card PIN assignments while retaining
+  explicitly safe GPIO assignments. Regressions assert both rejection and
+  absence of pre-validation filesystem artifacts.
+- Three pre-final coverage attempts are explicitly non-counting. The first
+  exposed a false positive for safe `pin=GPIO17`; the second lost one shard's
+  terminal summary; and the third became stale when the publication
+  open/inspection finding arrived. On the final 1,906-test tree, the first
+  parallel shard-1 run reported one failure and one error after severe host
+  subprocess contention and repeated malloc-stack-logging warnings; its exact
+  isolated rerun passed 517/517 and is the accepted shard-1 evidence. The
+  initial parallel shard-1 failure remains recorded rather than being treated
+  as a pass.
+- The final Python 3.13.12 inventory contains 1,906 exact test IDs from 22
+  authenticated sources under manifest digest
+  `c056517123fbc796c5cfa8a01760289465cd8fbe56f7eb193d8988b80159d86e`.
+  Shard 0 passes 452/452 in 3,021.239 seconds, the isolated shard-1 rerun passes
+  517/517 in 1,430.776 seconds, shard 2 passes 507/507 in 2,769.692 seconds,
+  and shard 3 passes 430/430 in 2,712.220 seconds, for exact aggregate coverage
+  of 1,906/1,906 without skips. Seven finding-focused tests pass in 77.224
+  seconds; module boundaries pass 19/19 with the unchanged 9,858 branch
+  inventory; CI contracts pass 33/33; and the independent Darwin security
+  inventory passes 14/14 in 58.963 seconds. Ruff lint and format checks,
+  both workflows under `actionlint`, tracked bytecode exclusion, and
+  `git diff --check` are clean.
 
 ## Follow-up Work
 

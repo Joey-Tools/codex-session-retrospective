@@ -588,10 +588,12 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + _PERSONAL_SUBJECT_PATTERN_TEXT
     + _PERSONAL_POSSESSIVE_PATTERN_TEXT
     + r"[_ -]?"
-    r"(?:id|identifier|address|" + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT + r")|"
+    r"(?:id|identifier|number|no|address|"
+    + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
+    + r")|"
     r"(?-i:"
     + _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT
-    + r"(?:Id|Identifier|Address|DOB|Dob|DateOfBirth))|"
+    + r"(?:Id|Identifier|Number|No|Address|DOB|Dob|DateOfBirth))|"
     r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
     r"shipping|tenant|user)[_ -]?address|"
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
@@ -1392,7 +1394,7 @@ RAW_IDENTIFIER_PATTERNS = (UUID_RE, LONG_HEX_ID_RE, RAW_ID_LABEL_RE)
 _SOURCE_PROMPT_LABEL_PATTERN_TEXT = (
     r"(?:"
     r"(?:raw|original|verbatim)[ _-]+(?:prompt|request|message|input|text)|"
-    r"prompt|input|request|"
+    r"prompt(?:[ _-]+text)?|input|request|"
     r"(?:user|assistant|system|developer)[ _-]+"
     r"(?:message|prompt|input|request)"
     r")"
@@ -1645,6 +1647,10 @@ _CREDENTIAL_FIELD_PATTERN_TEXT = (
     + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
     + r"['\"]?"
 )
+_CREDENTIAL_ASSIGNMENT_ONLY_FIELD_PATTERN_TEXT = (
+    r"(?:(?<![\w-])|(?<=[._-]))['\"]?(?:card[ \t_-]?)?pin['\"]?"
+    r"(?![ \t]*+(?:=|:)[ \t]*+['\"]?GPIO[0-9]++\b)"
+)
 _LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
     r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|Otp|OTP|MfaCode|MFACode|"
     r"TwoFactorCode|RecoveryCode|BackupCode|ApiKey|AccessKey|PrivateKey)"
@@ -1705,6 +1711,8 @@ _PASCAL_CASE_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT = (
 )
 _CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
     r"(?:"
+    + _CREDENTIAL_ASSIGNMENT_ONLY_FIELD_PATTERN_TEXT
+    + r"|"
     + _CREDENTIAL_FIELD_PATTERN_TEXT
     + r"|"
     + _LOWER_CAMEL_CASE_CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT

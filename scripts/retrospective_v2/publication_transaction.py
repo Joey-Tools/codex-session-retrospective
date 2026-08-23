@@ -248,6 +248,10 @@ class PublicationTransaction:
         expected_attempt_ref: str | None = None,
     ) -> PublicationTransaction:
         journal = Path(journal_path).absolute()
+        journal = (
+            temporary_paths.require_run_directory_outside_sources(journal.parent)
+            / journal.name
+        )
         state_directory = _AnchoredStateDirectory.open(journal.parent)
         with _anchored_lock(state_directory, f".{journal.name}.lock"):
             state = state_directory.read_json(journal.name)
@@ -288,6 +292,10 @@ class PublicationTransaction:
         """Read and validate a journal without invoking a publication adapter."""
 
         journal = Path(journal_path).absolute()
+        journal = (
+            temporary_paths.require_run_directory_outside_sources(journal.parent)
+            / journal.name
+        )
         state_directory = _AnchoredStateDirectory.open(journal.parent)
         try:
             with _anchored_lock(state_directory, f".{journal.name}.lock"):

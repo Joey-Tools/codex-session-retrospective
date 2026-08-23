@@ -147,12 +147,11 @@ def doctor(
     resolved_identity = identity
     try:
         if resolved_identity is None:
-            loader = (
-                IdentityKey.load
-                if require_existing_identity
-                else IdentityKey.load_or_create
+            resolved_identity = load_identity(
+                identity_path,
+                require_existing=True if require_existing_identity else False,
+                expected_key_id=None,
             )
-            resolved_identity = loader(identity_path)
         record("fixed_identity", True, resolved_identity.key_id)
     except (IdentityKeyMismatchError, OSError, ValueError) as error:
         record("fixed_identity", False, type(error).__name__)

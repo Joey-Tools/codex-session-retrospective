@@ -1424,6 +1424,7 @@ class AuditedResultContractTests(unittest.TestCase):
             "Payment sent to DE893704004405 before continuing.",
             "Payment sent to GB81 WEST 1234 5698 7654 32 before continuing.",
             "Inspect pin=GPIO17 before continuing.",
+            'Inspect Pin: "GPIO18" before continuing.',
             "Run with --pin requests==2.32.5.",
             "The pin is bent.",
         ):

@@ -2353,6 +2353,11 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Inspect host: build-node-7 before continuing.",
             "Connect to build-node-7:8080 before continuing.",
             "Connect to db01:5432 before continuing.",
+            "Prompt text: proprietary payload",
+            "Employee number: EMP-12345",
+            "Customer number: CUST-12345",
+            "Card pin: 8364",
+            "Pin: 8364",
             "Street address: 123 Main Street",
             "streetAddress: 123 Main Street",
             "Device MAC address: 00:1A:2B:3C:4D:5E",
@@ -2908,6 +2913,41 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
 
 
 class RetrospectiveV2ExportTests(unittest.TestCase):
+    def test_stage_and_export_reject_source_roots_before_create(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            codex_root = root / "source-account" / ".codex"
+            sessions = codex_root / "sessions"
+            archived = codex_root / "archived_sessions"
+            sessions.mkdir(parents=True, mode=0o700)
+            archived.mkdir(mode=0o700)
+            stage_output = sessions / "stage" / ".codex-local" / "retained-v2"
+            export_output = archived / "export" / ".codex-local" / "retained-v2"
+            artifacts = assemble_retained_artifacts(run_state(), review_data())
+
+            with mock.patch.object(
+                export_module.temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ):
+                with self.assertRaisesRegex(
+                    export_module.safe_io.UnsafePathError,
+                    "overlaps a retrospective source root",
+                ):
+                    stage_retained_artifacts(stage_output, artifacts)
+                with self.assertRaisesRegex(
+                    export_module.safe_io.UnsafePathError,
+                    "overlaps a retrospective source root",
+                ):
+                    export_retained_bundle(
+                        export_output,
+                        run_state(),
+                        review_data(),
+                    )
+
+            self.assertEqual([], list(sessions.iterdir()))
+            self.assertEqual([], list(archived.iterdir()))
+
     def test_artifact_hardening_precedes_the_first_payload_write(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

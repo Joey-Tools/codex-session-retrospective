@@ -1881,6 +1881,7 @@ class ResultValidationTests(unittest.TestCase):
                 )
         for safe_pin_text in (
             "Inspect pin=GPIO17 before continuing.",
+            'Inspect Pin: "GPIO18" before continuing.',
             "Run with --pin requests==2.32.5.",
             "The pin is bent.",
         ):
@@ -2230,6 +2231,11 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_ORIGINAL_PROMPT]",
             ),
             (
+                "Prompt text: proprietary payload.",
+                "original_prompt",
+                "[REDACTED_ORIGINAL_PROMPT]",
+            ),
+            (
                 "stdout: proprietary payload.",
                 "tool_output",
                 "[REDACTED_TOOL_OUTPUT]",
@@ -2247,6 +2253,7 @@ class ResultValidationTests(unittest.TestCase):
 
         for safe_prose in (
             "Improve user input handling.",
+            "The prompt text parser preserved derived summaries.",
             "The stdout parser dropped the final line.",
             "Improve stderr handling in the wrapper.",
             "The transcript validator was too strict.",
@@ -2281,6 +2288,16 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "Employee number: EMP-12345",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Customer number: CUST-12345",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "GPS coordinates: 37.7749, -122.4194",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
@@ -2294,6 +2311,8 @@ class ResultValidationTests(unittest.TestCase):
             ("Recovery answer: blue-sparrow-47", "credential", "[REDACTED_CREDENTIAL]"),
             ("CVV: 123", "credential", "[REDACTED_CREDENTIAL]"),
             ("Card verification value: 123", "credential", "[REDACTED_CREDENTIAL]"),
+            ("Card pin: 8364", "credential", "[REDACTED_CREDENTIAL]"),
+            ("Pin: 8364", "credential", "[REDACTED_CREDENTIAL]"),
         ):
             with self.subTest(source=source):
                 self.assertIn(

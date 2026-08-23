@@ -4938,6 +4938,41 @@ class DurablePublicationTests(unittest.TestCase):
         claim.assert_not_called()
         self.assertFalse((sessions / "source-run").exists())
 
+    def test_open_and_inspect_reject_source_journals_before_lock_creation(
+        self,
+    ) -> None:
+        codex_root = self.root / "source-account" / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+
+        for source_root in (sessions, archived):
+            for operation in (
+                PublicationTransaction.open,
+                PublicationTransaction.inspect_local,
+            ):
+                journal = source_root / f"{operation.__name__}.json"
+                with (
+                    self.subTest(
+                        source_root=source_root.name,
+                        operation=operation.__name__,
+                    ),
+                    mock.patch.object(
+                        temporary_paths,
+                        "local_codex_root",
+                        return_value=codex_root,
+                    ),
+                    self.assertRaisesRegex(
+                        safe_io.UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ),
+                ):
+                    operation(journal)
+
+                self.assertFalse(journal.exists())
+                self.assertFalse((source_root / f".{journal.name}.lock").exists())
+
     def test_latest_history_rejects_stale_run_and_local_cache_rollback(self) -> None:
         first, first_bundle = self.build_exportable_run("first")
         stale, stale_bundle = self.build_exportable_run("stale")

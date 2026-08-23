@@ -16,7 +16,7 @@ import tempfile
 import time
 from typing import Any
 
-from . import safe_io
+from . import safe_io, temporary_paths
 from .reporting import (
     RETAINED_ARTIFACT_NAMES,
     RetainedInventoryError,
@@ -318,9 +318,11 @@ class _AnchoredExport:
         create_parent: bool,
         require_ignored: bool = True,
     ) -> _AnchoredExport:
-        output = _normalized_staging_path(
-            output_dir,
-            require_ignored=require_ignored,
+        output = temporary_paths.require_run_directory_outside_sources(
+            _normalized_staging_path(
+                output_dir,
+                require_ignored=require_ignored,
+            )
         )
         if not output.name or output.name in {".", ".."}:
             raise ExportLocationError("retained export name is invalid")

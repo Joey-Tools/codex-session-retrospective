@@ -1501,6 +1501,39 @@ class OrchestratorTests(unittest.TestCase):
             "gap_reason": "insufficient_support",
         }
 
+    def test_doctor_rejects_source_identity_before_create(self) -> None:
+        codex_root = self.root / "source-account" / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+        source_identity = sessions / "doctor-probe" / "identity-v2.key"
+
+        with (
+            mock.patch.object(
+                temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+            mock.patch.object(IdentityKey, "load_or_create") as load_or_create,
+        ):
+            readiness = doctor(
+                identity_path=source_identity,
+                provenance=execution_provenance(),
+                shadow=True,
+                history_repo=self.root / "history",
+                history_target_ref="refs/heads/main",
+                publisher_gpg_program=TEST_PUBLISHER_GPG,
+            )
+
+        load_or_create.assert_not_called()
+        self.assertFalse(readiness["checks"]["fixed_identity"]["ok"])
+        self.assertEqual(
+            "UnsafePathError",
+            readiness["checks"]["fixed_identity"]["detail"],
+        )
+        self.assertFalse(source_identity.parent.exists())
+
     def test_doctor_identity_publisher_and_all_host_policy(self) -> None:
         expected_hosts = TEST_HOSTS
         self.assertEqual(expected_hosts, TEST_HOSTS)
