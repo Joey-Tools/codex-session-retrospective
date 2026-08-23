@@ -42,6 +42,7 @@ from retrospective_v2.result_validation import (  # noqa: E402
     build_synthesis_prompt_rewrite_exemplars,
     build_synthesis_signal_commitments,
     build_synthesis_signal_exemplars,
+    post_redact,
 )
 from retrospective_v2.reporting import (  # noqa: E402
     REPORT_SECTIONS,
@@ -1945,6 +1946,30 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
                 refresh_bundle_digest(report_tampered)
                 with self.assertRaisesRegex(RetainedPrivacyError, "forbidden locator"):
                     validate_retained_artifacts(report_tampered)
+
+    def test_overlapping_absolute_path_redaction_is_safe_to_retain(self) -> None:
+        source_text = (
+            "Inspect /Users/alice/Jane Smith Folder/Customer Notes.txt "
+            "before continuing."
+        )
+        redacted_text = post_redact(source_text)
+        self.assertEqual(
+            redacted_text,
+            "Inspect [REDACTED_PATH] before continuing.",
+        )
+
+        path_review = review_data()
+        path_review["turn_findings"][1]["rewritten_prompt"] = redacted_text
+        artifacts = assemble_retained_artifacts(run_state(), path_review)
+        validate_retained_artifacts(artifacts)
+        rows = [
+            json.loads(line) for line in artifacts["turn_findings.jsonl"].splitlines()
+        ]
+        high_impact = next(row for row in rows if row["disposition"] == "high_impact")
+        self.assertEqual(
+            high_impact["rewritten_prompt"],
+            "Inspect [REDACTED_PATH] before continuing.",
+        )
 
     def test_retained_validation_rejects_shared_personal_identifier_families(
         self,

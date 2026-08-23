@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import ipaddress
 import json
@@ -1278,6 +1279,17 @@ PATH_LOCATOR_PATTERNS = (
     UNC_SPACED_TERMINAL_PATH_RE,
     UNC_PATH_RE,
 )
+_STRUCTURALLY_BOUNDED_PATH_LOCATOR_PATTERNS = (
+    RELATIVE_SPACED_FILE_PATH_RE,
+    HOME_SPACED_INTERMEDIATE_PATH_RE,
+    HOME_FILE_PATH_RE,
+    UNIX_SPACED_INTERMEDIATE_PATH_RE,
+    UNIX_FILE_PATH_RE,
+    WINDOWS_SPACED_INTERMEDIATE_PATH_RE,
+    WINDOWS_FILE_PATH_RE,
+    UNC_SPACED_INTERMEDIATE_PATH_RE,
+    UNC_FILE_PATH_RE,
+)
 UUID_RE = re.compile(
     r"(?<![A-Za-z0-9])"
     r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
@@ -2360,6 +2372,55 @@ def redact_mac_addresses(value: str) -> str:
 
 def contains_raw_identifier(value: str) -> bool:
     return any(pattern.search(value) for pattern in RAW_IDENTIFIER_PATTERNS)
+
+
+def _merge_path_locator_span(
+    merged: tuple[tuple[int, int], ...], span: tuple[int, int]
+) -> tuple[tuple[int, int], ...]:
+    previous = merged[-1]
+    combined = (previous[0], max(previous[1], span[1]))
+    return (merged + (span,), merged[:-1] + (combined,))[span[0] < previous[1]]
+
+
+def path_locator_spans(value: str) -> tuple[tuple[int, int], ...]:
+    """Return merged path spans found against the unchanged input text."""
+
+    # A file extension or later path separator supplies a structural endpoint.
+    # Do not let an ambiguous spaced-terminal match consume following prose.
+    bounded_ends: dict[int, int] = {}
+    for pattern in _STRUCTURALLY_BOUNDED_PATH_LOCATOR_PATTERNS:
+        for match in pattern.finditer(value):
+            bounded_ends[match.start()] = max(
+                bounded_ends.get(match.start(), match.end()),
+                match.end(),
+            )
+    candidates = sorted(
+        (
+            (
+                match.start(),
+                min(match.end(), bounded_ends.get(match.start(), match.end())),
+            )
+            for pattern in PATH_LOCATOR_PATTERNS
+            for match in pattern.finditer(value)
+        ),
+        key=lambda span: (span[0], -span[1]),
+    )
+    return functools.reduce(
+        _merge_path_locator_span,
+        candidates,
+        ((-1, -1),),
+    )[1:]
+
+
+def redact_path_locators(
+    value: str,
+    replacement: str = "[REDACTED_PATH]",
+) -> str:
+    """Redact complete overlapping path matches without rescanning mutations."""
+
+    for start, end in reversed(path_locator_spans(value)):
+        value = value[:start] + replacement + value[end:]
+    return value
 
 
 def contains_path_locator(value: str) -> bool:

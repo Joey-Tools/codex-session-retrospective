@@ -3288,6 +3288,45 @@ superseded_by:
   executable and the selected host Python lacked PyYAML; the accepted offline
   Python 3.13 validator run used the existing task-local cache and reported
   `Skill is valid!`.
+- A clean-context Codex CLI review of signed head `0c1ca287` found one P1
+  retained-path defect. Path patterns were applied sequentially to already
+  modified text, so a relative spaced-file suffix could be replaced before the
+  complete absolute POSIX match. A path such as
+  `/Users/alice/Jane Smith Folder/Customer Notes.txt` consequently retained the
+  middle token `Smith`; the leak scanner accepted the fragment and final
+  `turn_findings.jsonl` validation did not reject it. The independent review
+  workspace bound 95 commits and 94 parent edges under graph digest
+  `d358aa361f63500ed611d61b014fb2f5daa00a830a4b50855b8e99da8f13f49a`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Postvalidation reproduced those exact receipts, the trusted 30-file control
+  manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  and the reviewer and preflight task roots were removed after process absence
+  was proved.
+- Path redaction now evaluates every locator pattern against the unchanged
+  input, clips ambiguous spaced-terminal matches to a structurally proved file
+  extension or later separator endpoint, merges overlapping spans, and then
+  replaces the merged spans from right to left. Detector findings use the same
+  merged spans. This closes the reviewer's combined spaced-directory and
+  spaced-filename case for POSIX, home-relative, Windows, and UNC paths while
+  preserving prose after a structurally complete filename. Focused final-tree
+  redaction and retained-artifact regressions pass 4/4. Module boundaries pass
+  19/19 with an exact 9,856-branch inventory under the unchanged 9,858 cap, CI
+  contracts pass 33/33, and the independent Darwin security inventory passes
+  14/14 in 59.094 seconds under an owner-controlled copied Python 3.13.12.
+- The final Python 3.13.12 inventory contains 1,895 exact test IDs from 22
+  authenticated sources under manifest digest
+  `624df069729e3b9fb1b8c3eea8edf4869fd4fdcf6b34aacb02a3f9fe0190d432`.
+  Shard 0 passes 450/450 in 1,677.706 seconds, shard 1 passes 513/513 in
+  1,527.170 seconds, shard 2 passes 504/504 in 1,402.397 seconds, and shard 3
+  passes 428/428 in 1,369.454 seconds, for exact aggregate coverage of
+  1,895/1,895 in 5,976.727 seconds without skips. An earlier direct unittest
+  selector stopped before test loading because isolated mode cannot import the
+  un-packaged `tests` directory, and initial CI/Darwin probes correctly rejected
+  a symlinked Python and a copied Python beneath world-writable `/private/tmp`;
+  those environment-shape attempts are non-counting. The accepted runs use the
+  owner-controlled worktree runtime and the canonical shard entrypoint.
 
 ## Follow-up Work
 

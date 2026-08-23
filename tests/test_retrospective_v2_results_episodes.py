@@ -2979,19 +2979,23 @@ class ResultValidationTests(unittest.TestCase):
             "/Users/alice/My Private Folder/secrets",
             "/Users/alice/John's Private Folder/secrets",
             "/Users/alice/Finance, Legal/secrets",
+            "/Users/alice/Jane Smith Folder/Customer Notes.txt",
             "~/My Private Folder/secrets",
             "~/private/customer.txt",
             "~/private/Customer Notes.txt",
             "~/private/Customer.v1 Notes.txt",
+            "~/Jane Smith Folder/Customer Notes.txt",
             r"C:\Users\alice\My Private Folder\secrets",
             r"C:\Users\alice\John's Private Folder\secrets",
             r"C:\private\customer.txt",
             r"C:\private\Customer Notes.txt",
             r"C:\private\Customer.v1 Notes.txt",
+            r"C:\Users\alice\Jane Smith Folder\Customer Notes.txt",
             r"\\server\share\My Private Folder\secrets",
             r"\\server\share\customer.txt",
             r"\\server\share\Customer Notes.txt",
             r"\\server\share\Customer.v1 Notes.txt",
+            r"\\server\share\Jane Smith Folder\Customer Notes.txt",
         ):
             with self.subTest(source_path=source_path):
                 value = extractor_result()
