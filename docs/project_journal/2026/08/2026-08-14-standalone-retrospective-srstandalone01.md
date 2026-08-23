@@ -3627,6 +3627,38 @@ superseded_by:
   under `actionlint` 1.7.12, the generated bootstrap manifest, the official
   OpenAI Skill validator, tracked-bytecode exclusion, and `git diff --check`
   are clean on the same Final7 implementation tree.
+- Current-head GitHub Codex review of signed head `90f178b4` reported three P1
+  findings. Provider-cache initialization and verification could touch state
+  below active or archived session roots before the source-overlap proof. The
+  shared retained-privacy policy also omitted wallet seed, mnemonic, and
+  recovery phrase labels, plus operational trace, span, correlation, event,
+  response, and task identifier labels. Provider-cache public entry points now
+  apply the existing run-directory source-exclusion gate before any open,
+  lock, read, or write. The shared credential and raw-identifier locators cover
+  the omitted label families in scan, post-redaction, and retained validation,
+  while preserving canonical placeholders and safe prose negatives.
+- The finding-focused tests pass 2/2; the affected authority module passes
+  7/7, result and privacy validation passes 98/98, export validation passes
+  76/76 in 157.526 seconds, and the audited result contract passes 25/25.
+  Module boundaries pass 19/19 with the exact 9,857-branch inventory, and CI
+  contracts pass 33/33. Two earlier combined focused invocations are explicitly
+  non-counting: a direct Homebrew Python launch failed the owner-controlled
+  executable-authority precondition, and an owner-controlled virtual
+  environment launched without the required isolated flags failed the runtime
+  isolation precondition. Package-style isolated probes that discovered zero
+  tests are also non-counting.
+- The final Python 3.13.12 inventory contains 1,914 exact test IDs from 22
+  authenticated sources under manifest digest
+  `63c197cbc5207c9902a1da84d6d3f3c582598e3ccba1413f6d192db1042d2d9d`.
+  Shards 0 through 3 pass 453/453 in 1,552.123 seconds, 519/519 in 1,335.990
+  seconds, 511/511 in 1,203.794 seconds, and 431/431 in 1,188.767 seconds,
+  for exact aggregate coverage of 1,914/1,914 in 5,280.674 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 57.906
+  seconds. Repository-wide Ruff 0.13.2 lint, changed-file formatting, both
+  workflows under `actionlint` 1.7.12, the generated bootstrap manifest, the
+  official OpenAI Skill validator, project-journal validation, tracked-bytecode
+  exclusion, and `git diff --check` are clean on the same Final8 implementation
+  tree.
 
 ## Follow-up Work
 

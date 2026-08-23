@@ -15,6 +15,7 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import retrospective_v2.result_validation as result_validation_module  # noqa: E402
+import retrospective_v2.reporting as reporting_module  # noqa: E402
 import retrospective_v2.source_overlap as source_overlap_module  # noqa: E402
 from retrospective_v2.episode_review import (  # noqa: E402
     construct_episodes,
@@ -2542,6 +2543,59 @@ class ResultValidationTests(unittest.TestCase):
                     result["turns"][0]["generalized_working_text"],
                 )
                 self.assertEqual((), scan_for_leaks(result))
+
+    def test_wallet_phrase_and_operational_ids_share_retained_privacy_policy(
+        self,
+    ) -> None:
+        credential_sources = (
+            "Wallet seed phrase: abandon ability able about above absent",
+            "Mnemonic phrase: abandon ability able about above absent",
+            "Recovery phrase: blue sparrow amber harbor quiet maple",
+            "walletSeedPhrase: abandon ability able about above absent",
+        )
+        identifier_sources = (
+            "trace_id: 4bf92f3577b34da6",
+            "span_id: 00f067aa0ba902b7",
+            "correlation_id: req-abc12345",
+            "event_id: evt-12345678",
+            "response_ref: rsp-12345678",
+            "task_identifier: task-12345678",
+        )
+
+        for sources, category, replacement in (
+            (credential_sources, "credential", "[REDACTED_CREDENTIAL]"),
+            (identifier_sources, "raw_id", "[REDACTED_RAW_ID]"),
+        ):
+            for source in sources:
+                with self.subTest(source=source):
+                    self.assertIn(
+                        category,
+                        {finding.category for finding in scan_for_leaks(source)},
+                    )
+                    self.assertEqual(
+                        replacement,
+                        result_validation_module.post_redact(source),
+                    )
+                    with self.assertRaises(reporting_module.RetainedPrivacyError):
+                        reporting_module.validate_retained_value(
+                            {"problem_statement": source}
+                        )
+
+        for label in ("trace", "span", "correlation", "event", "response", "task"):
+            for suffix in ("id", "ref", "identifier"):
+                source = f"{label}_{suffix}: opaque-12345678"
+                with self.subTest(label=label, suffix=suffix):
+                    self.assertEqual(
+                        "[REDACTED_RAW_ID]",
+                        result_validation_module.post_redact(source),
+                    )
+
+        for safe_prose in (
+            "Improve trace ID handling.",
+            "The recovery phrase parser failed closed.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertEqual((), scan_for_leaks(safe_prose))
 
     def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
         jwt_segment = "".join(("eyJ", "A" * 8))

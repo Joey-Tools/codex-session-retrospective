@@ -7,15 +7,18 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 
-SCRIPTS = (
-    Path(__file__).resolve().parents[1]
-    / "scripts"
-)
+SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from retrospective_v2 import authority, episode_review  # noqa: E402
+from retrospective_v2 import (  # noqa: E402
+    authority,
+    episode_review,
+    safe_io,
+    temporary_paths,
+)
 from retrospective_v2.identity import IdentityKey  # noqa: E402
 
 
@@ -313,6 +316,69 @@ class ProviderIdentityTests(unittest.TestCase):
             )
 
         self.assertFalse(state_dir.exists())
+
+    def test_provider_cache_entrypoints_reject_source_overlap_before_open(self) -> None:
+        codex_root = self.root / "codex"
+        sessions = codex_root / "sessions"
+        archived_sessions = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True)
+        archived_sessions.mkdir()
+        alias = self.root / "session-alias"
+        alias.symlink_to(sessions, target_is_directory=True)
+        previous = history_state(self.identity)
+        published = history_state(
+            self.identity,
+            provider_revision=1,
+            head_commit="b" * 40,
+        )
+        operations = (
+            (
+                "initialize",
+                lambda path: authority.initialize_provider_cache(
+                    path,
+                    history=previous,
+                    expected_revision=0,
+                    identity=self.identity,
+                ),
+            ),
+            (
+                "assert",
+                lambda path: authority.assert_provider_cache_matches(
+                    path,
+                    previous,
+                    identity=self.identity,
+                ),
+            ),
+            (
+                "derive",
+                lambda path: authority.derive_provider_cache(
+                    path,
+                    previous=previous,
+                    published=published,
+                    identity=self.identity,
+                ),
+            ),
+        )
+        state_dirs = (
+            sessions / "provider-active",
+            archived_sessions / "provider-archived",
+            alias / "provider-alias",
+        )
+
+        with mock.patch.object(
+            temporary_paths,
+            "local_codex_root",
+            return_value=codex_root,
+        ):
+            for operation_name, operation in operations:
+                for state_dir in state_dirs:
+                    with self.subTest(operation=operation_name, state_dir=state_dir):
+                        with self.assertRaisesRegex(
+                            safe_io.UnsafePathError,
+                            "overlaps a retrospective source root",
+                        ):
+                            operation(state_dir)
+                        self.assertFalse(state_dir.exists())
 
     def test_derivation_rejects_foreign_previous_or_published_identity(self) -> None:
         state_dir = self.root / "provider"

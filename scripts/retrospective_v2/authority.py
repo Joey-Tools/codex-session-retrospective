@@ -33,6 +33,7 @@ from . import (
     process_lifecycle,
     reporting,
     safe_io,
+    temporary_paths,
 )
 from .authority_errors import AuthorityError as AuthorityError, AutomationCutoverBlocked
 from .authority_errors import HistoryValidationError, ProductionMarkerError
@@ -3233,6 +3234,7 @@ def initialize_provider_cache(
         identity=identity,
         label="provider initialization history",
     )
+    state_dir = temporary_paths.require_run_directory_outside_sources(state_dir)
     directory, directory_fd = safe_io.open_owner_only_directory(
         state_dir,
         create=True,
@@ -3293,6 +3295,7 @@ def assert_provider_cache_matches(
     *,
     identity: IdentityKey,
 ) -> dict[str, Any]:
+    state_dir = temporary_paths.require_run_directory_outside_sources(state_dir)
     directory, directory_fd = safe_io.open_owner_only_directory(
         state_dir,
         reject_symlink_ancestors=True,
@@ -3337,6 +3340,7 @@ def derive_provider_cache(
         raise ProviderCacheError(
             "published history does not advance one provider revision"
         )
+    state_dir = temporary_paths.require_run_directory_outside_sources(state_dir)
     directory, directory_fd = safe_io.open_owner_only_directory(
         state_dir,
         reject_symlink_ancestors=True,

@@ -1430,7 +1430,8 @@ LONG_HEX_ID_RE = re.compile(
 )
 RAW_ID_LABEL_RE = re.compile(
     r"\b(?:session|thread|conversation|turn|message|tool[_ -]?call|request|"
-    r"run|job|attempt)[_ -]?(?:id|ref|identifier)\s*(?:=|:|#)\s*"
+    r"run|job|attempt|trace|span|correlation|event|response|task)"
+    r"[_ -]?(?:id|ref|identifier)\s*(?:=|:|#)\s*"
     r"(?![a-z][a-z0-9_]*_ref_v2:)[A-Za-z0-9._:-]{6,}",
     re.ASCII | re.IGNORECASE,
 )
@@ -1673,11 +1674,17 @@ _CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT = (
 _COMPACT_TOKEN_KEY_PATTERN_TEXT = (
     r"(?:access|api|auth|authorization|client|refresh|id|session|csrf|xsrf)Token"
 )
+_CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT = (
+    r"(?:(?:wallet[ \t_-]+)?seed[ \t_-]+phrase|"
+    r"mnemonic[ \t_-]+phrase|recovery[ \t_-]+phrase)"
+)
 _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"(?:authorization|aws[\s_-]?secret[\s_-]?access[\s_-]?key|"
     r"secret[\s_-]?access[\s_-]?key|access[\s_-]?token|"
     r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
     r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?code|"
+    + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT
+    + r"|"
     r"passwd|pwd|(?-i:PIN)|otp|"
     r"(?:cvv|cvc|cid)(?:[ \t_-]?(?:number|code))?|"
     r"card[ \t_-]?(?:security|verification)[ \t_-]?(?:code|value)|"
@@ -1697,12 +1704,13 @@ _CREDENTIAL_ASSIGNMENT_ONLY_FIELD_PATTERN_TEXT = (
 )
 _LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
     r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|Otp|OTP|MfaCode|MFACode|"
-    r"TwoFactorCode|RecoveryCode|BackupCode|ApiKey|AccessKey|PrivateKey)"
+    r"TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
+    r"RecoveryPhrase|ApiKey|AccessKey|PrivateKey)"
 )
 _PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
     r"(?:Credential|Secret|Password|Passphrase|Passcode|PIN|Pin|Otp|OTP|MfaCode|"
-    r"MFACode|TwoFactorCode|RecoveryCode|BackupCode|APIKey|ApiKey|AccessKey|"
-    r"PrivateKey|"
+    r"MFACode|TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
+    r"RecoveryPhrase|APIKey|ApiKey|AccessKey|PrivateKey|"
     r"(?:Access|API|Api|Auth|Authorization|Client|Refresh|ID|Id|Session|"
     r"CSRF|Csrf|XSRF|Xsrf)Token)"
 )
@@ -1773,6 +1781,25 @@ _CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT = (
     + _PASCAL_CASE_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT
     + r")"
 )
+_CREDENTIAL_PHRASE_ASSIGNMENT_FIELD_PATTERN_TEXT = (
+    r"(?:"
+    r"(?:(?<![\w-])|(?<=[._-]))['\"]?(?:[A-Za-z0-9]+[._-])*"
+    + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT
+    + r"['\"]?"
+    + r"|"
+    + _compact_case_credential_field_pattern(
+        initial_pattern=r"[a-z]",
+        suffix_pattern=r"(?:SeedPhrase|MnemonicPhrase|RecoveryPhrase)",
+        connector_pattern=r"(?:=|:)",
+    )
+    + r"|"
+    + _compact_case_credential_field_pattern(
+        initial_pattern=r"[A-Z]",
+        suffix_pattern=r"(?:SeedPhrase|MnemonicPhrase|RecoveryPhrase)",
+        connector_pattern=r"(?:=|:)",
+    )
+    + r")"
+)
 _AUTH_SCHEME_PATTERN_TEXT = (
     r"(?:Bearer|Basic|Digest|Negotiate|Token|Api[-_]?Key|HMAC|"
     r"AWS4-HMAC-SHA256|Signature|OAuth|MAC)"
@@ -1798,6 +1825,15 @@ _CREDENTIAL_NARRATIVE_VALUE_RE = re.compile(
     + r")",
     re.IGNORECASE,
 )
+_CREDENTIAL_PHRASE_LABELED_VALUE_RE = re.compile(
+    _CREDENTIAL_PHRASE_ASSIGNMENT_FIELD_PATTERN_TEXT
+    + _CREDENTIAL_INLINE_SPACE_ATOMIC_PATTERN_TEXT
+    + r"(?:=|:)"
+    + _CREDENTIAL_INLINE_SPACE_ATOMIC_PATTERN_TEXT
+    + _SAFE_CREDENTIAL_VALUE_LOOKAHEAD_PATTERN_TEXT
+    + r"(?=\S)[^\r\n]*\S",
+    re.IGNORECASE,
+)
 
 PRIVATE_KEY_BOUNDARY_RE = re.compile(
     r"-----\s*(?P<kind>BEGIN|END)\s+"
@@ -1816,6 +1852,11 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
             re.IGNORECASE,
         ),
         "[REDACTED_SECRET]",
+    ),
+    (
+        "credential",
+        _CREDENTIAL_PHRASE_LABELED_VALUE_RE,
+        "[REDACTED_CREDENTIAL]",
     ),
     (
         "credential",
