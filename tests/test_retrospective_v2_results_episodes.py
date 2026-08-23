@@ -2980,9 +2980,18 @@ class ResultValidationTests(unittest.TestCase):
             "/Users/alice/John's Private Folder/secrets",
             "/Users/alice/Finance, Legal/secrets",
             "~/My Private Folder/secrets",
+            "~/private/customer.txt",
+            "~/private/Customer Notes.txt",
+            "~/private/Customer.v1 Notes.txt",
             r"C:\Users\alice\My Private Folder\secrets",
             r"C:\Users\alice\John's Private Folder\secrets",
+            r"C:\private\customer.txt",
+            r"C:\private\Customer Notes.txt",
+            r"C:\private\Customer.v1 Notes.txt",
             r"\\server\share\My Private Folder\secrets",
+            r"\\server\share\customer.txt",
+            r"\\server\share\Customer Notes.txt",
+            r"\\server\share\Customer.v1 Notes.txt",
         ):
             with self.subTest(source_path=source_path):
                 value = extractor_result()
@@ -2999,11 +3008,15 @@ class ResultValidationTests(unittest.TestCase):
     def test_post_redaction_covers_paths_with_spaced_terminal_components(
         self,
     ) -> None:
-        for source_path in (
-            "/Users/alice/My Private Folder",
-            "~/My Private Folder",
-            r"C:\Users\alice\My Private Folder",
-            r"\\server\share\My Private Folder",
+        for source_path, suffix in (
+            ("/Users/alice/My Private Folder", ""),
+            ("/Users/alice/My Private Folder.", "."),
+            ("~/My Private Folder", ""),
+            ("~/My Private Folder!", "!"),
+            (r"C:\Users\alice\My Private Folder", ""),
+            (r"C:\Users\alice\My Private Folder;", ";"),
+            (r"\\server\share\My Private Folder", ""),
+            (r"\\server\share\My Private Folder?", "?"),
         ):
             with self.subTest(source_path=source_path):
                 value = extractor_result()
@@ -3012,11 +3025,24 @@ class ResultValidationTests(unittest.TestCase):
                 result = validate_extractor_result(value, ALL_REFS)
 
                 text = result["turns"][0]["generalized_working_text"]
-                self.assertEqual(text, "Read [REDACTED_PATH]")
+                self.assertEqual(
+                    text,
+                    f"Read [REDACTED_PATH]{suffix}",
+                )
                 self.assertEqual(scan_for_leaks(result), ())
 
     def test_post_redaction_covers_relative_source_paths(self) -> None:
-        for source_path in ("src/a.py", "./src/a.py", "../src/a.py", r"src\a.py"):
+        for source_path in (
+            "src/a.py",
+            "./src/a.py",
+            "../src/a.py",
+            r"src\a.py",
+            "src/My Private Notes.txt",
+            "src/Release.v1 Private Notes.txt",
+            "src/My Private Folder/secrets.txt",
+            "./My Private Notes.txt",
+            r"src\My Private Notes.txt",
+        ):
             with self.subTest(source_path=source_path):
                 value = extractor_result()
                 value["turns"][0]["generalized_working_text"] = (

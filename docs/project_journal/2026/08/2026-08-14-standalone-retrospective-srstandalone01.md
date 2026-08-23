@@ -3225,6 +3225,69 @@ superseded_by:
   workflows under `actionlint`, the generated bootstrap manifest, the official
   OpenAI Skill validator, source-tree bytecode exclusion, and `git diff
   --check` are clean.
+- A fresh-context Codex CLI review of signed head `1890f451` found two P1
+  retained-path gaps: sentence punctuation after an absolute path with a
+  spaced terminal component caused fallback redaction to retain the remaining
+  component, and relative file paths with spaces retained everything after the
+  first atom. The independently materialized workspace bound 94 commits and 93
+  parent edges under graph digest
+  `cf12214ccdc749d2ee63a9698bcf4d0d64695d6d4c9ca09991275a4ea2476a5d`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Postvalidation reproduced those exact receipts. The trusted 30-file control
+  manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  the playbook, guard, and Python digests remained unchanged, and the exact
+  reviewer task root was removed after process absence was proved.
+- The shared privacy grammar now treats punctuation as an outside terminal
+  boundary, recognizes relative file components containing spaces, and gives
+  structurally complete file paths and paths with a spaced intermediate
+  component priority over the inherently ambiguous spaced-terminal form. The
+  priority rules cover POSIX, home-relative, Windows, and UNC syntax, stop at a
+  complete final file or unspaced component, and preserve following reviewable
+  prose. Detector and post-redactor continue to consume the same ordered
+  pattern set. Accepted focused evidence is 5/5 result/path methods in 0.517
+  seconds, 1/1 retained assembly and reread method in 9.503 seconds, module
+  boundaries 19/19 in 1.671 seconds with the exact 9,853-branch inventory, CI
+  contracts 33/33 in 2.116 seconds, and Darwin security 14/14 in 68.130
+  seconds.
+- Two correction attempts are explicitly non-counting. The first focused
+  relative-path grammar allowed a leading prose token to become a spaced path
+  component and failed eight subcases before the first component was restored
+  to an unspaced form. The next frozen 1,894-test run under digest
+  `fdb36137ce7ddd4c77e94c9b9d6d7d8fce5186c7fdd74c3e307b4ac1aef48129`
+  found three over-redaction failures for ordinary absolute file paths followed
+  by prose; shard 3 reached a clean terminal while shards 0 and 1 were
+  interrupted once after that deterministic failure. No matching runner or
+  worktree process remained. The next Python 3.13.0 inventory contained the
+  same 1,894 test IDs from 22 authenticated sources under digest
+  `a81ff31dbf9af4bb2a7a36b9a4694159f3056bc5d79cf57166c85f4f5b6e4fc8`.
+  Shard 0 passes 450/450 in 1,544.143 seconds, shard 1 passes 513/513 in
+  1,397.682 seconds, shard 2 passes 503/503 in 1,281.021 seconds, and shard 3
+  passes 428/428 in 1,250.569 seconds, for exact aggregate coverage of
+  1,894/1,894 in 5,473.415 seconds without skips. That run became stale and is
+  non-counting after an exact dotted relative-file regression showed that
+  `src/Release.v1 Private Notes.txt` could stop at the first valid extension
+  and retain the spaced suffix. The complete-file component is now greedy, so
+  it selects the rightmost valid extension while still stopping before prose
+  after an ordinary file path.
+- The final Python 3.13.0 inventory contains the same 1,894 test IDs from 22
+  authenticated sources under digest
+  `756109f3ae89baf640289ccb8c807ff623172ef1d6359ee23cc0273b46157b01`.
+  Shard 0 passes 450/450 in 1,616.747 seconds, shard 1 passes 513/513 in
+  1,450.876 seconds, shard 2 passes 503/503 in 1,342.782 seconds, and shard 3
+  passes 428/428 in 1,301.652 seconds, for exact aggregate coverage of
+  1,894/1,894 in 5,712.057 seconds without skips. Signing, head-bound
+  exact-secret admission, replacement local Codex review, hosted CI, and
+  current-head GitHub Codex evidence remain delivery gates. Ruff 0.13.2 lint
+  for all `scripts/` and `tests/`, formatting for the three changed Python
+  files, both workflows under `actionlint`, the generated bootstrap manifest,
+  the official OpenAI Skill validator, project-journal validation, tracked
+  bytecode exclusion, and `git diff --check` are clean. Two validator launch
+  attempts stopped before reading the skill because the script was not
+  executable and the selected host Python lacked PyYAML; the accepted offline
+  Python 3.13 validator run used the existing task-local cache and reported
+  `Skill is valid!`.
 
 ## Follow-up Work
 
