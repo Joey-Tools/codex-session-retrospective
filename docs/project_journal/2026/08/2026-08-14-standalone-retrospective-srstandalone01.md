@@ -3547,6 +3547,46 @@ superseded_by:
   skips. Repository-wide Ruff 0.13.2 lint, changed-file formatting, both
   workflows under `actionlint` 1.7.12, the generated bootstrap manifest, and
   the official OpenAI Skill validator are clean on the same source tree.
+- The next clean-context Codex CLI review covered signed head
+  `a7410f4e00d399c7c689a4a03c6fc1d8090968ff` from base `a3836660`. The first
+  CLI launch was zero-start and non-counting after the Desktop sandbox denied
+  its state-database access. Fresh thread
+  `01a02ef3-83d6-7390-bf0d-84d354cc14ed` then reported two P1 findings: the
+  discovery candidate token did not bind link count, so a hard link created
+  after discovery could escape the single-link admission property; and an
+  active rollout renamed into the archive between source-cell captures could
+  produce colliding pre-deduplication unit references. The independent
+  workspace bound 102 commits and 101 parent edges under graph digest
+  `eb436bd26e347704715884011e878cb810e614cdd06982b6025309a57b1fc6cc`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Postvalidation, trusted-control digest revalidation, process quiescence, and
+  exact task-root cleanup were complete.
+- Candidate-token schema v7 now binds `st_nlink`, and every initial and
+  terminal source observation must remain single-link. Catalog unit identity
+  separately binds the observation source kind while physical and canonical
+  rollout identity remains archive-location independent. Reduction retains a
+  complete pre-deduplication duplicate-unit check, then deduplicates admitted
+  active and archived observations before catalog freeze. Regressions cover a
+  real post-discovery hard link, active-to-archive movement between source
+  cells, ordinary archive equivalence, and malicious cross-manifest unit-ref
+  collisions. The focused source and module-boundary group passes 24/24; the
+  exact branch inventory is 9,857 and the transport aggregate is 9,132 under
+  its unchanged 9,150 ceiling.
+- Earlier Final5 shard evidence is explicitly non-counting because one shard
+  exposed the missing cross-manifest duplicate-unit check; its partial passes
+  were not reused. The final Python 3.13.12 inventory contains 1,910 exact
+  test IDs from 22 authenticated sources under manifest digest
+  `b14f3183db9206ccf1f2c402ca70fd4bff3cf728f48c0b5672d9b70302275914`.
+  Shards 0 through 3 pass 452/452 in 1,697.855 seconds, 517/517 in 1,313.808
+  seconds, 510/510 in 1,293.882 seconds, and 431/431 in 1,183.256 seconds,
+  for exact aggregate coverage of 1,910/1,910 in 5,488.801 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 57.380
+  seconds, and CI contracts pass 33/33 in 2.219 seconds.
+- Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint`, the generated bootstrap manifest, the official OpenAI
+  Skill validator, tracked-bytecode exclusion, and `git diff --check` are clean
+  on the same implementation tree.
 
 ## Follow-up Work
 

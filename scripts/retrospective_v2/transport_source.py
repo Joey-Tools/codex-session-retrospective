@@ -74,7 +74,7 @@ try:
     from .transport_resume import (
         _SourceTransportResumeProbeBudget,
         _SourceTransportResumeProbeBudgetExhausted,
-        _source_transport_candidate_token,
+        _source_transport_candidate_token as _candidate_token,
         _source_transport_range_digest,
         decode_source_resume_position,
         encode_source_resume_position,
@@ -135,7 +135,7 @@ except (ImportError, ModuleNotFoundError):
     from transport_resume import (  # type: ignore[no-redef]
         _SourceTransportResumeProbeBudget,
         _SourceTransportResumeProbeBudgetExhausted,
-        _source_transport_candidate_token,
+        _source_transport_candidate_token as _candidate_token,
         _source_transport_range_digest,
         decode_source_resume_position,
         encode_source_resume_position,
@@ -653,7 +653,7 @@ def _source_transport_candidate_paths(
         seen.add(relative)
         candidates.append((root / relative, relative))
         candidate_identities[relative] = identities
-        candidate_tokens[relative] = _source_transport_candidate_token(
+        candidate_tokens[relative] = _candidate_token(
             metadata,
             access_policy_sha256,
         )
@@ -1126,11 +1126,11 @@ def _source_transport_scan(
             if not stat.S_ISREG(before.st_mode):
                 raise ValueError("source entry is not a regular file")
             source_token = candidate_tokens[relative]
-            if source_token != _source_transport_candidate_token(
-                before,
-                before_access_policy,
-            ):
-                raise ValueError("source entry changed after discovery")
+            observed_token = _candidate_token(before, before_access_policy)
+            if (before.st_nlink, source_token) != (1, observed_token):
+                terminal_status, stop = "gap", True
+                terminal_reason = "source_changed_during_scan"
+                continue
             source_occurrence = (
                 "sha256:"
                 + hashlib.sha256(

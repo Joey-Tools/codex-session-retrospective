@@ -5,6 +5,8 @@ from collections import defaultdict
 import copy
 from dataclasses import replace
 import heapq
+from itertools import chain
+from operator import attrgetter
 from typing import Any, Callable, Iterable, Mapping, Sequence
 from . import (
     agent_results,
@@ -162,10 +164,14 @@ class HierarchicalReductionOperations(OrchestratorComponent):
             model_eras_by_session,
         ) = self._accepted_source_inputs(state)
 
-        catalog.SourceCatalog.create(transport_manifests)
-        all_records = [
-            record for manifest in transport_manifests for record in manifest.records
-        ]
+        all_records = list(
+            chain.from_iterable(map(attrgetter("records"), transport_manifests))
+        )
+        unit_refs = tuple(map(attrgetter("unit_ref"), all_records))
+        if len(unit_refs) != len(set(unit_refs)):
+            raise catalog.CatalogValidationError(
+                "catalog contains duplicate unit_ref before deduplication"
+            )
         deduplicated = catalog.deduplicate_active_archived(all_records)
         records_by_ref = {record.unit_ref: record for record in deduplicated}
         payload_gap_reasons: dict[str, str] = {}

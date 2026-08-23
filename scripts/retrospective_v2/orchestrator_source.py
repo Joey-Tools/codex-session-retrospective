@@ -333,11 +333,10 @@ class SourceCoordinationOperations(OrchestratorComponent):
                         },
                     )
                 )
-            is_rollout = source_kind in {
-                SourceKind.ACTIVE_ROLLOUT,
-                SourceKind.ARCHIVED_ROLLOUT,
-            }
-            occurrence_source_kind = "rollout" if is_rollout else source_kind.value
+            occurrence_source_kind = {
+                SourceKind.ACTIVE_ROLLOUT: "rollout",
+                SourceKind.ARCHIVED_ROLLOUT: "rollout",
+            }.get(source_kind, source_kind.value)
             source_occurrence = str(inventory["source_occurrence"])
             physical_occurrence = hashlib.sha256(
                 canonical_json_bytes(
@@ -372,6 +371,7 @@ class SourceCoordinationOperations(OrchestratorComponent):
                     {
                         "content_commitment": content_commitment,
                         "coordinate": coordinate.to_dict(),
+                        "observation_source_kind": source_kind.value,
                     },
                 )
             )

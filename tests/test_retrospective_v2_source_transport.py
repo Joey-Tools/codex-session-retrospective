@@ -3915,6 +3915,40 @@ class SourceTransportProtocolTests(unittest.TestCase):
             [active_frames[-1]["status"], archived_frames[-1]["status"]],
         )
 
+    def test_rollout_hardlink_added_after_discovery_is_an_explicit_gap(
+        self,
+    ) -> None:
+        active_day = self.codex_root / "sessions/2026/07/06"
+        active_day.mkdir(parents=True, mode=0o700)
+        active = active_day / "rollout-primary.jsonl"
+        active.write_bytes(self._line("late-hardlink", kind="session_meta"))
+        external_alias = self.root / "external-rollout-hardlink.jsonl"
+        original_open = transport_source._open_source_transport_candidate
+        candidate_opens = 0
+
+        def add_hardlink_before_scan(*args, **kwargs):
+            nonlocal candidate_opens
+            candidate_opens += 1
+            if candidate_opens == 2:
+                os.link(active, external_alias)
+            return original_open(*args, **kwargs)
+
+        with mock.patch.object(
+            transport_source,
+            "_open_source_transport_candidate",
+            side_effect=add_hardlink_before_scan,
+        ):
+            frames = self._direct_source_frames(
+                "active-hardlink-after-discovery",
+                source_kind="active_rollout",
+                max_records=16,
+            )
+
+        self.assertGreaterEqual(candidate_opens, 3)
+        self.assertEqual("gap", frames[-1]["status"])
+        self.assertEqual("source_changed_during_scan", frames[-1]["reason"])
+        self.assertFalse(frames[-1]["complete"])
+
     def test_active_rollout_directory_change_before_terminal_is_a_gap(self) -> None:
         day = self.codex_root / "sessions/2026/07/06"
         day.mkdir(parents=True, mode=0o700)
@@ -4217,7 +4251,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual("source_enumeration_failed", frames[-1]["reason"])
         self.assertFalse(frames[-1]["complete"])
 
-    def test_candidate_token_binds_generation_birthtime_and_policy_flags(self) -> None:
+    def test_candidate_token_binds_link_generation_birthtime_and_policy(self) -> None:
         baseline = types.SimpleNamespace(
             st_birthtime=1234.5,
             st_dev=1,
@@ -4226,6 +4260,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             st_gid=20,
             st_ino=2,
             st_mode=stat.S_IFREG | 0o600,
+            st_nlink=1,
             st_uid=501,
         )
         replacement = types.SimpleNamespace(**vars(baseline))
@@ -4233,14 +4268,20 @@ class SourceTransportProtocolTests(unittest.TestCase):
         replacement.st_gen = 8
 
         self.assertNotEqual(
-            transport_source._source_transport_candidate_token(baseline),
-            transport_source._source_transport_candidate_token(replacement),
+            transport_resume._source_transport_candidate_token(baseline),
+            transport_resume._source_transport_candidate_token(replacement),
         )
         policy_change = types.SimpleNamespace(**vars(baseline))
         policy_change.st_flags = transport_resume._SOURCE_ACCESS_POLICY_FLAG_MASK
         self.assertNotEqual(
-            transport_source._source_transport_candidate_token(baseline),
-            transport_source._source_transport_candidate_token(policy_change),
+            transport_resume._source_transport_candidate_token(baseline),
+            transport_resume._source_transport_candidate_token(policy_change),
+        )
+        hardlinked = types.SimpleNamespace(**vars(baseline))
+        hardlinked.st_nlink = 2
+        self.assertNotEqual(
+            transport_resume._source_transport_candidate_token(baseline),
+            transport_resume._source_transport_candidate_token(hardlinked),
         )
 
     def test_candidate_open_is_inside_the_discovery_deadline(self) -> None:
@@ -5967,7 +6008,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertIsNotNone(archived_identity)
         self.assertEqual(active_identity[0], archived_identity[0])
         self.assertEqual(active_identity[1], archived_identity[1])
-        self.assertEqual(active_rollout.unit_ref, archived_rollout.unit_ref)
+        self.assertNotEqual(active_rollout.unit_ref, archived_rollout.unit_ref)
         self.assertEqual(
             active_rollout.coordinate.source_ref,
             archived_rollout.coordinate.source_ref,
@@ -6021,6 +6062,97 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual(
             3,
             both_state["metrics"]["accounting"]["structurally_excluded"],
+        )
+
+    def test_archive_move_between_source_cells_freezes_distinct_observations(
+        self,
+    ) -> None:
+        session_id = "between-cell-archive"
+        source_metadata = self._line(session_id, kind="session_meta")
+        self.codex_root.joinpath("session_index.jsonl").write_bytes(source_metadata)
+        self.codex_root.joinpath("history.jsonl").write_bytes(source_metadata)
+        payload = (
+            json.dumps(
+                {
+                    "payload": {"content": "between cells", "role": "user"},
+                    "session_id": session_id,
+                    "type": "response_item",
+                },
+                separators=(",", ":"),
+                sort_keys=True,
+            ).encode("ascii")
+            + b"\n"
+        )
+        active = self.codex_root.joinpath(
+            "sessions/2026/07/06/rollout-2026-07-06T01-00-00-between-cell-archive.jsonl"
+        )
+        active.parent.mkdir(mode=0o700, parents=True)
+        active.write_bytes(payload)
+        archived = self.codex_root.joinpath(
+            "archived_sessions/2026/07/06/"
+            "rollout-2026-07-06T01-00-00-between-cell-archive.jsonl"
+        )
+        archived.parent.mkdir(mode=0o700, parents=True)
+        coordinator = self._coordinator("archive-between-source-cells")
+        moved = False
+
+        with mock.patch.dict(os.environ, {"HOME": str(self.home)}):
+            for _ in range(32):
+                status = coordinator.status()
+                if status["stage"] != "source_catalog":
+                    break
+                leases = status["active_source_leases"]
+                if not leases:
+                    coordinator.advance()
+                    continue
+                for lease_view in leases:
+                    lease = transport.TransportLease.from_dict(
+                        lease_view["transport_lease"]
+                    )
+                    self._capture_prepare_accept(coordinator, lease_view)
+                    if (
+                        lease.source_kind is catalog.SourceKind.ACTIVE_ROLLOUT
+                        and active.exists()
+                    ):
+                        os.rename(active, archived)
+                        moved = True
+            else:
+                self.fail("native source loop did not terminate")
+        if coordinator.status()["stage"] == "source_catalog":
+            coordinator.advance()
+
+        state = coordinator.store.read().state
+        self.assertIsNotNone(state["source"]["catalog"], state["source"])
+        rollout_records = [
+            record
+            for manifest in catalog.SourceCatalog.from_dict(
+                state["source"]["catalog"]
+            ).manifests
+            for record in manifest.records
+            if manifest.source_kind
+            in {
+                catalog.SourceKind.ACTIVE_ROLLOUT,
+                catalog.SourceKind.ARCHIVED_ROLLOUT,
+            }
+        ]
+        self.assertTrue(moved)
+        self.assertEqual(2, len(rollout_records))
+        self.assertEqual(2, len({record.unit_ref for record in rollout_records}))
+        self.assertEqual(
+            1,
+            len(
+                {
+                    catalog.rollout_record_identity(record.coordinate.record_ref)[0]
+                    for record in rollout_records
+                }
+            ),
+        )
+        self.assertEqual(
+            {
+                catalog.AccountingClass.CONSUMED_CANDIDATE,
+                catalog.AccountingClass.STRUCTURALLY_EXCLUDED,
+            },
+            {record.accounting_class for record in rollout_records},
         )
 
     def test_rollout_filename_time_supports_non_midnight_window(self) -> None:

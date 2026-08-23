@@ -66,9 +66,10 @@ def _source_transport_candidate_token(
             "generation": generation,
             "gid": metadata.st_gid,
             "inode": metadata.st_ino,
+            "link_count": metadata.st_nlink,
             "mode": metadata.st_mode,
             "policy_flags": policy_flags,
-            "schema": "source_transport_candidate_v6",
+            "schema": "source_transport_candidate_v7",
             "uid": metadata.st_uid,
         }
     )
@@ -129,6 +130,7 @@ def _source_transport_scan_is_stable(
         _source_transport_file_identity(before, before_access_policy)
         == _source_transport_file_identity(proof_before, proof_access_policy)
         == _source_transport_file_identity(after, after_access_policy)
+        and before.st_nlink == proof_before.st_nlink == after.st_nlink == 1
     )
     bounded_stop = terminal_status == "gap" and terminal_reason in {
         "source_byte_limit_reached",

@@ -181,10 +181,18 @@ files; a multi-link object becomes an explicit
 Source rereads compare the selected protected properties: object identity,
 normalized descriptor ACL policy, selected BSD access-policy flags, and the
 exact scanned byte-range digest. The candidate token and every scan proof
-sample bind both the ACL policy and selected BSD flags; a grant, revoke, or
-policy-flag change during scanning therefore produces a source-stability gap.
+sample bind the link count, ACL policy, and selected BSD flags, and every scan
+observation must remain single-link. A post-discovery hardlink, grant, revoke,
+or policy-flag change during scanning therefore produces a source-stability gap.
 Timestamp-only churn is benign, while content, identity, or access-policy drift
 remains explicit.
+
+Catalog unit identity binds the source kind of each observation. Physical and
+canonical rollout-record identities intentionally remain independent of the
+active-versus-archived locator so an ordinary archive rename can still be
+deduplicated after both observations are admitted. This separation prevents an
+active observation and a later archived observation of the same file from
+colliding before catalog freeze while preserving their physical equivalence.
 
 The remote relay, publication/history subprocess owners, and publisher canary
 keep their leaders unreaped until post-output work is terminal. They share one
