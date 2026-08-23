@@ -7,7 +7,7 @@ import hashlib
 import os
 from pathlib import Path
 from typing import Any
-from . import authority
+from . import authority, temporary_paths
 from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
 from .identity import IdentityKey
 from .publication_claims import validate_persistent_publication_claim
@@ -107,18 +107,27 @@ class PublicationTransaction:
         max_bundle_bytes: int = MAX_BUNDLE_BYTES,
     ) -> PublicationTransaction:
         journal = Path(journal_path).absolute()
-        if shadow:
-            raise PublicationRejected(
-                "shadow runs cannot create publication transactions"
-            )
+        authoritative_run_dir = temporary_paths.require_run_directory_outside_sources(
+            journal.parent if run_dir is None else Path(run_dir).absolute()
+        )
+        startup_gate = (journal.parent == authoritative_run_dir, shadow)
+        if startup_gate != (True, False):
+            raise {
+                (False, False): AttemptMismatchError(
+                    "publication journal is outside the authoritative run directory"
+                ),
+                (False, True): AttemptMismatchError(
+                    "publication journal is outside the authoritative run directory"
+                ),
+                (True, True): PublicationRejected(
+                    "shadow runs cannot create publication transactions"
+                ),
+            }[startup_gate]
         attempt = attempt_ref or new_attempt_ref()
         _validate_attempt_ref(attempt)
 
         bundle = Path(bundle_dir).absolute()
         inventory = build_artifact_inventory(bundle, max_bundle_bytes=max_bundle_bytes)
-        authoritative_run_dir = (
-            journal.parent if run_dir is None else Path(run_dir).absolute()
-        )
         authoritative_identity_path = (
             authority.DEFAULT_PRODUCTION_MARKER.parent / "identity-v2.key"
             if identity_path is None

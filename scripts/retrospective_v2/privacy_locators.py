@@ -1163,7 +1163,7 @@ CONTEXTUAL_SHORT_INTERNAL_HOST_RE = re.compile(
 )
 # A rooted path supplies the structural context needed to admit any printable
 # non-separator component. Reject URI separators as possible path starts.
-_UNIX_PATH_START_PATTERN_TEXT = r"(?<![A-Za-z0-9_/:])/(?!/)"
+_UNIX_PATH_START_PATTERN_TEXT = r"(?<![A-Za-z0-9_/])/(?!/)"
 _POSIX_STRUCTURAL_PATH_ATOM_PATTERN_TEXT = r"[^/\x00-\x20\x7f]+"
 _POSIX_AMBIGUOUS_TERMINAL_ATOM_PATTERN_TEXT = r"(?:[^/:\x00-\x20\x7f]|:(?![ \t]))+"
 _POSIX_STRUCTURAL_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT = (

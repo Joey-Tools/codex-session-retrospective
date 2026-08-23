@@ -3443,6 +3443,36 @@ superseded_by:
   exactly 9,858 branches under the unchanged 9,858 ceiling; `orchestrator.py`
   is 798 lines, `orchestrator_startup_authority.py` is 164 lines, and
   `temporary_paths.py` remains at its unchanged 350-line cap.
+- The provider then reported two additional P1 findings from the preceding
+  signed head. POSIX path detection excluded a rooted path immediately after a
+  label colon, and the public publication-transaction constructor could create
+  its journal outside the authenticated run directory. Rooted path matching
+  now admits `Path:/...` and `Source path:/...` while the double-slash boundary
+  still excludes URI paths. Publication creation proves the authoritative run
+  directory is outside active and archived session roots, then applies one
+  closed startup gate that requires the journal parent to equal that run
+  directory before bundle inspection, claim acquisition, lock creation, or
+  journal persistence. The gate preserves the exact 9,858 branch ceiling.
+- The first 1,903-test follow-up inventory under digest
+  `ccb8c5da973aa7536aa20ef596cc65e98173237ebf68402f667ec7500243708f`
+  is non-counting. Shards 0, 1, and 3 passed 451/451 in 1,759.956 seconds,
+  517/517 in 1,614.934 seconds, and 430/430 in 1,478.853 seconds. Shard 2
+  ran all 505 tests in 1,475.515 seconds and found one obsolete error
+  expectation: the new journal/run binding rejected a symlink-parent probe
+  earlier as `AttemptMismatchError`, before the anchored state-directory layer.
+  The test now preserves the provider and adapter symlink checks while
+  asserting the stronger publication binding result.
+- The final Python 3.13.12 inventory contains 1,903 exact test IDs from 22
+  authenticated sources under manifest digest
+  `eb91ac393bf72ff2ef163b825bef2cbefd497f1a9e88a8ee84304e32b54d1b0b`.
+  Shards 0 through 3 pass 451/451 in 1,792.893 seconds, 517/517 in 1,639.394
+  seconds, 505/505 in 1,506.497 seconds, and 430/430 in 1,512.789 seconds,
+  for exact aggregate coverage of 1,903/1,903 without skips. The five focused
+  review and architecture regressions also pass in 76.706 seconds; CI
+  contracts pass 33/33 in 2.469 seconds, and the independent Darwin security
+  inventory passes 14/14 in 62.442 seconds. Repository-wide Ruff and
+  changed-file formatting, both workflows under `actionlint`, the project
+  journal validator, and `git diff --check` are clean.
 
 ## Follow-up Work
 

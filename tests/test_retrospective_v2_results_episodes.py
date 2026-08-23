@@ -2342,6 +2342,14 @@ class ResultValidationTests(unittest.TestCase):
 
         for source, expected in (
             (
+                "Path:/Users/alice/private/file.txt",
+                "Path:[REDACTED_PATH]",
+            ),
+            (
+                "Source path:/Users/alice/My Private Folder/secrets",
+                "Source path:[REDACTED_PATH]",
+            ),
+            (
                 "Read /tmp/file before continuing",
                 "Read [REDACTED_PATH] before continuing",
             ),
@@ -2356,6 +2364,13 @@ class ResultValidationTests(unittest.TestCase):
         ):
             with self.subTest(source=source):
                 self.assertEqual(expected, result_validation_module.post_redact(source))
+
+        self.assertEqual(
+            (),
+            result_validation_module.privacy_locators.path_locator_spans(
+                "https://example.com/private/file.txt"
+            ),
+        )
 
         for safe_prose in (
             "Map name:123 in the parser.",

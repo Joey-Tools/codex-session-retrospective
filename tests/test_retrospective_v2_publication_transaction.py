@@ -4872,6 +4872,72 @@ class DurablePublicationTests(unittest.TestCase):
             current.load_state()["publication"],
         )
 
+    def test_create_binds_journal_to_safe_authoritative_run_before_claim(self) -> None:
+        coordinator, bundle = self.build_exportable_run("journal-source-overlap")
+        state = coordinator.load_state()
+        codex_root = self.root / "source-account" / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+        claim = mock.Mock()
+
+        with (
+            mock.patch.object(
+                temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+            self.assertRaisesRegex(
+                AttemptMismatchError,
+                "outside the authoritative run directory",
+            ),
+        ):
+            PublicationTransaction.create(
+                sessions / "foreign-run" / "publication-transaction-v2.json",
+                bundle_dir=bundle,
+                destination=self.destination(state),
+                target_ref=TARGET_REF,
+                expected_target_head=state["authority"]["history_snapshot"][
+                    "history_commit"
+                ],
+                run_dir=coordinator.run_dir,
+                identity_path=self.identity_path,
+                adapter=self.adapter,
+                claim_before_persist=claim,
+            )
+
+        claim.assert_not_called()
+        self.assertFalse((sessions / "foreign-run").exists())
+
+        with (
+            mock.patch.object(
+                temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+            self.assertRaisesRegex(
+                safe_io.UnsafePathError,
+                "overlaps a retrospective source root",
+            ),
+        ):
+            PublicationTransaction.create(
+                sessions / "source-run" / "publication-transaction-v2.json",
+                bundle_dir=bundle,
+                destination=self.destination(state),
+                target_ref=TARGET_REF,
+                expected_target_head=state["authority"]["history_snapshot"][
+                    "history_commit"
+                ],
+                run_dir=sessions / "source-run",
+                identity_path=self.identity_path,
+                adapter=self.adapter,
+                claim_before_persist=claim,
+            )
+
+        claim.assert_not_called()
+        self.assertFalse((sessions / "source-run").exists())
+
     def test_latest_history_rejects_stale_run_and_local_cache_rollback(self) -> None:
         first, first_bundle = self.build_exportable_run("first")
         stale, stale_bundle = self.build_exportable_run("stale")
@@ -5594,7 +5660,10 @@ class DurablePublicationTests(unittest.TestCase):
 
         coordinator, bundle = self.build_exportable_run("symlink-journal")
         state = coordinator.load_state()
-        with self.assertRaises(StateCorruptionError):
+        with self.assertRaisesRegex(
+            AttemptMismatchError,
+            "outside the authoritative run directory",
+        ):
             PublicationTransaction.create(
                 alias / "journal-state" / "publication.json",
                 bundle_dir=bundle,
