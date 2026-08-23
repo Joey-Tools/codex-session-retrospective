@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime as dt
 import errno
 import importlib.util
@@ -6348,6 +6349,204 @@ class SessionRetrospectiveTests(unittest.TestCase):
             )
 
         self.assertEqual(turns[0].session_id, MODULE.opaque_session_id(raw_session))
+
+    def test_remote_probe_session_meta_accepts_timestamp_only_drift_with_content_revalidation(
+        self,
+    ) -> None:
+        rollout_refs = (
+            "sessions/2026/05/01/rollout-2026-05-01T10-00-00-active.jsonl",
+            "archived_sessions/2026/05/01/rollout-2026-05-01T10-00-00-archived.jsonl",
+        )
+        for rollout_ref in rollout_refs:
+            with (
+                self.subTest(rollout_ref=rollout_ref),
+                tempfile.TemporaryDirectory() as raw,
+            ):
+                root = Path(raw) / ".codex"
+                rollout = root / rollout_ref
+                write_jsonl(
+                    rollout,
+                    [
+                        {
+                            "type": "session_meta",
+                            "timestamp": "2026-05-01T10:00:00Z",
+                            "payload": {
+                                "id": "timestamp-stable-session",
+                                "cwd": "/repo",
+                            },
+                        }
+                    ],
+                )
+                parent_fd = os.open(
+                    rollout.parent,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+                )
+                try:
+                    inventory = (
+                        REMOTE_PROBE._capture_rollout_inventory_identity_from_parent_fd(
+                            parent_fd,
+                            rollout.name,
+                        )
+                    )
+                    enumerated_stat = rollout.stat()
+                    os.utime(
+                        rollout,
+                        ns=(
+                            enumerated_stat.st_atime_ns,
+                            enumerated_stat.st_mtime_ns + 1_000_000,
+                        ),
+                    )
+                    drifted_stat = rollout.stat()
+                    self.assertEqual(drifted_stat.st_ino, enumerated_stat.st_ino)
+                    self.assertNotEqual(
+                        drifted_stat.st_mtime_ns,
+                        enumerated_stat.st_mtime_ns,
+                    )
+                    capture = (
+                        REMOTE_PROBE._capture_active_rollout_candidate_identity_from_parent_fd
+                        if rollout_ref.startswith("sessions/")
+                        else REMOTE_PROBE._capture_rollout_candidate_identity_from_parent_fd
+                    )
+                    candidate = capture(parent_fd, rollout.name, inventory)
+                    real_parse = REMOTE_PROBE._parse_session_meta_snapshot
+
+                    def parse_then_touch(*args: object, **kwargs: object):
+                        result = real_parse(*args, **kwargs)
+                        parsed_stat = rollout.stat()
+                        os.utime(
+                            rollout,
+                            ns=(
+                                parsed_stat.st_atime_ns,
+                                parsed_stat.st_mtime_ns + 1_000_000,
+                            ),
+                        )
+                        self.assertNotEqual(
+                            rollout.stat().st_mtime_ns,
+                            parsed_stat.st_mtime_ns,
+                        )
+                        return result
+
+                    with mock.patch.object(
+                        REMOTE_PROBE,
+                        "_parse_session_meta_snapshot",
+                        side_effect=parse_then_touch,
+                    ):
+                        result = REMOTE_PROBE._session_meta_from_rollout(
+                            root,
+                            REMOTE_PROBE.pathlib.PurePosixPath(rollout_ref),
+                            parent_fd=parent_fd,
+                            expected_identity=candidate,
+                            date_value=dt.date(2026, 5, 1),
+                        )
+                finally:
+                    os.close(parent_fd)
+
+            self.assertIsNotNone(result)
+            assert result is not None
+            self.assertEqual(result[1], "timestamp-stable-session")
+
+    def test_remote_probe_session_meta_rejects_protected_property_changes(
+        self,
+    ) -> None:
+        rollout_ref = (
+            "archived_sessions/2026/05/01/"
+            "rollout-2026-05-01T10-00-00-property-change.jsonl"
+        )
+        for mutation in (
+            "content-before-open",
+            "content-after-scan",
+            "replace",
+            "mode",
+        ):
+            with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw) / ".codex"
+                rollout = root / rollout_ref
+                write_jsonl(
+                    rollout,
+                    [
+                        {
+                            "type": "session_meta",
+                            "timestamp": "2026-05-01T10:00:00Z",
+                            "payload": {"id": "stable-session", "cwd": "/repo"},
+                        }
+                    ],
+                )
+                parent_fd = os.open(
+                    rollout.parent,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+                )
+                try:
+                    inventory = (
+                        REMOTE_PROBE._capture_rollout_inventory_identity_from_parent_fd(
+                            parent_fd,
+                            rollout.name,
+                        )
+                    )
+                    candidate = (
+                        REMOTE_PROBE._capture_rollout_candidate_identity_from_parent_fd(
+                            parent_fd,
+                            rollout.name,
+                            inventory,
+                        )
+                    )
+                    original_bytes = rollout.read_bytes()
+                    mutated_bytes = original_bytes.replace(
+                        b"stable-session",
+                        b"mutate-session",
+                    )
+                    self.assertEqual(len(mutated_bytes), len(original_bytes))
+                    original_inode = rollout.stat().st_ino
+
+                    def mutate_content() -> None:
+                        with rollout.open("r+b") as handle:
+                            handle.write(mutated_bytes)
+                            handle.flush()
+                            os.fsync(handle.fileno())
+                        self.assertEqual(rollout.stat().st_ino, original_inode)
+
+                    if mutation == "content-before-open":
+                        mutate_content()
+                    elif mutation == "replace":
+                        replacement = rollout.with_suffix(".replacement")
+                        replacement.write_bytes(original_bytes)
+                        os.replace(replacement, rollout)
+                        self.assertNotEqual(rollout.stat().st_ino, original_inode)
+                    elif mutation == "mode":
+                        rollout.chmod(0o400)
+
+                    real_parse = REMOTE_PROBE._parse_session_meta_snapshot
+
+                    def parse_then_mutate(*args: object, **kwargs: object):
+                        result = real_parse(*args, **kwargs)
+                        mutate_content()
+                        return result
+
+                    parse_context = (
+                        mock.patch.object(
+                            REMOTE_PROBE,
+                            "_parse_session_meta_snapshot",
+                            side_effect=parse_then_mutate,
+                        )
+                        if mutation == "content-after-scan"
+                        else contextlib.nullcontext()
+                    )
+                    with (
+                        parse_context,
+                        self.assertRaises(
+                            REMOTE_PROBE.SessionMetaRolloutError
+                        ) as raised,
+                    ):
+                        REMOTE_PROBE._session_meta_from_rollout(
+                            root,
+                            REMOTE_PROBE.pathlib.PurePosixPath(rollout_ref),
+                            parent_fd=parent_fd,
+                            expected_identity=candidate,
+                            date_value=dt.date(2026, 5, 1),
+                        )
+                finally:
+                    os.close(parent_fd)
+
+            self.assertIn("rollout identity changed", raised.exception.error)
 
     def test_remote_probe_session_meta_prefix_preads_stay_within_cap_and_accept_no_lf_eof(
         self,

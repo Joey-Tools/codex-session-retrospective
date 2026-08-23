@@ -3019,8 +3019,14 @@ class ResultValidationTests(unittest.TestCase):
         self,
     ) -> None:
         for source_path, suffix in (
+            ("/Users/alice/{Customer}", ""),
+            ("/Users/alice/{Customer} Folder", ""),
+            ("/Users/alice/{Customer}:2026 Folder", ""),
+            ("/Users/alice/!#^*|<>?{}", ""),
             ("/Users/alice/My Private Folder", ""),
             ("/Users/alice/My Private Folder.", "."),
+            ("~/{Customer}", ""),
+            ("~/{Customer} Folder", ""),
             ("~/My Private Folder", ""),
             ("~/My Private Folder!", "!"),
             (r"C:\Users\alice\My Private Folder", ""),

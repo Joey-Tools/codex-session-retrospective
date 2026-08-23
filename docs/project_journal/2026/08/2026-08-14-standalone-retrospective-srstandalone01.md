@@ -3365,6 +3365,45 @@ superseded_by:
   generated bootstrap manifest, the official OpenAI Skill validator, project
   journal validation, tracked bytecode exclusion, and `git diff --check` are
   clean.
+- A clean-context Codex CLI review of signed head `1f7bca71` found two
+  remaining retained-evidence defects. Extensionless terminal path components
+  containing unsupported punctuation could retain a suffix, and rollout
+  inventory equality treated benign `mtime`/`ctime` drift as content mutation.
+  The independent workspace bound 97 commits and 96 parent edges under graph
+  digest `d5a4582434817359d26b831efdfdbfefef32655d827a8cfccd068e7bea361a62`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The trusted 30-file control manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  and postvalidation and task-root cleanup completed.
+- Rooted POSIX and home-relative terminal components now admit printable
+  non-separator punctuation while preserving URI and following-prose
+  boundaries. Rollout validation separately binds device/inode object
+  identity, mode/owner/group access policy, the permitted size relation, and
+  the exact bounded prefix consumed by session-meta parsing. Timestamp-only
+  drift triggers descriptor/path content revalidation and is accepted when
+  those protected properties remain stable; same-inode content mutation,
+  replacement, and access-policy drift fail closed. A shared checkpoint owner
+  removes duplicate immutable/append validation while keeping the migration
+  probe at 3,993 lines under its unchanged 4,000-line architecture cap.
+- Focused final-tree evidence passes the architecture and rollout matrix 9/9,
+  path and retained validation 2/2, module boundaries 19/19, and CI contracts
+  33/33. Three attempts are explicitly non-counting: an initial terminal atom
+  consumed following `Prompt:` prose; a broad run inherited stale source-tree
+  bytecode from an older focused runner; and the next full run correctly found
+  the migration probe at 4,040 lines before the shared checkpoint refactor.
+  Stale shard process groups were terminated once and proved absent before the
+  implementation changed.
+- The final Python 3.13.12 inventory contains 1,897 exact test IDs from 22
+  authenticated sources under manifest digest
+  `fbd637787e635a8e73af16ed0ee6926dd9e40ed44eb2be7f3702831cd9877639`.
+  Shard 0 passes 450/450 in 1,611.285 seconds, shard 1 passes 515/515 in
+  1,458.164 seconds, shard 2 passes 504/504 in 1,344.799 seconds, and shard 3
+  passes 428/428 in 1,311.214 seconds, for exact aggregate coverage of
+  1,897/1,897 without skips. The independent Darwin security inventory passes
+  14/14 in 59.010 seconds. Repository-wide Ruff, changed-file formatting, both
+  workflows under `actionlint`, the generated bootstrap manifest, and the
+  official OpenAI Skill validator are clean.
 
 ## Follow-up Work
 

@@ -2307,6 +2307,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         values = (
             "home path ~/private/file.txt",
             "home path ~/My Private Folder/secrets",
+            "home path ~/{Customer}",
+            "home path ~/{Customer} Folder",
+            "absolute path /Users/alice/{Customer}",
+            "absolute path /Users/alice/{Customer} Folder",
             "drive path C:\\private\\file.txt",
             r"drive path C:\Users\alice\My Private Folder\secrets",
             "host path \\\\server\\share",
