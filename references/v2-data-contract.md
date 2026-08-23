@@ -457,8 +457,12 @@ compounds remain
 reviewable prose; relative paths require an explicit dot prefix, a common path
 root, or a filename extension. Absolute, home, drive, and UNC locators consume
 spaced intermediate components plus legal apostrophe and comma punctuation so
-redaction cannot leave a residual directory suffix. Hardware addresses cover
-only strict six-octet colon/hyphen forms with one delimiter or strict
+redaction cannot leave a residual directory suffix. POSIX absolute paths retain
+their path classification with multiple leading separators; a multi-separator
+start immediately after a colon remains owned by URI classification. Windows
+extended and device namespace drive or UNC roots are path locators under the
+same shared scan, redaction, and retained-validation policy. Hardware addresses
+cover only strict six-octet colon/hyphen forms with one delimiter or strict
 three-group dotted forms such as `0011.2233.4455`; embedded, shortened, mixed,
 or extended tokens remain outside that grammar. MAC redaction precedes generic
 personal-number redaction so every accepted hardware-address shape uses the

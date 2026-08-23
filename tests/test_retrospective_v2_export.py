@@ -1986,6 +1986,50 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             assemble_retained_artifacts(run_state(), path_review)
         )
 
+    def test_multi_root_and_extended_unc_paths_cannot_enter_retained_bundle(
+        self,
+    ) -> None:
+        for raw_path in (
+            "//private/tmp/secret",
+            r"\\?\UNC\server\share\secret.txt",
+        ):
+            with self.subTest(raw_path=raw_path, phase="assembly"):
+                unsafe_review = review_data()
+                unsafe_review["turn_findings"][1]["cause"] = f"Failure at {raw_path}"
+                with self.assertRaisesRegex(RetainedPrivacyError, "local path"):
+                    assemble_retained_artifacts(run_state(), unsafe_review)
+
+            redacted_review = review_data()
+            redacted_review["turn_findings"][1]["cause"] = post_redact(
+                f"Failure at {raw_path}"
+            )
+            artifacts = assemble_retained_artifacts(run_state(), redacted_review)
+            self.assertEqual(RETAINED_ARTIFACT_NAMES, tuple(artifacts))
+            self.assertFalse(
+                any(
+                    raw_path.encode("utf-8") in content
+                    for content in artifacts.values()
+                )
+            )
+            validate_retained_artifacts(artifacts)
+
+            with self.subTest(raw_path=raw_path, phase="retained-validation"):
+                tampered = dict(artifacts)
+                rows = [
+                    json.loads(line)
+                    for line in tampered["turn_findings.jsonl"].splitlines()
+                ]
+                high_impact = next(
+                    row for row in rows if row["disposition"] == "high_impact"
+                )
+                high_impact["cause"] = f"Failure at {raw_path}"
+                tampered["turn_findings.jsonl"] = b"".join(
+                    canonical_json_bytes(row) for row in rows
+                )
+                refresh_bundle_digest(tampered)
+                with self.assertRaisesRegex(RetainedPrivacyError, "local path"):
+                    validate_retained_artifacts(tampered)
+
     def test_retained_validation_rejects_shared_personal_identifier_families(
         self,
     ) -> None:

@@ -3587,6 +3587,46 @@ superseded_by:
   under `actionlint`, the generated bootstrap manifest, the official OpenAI
   Skill validator, tracked-bytecode exclusion, and `git diff --check` are clean
   on the same implementation tree.
+- A clean-context Codex CLI review of signed head `366f9921` covered
+  `a3836660..366f9921` from an independently materialized and validated
+  owner-private workspace. The paired receipts bound 103 commits and 102
+  parent edges under graph digest
+  `ab213e1eb065dd433d124459e70fde4e0500e4a07346cd3d365bda7b2dd4f29d`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  A first sandboxed CLI attempt was zero-start and non-counting because its
+  state database was unavailable. Fresh ephemeral thread
+  `01a02f9a-fb51-7fb0-8700-70d8d4515b57` then reported one P1: the retained
+  locator policy omitted POSIX roots with multiple leading separators and
+  Windows device or extended namespace roots. Postvalidation, the trusted
+  30-file control-manifest digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  process quiescence, and exact task-root cleanup were all revalidated.
+- Locator classification now covers `//` and longer rooted POSIX forms while
+  keeping URI authority paths in the URI policy. It also covers Windows
+  `\\?\\` and `\\.\\` drive, UNC, volume, named-pipe, and generic namespace
+  roots. Result-level regressions prove each raw locator is replaced and the
+  retained scanner is clean. Full-bundle regressions prove raw assembly is
+  rejected, post-redacted eight-artifact assembly validates, no raw value is
+  retained, and digest-recomputed tampering is rejected. Focused privacy tests
+  pass 9/9, affected result/export modules pass 173/173, and module boundaries
+  pass 19/19.
+- The final Python 3.13.12 inventory contains 1,912 exact test IDs from 22
+  authenticated sources under manifest digest
+  `843787416b2456562f5764292c170b16f7c4e861ec6464f245dd02e573eb2a5b`.
+  Shards 0 through 3 pass 452/452 in 1,418.360 seconds, 519/519 in 1,298.761
+  seconds, 510/510 in 1,274.304 seconds, and 431/431 in 1,222.873 seconds,
+  for exact aggregate coverage of 1,912/1,912 in 5,214.298 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 56.829
+  seconds, and CI contracts pass 33/33 in 2.250 seconds. One package-style CI
+  contract invocation and two Skill-validator invocations without PyYAML are
+  pre-discovery launcher errors and explicitly non-counting; the canonical
+  direct-file CI entrypoint and isolated PyYAML validator are the accepted
+  results.
+- Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the official
+  OpenAI Skill validator, tracked-bytecode exclusion, and `git diff --check`
+  are clean on the same Final7 implementation tree.
 
 ## Follow-up Work
 

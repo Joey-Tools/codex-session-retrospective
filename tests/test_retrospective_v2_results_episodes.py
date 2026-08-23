@@ -2401,6 +2401,30 @@ class ResultValidationTests(unittest.TestCase):
                     {finding.category for finding in scan_for_leaks(safe_prose)},
                 )
 
+    def test_multi_root_and_windows_namespace_paths_are_redacted_from_results(
+        self,
+    ) -> None:
+        path_forms = (
+            "//private/tmp/secret",
+            "///private/tmp/secret",
+            r"\\?\UNC\server\share\secret.txt",
+            r"\\?\C:\Users\alice\secret.txt",
+            r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\secret.txt",
+            r"\\.\UNC\server\share\secret.txt",
+            r"\\.\pipe\private-name",
+        )
+        for path_form in path_forms:
+            with self.subTest(path_form=path_form):
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = (
+                    f"Failure at {path_form}"
+                )
+                result = validate_extractor_result(value, ALL_REFS)
+                text = result["turns"][0]["generalized_working_text"]
+                self.assertEqual("Failure at [REDACTED_PATH]", text)
+                self.assertNotIn(path_form, text)
+                self.assertEqual((), scan_for_leaks(result))
+
     def test_changed_camelcase_credential_label_is_redacted_below_overlap_window(
         self,
     ) -> None:
