@@ -29192,6 +29192,74 @@ class SessionRetrospectiveTests(unittest.TestCase):
         )
         self.assertFalse(any(row.get("status") == "partial" for row in shard_rows))
 
+    def test_make_shards_reports_manifest_generated_summary_that_disappeared(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw) / ".codex"
+            write_local_evidence(root)
+            generated_root = safe_output_dir(raw, "generated-rollout-summaries")
+            generated_summary = generated_root / "rollout-summary-generated.jsonl"
+            write_jsonl(
+                generated_summary,
+                [
+                    {
+                        "kind": "user_message",
+                        "timestamp": "2026-05-01T10:00:00Z",
+                        "text": "You missed verification.",
+                    }
+                ],
+            )
+            manifest = Path(raw) / "manifest.json"
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "sources": [
+                            {
+                                "host": "local",
+                                "root": str(root),
+                                "status": "ready",
+                                "generated_summary_root": str(generated_root),
+                                "generated_summaries": [str(generated_summary)],
+                            }
+                        ],
+                        "window": {
+                            "start": "2026-05-01T00:00:00Z",
+                            "end": "2026-05-02T00:00:00Z",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            generated_summary.unlink()
+            output = safe_output_dir(raw, "missing-generated-summary-shards")
+
+            MODULE.main(
+                [
+                    "make-shards",
+                    "--manifest",
+                    str(manifest),
+                    "--output",
+                    str(output),
+                    "--max-raw-bytes",
+                    "3000",
+                ]
+            )
+            rows = [
+                json.loads(line)
+                for line in (output / "shards.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["kind"], "summary")
+        self.assertEqual(rows[0]["status"], "stale")
+        self.assertEqual(
+            rows[0]["coverage_gap"],
+            "summary disappeared during shard discovery",
+        )
+
     def test_generated_summary_context_covers_old_oversized_rollout_without_flags(
         self,
     ) -> None:

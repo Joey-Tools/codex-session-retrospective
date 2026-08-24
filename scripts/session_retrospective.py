@@ -1764,7 +1764,12 @@ def generated_summary_files(root: Path | None) -> list[Path]:
     return sorted(path for path in root.rglob("rollout-summary*.jsonl") if safe_source_file(path, root))
 
 
-def generated_summary_files_from_manifest(root: Path | None, raw_paths: Any) -> list[Path]:
+def generated_summary_files_from_manifest(
+    root: Path | None,
+    raw_paths: Any,
+    *,
+    missing_paths: list[str] | None = None,
+) -> list[Path]:
     if root is None:
         return []
     if raw_paths is None:
@@ -1785,10 +1790,16 @@ def generated_summary_files_from_manifest(root: Path | None, raw_paths: Any) -> 
         if not generated_summary_artifact_path(path):
             raise SystemExit("make-shards generated_summaries entries must be generated-summary artifacts")
         try:
-            path.resolve(strict=True).relative_to(resolved_root)
-        except FileNotFoundError:
-            continue
+            path.resolve(strict=False).relative_to(resolved_root)
         except (OSError, ValueError) as exc:
+            raise SystemExit("make-shards generated_summaries entries must stay under generated_summary_root") from exc
+        try:
+            path.resolve(strict=True)
+        except FileNotFoundError:
+            if missing_paths is not None:
+                missing_paths.append(raw_path)
+            continue
+        except OSError as exc:
             raise SystemExit("make-shards generated_summaries entries must stay under generated_summary_root") from exc
         if path_has_disallowed_symlink_component(path.parent) or path.is_symlink() or not path.is_file():
             raise SystemExit("make-shards generated_summaries entries must be regular files without symlink ancestors")
@@ -11227,9 +11238,11 @@ def cmd_make_shards(args: argparse.Namespace) -> int:
         raw_generated_summary_root = source_entry.get("generated_summary_root")
         if isinstance(raw_generated_summary_root, str) and raw_generated_summary_root:
             generated_summary_root = ensure_safe_output_dir(Path(raw_generated_summary_root).expanduser())
+        missing_generated_summary_paths: list[str] = []
         generated_summaries = generated_summary_files_from_manifest(
             generated_summary_root,
             source_entry.get("generated_summaries"),
+            missing_paths=missing_generated_summary_paths,
         )
         generated_summary_paths = generated_summary_path_set(generated_summaries)
         source = Source(str(host), root)
@@ -11270,6 +11283,10 @@ def cmd_make_shards(args: argparse.Namespace) -> int:
         if source_materialization_gaps:
             append_source_gap_shards(source_materialization_gaps, root)
             continue
+        for missing_generated_summary_path in sorted(set(missing_generated_summary_paths)):
+            append_relevance_proven_disappeared_summary_shard(
+                Path(missing_generated_summary_path).expanduser()
+            )
         if (
             missing_remote_generated_summary_paths
             or remote_generated_summary_metadata_incomplete

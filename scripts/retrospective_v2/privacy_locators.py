@@ -569,6 +569,7 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"patient[_ -]?(?:id|identifier)|"
     r"insurance[_ -]+(?:policy|member)"
     r"(?:[_ -]+(?:number|no|id|identifier))?|"
+    r"health[_ -]+insurance(?:[_ -]+(?:number|no|id|identifier))|"
     r"health[_ -]+plan[_ -]+beneficiary"
     r"(?:[_ -]+(?:number|no|id|identifier))?|"
     r"national[_ -]?(?:insurance|identity)(?:[_ -]?(?:number|no|id))?|"
@@ -585,6 +586,7 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?-i:(?:socialSecurityNumber|medicalRecord(?:Number|Id)|"
     r"patient(?:Id|Identifier)|"
     r"insurance(?:Policy|Member)(?:Number|No|Id|Identifier)|"
+    r"healthInsurance(?:Number|No|Id|Identifier)|"
     r"healthPlanBeneficiary(?:Number|No|Id|Identifier)|"
     r"nationalInsuranceNumber|nationalId|taxId|"
     r"passport(?:Number|Id)|driversLicenseNumber|vehicleIdentificationNumber|"
@@ -1317,38 +1319,52 @@ _WINDOWS_PATH_FILE_COMPONENT_PATTERN_TEXT = (
     rf"(?:[ \t]+{_WINDOWS_PATH_ATOM_PATTERN_TEXT})*"
     r"\.[A-Za-z0-9][A-Za-z0-9_~+@%=-]{0,31}"
 )
+_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT = r"(?>\\{1,2})"
+_WINDOWS_PATH_PREFIX_PATTERN_TEXT = r"(?>\\{4}|\\{2})"
 WINDOWS_SPACED_INTERMEDIATE_PATH_RE = re.compile(
-    r"\b[A-Z]:\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
-    rf"{_WINDOWS_PATH_SPACED_SEGMENT_PATTERN_TEXT}\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"\b[A-Z]:{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
+    rf"{_WINDOWS_PATH_SPACED_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}",
     re.ASCII | re.IGNORECASE,
 )
 WINDOWS_FILE_PATH_RE = re.compile(
-    r"\b[A-Z]:\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"\b[A-Z]:{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_FILE_COMPONENT_PATTERN_TEXT}"
     rf"{_FILE_PATH_BOUNDARY_PATTERN_TEXT}",
     re.ASCII | re.IGNORECASE,
 )
 WINDOWS_SPACED_TERMINAL_PATH_RE = re.compile(
-    r"\b[A-Z]:\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"\b[A-Z]:{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
     rf"(?:[ \t]+{_WINDOWS_PATH_ATOM_PATTERN_TEXT})+"
     rf"{_SPACED_TERMINAL_PATH_BOUNDARY_PATTERN_TEXT}",
     re.ASCII | re.IGNORECASE,
 )
 WINDOWS_PATH_RE = re.compile(
-    r"\b[A-Z]:\\"
-    rf"(?:(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"\b[A-Z]:{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT})?",
     re.ASCII | re.IGNORECASE,
 )
-_WINDOWS_NAMESPACE_DRIVE_ROOT_PATTERN_TEXT = r"\\\\[?.]\\[A-Z]:\\"
+_WINDOWS_NAMESPACE_DRIVE_ROOT_PATTERN_TEXT = (
+    rf"{_WINDOWS_PATH_PREFIX_PATTERN_TEXT}[?.]"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}[A-Z]:"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+)
 _WINDOWS_NAMESPACE_NAMED_ROOT_PATTERN_TEXT = (
-    rf"\\\\[?.]\\{_WINDOWS_PATH_ATOM_PATTERN_TEXT}\\"
+    rf"{_WINDOWS_PATH_PREFIX_PATTERN_TEXT}[?.]"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
 )
 _WINDOWS_NAMESPACE_ROOT_PATTERN_TEXT = (
     rf"(?:{_WINDOWS_NAMESPACE_DRIVE_ROOT_PATTERN_TEXT}|"
@@ -1356,22 +1372,27 @@ _WINDOWS_NAMESPACE_ROOT_PATTERN_TEXT = (
 )
 WINDOWS_NAMESPACE_SPACED_INTERMEDIATE_PATH_RE = re.compile(
     rf"{_WINDOWS_NAMESPACE_ROOT_PATTERN_TEXT}"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
-    rf"{_WINDOWS_PATH_SPACED_SEGMENT_PATTERN_TEXT}\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
+    rf"{_WINDOWS_PATH_SPACED_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}",
     re.ASCII | re.IGNORECASE,
 )
 WINDOWS_NAMESPACE_FILE_PATH_RE = re.compile(
     rf"{_WINDOWS_NAMESPACE_ROOT_PATTERN_TEXT}"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_FILE_COMPONENT_PATTERN_TEXT}"
     rf"{_FILE_PATH_BOUNDARY_PATTERN_TEXT}",
     re.ASCII | re.IGNORECASE,
 )
 WINDOWS_NAMESPACE_SPACED_TERMINAL_PATH_RE = re.compile(
     rf"{_WINDOWS_NAMESPACE_ROOT_PATTERN_TEXT}"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
     rf"(?:[ \t]+{_WINDOWS_PATH_ATOM_PATTERN_TEXT})+"
     rf"{_SPACED_TERMINAL_PATH_BOUNDARY_PATTERN_TEXT}",
@@ -1379,33 +1400,44 @@ WINDOWS_NAMESPACE_SPACED_TERMINAL_PATH_RE = re.compile(
 )
 WINDOWS_NAMESPACE_PATH_RE = re.compile(
     rf"{_WINDOWS_NAMESPACE_ROOT_PATTERN_TEXT}"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}",
     re.ASCII | re.IGNORECASE,
 )
 UNC_SPACED_INTERMEDIATE_PATH_RE = re.compile(
-    rf"\\\\{_WINDOWS_PATH_ATOM_PATTERN_TEXT}\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
-    rf"{_WINDOWS_PATH_SPACED_SEGMENT_PATTERN_TEXT}\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"{_WINDOWS_PATH_PREFIX_PATTERN_TEXT}{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
+    rf"{_WINDOWS_PATH_SPACED_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
 )
 UNC_FILE_PATH_RE = re.compile(
-    rf"\\\\{_WINDOWS_PATH_ATOM_PATTERN_TEXT}\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"{_WINDOWS_PATH_PREFIX_PATTERN_TEXT}{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_FILE_COMPONENT_PATTERN_TEXT}"
     rf"{_FILE_PATH_BOUNDARY_PATTERN_TEXT}"
 )
 UNC_SPACED_TERMINAL_PATH_RE = re.compile(
-    rf"\\\\{_WINDOWS_PATH_ATOM_PATTERN_TEXT}\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"{_WINDOWS_PATH_PREFIX_PATTERN_TEXT}{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
     rf"(?:[ \t]+{_WINDOWS_PATH_ATOM_PATTERN_TEXT})+"
     rf"{_SPACED_TERMINAL_PATH_BOUNDARY_PATTERN_TEXT}"
 )
 UNC_PATH_RE = re.compile(
-    rf"\\\\{_WINDOWS_PATH_ATOM_PATTERN_TEXT}\\"
-    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}\\)*"
+    rf"{_WINDOWS_PATH_PREFIX_PATTERN_TEXT}{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT}"
+    rf"(?:{_WINDOWS_PATH_INTERMEDIATE_SEGMENT_PATTERN_TEXT}"
+    rf"{_WINDOWS_PATH_SEPARATOR_PATTERN_TEXT})*"
     rf"{_WINDOWS_PATH_ATOM_PATTERN_TEXT}"
 )
 PATH_LOCATOR_PATTERNS = (
@@ -1474,6 +1506,7 @@ _SOURCE_PROMPT_LABEL_PATTERN_TEXT = (
 _SOURCE_TOOL_OUTPUT_LABEL_PATTERN_TEXT = (
     r"(?:"
     r"(?:tool|command)[ _-]+(?:output|response|result)|"
+    r"(?:execution|process|subprocess)[ _-]+output|"
     r"(?:terminal|console|shell)[ _-]+output|stdout|stderr|transcript"
     r")"
 )
@@ -1713,7 +1746,7 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?code|"
     + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT
     + r"|"
-    r"passwd|pwd|(?-i:PIN)|otp|"
+    r"passwd|pwd|(?-i:PIN)|otp(?:[ \t_-]?code)?|"
     r"(?:cvv|cvc|cid)(?:[ \t_-]?(?:number|code))?|"
     r"card[ \t_-]?(?:security|verification)[ \t_-]?(?:code|value)|"
     r"(?:security(?:[ \t_-]?question)?|recovery)[ \t_-]?answer|"
@@ -1733,12 +1766,14 @@ _CREDENTIAL_ASSIGNMENT_ONLY_FIELD_PATTERN_TEXT = (
     r"(?![ \t]*+(?:=|:)[ \t]*+['\"]?GPIO[0-9]++\b)"
 )
 _LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
-    r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|Otp|OTP|MfaCode|MFACode|"
+    r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|Otp|OTP|OtpCode|OTPCode|"
+    r"MfaCode|MFACode|"
     r"TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
     r"RecoveryPhrase|ApiKey|AccessKey|PrivateKey)"
 )
 _PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
-    r"(?:Credential|Secret|Password|Passphrase|Passcode|PIN|Pin|Otp|OTP|MfaCode|"
+    r"(?:Credential|Secret|Password|Passphrase|Passcode|PIN|Pin|Otp|OTP|"
+    r"OtpCode|OTPCode|MfaCode|"
     r"MFACode|TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
     r"RecoveryPhrase|APIKey|ApiKey|AccessKey|PrivateKey|"
     r"(?:Access|API|Api|Auth|Authorization|Client|Refresh|ID|Id|Session|"

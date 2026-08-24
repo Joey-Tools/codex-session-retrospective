@@ -2241,6 +2241,21 @@ class ResultValidationTests(unittest.TestCase):
                 "tool_output",
                 "[REDACTED_TOOL_OUTPUT]",
             ),
+            (
+                "Execution output: proprietary payload.",
+                "tool_output",
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
+            (
+                "Process output: proprietary payload.",
+                "tool_output",
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
+            (
+                "Subprocess output: proprietary payload.",
+                "tool_output",
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
         ):
             with self.subTest(source=source):
                 self.assertIn(
@@ -2258,6 +2273,8 @@ class ResultValidationTests(unittest.TestCase):
             "The stdout parser dropped the final line.",
             "Improve stderr handling in the wrapper.",
             "The transcript validator was too strict.",
+            "Improve process output handling.",
+            "The execution output parser needs a regression test.",
         ):
             with self.subTest(safe_prose=safe_prose):
                 self.assertEqual((), scan_for_leaks(safe_prose))
@@ -2285,6 +2302,16 @@ class ResultValidationTests(unittest.TestCase):
             ),
             (
                 "Health plan beneficiary number: H123456789",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Health insurance number: ABC123456",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "healthInsuranceNumber: ABC123456",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
@@ -2370,6 +2397,10 @@ class ResultValidationTests(unittest.TestCase):
                 "Source path:[REDACTED_PATH]",
             ),
             (
+                r"Path: C:\\Users\\alice\\secret.txt",
+                "Path: [REDACTED_PATH]",
+            ),
+            (
                 "Read /tmp/file before continuing",
                 "Read [REDACTED_PATH] before continuing",
             ),
@@ -2410,9 +2441,11 @@ class ResultValidationTests(unittest.TestCase):
             "///private/tmp/secret",
             r"\\?\UNC\server\share\secret.txt",
             r"\\?\C:\Users\alice\secret.txt",
+            r"\\\\?\\C:\\Users\\alice\\secret.txt",
             r"\\?\Volume{01234567-89ab-cdef-0123-456789abcdef}\secret.txt",
             r"\\.\UNC\server\share\secret.txt",
             r"\\.\pipe\private-name",
+            r"\\\\server\\share\\secret.txt",
         )
         for path_form in path_forms:
             with self.subTest(path_form=path_form):
@@ -2464,6 +2497,9 @@ class ResultValidationTests(unittest.TestCase):
     def test_post_redaction_removes_one_time_and_recovery_codes(self) -> None:
         for source in (
             "OTP: 123456",
+            "OTP code: 123456",
+            "otpCode: 123456",
+            "deviceOtpCode: 123456",
             "MFA code: 123456",
             "2FA code: 123456",
             "two_factor_code: 123456",
@@ -2486,6 +2522,8 @@ class ResultValidationTests(unittest.TestCase):
                     result["turns"][0]["generalized_working_text"],
                 )
                 self.assertEqual((), scan_for_leaks(result))
+
+        self.assertEqual((), scan_for_leaks("Improve OTP code parsing."))
 
     def test_post_redaction_preserves_only_unambiguous_dotted_versions(self) -> None:
         for source in (
@@ -2772,6 +2810,7 @@ class ResultValidationTests(unittest.TestCase):
             "Improve diagnosis handling.",
             "The biometric template detector needs a regression test.",
             "Emergency contact parsing is documented.",
+            "Improve health insurance number parsing.",
             "Improve cookie header parsing.",
         ):
             with self.subTest(safe_prose=safe_prose):
@@ -3453,6 +3492,7 @@ class ResultValidationTests(unittest.TestCase):
             r"C:\private\Customer Notes.txt",
             r"C:\private\Customer.v1 Notes.txt",
             r"C:\Users\alice\Jane Smith Folder\Customer Notes.txt",
+            r"C:\\Users\\alice\\secret.txt",
             r"\\server\share\My Private Folder\secrets",
             r"\\server\share\customer.txt",
             r"\\server\share\Customer Notes.txt",

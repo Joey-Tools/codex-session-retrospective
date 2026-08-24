@@ -3849,6 +3849,40 @@ superseded_by:
   retained test output and is also non-counting. The accepted reruns use
   durable, deadline-bounded cbth tasks, and the final source tree contains no
   `__pycache__`, `.pyc`, or `.pyo` artifacts.
+- The next current-head GitHub Codex snapshot reported five valid P1 findings.
+  The retained privacy grammar omitted OTP-code labels, health-insurance
+  identifiers, execution/process/subprocess output labels, and string-literal
+  Windows paths with doubled separators. Local generated summaries declared by
+  the transient manifest could also disappear before `make-shards` and be
+  silently omitted. The shared privacy owner now covers the exact controlled
+  labels and atomically consumes ordinary or escaped drive, namespace, and UNC
+  separators. Manifest summary selection records disappeared local artifacts
+  as the existing `summary disappeared during shard discovery` stale gap.
+- Ten exact finding and safe-prose regressions pass 10/10 in 6.796 seconds.
+  Result-contract, module-boundary, and CI-contract suites pass 77/77 in 7.857
+  seconds. The Final14 Python 3.13.12 inventory contains 1,924 exact test IDs
+  from 22 authenticated sources under manifest digest
+  `6a6e6d8998c45ef4dc694d71d0fb398fa88ce0e8b30c1dbe0739a35166878403`.
+  Shards 0 through 3 pass 454/454 in 1,698.177 seconds, 520/520 in
+  1,523.990 seconds, 517/517 in 1,418.541 seconds, and 433/433 in
+  1,438.417 seconds, for exact aggregate coverage of 1,924/1,924 in
+  6,079.125 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 68.259 seconds.
+- Repository-wide Ruff 0.13.2 lint, formatting for the modular privacy and test
+  files, both workflows under `actionlint` 1.7.12, the generated bootstrap
+  manifest, the official OpenAI Skill validator, project-journal validation,
+  tracked-bytecode exclusion, and `git diff --check` are clean on the Final14
+  implementation tree. The inherited monolithic helper remains intentionally
+  outside whole-file Ruff formatting to avoid unrelated mechanical churn.
+- Initial Final14 long-test attempts are non-counting after the exact review
+  scope was expanded from the drive-path example to the complete Windows
+  drive, namespace, and UNC family. The running session suite and four shards
+  were each cancelled once through cbth and reached terminal `SIGTERM`; the
+  privacy/export affected run completed before cancellation but became stale.
+  A direct `py_compile` probe created five ignored bytecode files that were
+  removed before accepted testing. A mistaken `--help` invocation of the
+  argument-free Darwin runner executed without a collectable terminal result
+  and is also non-counting; the accepted cbth run supplies the 14/14 evidence.
 
 ## Follow-up Work
 
