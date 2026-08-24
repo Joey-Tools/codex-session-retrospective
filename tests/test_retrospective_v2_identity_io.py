@@ -46,6 +46,7 @@ from retrospective_v2.identity import (  # noqa: E402
     IdentityKeyMismatchError,
     IdentityKeyMissingError,
 )
+from retrospective_v2 import identity as identity_module  # noqa: E402
 from retrospective_v2 import safe_io  # noqa: E402
 from retrospective_v2.safe_io import (  # noqa: E402
     InvalidJsonError,
@@ -1407,15 +1408,29 @@ class IdentityKeyTests(unittest.TestCase):
         self.assertEqual(0o700, stat.S_IMODE(target.parent.stat().st_mode))
         self.assertEqual(0o600, stat.S_IMODE(target.stat().st_mode))
 
-    def test_default_path_is_resolved_at_call_time(self) -> None:
-        home = self.root / "home"
-        home.mkdir(mode=0o700)
-        with mock.patch.dict(os.environ, {"HOME": str(home)}):
+    def test_default_path_uses_account_home_and_ignores_ambient_home(self) -> None:
+        account_home = self.root / "account-home"
+        account_home.mkdir(mode=0o700)
+        poisoned_home = self.root / "poisoned-home"
+        poisoned_home.mkdir(mode=0o700)
+        account = mock.Mock(pw_dir=str(account_home))
+        with (
+            mock.patch.dict(os.environ, {"HOME": str(poisoned_home)}),
+            mock.patch.object(identity_module.pwd, "getpwuid", return_value=account),
+        ):
             identity = IdentityKey.load_or_create()
 
-        expected = home / ".codex" / "session-retrospective" / "identity-v2.key"
+        expected = (
+            account_home.resolve()
+            / ".codex"
+            / "session-retrospective"
+            / "identity-v2.key"
+        )
         self.assertEqual(expected, identity.path)
         self.assertTrue(expected.is_file())
+        self.assertFalse(
+            (poisoned_home / ".codex/session-retrospective/identity-v2.key").exists()
+        )
 
     def test_expected_key_id_mismatch_and_missing_key_block(self) -> None:
         target = self.root / "identity" / "identity-v2.key"

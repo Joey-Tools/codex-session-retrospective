@@ -76,6 +76,7 @@ from retrospective_v2.identity import (  # noqa: E402
 from retrospective_v2.export import export_retained_bundle  # noqa: E402
 import retrospective_v2.orchestrator as orchestrator_module  # noqa: E402
 import retrospective_v2.orchestrator_execution_contract as execution_contract_module  # noqa: E402
+import retrospective_v2.orchestrator_startup_authority as startup_authority_module  # noqa: E402
 import retrospective_v2.cli as cli_module  # noqa: E402
 from retrospective_v2.orchestrator import (  # noqa: E402
     MAX_SESSION_SHARDS_RECORD_DATA_FRAMES,
@@ -2048,6 +2049,12 @@ class OrchestratorTests(unittest.TestCase):
             with (
                 self.subTest(case=label),
                 mock.patch.dict(os.environ, {"HOME": str(home)}),
+                mock.patch.object(
+                    startup_authority_module,
+                    "identity_key_path",
+                    return_value=poisoned_home
+                    / ".codex/session-retrospective/identity-v2.key",
+                ),
                 mock.patch.object(
                     temporary_paths,
                     "local_codex_root",

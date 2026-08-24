@@ -18,7 +18,7 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any, Protocol
 
-from .identity import IdentityKey
+from .identity import IdentityKey, account_home_path
 
 STATE_SCHEMA_VERSION = 2
 MAX_BUNDLE_BYTES = 256 * 1024 * 1024
@@ -36,7 +36,7 @@ LOCAL_GIT_CAPACITY_RESERVATION_SCHEMA = "local_git_capacity_reservation_v2"
 LOCAL_GIT_CLEANUP_CLAIM_PREFIX = "local_git_cleanup_claim_v2:"
 LOCAL_GIT_CLEANUP_CLAIM_SCHEMA = "local_git_cleanup_claim_v2"
 DEFAULT_PUBLISHER_GNUPG_HOME = (
-    Path.home() / ".codex/session-retrospective/publisher-gnupg-v2"
+    account_home_path() / ".codex/session-retrospective/publisher-gnupg-v2"
 )
 DEFAULT_PUBLISHER_FINGERPRINT = "40FA5D05AC7A3D5C180B037FF6DCF7A06FFC9C52"
 LOCAL_GIT_SIGNER_NAME = "Codex Session Retrospective Publisher"

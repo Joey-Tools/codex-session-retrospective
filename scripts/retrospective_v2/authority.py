@@ -40,7 +40,7 @@ from .authority_errors import HistoryValidationError, ProductionMarkerError
 from .authority_errors import ProviderCacheConflict, ProviderCacheError
 from .contracts import MAX_RUN_HOSTS, RefType, canonical_json_bytes
 from .gpg_status import validsig_primary_fingerprints
-from .identity import IdentityKey
+from .identity import IdentityKey, account_home_path
 from .orchestrator_core import LEGACY_SHADOW_CLEANUP_ROOTS, SHADOW_CLEANUP_ROOTS
 
 
@@ -51,12 +51,15 @@ AUTOMATION_CUTOVER_SNAPSHOT_SCHEMA = "automation_cutover_snapshot_v2"
 AUTOMATION_UPDATE_RESULT_SCHEMA = "automation_update_result_v2"
 PROVIDER_CACHE_SCHEMA = "provider_cache_v2"
 PROVIDER_INITIALIZATION_SCHEMA = "provider_cache_initialization_v2"
+_ACCOUNT_HOME = account_home_path()
 DEFAULT_PRODUCTION_MARKER = (
-    Path.home() / ".codex/session-retrospective/production-marker-v2.json"
+    _ACCOUNT_HOME / ".codex/session-retrospective/production-marker-v2.json"
 )
-DEFAULT_PROVIDER_STATE = Path.home() / ".codex/session-retrospective/provider-state-v2"
+DEFAULT_PROVIDER_STATE = (
+    _ACCOUNT_HOME / ".codex/session-retrospective/provider-state-v2"
+)
 DEFAULT_PUBLISHER_GNUPG_HOME = (
-    Path.home() / ".codex/session-retrospective/publisher-gnupg-v2"
+    _ACCOUNT_HOME / ".codex/session-retrospective/publisher-gnupg-v2"
 )
 DEFAULT_PUBLISHER_FINGERPRINT = "40FA5D05AC7A3D5C180B037FF6DCF7A06FFC9C52"
 PROVIDER_CACHE_FILE = "provider-cache-v2.json"
@@ -873,7 +876,7 @@ class _GitRepository:
             self._gpg_no_options_launcher_authority
         )
         self.env = git_safety.history_git_environment(
-            home=str(Path.home()), gnupg_home=str(self.gnupg_home)
+            home=str(_ACCOUNT_HOME), gnupg_home=str(self.gnupg_home)
         )
         if self._gpg_executable_authority is not None:
             self.env[gpg_status.GPG_PROGRAM_ENV] = self.gpg
@@ -2185,7 +2188,7 @@ def installed_v2_cli_path() -> Path:
     """Return the sole supported installed v2 coordinator path."""
 
     return (
-        Path.home()
+        _ACCOUNT_HOME
         / ".codex/skills/codex-session-retrospective/scripts"
         / "session_retrospective_v2.py"
     ).absolute()
@@ -2194,23 +2197,27 @@ def installed_v2_cli_path() -> Path:
 def installed_runtime_python_path() -> Path:
     """Return the fixed owner-controlled production Python copy."""
 
-    return (Path.home() / ".codex/session-retrospective/runtime/bin/python3").absolute()
+    return (
+        _ACCOUNT_HOME / ".codex/session-retrospective/runtime/bin/python3"
+    ).absolute()
 
 
 def automation_cutover_record_path() -> Path:
     return (
-        Path.home() / ".codex/session-retrospective" / AUTOMATION_CUTOVER_RECORD_FILE
+        _ACCOUNT_HOME / ".codex/session-retrospective" / AUTOMATION_CUTOVER_RECORD_FILE
     ).absolute()
 
 
 def automation_cutover_snapshot_path() -> Path:
     return (
-        Path.home() / ".codex/session-retrospective" / AUTOMATION_CUTOVER_SNAPSHOT_FILE
+        _ACCOUNT_HOME
+        / ".codex/session-retrospective"
+        / AUTOMATION_CUTOVER_SNAPSHOT_FILE
     ).absolute()
 
 
 def _automation_root() -> Path:
-    return (Path.home() / ".codex" / "automations").absolute()
+    return (_ACCOUNT_HOME / ".codex" / "automations").absolute()
 
 
 def _validated_automation_root(automation_root: Path) -> Path:

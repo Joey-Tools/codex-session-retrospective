@@ -602,6 +602,20 @@ def dynamic_loading_primitives(tree: ast.AST) -> set[str]:
 
 
 class ModuleBoundaryTests(unittest.TestCase):
+    def test_runtime_modules_do_not_use_ambient_path_home(self) -> None:
+        offenders: list[str] = []
+        for path in sorted(PACKAGE.glob("*.py"), key=lambda item: item.name):
+            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and node.func.attr == "home"
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "Path"
+                ):
+                    offenders.append(f"{path.name}:{node.lineno}")
+        self.assertEqual([], offenders)
+
     def test_orchestrator_facade_uses_explicit_composition(self) -> None:
         self.assertEqual((object,), RetrospectiveOrchestrator.__bases__)
         self.assertNotIn("__getattr__", vars(RetrospectiveOrchestrator))
@@ -1279,8 +1293,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_932, branch_total)
-        self.assertLessEqual(branch_total, 9_932)
+        self.assertEqual(9_938, branch_total)
+        self.assertLessEqual(branch_total, 9_938)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

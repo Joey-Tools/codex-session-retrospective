@@ -7,8 +7,10 @@ import hashlib
 import hmac
 import os
 from pathlib import Path
+import pwd
 import re
 import secrets
+import stat
 
 from .contracts import (
     JsonValue,
@@ -54,8 +56,34 @@ class IdentityKeyMissingError(IdentityKeyMismatchError):
 IdentityMismatchError = IdentityKeyMismatchError
 
 
+def account_home_path() -> Path:
+    """Return the canonical account home without consulting ambient HOME."""
+    try:
+        account = pwd.getpwuid(os.getuid())
+    except (KeyError, OSError) as exc:
+        raise IdentityKeyError("local account identity is unavailable") from exc
+    raw_home = getattr(account, "pw_dir", None)
+    if (
+        not isinstance(raw_home, str)
+        or not raw_home
+        or set(raw_home) & {"\x00", "\r", "\n"}
+    ):
+        raise IdentityKeyError("local account home is invalid")
+    home = Path(raw_home)
+    if not home.is_absolute():
+        raise IdentityKeyError("local account home is invalid")
+    try:
+        canonical = home.resolve(strict=True)
+        metadata = canonical.stat()
+    except (OSError, RuntimeError) as exc:
+        raise IdentityKeyError("local account home is unavailable") from exc
+    if not stat.S_ISDIR(metadata.st_mode):
+        raise IdentityKeyError("local account home is invalid")
+    return canonical
+
+
 def identity_key_path() -> Path:
-    return Path.home() / ".codex" / "session-retrospective" / IDENTITY_KEY_FILE
+    return account_home_path() / ".codex" / "session-retrospective" / IDENTITY_KEY_FILE
 
 
 default_identity_key_path = identity_key_path

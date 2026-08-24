@@ -4184,6 +4184,58 @@ superseded_by:
   under actionlint 1.7.12, the generated bootstrap manifest, CI contract
   33/33, module boundaries 19/19, Skill contract 5/5, and the official Python
   3.13 OpenAI Skill validator are clean on the Final26 tree.
+- The signed Final26 anchor is `816290a6` with tree `057bbd77` and parent
+  `e12f977e`; host verification accepted Joey's EDDSA signature. Exact-secret
+  admission over `a3836660..816290a6` is clean with complete temporary cleanup
+  and no reviewer start. A fresh ephemeral `gpt-5.6-sol` reviewer at `xhigh`
+  reasoning used a new independently materialized read-only workspace. Equal
+  receipts bound 118 commits, 117 parent edges, graph digest
+  `cc528117b94058e2a95f391c4a6e10f7a36225a68880310a89fa547c72bed7ee`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+- That clean-context review returned two findings. The controlled demographic
+  grammar omitted age, marital and family status, disability, pregnancy,
+  veteran and military status, immigration and residency data, national
+  origin and ancestry, language, caste, sexual orientation, religion and
+  belief, political opinion, and union membership. Runtime defaults also used
+  ambient `HOME`, allowing a caller to redirect identity, provider, marker,
+  automation, runtime, installed CLI, and publication paths. Postvalidation
+  reproduced the prelaunch receipt, all trusted-control digests remained
+  exact, the reviewer process was absent, and the exact task root was removed.
+- The shared detector, post-redactor, and retained validator now use one closed
+  demographic-field taxonomy with ordinary, snake-case, camel-case, and
+  Markdown assignment regressions plus assignment-free safe prose. Runtime
+  authority derives the account home from `getpwuid(getuid()).pw_dir`, resolves
+  it fail-closed as an existing directory. Identity, provider, marker, history
+  Git, automation, runtime, installed CLI, cutover, and publisher-keyring
+  defaults consume that authority without consulting ambient `HOME`. An AST
+  boundary test rejects every v2 engine module `Path.home()` call.
+- Focused demographic, identity, module-boundary, orchestrator, and authority
+  regressions pass 13/13. One direct focused invocation used `-I -m unittest`
+  and stopped during test-package import; the corrected file/module entrypoints
+  pass and the failed invocation is non-counting. Final27 is also non-counting:
+  its shard 2 passed 519 ordinary tests but found the expected branch-inventory
+  snapshot still at 9,932 rather than the new exact 9,938, shard 3 completed,
+  and shards 0 and 1 received one bounded cancellation because the test source
+  had to change. The complete module-boundary suite passes 20/20 after both the
+  exact value and ceiling are synchronized.
+- Final28 uses Python 3.13.12 and 1,939 exact test IDs from 22 authenticated
+  sources under manifest digest
+  `dc6e4f8f0cc4e8ad998bf0eb6b83f9dbd68989bac071fdfd1e330e5224402f7d`.
+  Shards 0 through 3 pass 460/460 in 1,853.814 seconds, 523/523 in
+  1,644.874 seconds, 520/520 in 1,544.763 seconds, and 436/436 in
+  1,548.500 seconds. The independent Darwin security inventory passes 14/14
+  in 69.188 seconds. All five logs total 472,120 bytes below the 40 MiB
+  aggregate ceiling, and the bounded error scan is empty.
+- Repository-wide Ruff 0.13.2 lint, formatting for all nine changed Python
+  files, both workflows under bounded actionlint 1.7.12, the generated
+  bootstrap manifest, CI contract 33/33, module boundaries 20/20, Skill
+  contract 5/5, the official Python 3.13 OpenAI Skill validator, project-journal
+  validation, tracked and source/test-tree bytecode exclusion, and
+  `git diff --check` are clean on the Final28 tree. One combined contract
+  invocation omitted the required `-I` and failed closed before two fixture
+  bodies; the three authoritative isolated file entrypoints all pass and that
+  invocation is non-counting.
 
 ## Follow-up Work
 

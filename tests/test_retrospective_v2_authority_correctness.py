@@ -16,6 +16,8 @@ sys.path.insert(0, str(SCRIPTS))
 from retrospective_v2 import (  # noqa: E402
     authority,
     episode_review,
+    identity as identity_module,
+    publication_contracts,
     safe_io,
     temporary_paths,
 )
@@ -33,6 +35,51 @@ TURN_B = ref("turn", "b")
 SESSION = ref("session", "session")
 GOAL = ref("goal", "goal")
 WORKSTREAM = ref("workstream", "workstream")
+
+
+class AccountHomeAuthorityTests(unittest.TestCase):
+    def test_runtime_authority_paths_ignore_ambient_home(self) -> None:
+        account_home = identity_module.account_home_path()
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            poisoned_home = Path(temporary_directory) / "poisoned-home"
+            poisoned_home.mkdir(mode=0o700)
+            with mock.patch.dict(os.environ, {"HOME": str(poisoned_home)}):
+                self.assertEqual(
+                    account_home
+                    / ".codex/skills/codex-session-retrospective/scripts"
+                    / "session_retrospective_v2.py",
+                    authority.installed_v2_cli_path(),
+                )
+                self.assertEqual(
+                    account_home / ".codex/session-retrospective/runtime/bin/python3",
+                    authority.installed_runtime_python_path(),
+                )
+                self.assertEqual(
+                    account_home
+                    / ".codex/session-retrospective/automation-cutover-v2.json",
+                    authority.automation_cutover_record_path(),
+                )
+                self.assertEqual(
+                    account_home / ".codex/automations",
+                    authority._automation_root(),
+                )
+                self.assertEqual(
+                    account_home
+                    / ".codex/session-retrospective/production-marker-v2.json",
+                    authority.DEFAULT_PRODUCTION_MARKER,
+                )
+                self.assertEqual(
+                    account_home / ".codex/session-retrospective/provider-state-v2",
+                    authority.DEFAULT_PROVIDER_STATE,
+                )
+                self.assertEqual(
+                    account_home / ".codex/session-retrospective/publisher-gnupg-v2",
+                    authority.DEFAULT_PUBLISHER_GNUPG_HOME,
+                )
+                self.assertEqual(
+                    authority.DEFAULT_PUBLISHER_GNUPG_HOME,
+                    publication_contracts.DEFAULT_PUBLISHER_GNUPG_HOME,
+                )
 
 
 def episode(turn_refs: list[str]) -> dict[str, object]:
