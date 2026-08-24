@@ -4151,6 +4151,39 @@ superseded_by:
   3.13 OpenAI Skill validator, project-journal validation, tracked and
   source/test-tree bytecode exclusion, and `git diff --check` are clean on the
   Final25 tree.
+- The signed Final25 anchor is `e12f977e` with tree `c3c437af` and parent
+  `829f4477`; host verification accepted Joey's EDDSA signature. Exact-secret
+  admission over `a3836660..e12f977e` is clean with complete temporary cleanup
+  and no reviewer start. The first Codex CLI launch failed before model start
+  because the outer workspace sandbox denied its own state database; it
+  produced no result artifact, left no process, and the workspace revalidated
+  before the actual launch.
+- The fresh ephemeral `gpt-5.6-sol` reviewer at `xhigh` reasoning used one
+  independently materialized read-only workspace. Equal receipts bound 117
+  commits, 116 parent edges, graph digest
+  `619c4cc407199228355271735308625552548b9a1902c13e1e0d2efc2c75d4b3`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It returned one P1 finding: labeled nationality and citizenship remained
+  outside the controlled demographic grammar. Postvalidation and all trusted
+  digests remained exact, the reviewer process was absent, and the exact task
+  root was removed.
+- The demographic grammar and three-layer regression now cover nationality,
+  citizenship, nationality/citizenship status, and country of citizenship in
+  ordinary, snake-case, camel-case, and Markdown assignment forms while
+  preserving assignment-free technical prose.
+- Final26 uses Python 3.13.12 and 1,937 exact test IDs from 22 authenticated
+  sources under manifest digest
+  `d28a34914165e982b2bf795eecf9a348ff74e6053f035ada565de43ab66103bd`.
+  Shards 0 through 3 pass 458/458 in 1,828.826 seconds, 523/523 in
+  1,642.185 seconds, 521/521 in 1,556.677 seconds, and 435/435 in
+  1,545.513 seconds. The independent Darwin security inventory passes 14/14
+  in 66.467 seconds. All five logs total 471,738 bytes below the 40 MiB
+  aggregate ceiling.
+- Repository-wide Ruff 0.13.2 lint, affected-file formatting, both workflows
+  under actionlint 1.7.12, the generated bootstrap manifest, CI contract
+  33/33, module boundaries 19/19, Skill contract 5/5, and the official Python
+  3.13 OpenAI Skill validator are clean on the Final26 tree.
 
 ## Follow-up Work
 

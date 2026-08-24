@@ -560,8 +560,12 @@ _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
 )
 _CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT = (
     r"(?:sex|gender(?:[_ -]+identity)?|race|ethnicity|"
+    r"nationality(?:[_ -]+status)?|citizenship(?:[_ -]+status)?|"
+    r"country[_ -]+of[_ -]+citizenship|"
     r"sexual[_ -]+orientation|religion|political[_ -]+affiliation|"
-    r"(?-i:(?:gender|Gender)Identity|(?:sexual|Sexual)Orientation|"
+    r"(?-i:(?:gender|Gender)Identity|(?:nationality|Nationality)Status|"
+    r"(?:citizenship|Citizenship)Status|(?:country|Country)OfCitizenship|"
+    r"(?:sexual|Sexual)Orientation|"
     r"(?:political|Political)Affiliation))"
 )
 _BIOMETRIC_TEMPLATE_FIELD_PATTERN_TEXT = (
