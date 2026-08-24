@@ -1865,13 +1865,36 @@ class CliContractTests(unittest.TestCase):
         lexical_escape.symlink_to(outside, target_is_directory=True)
         resolved_alias = self.root / "sessions-alias"
         resolved_alias.symlink_to(sessions, target_is_directory=True)
+        root_alias = self.root / "codex-root-alias"
+        root_alias.symlink_to(codex_root, target_is_directory=True)
         safe_sibling = codex_root / "session-retrospective" / "run"
         cases = (
             ("active-child", sessions / "new-run", False),
             ("archived-child", archived_sessions / "new-run", False),
             ("resolved-alias", resolved_alias / "new-run", False),
             ("lexical-escape", lexical_escape / "new-run", False),
+            ("missing-history", codex_root / "history.jsonl" / "new-run", False),
+            (
+                "missing-session-index",
+                codex_root / "session_index.jsonl" / "new-run",
+                False,
+            ),
+            (
+                "missing-root-rollout",
+                codex_root / "rollout-absent.jsonl" / "new-run",
+                False,
+            ),
+            (
+                "missing-root-source-alias",
+                root_alias / "rollout-aliased.jsonl" / "new-run",
+                False,
+            ),
             ("source-parent", codex_root, False),
+            (
+                "excluded-summary-rollout",
+                codex_root / "rollout-summary-note.jsonl" / "new-run",
+                True,
+            ),
             ("safe-sibling", safe_sibling, True),
         )
 
@@ -1932,6 +1955,9 @@ class CliContractTests(unittest.TestCase):
         self.assertFalse((sessions / "new-run").exists())
         self.assertFalse((archived_sessions / "new-run").exists())
         self.assertFalse((outside / "new-run").exists())
+        self.assertFalse((codex_root / "history.jsonl").exists())
+        self.assertFalse((codex_root / "session_index.jsonl").exists())
+        self.assertFalse((codex_root / "rollout-absent.jsonl").exists())
 
     def test_history_repository_cannot_overlap_local_session_sources(self) -> None:
         account_home = self.root / "account-home"
@@ -1950,12 +1976,30 @@ class CliContractTests(unittest.TestCase):
         lexical_escape.symlink_to(outside, target_is_directory=True)
         resolved_alias = self.root / "sessions-alias"
         resolved_alias.symlink_to(sessions, target_is_directory=True)
+        root_alias = self.root / "codex-root-alias"
+        root_alias.symlink_to(codex_root, target_is_directory=True)
         safe_sibling = codex_root / "session-retrospective-history"
         cases = (
             ("active-child", sessions / "history.git", False),
             ("archived-child", archived_sessions / "history.git", False),
             ("resolved-alias", resolved_alias / "history.git", False),
             ("lexical-escape", lexical_escape / "history.git", False),
+            ("missing-history", codex_root / "history.jsonl" / "history.git", False),
+            (
+                "missing-session-index",
+                codex_root / "session_index.jsonl" / "history.git",
+                False,
+            ),
+            (
+                "missing-root-rollout",
+                codex_root / "rollout-absent.jsonl" / "history.git",
+                False,
+            ),
+            (
+                "missing-root-source-alias",
+                root_alias / "rollout-aliased.jsonl" / "history.git",
+                False,
+            ),
             ("source-parent", codex_root, False),
             ("canonical-tilde", "~/.codex/sessions/history.git", False),
             ("safe-sibling", safe_sibling, True),
@@ -2012,6 +2056,9 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual("active\n", active_sentinel.read_text(encoding="ascii"))
         self.assertEqual("archived\n", archived_sentinel.read_text(encoding="ascii"))
         self.assertEqual([], list(outside.iterdir()))
+        self.assertFalse((codex_root / "history.jsonl").exists())
+        self.assertFalse((codex_root / "session_index.jsonl").exists())
+        self.assertFalse((codex_root / "rollout-absent.jsonl").exists())
 
     def test_export_destination_cannot_overlap_local_session_sources(self) -> None:
         self.real_coordinator(self.run_dir, activity=False)

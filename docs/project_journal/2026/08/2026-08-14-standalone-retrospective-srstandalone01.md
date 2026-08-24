@@ -3659,6 +3659,44 @@ superseded_by:
   official OpenAI Skill validator, project-journal validation, tracked-bytecode
   exclusion, and `git diff --check` are clean on the same Final8 implementation
   tree.
+- A clean-context Codex CLI review of signed head `c7d075c5` covered
+  `a3836660..c7d075c5` from an independently materialized and validated
+  owner-private workspace. The paired receipts bound 105 commits and 104
+  parent edges and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The reviewer reported one P2: temporary, history, and retained-output roots
+  excluded the `sessions/` and `archived_sessions/` trees but not canonical
+  root-level `history.jsonl`, `session_index.jsonl`, or `rollout-*.jsonl`
+  sources. An absent source pathname could therefore be created as a directory
+  before any source artifact existed. Postvalidation, trusted-control digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  Python digest
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`,
+  process quiescence, and exact task-root cleanup were revalidated.
+- The shared temporary-root gate now excludes all canonical local source names
+  in lexical and resolved path views before any create, open, or lock. It
+  reuses the transport layer's exact root-rollout grammar, while history
+  repository validation delegates to the same owner and retains its public
+  error contract. Regressions cover absent root files, rollout paths reached
+  through a resolved Codex-root alias, absence of premature filesystem
+  creation, and the non-source `rollout-summary-*` negative. The architecture
+  inventory passes 19/19 with exactly 9,857 branches and
+  `temporary_paths.py` at its unchanged 350-line cap. The affected CLI class
+  passes 75/75 in 221.275 seconds; an earlier launch without the required `-I`
+  flag failed runtime authority before test execution and is explicitly
+  non-counting.
+- The Final9 Python 3.13.12 inventory contains 1,914 exact test IDs from 22
+  authenticated sources under manifest digest
+  `66ab5afb4367d31485d4af0696df9a90174c7205eb90bb7d2f7cb4671ba5d02e`.
+  Shards 0 through 3 pass 453/453 in 1,479.294 seconds, 519/519 in 1,304.619
+  seconds, 511/511 in 1,208.778 seconds, and 431/431 in 1,233.088 seconds,
+  for exact aggregate coverage of 1,914/1,914 in 5,225.779 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 57.159
+  seconds, and CI contracts pass 33/33 in 2.284 seconds. Repository-wide Ruff
+  0.13.2 lint, changed-file formatting, both workflows under `actionlint`
+  1.7.12, the generated bootstrap manifest, the official OpenAI Skill
+  validator, project-journal validation, tracked-bytecode exclusion, and
+  `git diff --check` are clean on the same implementation tree.
 
 ## Follow-up Work
 

@@ -13,21 +13,6 @@ _SEPARATION_DETAIL = "outside canonical retrospective source roots"
 _ACCOUNT_HOME_RE = re.compile(r"\A~(?=/|\Z)")
 
 
-def _roots_overlap(candidate: Path, source: Path) -> bool:
-    lexical_candidate = Path(os.path.abspath(os.fspath(candidate)))
-    lexical_source = Path(os.path.abspath(os.fspath(source)))
-    resolved_candidate = lexical_candidate.resolve(strict=False)
-    resolved_source = lexical_source.resolve(strict=False)
-    return any(
-        (
-            lexical_candidate.is_relative_to(lexical_source),
-            lexical_source.is_relative_to(lexical_candidate),
-            resolved_candidate.is_relative_to(resolved_source),
-            resolved_source.is_relative_to(resolved_candidate),
-        )
-    )
-
-
 def require_repository(value: str | os.PathLike[str]) -> Path:
     """Return a canonical history path that cannot overlap local sources."""
 
@@ -39,14 +24,12 @@ def require_repository(value: str | os.PathLike[str]) -> Path:
         _ACCOUNT_HOME_RE.sub(os.fspath(source_root.parent), raw_value, count=1)
     ).expanduser()
     candidate = Path(os.path.abspath(os.fspath(expanded)))
-    if True in (
-        _roots_overlap(candidate, source_root / "sessions"),
-        _roots_overlap(candidate, source_root / "archived_sessions"),
-    ):
+    try:
+        return temporary_paths.require_run_directory_outside_sources(candidate)
+    except safe_io.UnsafePathError as error:
         raise safe_io.UnsafePathError(
             "history repository overlaps a retrospective source root"
-        )
-    return candidate
+        ) from error
 
 
 def readiness(

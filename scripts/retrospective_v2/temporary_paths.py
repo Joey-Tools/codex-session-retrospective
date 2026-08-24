@@ -9,13 +9,14 @@ from pathlib import Path
 import pwd
 import secrets
 import stat
-from typing import Iterator
+from typing import Callable, Iterator
 
 try:
-    from . import safe_io
+    from . import safe_io, transport_paths
     from .transport_contracts import source_root_commitment
 except (ImportError, ModuleNotFoundError):
     import safe_io  # type: ignore[no-redef]
+    import transport_paths  # type: ignore[no-redef]
     from transport_contracts import source_root_commitment  # type: ignore[no-redef]
 
 
@@ -33,18 +34,20 @@ _TEMPORARY_CLEANUP_DEPTH = 4
 _TEMPORARY_CLEANUP_SECONDS = 30.0
 _TEMPORARY_CLEANUP_CAUSE_LIMIT = 16
 _TEMPORARY_CLEANUP_INCOMPLETE_ATTRIBUTE = "_retrospective_temporary_cleanup_incomplete"
+_UNEXPECTED_RETENTION = (
+    "sensitive temporary directory retained without an active failure"
+)
+_BOUNDED_RETENTION = "sensitive temporary directory retained for bounded recovery"
 
 
 def mark_incomplete_cleanup(error: BaseException, *, stage: str) -> None:
     """Attach a content-free sensitive temporary-cleanup marker."""
-
     setattr(error, _TEMPORARY_CLEANUP_INCOMPLETE_ATTRIBUTE, True)
     error.add_note(f"sensitive temporary cleanup incomplete at {stage}")
 
 
 def incomplete_cleanup_primary(error: BaseException) -> BaseException | None:
     """Return the outer primary when nested temporary cleanup is incomplete."""
-
     current: BaseException | None = error
     visited: set[int] = set()
     for _ in range(_TEMPORARY_CLEANUP_CAUSE_LIMIT):
@@ -59,19 +62,12 @@ def incomplete_cleanup_primary(error: BaseException) -> BaseException | None:
 
 def local_codex_root() -> Path:
     """Resolve the canonical local source root without ambient HOME state."""
-
     try:
         account = pwd.getpwuid(os.getuid())
     except (KeyError, OSError) as exc:
         raise ValueError("local account identity is unavailable") from exc
     home = account.pw_dir
-    if (
-        not isinstance(home, str)
-        or not home
-        or "\x00" in home
-        or "\r" in home
-        or "\n" in home
-    ):
+    if not isinstance(home, str) or not home or set(home) & {"\x00", "\r", "\n"}:
         raise ValueError("local account home is invalid")
     root = Path(home) / ".codex"
     source_root_commitment(codex_root=str(root), route="local", host="local")
@@ -80,26 +76,52 @@ def local_codex_root() -> Path:
 
 def require_run_directory_outside_sources(run_dir: str | Path) -> Path:
     """Reject a run directory that can contain or enter local session sources."""
-
     lexical_run_dir = Path(os.path.abspath(os.fspath(Path(run_dir).expanduser())))
     source_root = local_codex_root()
     _require_root_outside_source(lexical_run_dir, source_root / "sessions")
     _require_root_outside_source(lexical_run_dir, source_root / "archived_sessions")
+    _require_root_outside_source(lexical_run_dir, source_root / "history.jsonl")
+    _require_root_outside_source(lexical_run_dir, source_root / "session_index.jsonl")
+    _require_root_outside_source(lexical_run_dir, source_root, _root_rollout_overlap)
     return lexical_run_dir
 
 
-def _require_root_outside_source(temporary_root: Path, source_root: Path) -> None:
+def _ordinary_source_overlap(*paths: Path) -> bool:
+    return any(
+        (
+            paths[0].is_relative_to(paths[1]),
+            paths[1].is_relative_to(paths[0]),
+            paths[2].is_relative_to(paths[3]),
+            paths[3].is_relative_to(paths[2]),
+        )
+    )
+
+
+def _root_rollout_overlap(*paths: Path) -> bool:
+    lexical_name = os.path.relpath(paths[0], paths[1]).partition(os.sep)[0]
+    resolved_name = os.path.relpath(paths[2], paths[3]).partition(os.sep)[0]
+    return any(
+        (
+            transport_paths.ROOT_ROLLOUT_RELATIVE_RE.fullmatch(lexical_name),
+            transport_paths.ROOT_ROLLOUT_RELATIVE_RE.fullmatch(resolved_name),
+        )
+    )
+
+
+def _require_root_outside_source(
+    temporary_root: Path,
+    source_root: Path,
+    overlap_test: Callable[..., bool] = _ordinary_source_overlap,
+) -> None:
     lexical_temporary_root = Path(os.path.abspath(os.fspath(temporary_root)))
     lexical_source_root = Path(os.path.abspath(os.fspath(source_root)))
     resolved_temporary_root = lexical_temporary_root.resolve(strict=False)
     resolved_source_root = lexical_source_root.resolve(strict=False)
-    overlap = any(
-        (
-            lexical_temporary_root.is_relative_to(lexical_source_root),
-            lexical_source_root.is_relative_to(lexical_temporary_root),
-            resolved_temporary_root.is_relative_to(resolved_source_root),
-            resolved_source_root.is_relative_to(resolved_temporary_root),
-        )
+    overlap = overlap_test(
+        lexical_temporary_root,
+        lexical_source_root,
+        resolved_temporary_root,
+        resolved_source_root,
     )
     if overlap:
         raise safe_io.UnsafePathError(
@@ -108,12 +130,8 @@ def _require_root_outside_source(temporary_root: Path, source_root: Path) -> Non
 
 
 def _directory_object(metadata: os.stat_result) -> tuple[int, int, int, int]:
-    return (
-        metadata.st_dev,
-        metadata.st_ino,
-        metadata.st_uid,
-        stat.S_IMODE(metadata.st_mode),
-    )
+    mode = stat.S_IMODE(metadata.st_mode)
+    return metadata.st_dev, metadata.st_ino, metadata.st_uid, mode
 
 
 def _close_descriptor(descriptor: int, *, primary: BaseException | None) -> None:
@@ -139,9 +157,7 @@ class BoundTemporaryDirectory:
     _root_fd: int
     _child_fd: int
     _retention: _TemporaryRetention = field(
-        default_factory=_TemporaryRetention,
-        repr=False,
-        compare=False,
+        default_factory=_TemporaryRetention, repr=False, compare=False
     )
 
     @property
@@ -150,7 +166,6 @@ class BoundTemporaryDirectory:
 
     def retain_for_recovery(self, error: BaseException, *, stage: str) -> None:
         """Prevent generic removal when specialized cleanup is unproved."""
-
         self._retention.requested = True
         mark_incomplete_cleanup(error, stage=stage)
 
@@ -249,14 +264,8 @@ def _cleanup_bound_directory(binding: BoundTemporaryDirectory) -> None:
 def owner_only_temporary_directory(
     *, root: Path, prefix: str
 ) -> Iterator[BoundTemporaryDirectory]:
-    if (
-        not prefix
-        or len(prefix) > 64
-        or any(
-            character not in "abcdefghijklmnopqrstuvwxyz0123456789-_"
-            for character in prefix
-        )
-    ):
+    allowed = "abcdefghijklmnopqrstuvwxyz0123456789-_"
+    if not prefix or len(prefix) > 64 or any(char not in allowed for char in prefix):
         raise ValueError("temporary directory prefix is invalid")
     source_root = local_codex_root()
     root = Path(root)
@@ -305,19 +314,11 @@ def owner_only_temporary_directory(
         if binding is not None:
             if binding.retained_for_recovery:
                 if primary is None:
-                    terminal_error = RuntimeError(
-                        "sensitive temporary directory was retained without an "
-                        "active failure"
-                    )
-                    mark_incomplete_cleanup(
-                        terminal_error,
-                        stage="explicit-retention",
-                    )
+                    terminal_error = RuntimeError(_UNEXPECTED_RETENTION)
+                    mark_incomplete_cleanup(terminal_error, stage="explicit-retention")
                     primary = terminal_error
                 else:
-                    primary.add_note(
-                        "sensitive temporary directory retained for bounded recovery"
-                    )
+                    primary.add_note(_BOUNDED_RETENTION)
             else:
                 try:
                     _cleanup_bound_directory(binding)
@@ -339,8 +340,7 @@ def owner_only_temporary_directory(
         elif retained_name is not None and primary is not None:
             mark_incomplete_cleanup(primary, stage="unproven-created-directory")
             primary.add_note(
-                "unproven temporary directory retained under its bound root: "
-                + retained_name
+                f"unproven temporary directory retained under bound root: {retained_name}"
             )
         try:
             _close_descriptor(root_fd, primary=primary)
