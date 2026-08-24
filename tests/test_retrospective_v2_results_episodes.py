@@ -2820,6 +2820,41 @@ class ResultValidationTests(unittest.TestCase):
                     result_validation_module.post_redact(safe_prose),
                 )
 
+    def test_demographic_fields_share_retained_privacy_policy(self) -> None:
+        for source in (
+            "Sexual orientation: bisexual",
+            "Religion: Muslim",
+            "Political affiliation: Example Party",
+            "sexualOrientation: bisexual",
+            "politicalAffiliation: Example Party",
+            "**Sexual orientation:** bisexual",
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    "personal_identifier",
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result_validation_module.post_redact(source),
+                )
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value(
+                        {"problem_statement": source}
+                    )
+
+        for safe_prose in (
+            "Improve sexual orientation handling.",
+            "The religion detector needs a regression test.",
+            "Political affiliation parsing is documented.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertEqual((), scan_for_leaks(safe_prose))
+                self.assertEqual(
+                    safe_prose,
+                    result_validation_module.post_redact(safe_prose),
+                )
+
     def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
         jwt_segment = "".join(("eyJ", "A" * 8))
         stateless_github = "".join(

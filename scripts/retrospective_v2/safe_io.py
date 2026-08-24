@@ -1922,6 +1922,48 @@ class AtomicCreateReceiptSlot:
     receipt: AtomicCreateReceipt | None = None
 
 
+def _open_atomic_create_parent(
+    path: str | os.PathLike[str],
+    *,
+    create_parents: bool,
+    bound_parent_descriptor: int | None,
+) -> tuple[Path, int]:
+    if bound_parent_descriptor is None:
+        return _open_parent_directory(path, create_parents=create_parents)
+    if (
+        isinstance(bound_parent_descriptor, bool)
+        or not isinstance(bound_parent_descriptor, int)
+        or bound_parent_descriptor < 0
+    ):
+        raise TypeError("bound atomic-create parent descriptor is invalid")
+    if create_parents:
+        raise ValueError("a bound atomic-create parent cannot create parents")
+    target = _normalized_path(path)
+    directory_fd = os.dup(bound_parent_descriptor)
+    try:
+        anchored_parent = validate_owner_only_directory_descriptor(
+            directory_fd,
+            target.parent,
+        )
+        named_parent = os.stat(target.parent, follow_symlinks=False)
+        _validate_directory_stat(named_parent, target.parent, exact_mode=True)
+        if _atomic_create_parent_identity(
+            anchored_parent
+        ) != _atomic_create_parent_identity(named_parent):
+            raise UnsafePathError(
+                f"bound atomic-create parent changed: {target.parent}"
+            )
+    except BaseException as error:
+        try:
+            os.close(directory_fd)
+        except OSError as close_error:
+            error.add_note(
+                f"bound atomic-create parent close failed: {type(close_error).__name__}"
+            )
+        raise
+    return target, directory_fd
+
+
 def _hash_file_descriptor(
     descriptor: int,
     *,
@@ -2202,6 +2244,7 @@ def atomic_create_bytes_with_receipt(
     *,
     create_parents: bool = True,
     receipt_slot: AtomicCreateReceiptSlot | None = None,
+    bound_parent_descriptor: int | None = None,
 ) -> AtomicCreateReceipt:
     if not isinstance(data, (bytes, bytearray, memoryview)):
         raise TypeError("atomic create data must be bytes-like")
@@ -2214,9 +2257,10 @@ def atomic_create_bytes_with_receipt(
             raise TypeError("atomic create receipt slot must be empty")
     payload = bytes(data)
     payload_digest = hashlib.sha256(payload).hexdigest()
-    target, directory_fd = _open_parent_directory(
+    target, directory_fd = _open_atomic_create_parent(
         path,
         create_parents=create_parents,
+        bound_parent_descriptor=bound_parent_descriptor,
     )
     lock_name = _atomic_create_lock_name(target.name)
     lock_path = target.parent / lock_name

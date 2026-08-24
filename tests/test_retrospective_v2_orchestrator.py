@@ -6152,6 +6152,66 @@ class OrchestratorTests(unittest.TestCase):
             ],
         )
 
+    def test_source_staging_rejects_session_sources_before_creation(self) -> None:
+        codex_root = self.root / "account-home" / ".codex"
+        codex_root.mkdir(parents=True, mode=0o700)
+
+        for source_name in ("sessions", "archived_sessions"):
+            with self.subTest(source_name=source_name):
+                source_root = codex_root / source_name
+                target = source_root / "2026" / "08" / "raw.bin"
+                prepared = source_inputs.prepare_file(target, b"sensitive source\n")
+                with (
+                    mock.patch.object(
+                        temporary_paths,
+                        "local_codex_root",
+                        return_value=codex_root,
+                    ),
+                    self.assertRaisesRegex(
+                        safe_io.UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ),
+                ):
+                    source_inputs.materialize((prepared,))
+
+                self.assertFalse(source_root.exists())
+
+    def test_source_staging_rejects_bound_parent_name_replacement(self) -> None:
+        codex_root = self.root / "account-home" / ".codex"
+        sessions = codex_root / "sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        staging = self.root / "staging"
+        target = staging / "payload.bin"
+        prepared = source_inputs.prepare_file(target, b"sensitive source\n")
+        moved = sessions / "moved-staging"
+        original_atomic_create = safe_io.atomic_create_bytes_with_receipt
+
+        def replace_parent_before_create(*args, **kwargs):
+            staging.rename(moved)
+            staging.mkdir(mode=0o700)
+            return original_atomic_create(*args, **kwargs)
+
+        with (
+            mock.patch.object(
+                temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ),
+            mock.patch.object(
+                safe_io,
+                "atomic_create_bytes_with_receipt",
+                side_effect=replace_parent_before_create,
+            ),
+            self.assertRaisesRegex(
+                safe_io.UnsafePathError,
+                "bound atomic-create parent changed",
+            ),
+        ):
+            source_inputs.materialize((prepared,))
+
+        self.assertEqual([], list(staging.iterdir()))
+        self.assertEqual([], list(moved.iterdir()))
+
     def test_result_sidecars_keep_near_limit_checkpoint_reloadable(self) -> None:
         run_dir = self.root / "accepted-result-capacity"
         files = []

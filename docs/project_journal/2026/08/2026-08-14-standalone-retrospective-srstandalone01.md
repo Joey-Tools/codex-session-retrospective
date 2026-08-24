@@ -4024,6 +4024,61 @@ superseded_by:
   bootstrap manifest, the official OpenAI Skill validator, project-journal
   validation, tracked and working-tree bytecode exclusion, and
   `git diff --check` are clean.
+- A fresh ephemeral Codex CLI review was started for signed head `fafe59a2`
+  over `a3836660..fafe59a2` in an independently materialized and validated
+  owner-private workspace. The equal receipt pair bound 114 commits, 113
+  parent edges, graph digest
+  `49fd9663761c4360a1d88d4905103335562dcc9a179bc9cbbb264dbed85b8bfc`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  GitHub findings made the head stale before the local reviewer completed, so
+  the process received one bounded cancellation; no partial output was read or
+  classified. Postvalidation, trusted-control and Python digest checks,
+  process quiescence, and exact reviewer task-root removal all completed.
+- The automated exact-head request comment `5396826816` was posted before the
+  local lane became terminal and is therefore recorded as
+  `early-request-observed`. Provider review `5009155839` returned two unique
+  P1 findings plus one duplicate privacy comment: arbitrary `PreparedFile`
+  targets could create or write below active or archived session sources, and
+  the shared retained-privacy grammar omitted labeled sexual orientation,
+  religion, and political affiliation values.
+- Accepted source publication now performs the canonical lexical, resolved,
+  and object-aware source-overlap check before parent creation. A dedicated
+  `source_publication.py` owner holds the parent descriptor across atomic
+  create or descriptor-relative existing-content validation and final source
+  revalidation. The atomic-create helper duplicates the held descriptor,
+  validates its owner-only access policy, and requires its object identity to
+  match the current named parent before creating a pending file. Benign
+  timestamp and child-entry churn remain outside the selected property. The
+  installed runtime manifest and architecture inventory include the new
+  module. The shared personal-data grammar independently detects, redacts, and
+  retained-blocks the three controlled demographic labels while preserving
+  assignment-free safe prose.
+- Four exact finding regressions and the module-boundary inventory pass 23/23.
+  The first combined affected-suite command used a non-isolated interpreter
+  shape, and a direct isolated single-file command could not import the closed
+  test package; both stopped before valid repository testing and are
+  non-counting. The first four-shard attempt was cancelled once per shard after
+  static dependency inspection found the new module missing from the installed
+  runtime manifest. Its 14/14 Darwin result became stale with that source
+  change. On the next tree, shards 1 through 3 passed but shard 0 found one
+  stale failure-injection adapter that rejected the new descriptor keyword;
+  the adapter now explicitly forwards that authority, and its exact regression
+  passes 1/1. All of those earlier shard results are stale after the test-source
+  correction.
+- The Final22 Python 3.13.12 inventory contains 1,937 exact test IDs from 22
+  authenticated sources under manifest digest
+  `b90fae98251e670694d748a23c7b180bd33e863881605a92cbca73498091a9f5`.
+  Shards 0 through 3 pass 458/458 in 1,777.382 seconds, 523/523 in
+  1,599.047 seconds, 521/521 in 1,504.370 seconds, and 435/435 in
+  1,501.461 seconds, for exact aggregate coverage of 1,937/1,937 in
+  6,382.260 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 70.431 seconds.
+- Repository-wide Ruff 0.13.2 lint, formatting for all nine changed Python
+  files, both workflows under `actionlint` 1.7.12, the generated bootstrap
+  manifest, CI contract 33/33, module boundaries 19/19, Skill contract 5/5,
+  the official Python 3.13 OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean on the Final22 tree.
 
 ## Follow-up Work
 

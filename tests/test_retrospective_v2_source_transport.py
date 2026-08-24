@@ -298,6 +298,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
             *,
             create_parents=True,
             receipt_slot=None,
+            bound_parent_descriptor=None,
         ):
             nonlocal calls
             calls += 1
@@ -307,6 +308,7 @@ class SourceTransportProtocolTests(unittest.TestCase):
                     payload,
                     create_parents=create_parents,
                     receipt_slot=receipt_slot,
+                    bound_parent_descriptor=bound_parent_descriptor,
                 )
                 original = Path(path).with_name("primary-original.bin")
                 Path(path).rename(original)

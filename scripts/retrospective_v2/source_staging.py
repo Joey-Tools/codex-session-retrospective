@@ -7,7 +7,7 @@ import hashlib
 from pathlib import Path
 from typing import Sequence
 
-from . import safe_io, temporary_paths
+from . import safe_io, source_publication, temporary_paths
 from .identity import IdentityKey
 from .orchestrator_core import RAW_INPUT_DIRECTORY
 from .orchestrator_support import InvalidTransitionError
@@ -100,22 +100,13 @@ def materialize_file(
         or materialized.slots[index].receipt is not None
     ):
         raise TypeError("source materialization receipt slot is invalid")
-    safe_io.ensure_owner_only_directory(prepared.path.parent)
-    try:
-        safe_io.atomic_create_bytes_with_receipt(
-            prepared.path,
-            prepared.payload,
-            create_parents=False,
-            receipt_slot=materialized.slots[index],
-        )
-    except FileExistsError:
-        existing = safe_io.read_bounded_bytes(
-            prepared.path,
-            max_bytes=max(1, prepared.byte_count),
-            require_owner_only=True,
-        )
-        if existing != prepared.payload:
-            raise InvalidTransitionError("staged source file changed")
+    matched = source_publication.create_run_bytes_with_receipt(
+        prepared.path,
+        prepared.payload,
+        materialized.slots[index],
+    )
+    if not matched:
+        raise InvalidTransitionError("staged source file changed")
 
 
 def materialize(files: Sequence[PreparedFile]) -> MaterializedFiles:

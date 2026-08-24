@@ -185,6 +185,7 @@ else:
         "source_inputs.py",
         "source_overlap.py",
         "source_payloads.py",
+        "source_publication.py",
         "source_session_policy.py",
         "source_spool.py",
         "source_staging.py",

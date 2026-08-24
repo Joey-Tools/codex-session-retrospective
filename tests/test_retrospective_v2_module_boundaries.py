@@ -282,6 +282,7 @@ ORCHESTRATOR_SOURCE_SUPPORT_MODULES = {
 
 ORCHESTRATOR_SOURCE_STAGING_MODULES = {
     "source_acceptance.py",
+    "source_publication.py",
     "source_spool.py",
     "source_staging.py",
 }
@@ -419,6 +420,7 @@ BOUNDED_MODULE_LINES = {
     "temporary_paths.py": 350,
     "temporary_recovery.py": 375,
     "source_spool.py": 350,
+    "source_publication.py": 100,
     "source_staging.py": 350,
     "source_capacity.py": 150,
     "orchestrator_core.py": 250,
@@ -1119,7 +1121,7 @@ spec.loader.exec_module(module)
                 len((PACKAGE / name).read_text(encoding="utf-8").splitlines())
                 for name in ORCHESTRATOR_SOURCE_STAGING_MODULES
             ),
-            775,
+            850,
         )
         self.assertLessEqual(
             sum(
@@ -1277,8 +1279,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_921, branch_total)
-        self.assertLessEqual(branch_total, 9_921)
+        self.assertEqual(9_932, branch_total)
+        self.assertLessEqual(branch_total, 9_932)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

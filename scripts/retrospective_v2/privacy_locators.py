@@ -558,6 +558,10 @@ _RELATIONSHIP_NAME_FIELD_PATTERN_TEXT = (
 _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
     r"(?:diagnosis|medication|blood[_ -]+type|(?-i:(?:blood|Blood)Type))"
 )
+_CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT = (
+    r"(?:sexual[_ -]+orientation|religion|political[_ -]+affiliation|"
+    r"(?-i:(?:sexual|Sexual)Orientation|(?:political|Political)Affiliation))"
+)
 _BIOMETRIC_TEMPLATE_FIELD_PATTERN_TEXT = (
     r"(?:(?:biometric|fingerprint|face|facial|retina)[_ -]+template|voiceprint|"
     r"(?-i:(?:biometric|Biometric|fingerprint|Fingerprint|face|Face|facial|Facial|"
@@ -626,6 +630,8 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT
     + r"|"
     + _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT
+    + r"|"
+    + _CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT
     + r"|"
     + _BIOMETRIC_TEMPLATE_FIELD_PATTERN_TEXT
     + r")"

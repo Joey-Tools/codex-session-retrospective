@@ -40,6 +40,7 @@ operate on that single coordinator context and do not import one another:
 | `extracted_turns.py` | Authenticated derived-turn sidecar preparation and loading |
 | `implementation_authority.py` | Coordinator startup-receipt and fallback source authority validation |
 | `raw_shard_staging.py` | Two-pass source-payload streaming and raw-shard rollback ownership |
+| `source_publication.py` | Descriptor-bound run-file publication and existing-content validation |
 | `source_staging.py` | Preallocated receipt ledger and atomic final-file staging |
 | `orchestrator_scheduler.py` | Stage transitions, task creation, and bounded envelope scheduling |
 
