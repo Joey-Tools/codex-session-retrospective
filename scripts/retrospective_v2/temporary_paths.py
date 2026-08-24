@@ -9,14 +9,14 @@ from pathlib import Path
 import pwd
 import secrets
 import stat
-from typing import Callable, Iterator
+from typing import Iterator
 
 try:
-    from . import safe_io, transport_paths
+    from . import path_separation, safe_io
     from .transport_contracts import source_root_commitment
 except (ImportError, ModuleNotFoundError):
+    import path_separation  # type: ignore[no-redef]
     import safe_io  # type: ignore[no-redef]
-    import transport_paths  # type: ignore[no-redef]
     from transport_contracts import source_root_commitment  # type: ignore[no-redef]
 
 
@@ -77,56 +77,52 @@ def local_codex_root() -> Path:
 def require_run_directory_outside_sources(run_dir: str | Path) -> Path:
     """Reject a run directory that can contain or enter local session sources."""
     lexical_run_dir = Path(os.path.abspath(os.fspath(Path(run_dir).expanduser())))
-    source_root = local_codex_root()
-    _require_root_outside_source(lexical_run_dir, source_root / "sessions")
-    _require_root_outside_source(lexical_run_dir, source_root / "archived_sessions")
-    _require_root_outside_source(lexical_run_dir, source_root / "history.jsonl")
-    _require_root_outside_source(lexical_run_dir, source_root / "session_index.jsonl")
-    _require_root_outside_source(lexical_run_dir, source_root, _root_rollout_overlap)
-    return lexical_run_dir
-
-
-def _ordinary_source_overlap(*paths: Path) -> bool:
-    return any(
-        (
-            paths[0].is_relative_to(paths[1]),
-            paths[1].is_relative_to(paths[0]),
-            paths[2].is_relative_to(paths[3]),
-            paths[3].is_relative_to(paths[2]),
-        )
+    return path_separation.require_run_directory_outside_sources(
+        lexical_run_dir,
+        local_codex_root(),
     )
 
 
-def _root_rollout_overlap(*paths: Path) -> bool:
-    lexical_name = os.path.relpath(paths[0], paths[1]).partition(os.sep)[0]
-    resolved_name = os.path.relpath(paths[2], paths[3]).partition(os.sep)[0]
-    return any(
-        (
-            transport_paths.ROOT_ROLLOUT_RELATIVE_RE.fullmatch(lexical_name),
-            transport_paths.ROOT_ROLLOUT_RELATIVE_RE.fullmatch(resolved_name),
-        )
+_require_root_outside_source = path_separation.require_root_outside_source
+
+
+def require_bound_run_directory_outside_sources(
+    run_dir: str | Path,
+    descriptor: int,
+) -> Path:
+    """Revalidate a bound run directory against every local source root."""
+    normalized = Path(os.path.abspath(os.fspath(Path(run_dir).expanduser())))
+    return path_separation.require_bound_run_directory_outside_sources(
+        normalized,
+        descriptor,
+        local_codex_root(),
     )
 
 
-def _require_root_outside_source(
-    temporary_root: Path,
-    source_root: Path,
-    overlap_test: Callable[..., bool] = _ordinary_source_overlap,
-) -> None:
-    lexical_temporary_root = Path(os.path.abspath(os.fspath(temporary_root)))
-    lexical_source_root = Path(os.path.abspath(os.fspath(source_root)))
-    resolved_temporary_root = lexical_temporary_root.resolve(strict=False)
-    resolved_source_root = lexical_source_root.resolve(strict=False)
-    overlap = overlap_test(
-        lexical_temporary_root,
-        lexical_source_root,
-        resolved_temporary_root,
-        resolved_source_root,
+def open_run_directory(
+    run_dir: str | Path,
+    *,
+    create: bool = False,
+) -> tuple[Path, int]:
+    """Open a run directory across lexical and bound-object source checks."""
+    normalized = Path(os.path.abspath(os.fspath(Path(run_dir).expanduser())))
+    path_separation.require_run_directory_lexically_outside_sources(
+        normalized,
+        local_codex_root(),
     )
-    if overlap:
-        raise safe_io.UnsafePathError(
-            "runtime temporary root overlaps a retrospective source root"
-        )
+    opened_path, descriptor = safe_io.open_owner_only_directory(
+        normalized,
+        create=create,
+    )
+    try:
+        require_bound_run_directory_outside_sources(opened_path, descriptor)
+    except BaseException as primary:
+        try:
+            os.close(descriptor)
+        except OSError as close_error:
+            primary.add_note(f"bound run-directory close failed: {close_error}")
+        raise
+    return opened_path, descriptor
 
 
 def _directory_object(metadata: os.stat_result) -> tuple[int, int, int, int]:

@@ -3883,6 +3883,57 @@ superseded_by:
   removed before accepted testing. A mistaken `--help` invocation of the
   argument-free Darwin runner executed without a collectable terminal result
   and is also non-counting; the accepted cbth run supplies the 14/14 evidence.
+- A clean-context Codex CLI review of signed head `0a12152d` covered
+  `a3836660..0a12152d` from an independently materialized and validated
+  owner-private workspace. The equal receipt pair binds 111 commits, 110
+  parent edges, graph digest
+  `b0fd8e3bbc1918d578b18a67323451da626ba556bbe7943ce357788579a4826c`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Codex CLI thread `01a03373-15a8-7cd2-855f-930c5c15ee43` reported one P1:
+  lexical paths plus `Path.resolve()` could not prove source separation across
+  APFS firmlinks or case-insensitive aliases. Postvalidation, trusted-control
+  digest `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  Python digest
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`,
+  process quiescence, and exact task-root removal were all revalidated.
+- Run-directory source separation now binds every existing route component by
+  `(device, inode, file type)`, retains unresolved suffixes, and compares the
+  held run-directory descriptor's complete ancestor chain with canonical
+  session and history source objects. Lexical and resolver-visible overlap is
+  checked before open; named routes, held descriptors, source chains, and
+  missing components are revalidated after open and before checkpoint or spool
+  writes. Timestamp, link-count, and child-entry churn are intentionally not
+  treated as object replacement. The closed runtime and remote-worker source
+  manifests include the two bounded identity/separation modules. Ancestor
+  descriptors remain under one cleanup owner from acquisition through final
+  closure, so an uncertain `close(2)` result is recorded once and never retried
+  against a potentially reused descriptor number.
+- Complete orchestrator-support, checkpoint-security, checkpoint-store,
+  source-overlap/spool-focused, bootstrap, module-boundary, CI, and skill tests
+  pass 33/33, 15/15, 2/2, 4/4, 12/12, 19/19, 33/33, and 5/5 on the
+  implementation tree. Regressions cover resolver-hidden aliases, a held
+  descriptor below `sessions/` despite a safe displayed path, post-open alias
+  substitution with descriptor closure, preserved checkpoint descriptor
+  custody, uncertain-close single dispatch, and benign child-entry churn. On
+  this host, `/Users/hoteng` and `/System/Volumes/Data/Users/hoteng` have the
+  same device/inode/type; a read-only probe confirms the firmlink-form session
+  path is rejected without filesystem creation.
+- The Final17 Python 3.13.12 inventory contains 1,930 exact test IDs from 22
+  authenticated sources under manifest digest
+  `09962bafd269c78bf0f4a93594ecde039d93bcc1c03390babe39cf362c82bb09`.
+  Shards 0 through 3 pass 456/456 in 1,762.966 seconds, 522/522 in
+  1,580.568 seconds, 517/517 in 1,488.696 seconds, and 435/435 in
+  1,492.175 seconds, for exact aggregate coverage of 1,930/1,930 in
+  6,324.405 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 75.551 seconds.
+- Four earlier Final16 shard tasks were cancelled once with `SIGTERM` and are
+  explicitly non-counting after self-review found that the initial ancestor
+  implementation could retry an uncertain close against a reused descriptor
+  number. A Final16 Darwin run passed on that prior tree but became stale after
+  the descriptor-ownership fix. An earlier argument-free Darwin runner
+  invocation included a mistaken `--help`, exited without retained terminal
+  status, and is also non-counting; Final17 supplies the accepted evidence.
 
 ## Follow-up Work
 

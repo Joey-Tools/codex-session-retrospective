@@ -69,6 +69,295 @@ class PublisherCanaryPathContractTests(unittest.TestCase):
                     source_root,
                 )
 
+    def test_object_identity_rejects_alias_not_normalized_by_resolution(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            source_root = root / "source-root"
+            source_root.mkdir(mode=0o700)
+            alias = root / "physical-alias"
+            alias.symlink_to(source_root, target_is_directory=True)
+            candidate = alias / "retrospective-run"
+
+            def lexical_only(path: Path, *, strict: bool = False) -> Path:
+                del strict
+                return Path(os.path.abspath(os.fspath(path)))
+
+            with (
+                mock.patch.object(
+                    Path,
+                    "resolve",
+                    autospec=True,
+                    side_effect=lexical_only,
+                ),
+                self.assertRaisesRegex(
+                    orchestrator_support.safe_io.UnsafePathError,
+                    "overlaps a retrospective source root",
+                ),
+            ):
+                orchestrator_support.temporary_paths._require_root_outside_source(
+                    candidate,
+                    source_root,
+                )
+
+            self.assertFalse((source_root / "retrospective-run").exists())
+
+    def test_bound_run_directory_rejects_post_open_source_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_root = root / "account-home" / ".codex"
+            sessions = codex_root / "sessions"
+            sessions.mkdir(parents=True, mode=0o700)
+            sentinel = sessions / "source-sentinel"
+            sentinel.write_text("unchanged", encoding="ascii")
+            run_dir = root / "runtime"
+            run_dir.mkdir(mode=0o700)
+            displaced = root / "runtime-displaced"
+            descriptor = os.open(
+                run_dir,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+            )
+            try:
+                with mock.patch.object(
+                    orchestrator_support.temporary_paths,
+                    "local_codex_root",
+                    return_value=codex_root,
+                ):
+                    orchestrator_support.temporary_paths.require_run_directory_outside_sources(
+                        run_dir
+                    )
+                    run_dir.rename(displaced)
+                    run_dir.symlink_to(sessions, target_is_directory=True)
+                    with self.assertRaisesRegex(
+                        orchestrator_support.safe_io.UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ):
+                        orchestrator_support.temporary_paths.require_bound_run_directory_outside_sources(
+                            run_dir,
+                            descriptor,
+                        )
+            finally:
+                os.close(descriptor)
+                if run_dir.is_symlink():
+                    run_dir.unlink()
+                if displaced.exists():
+                    shutil.rmtree(displaced)
+
+            self.assertEqual("unchanged", sentinel.read_text(encoding="ascii"))
+            self.assertEqual([sentinel], list(sessions.iterdir()))
+
+    def test_bound_source_descendant_rejects_safe_named_path(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_root = root / "account-home" / ".codex"
+            sessions = codex_root / "sessions"
+            captured = sessions / "captured-run"
+            captured.mkdir(parents=True, mode=0o700)
+            sentinel = captured / "source-sentinel"
+            sentinel.write_text("unchanged", encoding="ascii")
+            safe_run_dir = root / "safe-runtime"
+            safe_run_dir.mkdir(mode=0o700)
+            descriptor = os.open(
+                captured,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+            )
+            try:
+                with (
+                    mock.patch.object(
+                        orchestrator_support.temporary_paths,
+                        "local_codex_root",
+                        return_value=codex_root,
+                    ),
+                    self.assertRaisesRegex(
+                        orchestrator_support.safe_io.UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ),
+                ):
+                    orchestrator_support.temporary_paths.require_bound_run_directory_outside_sources(
+                        safe_run_dir,
+                        descriptor,
+                    )
+            finally:
+                os.close(descriptor)
+
+            self.assertEqual("unchanged", sentinel.read_text(encoding="ascii"))
+            self.assertEqual([sentinel], list(captured.iterdir()))
+
+    def test_bound_run_directory_allows_child_entry_churn(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_root = root / "account-home" / ".codex"
+            (codex_root / "sessions").mkdir(parents=True, mode=0o700)
+            run_dir = root / "runtime"
+            run_dir.mkdir(mode=0o700)
+            descriptor = os.open(
+                run_dir,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+            )
+            path_identity = (
+                orchestrator_support.temporary_paths.path_separation.path_identity
+            )
+            run_identity = path_identity.object_identity(os.fstat(descriptor))
+            real_fstat = os.fstat
+            churned = False
+
+            def churn_on_run_identity(candidate: int):
+                nonlocal churned
+                metadata = real_fstat(candidate)
+                if (
+                    not churned
+                    and path_identity.object_identity(metadata) == run_identity
+                ):
+                    churned = True
+                    transient = run_dir / "benign-child"
+                    transient.write_text("temporary", encoding="ascii")
+                    transient.unlink()
+                return metadata
+
+            try:
+                with (
+                    mock.patch.object(
+                        orchestrator_support.temporary_paths,
+                        "local_codex_root",
+                        return_value=codex_root,
+                    ),
+                    mock.patch.object(
+                        path_identity.os,
+                        "fstat",
+                        side_effect=churn_on_run_identity,
+                    ),
+                ):
+                    self.assertEqual(
+                        run_dir,
+                        orchestrator_support.temporary_paths.require_bound_run_directory_outside_sources(
+                            run_dir,
+                            descriptor,
+                        ),
+                    )
+            finally:
+                os.close(descriptor)
+
+            self.assertTrue(churned)
+            self.assertEqual([], list(run_dir.iterdir()))
+
+    def test_ancestor_chain_does_not_retry_uncertain_close(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            run_dir = Path(raw) / "runtime"
+            run_dir.mkdir(mode=0o700)
+            descriptor = os.open(
+                run_dir,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+            )
+            path_identity = (
+                orchestrator_support.temporary_paths.path_separation.path_identity
+            )
+            real_open = os.open
+            real_close = os.close
+            real_fstat = os.fstat
+            root_duplicate: int | None = None
+            close_attempts = 0
+
+            def observe_root_duplicate(path, flags, mode=0o777, *, dir_fd=None):
+                nonlocal root_duplicate
+                opened = real_open(path, flags, mode, dir_fd=dir_fd)
+                if (
+                    path == ".."
+                    and dir_fd is not None
+                    and path_identity.object_identity(real_fstat(opened))
+                    == path_identity.object_identity(real_fstat(dir_fd))
+                ):
+                    root_duplicate = opened
+                return opened
+
+            def fail_root_close_once(candidate: int) -> None:
+                nonlocal close_attempts
+                if candidate == root_duplicate:
+                    close_attempts += 1
+                    raise OSError(errno.EIO, "simulated uncertain close")
+                real_close(candidate)
+
+            try:
+                with (
+                    mock.patch.object(
+                        path_identity.os,
+                        "open",
+                        side_effect=observe_root_duplicate,
+                    ),
+                    mock.patch.object(
+                        path_identity.os,
+                        "close",
+                        side_effect=fail_root_close_once,
+                    ),
+                    self.assertRaisesRegex(OSError, "simulated uncertain close"),
+                ):
+                    with path_identity.bound_directory_ancestor_chain(descriptor):
+                        pass
+                self.assertIsNotNone(root_duplicate)
+                self.assertEqual(1, close_attempts)
+            finally:
+                if root_duplicate is not None:
+                    real_close(root_duplicate)
+                real_close(descriptor)
+
+    def test_run_directory_open_rejects_post_open_source_alias_and_closes(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_root = root / "account-home" / ".codex"
+            sessions = codex_root / "sessions"
+            sessions.mkdir(parents=True, mode=0o700)
+            sentinel = sessions / "source-sentinel"
+            sentinel.write_text("unchanged", encoding="ascii")
+            run_dir = root / "runtime"
+            run_dir.mkdir(mode=0o700)
+            displaced = root / "runtime-displaced"
+            opened_descriptor: int | None = None
+            real_open = orchestrator_support.safe_io.open_owner_only_directory
+
+            def replace_after_open(path, *, create=False):
+                nonlocal opened_descriptor
+                opened_path, descriptor = real_open(path, create=create)
+                opened_descriptor = descriptor
+                run_dir.rename(displaced)
+                run_dir.symlink_to(sessions, target_is_directory=True)
+                return opened_path, descriptor
+
+            try:
+                with (
+                    mock.patch.object(
+                        orchestrator_support.temporary_paths,
+                        "local_codex_root",
+                        return_value=codex_root,
+                    ),
+                    mock.patch.object(
+                        orchestrator_support.safe_io,
+                        "open_owner_only_directory",
+                        side_effect=replace_after_open,
+                    ),
+                    self.assertRaisesRegex(
+                        orchestrator_support.safe_io.UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ),
+                ):
+                    orchestrator_support.temporary_paths.open_run_directory(run_dir)
+                self.assertIsNotNone(opened_descriptor)
+                with self.assertRaises(OSError):
+                    os.fstat(opened_descriptor)
+            finally:
+                if run_dir.is_symlink():
+                    run_dir.unlink()
+                if displaced.exists():
+                    shutil.rmtree(displaced)
+
+            self.assertEqual("unchanged", sentinel.read_text(encoding="ascii"))
+            self.assertEqual([sentinel], list(sessions.iterdir()))
+
     def test_bound_creation_rejects_parent_replacement_before_yield(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

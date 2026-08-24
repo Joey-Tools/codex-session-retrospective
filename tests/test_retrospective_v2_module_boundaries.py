@@ -350,7 +350,7 @@ TRANSPORT_LINE_INVENTORY = {
     "transport.py": 268,
     "transport_auth.py": 147,
     "transport_capture.py": 1_024,
-    "transport_contracts.py": 1_107,
+    "transport_contracts.py": 1_109,
     "transport_discovery.py": 240,
     "transport_host_inventory.py": 551,
     "transport_paths.py": 100,
@@ -414,6 +414,8 @@ BOUNDED_MODULE_LINES = {
     "synthesis_evidence.py": 200,
     "synthesis_sources.py": 175,
     "synthesis_tasks.py": 110,
+    "path_identity.py": 300,
+    "path_separation.py": 350,
     "temporary_paths.py": 350,
     "temporary_recovery.py": 375,
     "source_spool.py": 350,
@@ -1226,7 +1228,7 @@ spec.loader.exec_module(module)
         }
         self.assertEqual(TRANSPORT_MODULES, set(TRANSPORT_LINE_INVENTORY))
         self.assertEqual(TRANSPORT_LINE_INVENTORY, observed)
-        self.assertEqual(9_132, sum(observed.values()))
+        self.assertEqual(9_134, sum(observed.values()))
         self.assertLessEqual(
             sum(observed.values()),
             TRANSPORT_AGGREGATE_LINE_LIMIT,
@@ -1275,8 +1277,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(9_858, branch_total)
-        self.assertLessEqual(branch_total, 9_858)
+        self.assertEqual(9_912, branch_total)
+        self.assertLessEqual(branch_total, 9_912)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 
@@ -1321,7 +1323,7 @@ spec.loader.exec_module(module)
         manifest = tuple(transport.SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST)
         self.assertEqual(manifest, transport.SOURCE_TRANSPORT_PROGRAM_MODULE_ALLOWLIST)
         self.assertEqual(len(manifest), len(set(manifest)))
-        self.assertLessEqual(len(manifest), 17)
+        self.assertLessEqual(len(manifest), 19)
         self.assertNotIn("reporting.py", manifest)
         self.assertFalse(set(manifest) & PUBLICATION_MODULES)
         self.assertFalse(set(manifest) & ORCHESTRATOR_MODULES)

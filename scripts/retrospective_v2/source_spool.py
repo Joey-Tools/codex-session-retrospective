@@ -68,7 +68,7 @@ class StreamingRawPayloadStaging:
         self._records: list[SpooledRawPayload] = []
         self._closed = False
         try:
-            _, self._parent_fd = safe_io.open_owner_only_directory(self.spool_root)
+            _, self._parent_fd = temporary_paths.open_run_directory(self.spool_root)
             self._acquire_lock()
             self._remove_orphan()
             self._create_spool()

@@ -145,6 +145,8 @@ else:
         "orchestrator_support.py",
         "orchestrator_synthesis.py",
         "orchestrator_transport.py",
+        "path_identity.py",
+        "path_separation.py",
         "privacy_locators.py",
         "process_lifecycle.py",
         "publication_abort_authority.py",

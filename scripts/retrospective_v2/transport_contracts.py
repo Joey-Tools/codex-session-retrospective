@@ -54,6 +54,8 @@ SOURCE_TRANSPORT_SOURCE_ROOT_OPTION = "--source-root-commitment"
 SOURCE_TRANSPORT_WORKER_MODULE_MANIFEST = (
     "catalog.py",
     "contracts.py",
+    "path_identity.py",
+    "path_separation.py",
     "process_lifecycle.py",
     "safe_io.py",
     "temporary_paths.py",

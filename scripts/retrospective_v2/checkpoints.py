@@ -550,7 +550,7 @@ class _CheckpointLock:
 
     def __enter__(self) -> "_CheckpointLock":
         try:
-            _, self.directory_fd = common_safe_io.open_owner_only_directory(
+            _, self.directory_fd = temporary_paths.open_run_directory(
                 self.store.run_dir,
                 create=self.create_directory,
             )
