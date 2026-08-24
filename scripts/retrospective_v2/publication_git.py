@@ -7,7 +7,13 @@ import fcntl
 import os
 from pathlib import Path
 from typing import Any
-from . import executable_authority, export as retained_export, git_safety, gpg_status
+from . import (
+    executable_authority,
+    export as retained_export,
+    git_safety,
+    gpg_status,
+    temporary_paths,
+)
 
 from .publication_support import (
     AppendOnlyViolation,
@@ -86,7 +92,9 @@ class LocalGitPublicationAdapter(
         retained_export_lifecycle: RetainedExportLifecycle = retained_export,
     ) -> None:
         self._repo = Path(repo_path).absolute()
-        self._state_dir = Path(state_dir).absolute()
+        self._state_dir = temporary_paths.require_run_directory_outside_sources(
+            state_dir
+        )
         self._attempts_dir = self._state_dir / "attempts"
         self._publication_lock_path = self._state_dir / "publication.lock"
         self._generation_path = self._state_dir / "generations.json"

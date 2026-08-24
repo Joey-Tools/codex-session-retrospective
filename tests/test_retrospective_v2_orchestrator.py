@@ -885,6 +885,12 @@ class OrchestratorTests(unittest.TestCase):
             patcher.stop()
         self.temporary_directory.cleanup()
 
+    def test_constructor_rejects_pathless_identity_before_run_creation(self) -> None:
+        run_dir = self.root / "pathless-identity-run"
+        with self.assertRaisesRegex(InvalidInputError, "persistent path"):
+            RetrospectiveOrchestrator(run_dir, identity=IdentityKey.generate())
+        self.assertFalse(run_dir.exists())
+
     def test_catalog_freeze_rejects_cross_manifest_unit_ref_collision(self) -> None:
         host_ref = typed_ref(RefType.HOST, "local")
         lease = {

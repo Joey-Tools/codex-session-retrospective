@@ -551,6 +551,18 @@ _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
     r"(?-i:(?:dateOfBirth|DateOfBirth)))"
 )
 _ACCOUNT_HANDLE_FIELD_PATTERN_TEXT = r"(?:handle|login(?:[_ -]+name)?|screen[_ -]+name)"
+_RELATIONSHIP_NAME_FIELD_PATTERN_TEXT = (
+    r"(?:emergency[_ -]+contact|next[_ -]+of[_ -]+kin)(?:[_ -]+name)?|"
+    r"(?-i:(?:emergencyContact|EmergencyContact|nextOfKin|NextOfKin)(?:Name)?)"
+)
+_CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
+    r"(?:diagnosis|medication|blood[_ -]+type|(?-i:(?:blood|Blood)Type))"
+)
+_BIOMETRIC_TEMPLATE_FIELD_PATTERN_TEXT = (
+    r"(?:(?:biometric|fingerprint|face|facial|retina)[_ -]+template|voiceprint|"
+    r"(?-i:(?:biometric|Biometric|fingerprint|Fingerprint|face|Face|facial|Facial|"
+    r"retina|Retina)Template))"
+)
 _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"
     r"mrn|medical[_ -]?record(?:[_ -]?(?:number|no|id))?|"
@@ -586,6 +598,8 @@ _LABELED_PERSONAL_NAME_FIELD_PATTERN_TEXT = (
     + _PERSONAL_POSSESSIVE_PATTERN_TEXT
     + r"(?:[._ -]+)?"
     + _PERSONAL_CONTEXTUAL_NAME_FIELD_PATTERN_TEXT
+    + r"|"
+    + _RELATIONSHIP_NAME_FIELD_PATTERN_TEXT
     + r")"
 )
 _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
@@ -608,6 +622,10 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
     + r"|"
     + _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT
+    + r"|"
+    + _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT
+    + r"|"
+    + _BIOMETRIC_TEMPLATE_FIELD_PATTERN_TEXT
     + r")"
 )
 
@@ -1701,7 +1719,9 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"(?:security(?:[ \t_-]?question)?|recovery)[ \t_-]?answer|"
     r"(?:mfa|2fa|two[ \t_-]?factor)[ \t_-]?code|"
     r"(?:recovery|backup)[ \t_-]?code|"
-    r"credential|token|" + _COMPACT_TOKEN_KEY_PATTERN_TEXT + r")"
+    r"credential|token|"
+    r"(?:(?:session|http|auth(?:entication)?)[\s_-]?)?cookie(?:[\s_-]?header)?|"
+    r"set[\s_-]?cookie(?:[\s_-]?header)?|" + _COMPACT_TOKEN_KEY_PATTERN_TEXT + r")"
 )
 _CREDENTIAL_FIELD_PATTERN_TEXT = (
     r"(?:(?<![\w-])|(?<=[._-]))['\"]?(?:[A-Za-z0-9]+[._-])*"

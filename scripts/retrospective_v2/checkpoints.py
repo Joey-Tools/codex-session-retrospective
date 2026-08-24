@@ -152,7 +152,7 @@ class AtomicCheckpointStore:
             raise TypeError("checkpoint identity must be an IdentityKey")
         self.identity = identity
         self.key_id = _validated_key_id(identity.key_id)
-        self.run_dir = Path(run_dir).expanduser().absolute()
+        self.run_dir = temporary_paths.require_run_directory_outside_sources(run_dir)
         self.path = self.run_dir / filename
         self.lock_path = self.run_dir / _LOCK_FILE
         self.max_bytes = max_bytes

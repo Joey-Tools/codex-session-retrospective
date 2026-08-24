@@ -5735,6 +5735,63 @@ class DurablePublicationTests(unittest.TestCase):
                 signing_program=self.gpg,
             )
 
+    def test_public_write_owners_reject_source_roots_before_creation(self) -> None:
+        codex_root = self.root / "source-account" / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+        alias = self.root / "source-alias"
+        alias.symlink_to(sessions, target_is_directory=True)
+
+        with mock.patch.object(
+            temporary_paths,
+            "local_codex_root",
+            return_value=codex_root,
+        ):
+            for source_parent in (sessions, archived, alias):
+                state_dir = source_parent / "publication-state"
+                marker_path = source_parent / "production-marker.json"
+                with (
+                    self.subTest(owner="publication-adapter", path=state_dir),
+                    self.assertRaisesRegex(
+                        safe_io.UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ),
+                ):
+                    LocalGitPublicationAdapter(
+                        self.repo,
+                        state_dir,
+                        signing_key=self.fingerprint,
+                        gnupg_home=self.gnupg_home,
+                        expected_signer_uid=DEFAULT_PUBLISHER_UID,
+                        signing_program=self.gpg,
+                    )
+                with (
+                    self.subTest(owner="production-marker", path=marker_path),
+                    self.assertRaisesRegex(
+                        safe_io.UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ),
+                ):
+                    authority.issue_production_marker(
+                        marker_path,
+                        identity=self.identity,
+                        canonical_hosts=TEST_HOSTS,
+                        history_repo=self.repo,
+                        target_ref=TARGET_REF,
+                        configuration_root=self.configuration_root,
+                        configuration_ref=self.configuration_ref,
+                        model_era=self.model_era,
+                        policy_era=self.policy_era,
+                        calibration_receipt=self.calibration_receipt,
+                        accepted_shadow_evidence=self.shadow_evidence,
+                        automation_cutover_record=self.automation_cutover_record,
+                        installed_commits=(self.base_head,),
+                    )
+                self.assertFalse(state_dir.exists())
+                self.assertFalse(marker_path.exists())
+
     def test_git_metadata_requires_real_current_user_controlled_directories(
         self,
     ) -> None:

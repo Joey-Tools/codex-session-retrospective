@@ -438,6 +438,8 @@ class RetrospectiveOrchestrator:
                     "supplied identity does not match the checkpoint store"
                 )
             resolved_identity = identity
+        if resolved_identity.path is None:
+            raise InvalidInputError("orchestrator identity must use a persistent path")
         if store is not None:
             if store.run_dir != resolved_run_dir:
                 raise InvalidInputError("checkpoint store run_dir does not match")

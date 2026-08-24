@@ -3811,6 +3811,44 @@ superseded_by:
   One direct `uv` validator invocation combined `-S` with a site-installed
   PyYAML dependency and failed before validation; it is non-counting, while the
   canonical Joey validation wrapper returned `Skill is valid!`.
+- The next exact-head GitHub Codex snapshot reported eight additional valid
+  findings. The shared retained-privacy grammar omitted controlled diagnosis,
+  medication, blood-type, biometric-template, voiceprint, emergency-contact,
+  next-of-kin, and cookie credential labels. Three public write owners could
+  also accept state or marker paths below active or archived session sources,
+  and an explicitly supplied in-memory identity could not be reconstructed by
+  projected child CLI commands. The closed privacy grammar now covers those
+  labels without admitting assignment-free safe prose. Checkpoint,
+  local-publication, and production-marker entry points apply the canonical
+  lexical-and-resolved source-overlap authority before any lock, state, or
+  marker write. The orchestrator rejects pathless identities before run-state
+  creation.
+- The exact isolated finding group passes 4/4 in 28.621 seconds. The five
+  affected result, export, checkpoint, orchestrator, and publication modules
+  pass 494/494 in 5,131.404 seconds without skips. Result-contract,
+  module-boundary, and CI-contract suites pass 77/77 in 7.245 seconds, with the
+  deliberate fail-closed branch reflected in the exact 9,858-branch inventory.
+  One direct Homebrew Python publication setup failed executable-authority
+  validation, and one non-isolated copied-Python setup failed runtime-isolation
+  validation; both are pre-test environment failures and explicitly
+  non-counting. The accepted runs use the owner-private Python 3.13.12 copy
+  under `-I -B -S`.
+- The Final13 Python 3.13.12 inventory contains 1,923 exact test IDs from 22
+  authenticated sources under manifest digest
+  `a6188513f2aa8d1290b9b0456abd09ffb8904e4f1bac57a7e022dee96f209189`.
+  Shards 0 through 3 pass 454/454 in 1,563.829 seconds, 520/520 in
+  1,615.354 seconds, 516/516 in 1,287.094 seconds, and 433/433 in
+  1,296.651 seconds, for exact aggregate coverage of 1,923/1,923 in
+  5,762.928 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 60.292 seconds.
+- The first Final13 attempts for shards 0, 2, and 3 are non-counting because a
+  direct `py_compile` probe had created five ignored bytecode files before
+  launch; their exact cache-sensitive regressions pass after those known
+  artifacts are removed. A later PTY-backed attempt for the same three shards
+  was terminated by a response-session transition without terminal status or
+  retained test output and is also non-counting. The accepted reruns use
+  durable, deadline-bounded cbth tasks, and the final source tree contains no
+  `__pycache__`, `.pyc`, or `.pyo` artifacts.
 
 ## Follow-up Work
 

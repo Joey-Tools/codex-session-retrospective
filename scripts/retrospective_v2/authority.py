@@ -2914,6 +2914,7 @@ def issue_production_marker(
     automation_cutover_record: Mapping[str, object],
     installed_commits: Sequence[str],
 ) -> dict[str, Any]:
+    marker_path = temporary_paths.require_run_directory_outside_sources(path)
     try:
         verified_calibration = calibration.verify_calibration_receipt(
             identity,
@@ -2983,7 +2984,7 @@ def issue_production_marker(
         "authentication_tag": "production_marker_auth_v2:"
         + identity.derive_digest("production-marker-v2", body),
     }
-    safe_io.atomic_write_json(path, marker)
+    safe_io.atomic_write_json(marker_path, marker)
     return marker
 
 

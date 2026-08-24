@@ -2689,6 +2689,98 @@ class ResultValidationTests(unittest.TestCase):
                     result_validation_module.post_redact(safe_prose),
                 )
 
+    def test_health_biometric_contact_and_cookie_fields_share_privacy_policy(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "Diagnosis: HIV positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Medication: sertraline 50mg",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Blood type: AB negative",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Biometric template: opaque-template-data",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Fingerprint template: opaque-template-data",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Voiceprint: opaque-template-data",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Face template: opaque-template-data",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Retina template: opaque-template-data",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Emergency contact: Alice Smith",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Next of kin: Alice Smith",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            ("Session cookie: session-secret", "credential", "[REDACTED_CREDENTIAL]"),
+            ("HTTP cookie: session-secret", "credential", "[REDACTED_CREDENTIAL]"),
+            ("Auth cookie: session-secret", "credential", "[REDACTED_CREDENTIAL]"),
+            (
+                "Cookie header: session=session-secret",
+                "credential",
+                "[REDACTED_CREDENTIAL]",
+            ),
+        )
+
+        for source, category, replacement in cases:
+            with self.subTest(source=source):
+                self.assertIn(
+                    category,
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(
+                    replacement,
+                    result_validation_module.post_redact(source),
+                )
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value(
+                        {"problem_statement": source}
+                    )
+
+        for safe_prose in (
+            "Improve diagnosis handling.",
+            "The biometric template detector needs a regression test.",
+            "Emergency contact parsing is documented.",
+            "Improve cookie header parsing.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertEqual((), scan_for_leaks(safe_prose))
+                self.assertEqual(
+                    safe_prose,
+                    result_validation_module.post_redact(safe_prose),
+                )
+
     def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
         jwt_segment = "".join(("eyJ", "A" * 8))
         stateless_github = "".join(

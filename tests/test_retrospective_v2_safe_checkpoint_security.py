@@ -23,6 +23,7 @@ from retrospective_v2.checkpoints import (  # noqa: E402
 from retrospective_v2.identity import IdentityKey  # noqa: E402
 from retrospective_v2 import temporary_paths  # noqa: E402
 from retrospective_v2.safe_io import (  # noqa: E402
+    UnsafePathError,
     atomic_write_bytes,
     atomic_write_json,
     require_secure_io_capabilities,
@@ -61,6 +62,36 @@ class CheckpointSecurityTests(unittest.TestCase):
                 identity=self.identity,
                 filename=".checkpoint.lock",
             )
+
+    def test_store_rejects_source_roots_before_lock_creation(self) -> None:
+        codex_root = self.root / "source-account" / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True, mode=0o700)
+        archived.mkdir(mode=0o700)
+        alias = self.root / "source-alias"
+        alias.symlink_to(sessions, target_is_directory=True)
+
+        with mock.patch.object(
+            temporary_paths,
+            "local_codex_root",
+            return_value=codex_root,
+        ):
+            for run_dir in (
+                sessions / "active-run",
+                archived / "archived-run",
+                alias / "aliased-run",
+            ):
+                with (
+                    self.subTest(run_dir=run_dir),
+                    self.assertRaisesRegex(
+                        UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ),
+                ):
+                    AtomicCheckpointStore(run_dir, identity=self.identity)
+                self.assertFalse(run_dir.exists())
+                self.assertFalse((run_dir / ".checkpoint.lock").exists())
 
     def test_closed_envelope_binds_format_revision_key_and_state(self) -> None:
         snapshot = self.store.initialize({"stage": "catalog", "value": 1})
