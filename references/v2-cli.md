@@ -1,9 +1,10 @@
 # Session Retrospective v2 CLI
 
-Use exactly the installed
-`~/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py`
-for the modular v2 engine. The repo-relative script is a source artifact, not an
-automation entrypoint. Its command surface is limited to:
+Use exactly the installed literal canonical path supplied by the installer and
+cutover record, represented here as
+`/absolute/canonical/account-home/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py`,
+for the modular v2 engine. The repo-relative script is a source artifact, not
+an automation entrypoint. Its command surface is limited to:
 
 ```text
 doctor
@@ -20,14 +21,17 @@ There are no bootstrap, cutover-lease, campaign, identity-initialization,
 source-preparation, or execute-source commands. Durable private Git history is
 publication authority. Owner-local marker and provider files are derived state.
 
-All examples use the same installed path:
+The installer resolves the account home through the account database and
+writes these literal canonical absolute paths into the cutover and automation
+records. The placeholders below illustrate those values. Do not derive a
+production path from ambient `HOME`, shell `~`, or `expanduser`:
 
 ```bash
-RETROSPECTIVE_PYTHON="$HOME/.codex/session-retrospective/runtime/bin/python3"
-V2_CLI="$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
+RETROSPECTIVE_PYTHON="/absolute/canonical/account-home/.codex/session-retrospective/runtime/bin/python3"
+V2_CLI="/absolute/canonical/account-home/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
 PUBLISHER_GPG="/absolute/owner-controlled/path/to/gpg"
-PROVIDER_STATE="$HOME/.codex/session-retrospective/provider-state-v2"
-PRODUCTION_MARKER="$HOME/.codex/session-retrospective/production-marker-v2.json"
+PROVIDER_STATE="/absolute/canonical/account-home/.codex/session-retrospective/provider-state-v2"
+PRODUCTION_MARKER="/absolute/canonical/account-home/.codex/session-retrospective/production-marker-v2.json"
 ```
 
 Every invocation must use `"$RETROSPECTIVE_PYTHON" -I -B -S`. The fixed
@@ -59,7 +63,8 @@ discover or substitute them.
 
 ## Identity
 
-Production uses the fixed `~/.codex/session-retrospective/identity-v2.key`.
+Production uses the fixed canonical path
+`/absolute/canonical/account-home/.codex/session-retrospective/identity-v2.key`.
 Shadow `doctor` and `start` require both an explicit `--identity-path` and
 `--require-existing-identity`; neither command creates an identity.
 
@@ -268,7 +273,7 @@ tool call it captures an identity-authenticated snapshot through the internal
 and snapshot to that API, which verifies the exact stable IDs, operation type,
 previous and installed record digests, installed v2 path, production prompts,
 and result commitment before writing
-`~/.codex/session-retrospective/automation-cutover-v2.json`.
+`/absolute/canonical/account-home/.codex/session-retrospective/automation-cutover-v2.json`.
 
 The installed record is a closed document, not a command substring check. It
 must contain exactly the seven fields `version`, `id`, `kind`, `name`, `prompt`,

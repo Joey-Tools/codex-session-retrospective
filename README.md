@@ -19,12 +19,14 @@ not own SSH host registry or private overlay installation.
 
 ## Installed Entry Point
 
-After a future private sync integration, the supported installed coordinator
-and runtime paths will be:
+After a future private sync integration, the installer and cutover record will
+resolve the account home through the account database and supply literal
+canonical absolute paths. The placeholders below illustrate that contract; do
+not derive production paths from ambient `HOME`, shell `~`, or `expanduser`:
 
 ```bash
-RETROSPECTIVE_PYTHON="$HOME/.codex/session-retrospective/runtime/bin/python3"
-V2_CLI="$HOME/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
+RETROSPECTIVE_PYTHON="/absolute/canonical/account-home/.codex/session-retrospective/runtime/bin/python3"
+V2_CLI="/absolute/canonical/account-home/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
 "$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" --help
 ```
 

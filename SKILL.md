@@ -18,10 +18,14 @@ redefine event time, session identity, or episode boundaries.
 
 ## Main Workflow
 
-The only supported installed coordinator is
-`~/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py`.
+The only supported installed coordinator is the literal canonical absolute
+path supplied by the installer and cutover record, represented here as
+`/absolute/canonical/account-home/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py`.
 It must be launched with the owner-controlled copied Python at
-`~/.codex/session-retrospective/runtime/bin/python3` and flags `-I -B -S`.
+`/absolute/canonical/account-home/.codex/session-retrospective/runtime/bin/python3`
+and flags `-I -B -S`. The installer resolves the account home through the
+account database; never reconstruct these production paths from ambient
+`HOME`, shell `~`, or `expanduser`.
 The replacement sync installs that Python 3.13-or-newer `venv --copies`
 runtime beneath owner-only ancestors; ambient `python3` and Homebrew Cellar
 interpreters are not production entry points. Do not invoke the migration-only
@@ -33,9 +37,11 @@ v1 helper for a v2 run.
    `--publisher-gpg-program` to both `doctor` and `start`; do not resolve it
    from ambient `PATH` or attempt to override it during `finalize`. The exact
    production commands also bind `--provider-state` to
-   `~/.codex/session-retrospective/provider-state-v2` and
+   `/absolute/canonical/account-home/.codex/session-retrospective/provider-state-v2`
+   and
    `--production-marker` to
-   `~/.codex/session-retrospective/production-marker-v2.json`; neither path is
+   `/absolute/canonical/account-home/.codex/session-retrospective/production-marker-v2.json`;
+   neither path is
    inferred by the automation agent. The exact
    authenticated `$remote-host-context` helper must declare both
    `session-shards` and `source-transport` in its immutable capability

@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-24
+updated: 2026-08-25
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -4236,6 +4236,38 @@ superseded_by:
   invocation omitted the required `-I` and failed closed before two fixture
   bodies; the three authoritative isolated file entrypoints all pass and that
   invocation is non-counting.
+- The signed Final28 implementation anchor is `673a19c1` with tree
+  `1b640c80` and parent `816290a6`; host verification accepted Joey's EDDSA
+  signature. Exact-secret admission over `a3836660..673a19c1` returned clean,
+  started no reviewer, and completed temporary cleanup.
+- One fresh Codex CLI 0.149.0 `gpt-5.6-sol` reviewer at `xhigh` reasoning used
+  an independently materialized and validated read-only workspace. Equal
+  receipts bound 119 commits, 118 parent edges, graph digest
+  `f128de3fe5e20db258c37d972a871c695c74618c31b903c531cc7c117bb21bac`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It returned one P2 finding: the production documentation constructed the
+  provider-state and production-marker paths from ambient `HOME`, while the
+  runtime requires exact paths derived from the account database.
+  Postvalidation reproduced the prelaunch receipt, trusted control and Python
+  digests remained exact, no reviewer process remained, and the owner-private
+  task root was removed.
+- Production documentation now treats installer and cutover values as literal
+  canonical absolute paths derived from the account database. README, Skill,
+  and CLI examples use one explicit placeholder and prohibit reconstructing
+  production paths from `HOME`, shell `~`, or `expanduser`. The Skill contract
+  enforces those positive and negative properties without weakening runtime
+  exact-path comparison.
+- Final29 uses Python 3.13.12 and 1,939 exact test IDs from 22 authenticated
+  sources under manifest digest
+  `87dab77cc02a06864fc020d212409feb3a021b33d266df667b4daf4d76b1d121`.
+  Shards 0 through 3 pass 460/460 in 1,826.770 seconds, 523/523 in
+  1,633.971 seconds, 520/520 in 1,537.625 seconds, and 436/436 in
+  1,540.948 seconds. The independent Darwin security inventory passes 14/14
+  in 69.851 seconds. Focused Skill, module-boundary, and CI contracts pass
+  5/5, 20/20, and 33/33; Ruff lint/format, the official Python 3.13 OpenAI
+  Skill validator, project-journal validation, and `git diff --check` are
+  clean on the same tree.
 
 ## Follow-up Work
 

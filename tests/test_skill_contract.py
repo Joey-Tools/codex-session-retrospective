@@ -48,13 +48,17 @@ class SkillContractTests(unittest.TestCase):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         cli_reference = (ROOT / "references" / "v2-cli.md").read_text(encoding="utf-8")
 
-        shell_runtime = "$HOME/.codex/session-retrospective/runtime/bin/python3"
-        prose_runtime = "~/.codex/session-retrospective/runtime/bin/python3"
+        canonical_home = "/absolute/canonical/account-home"
+        shell_runtime = (
+            f"{canonical_home}/.codex/session-retrospective/runtime/bin/python3"
+        )
         invocation = '"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI"'
-        self.assertIn(prose_runtime, skill)
-        for document in (readme, cli_reference):
+        for document in (skill, readme, cli_reference):
             with self.subTest(document=document[:32]):
                 self.assertIn(shell_runtime, document)
+                self.assertIn("account database", document)
+                self.assertNotIn("$HOME/.codex", document)
+                self.assertNotIn("~/.codex", document)
         for document in (skill, readme, cli_reference):
             with self.subTest(copies_document=document[:32]):
                 self.assertIn("venv --copies", document)
