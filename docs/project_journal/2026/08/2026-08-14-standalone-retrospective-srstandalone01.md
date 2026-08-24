@@ -4079,6 +4079,51 @@ superseded_by:
   manifest, CI contract 33/33, module boundaries 19/19, Skill contract 5/5,
   the official Python 3.13 OpenAI Skill validator, tracked and source/test-tree
   bytecode exclusion, and `git diff --check` are clean on the Final22 tree.
+- The signed Final22 anchor is `24cbe0fa` with tree `a1b206cb`. Exact-secret
+  admission over `a3836660..24cbe0fa` returned `clean`, started no reviewer,
+  and completed temporary cleanup. The first Codex CLI invocation stopped
+  before model start because the outer workspace sandbox denied its state
+  database; it produced no session or terminal artifact and is a non-counting
+  launch failure. After an unchanged-workspace validation, the host invocation
+  started one fresh ephemeral `gpt-5.6-sol` reviewer at `xhigh` reasoning in
+  a read-only sandbox. Its equal receipts bound 115 commits, 114 parent edges,
+  graph digest
+  `a6fa5470d4312703dd4a84c3415fad7761afec8d864b42f5ed9c1e2757c0b95d`,
+  and the unchanged local-config digest.
+- That clean-context review returned one P1 finding: the demographic privacy
+  grammar still omitted labeled gender, gender identity, race, and ethnicity
+  values. Postvalidation reproduced the prelaunch receipt, trusted manifest,
+  guard, and Python digests were unchanged, the reviewer process was absent,
+  and the exact owner-private task root was removed. The controlled demographic
+  grammar now covers those four labels plus `genderIdentity` camel case.
+  Detector, post-redactor, and retained-validator regressions include ordinary,
+  camel-case, and Markdown assignments while preserving assignment-free
+  technical prose such as `Race condition handling is documented.`
+- The exact demographic regression passes 1/1 and Ruff 0.13.2 accepts the two
+  affected Python files. The first post-finding full invocation, Final23, is
+  non-counting because its per-log `RLIMIT_FSIZE` was inherited by test
+  children. Shard 3 consequently reported five `EFBIG` fixture errors; the
+  three remaining shards received one bounded cancellation, and their partial
+  or coincidentally successful results are not reused. Exact process checks
+  found no retained shard process.
+- Final24 instead uses a 2,700-second process-group deadline per shard and a
+  separate 8 MiB pipe sink per combined output stream, without changing child
+  file limits. Its Python 3.13.12 inventory contains 1,937 exact test IDs from
+  22 authenticated sources under manifest digest
+  `3f96584a4b6dbeab9f6675bda76fc6a23f105b03610af5916e27c1fb3b84efb1`.
+  Shards 0 through 3 pass 458/458 in 1,813.767 seconds, 523/523 in
+  1,639.187 seconds, 521/521 in 1,550.257 seconds, and 435/435 in
+  1,543.770 seconds, for exact aggregate coverage of 1,937/1,937 in
+  6,546.981 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 79.513 seconds under the same noninterfering supervisor
+  shape. All five retained logs total 471,738 bytes, below their 40 MiB
+  aggregate ceiling.
+- Repository-wide Ruff 0.13.2 lint, affected-file formatting, both workflows
+  under bounded actionlint 1.7.12, the generated bootstrap manifest, CI
+  contract 33/33, module boundaries 19/19, Skill contract 5/5, the official
+  Python 3.13 OpenAI Skill validator, project-journal validation, tracked and
+  source/test-tree bytecode exclusion, and `git diff --check` are clean on
+  the Final24 tree.
 
 ## Follow-up Work
 

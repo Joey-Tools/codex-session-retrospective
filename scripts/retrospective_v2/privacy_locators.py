@@ -559,8 +559,10 @@ _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
     r"(?:diagnosis|medication|blood[_ -]+type|(?-i:(?:blood|Blood)Type))"
 )
 _CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT = (
-    r"(?:sexual[_ -]+orientation|religion|political[_ -]+affiliation|"
-    r"(?-i:(?:sexual|Sexual)Orientation|(?:political|Political)Affiliation))"
+    r"(?:gender(?:[_ -]+identity)?|race|ethnicity|sexual[_ -]+orientation|"
+    r"religion|political[_ -]+affiliation|"
+    r"(?-i:(?:gender|Gender)Identity|(?:sexual|Sexual)Orientation|"
+    r"(?:political|Political)Affiliation))"
 )
 _BIOMETRIC_TEMPLATE_FIELD_PATTERN_TEXT = (
     r"(?:(?:biometric|fingerprint|face|facial|retina)[_ -]+template|voiceprint|"

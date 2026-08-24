@@ -2822,11 +2822,17 @@ class ResultValidationTests(unittest.TestCase):
 
     def test_demographic_fields_share_retained_privacy_policy(self) -> None:
         for source in (
+            "Gender: woman",
+            "Gender identity: nonbinary",
+            "Race: Black",
+            "Ethnicity: Hispanic",
             "Sexual orientation: bisexual",
             "Religion: Muslim",
             "Political affiliation: Example Party",
+            "genderIdentity: nonbinary",
             "sexualOrientation: bisexual",
             "politicalAffiliation: Example Party",
+            "**Race:** Black",
             "**Sexual orientation:** bisexual",
         ):
             with self.subTest(source=source):
@@ -2844,6 +2850,9 @@ class ResultValidationTests(unittest.TestCase):
                     )
 
         for safe_prose in (
+            "Improve gender handling.",
+            "Race condition handling is documented.",
+            "The ethnicity detector needs a regression test.",
             "Improve sexual orientation handling.",
             "The religion detector needs a regression test.",
             "Political affiliation parsing is documented.",
