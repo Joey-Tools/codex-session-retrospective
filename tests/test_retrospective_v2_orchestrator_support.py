@@ -132,6 +132,57 @@ class PublisherCanaryPathContractTests(unittest.TestCase):
             self.assertFalse(casefold_alias.exists())
             self.assertFalse((codex_root / "archived_sessions").exists())
 
+    def test_missing_root_rollout_aliases_are_rejected_before_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_root = root / "account-home" / ".codex"
+            codex_root.mkdir(parents=True, mode=0o700)
+            path_separation = orchestrator_support.temporary_paths.path_separation
+            path_identity = path_separation.path_identity
+            for alias_name in (
+                "ROLLOUT-ABSENT.JSONL",
+                "rollout-absent.j\N{LATIN SMALL LETTER LONG S}onl",
+            ):
+                with self.subTest(alias_name=alias_name):
+                    alias = codex_root / alias_name
+                    run_dir = alias / "retrospective-run"
+                    with (
+                        path_identity.bound_path_identity_chain(
+                            run_dir
+                        ) as temporary_chain,
+                        path_identity.bound_path_identity_chain(
+                            codex_root
+                        ) as source_chain,
+                    ):
+                        self.assertTrue(
+                            path_separation._root_rollout_object_overlap(
+                                temporary_chain,
+                                source_chain,
+                            )
+                        )
+                    with (
+                        mock.patch.object(
+                            orchestrator_support.temporary_paths,
+                            "local_codex_root",
+                            return_value=codex_root,
+                        ),
+                        mock.patch.object(
+                            orchestrator_support.safe_io,
+                            "open_owner_only_directory",
+                        ) as open_directory,
+                        self.assertRaisesRegex(
+                            orchestrator_support.safe_io.UnsafePathError,
+                            "overlaps a retrospective source root",
+                        ),
+                    ):
+                        orchestrator_support.temporary_paths.open_run_directory(
+                            run_dir,
+                            create=True,
+                        )
+
+                    open_directory.assert_not_called()
+                    self.assertFalse(alias.exists())
+
     def test_unicode_casefold_is_limited_to_unresolved_components(self) -> None:
         path_separation = orchestrator_support.temporary_paths.path_separation
         decomposed = (("A\N{COMBINING RING ABOVE}", True),)
@@ -189,6 +240,46 @@ class PublisherCanaryPathContractTests(unittest.TestCase):
 
             self.assertEqual("unchanged", sentinel.read_text(encoding="ascii"))
             self.assertEqual([sentinel], list(sessions.iterdir()))
+
+    def test_bound_run_directory_rejects_move_into_root_rollout_namespace(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_root = root / "account-home" / ".codex"
+            codex_root.mkdir(parents=True, mode=0o700)
+            run_dir = root / "runtime"
+            run_dir.mkdir(mode=0o700)
+            descriptor = os.open(
+                run_dir,
+                os.O_RDONLY
+                | getattr(os, "O_DIRECTORY", 0)
+                | getattr(os, "O_CLOEXEC", 0),
+            )
+            rollout_alias = codex_root / "rollout-moved.jsonl"
+            run_dir.rename(rollout_alias)
+            run_dir.mkdir(mode=0o700)
+            try:
+                with (
+                    mock.patch.object(
+                        orchestrator_support.temporary_paths,
+                        "local_codex_root",
+                        return_value=codex_root,
+                    ),
+                    self.assertRaisesRegex(
+                        orchestrator_support.safe_io.UnsafePathError,
+                        "name changed after it was opened",
+                    ),
+                ):
+                    orchestrator_support.temporary_paths.require_bound_run_directory_outside_sources(
+                        run_dir,
+                        descriptor,
+                    )
+            finally:
+                os.close(descriptor)
+
+            self.assertEqual([], list(run_dir.iterdir()))
+            self.assertEqual([], list(rollout_alias.iterdir()))
 
     def test_bound_source_descendant_rejects_safe_named_path(self) -> None:
         with tempfile.TemporaryDirectory() as raw:

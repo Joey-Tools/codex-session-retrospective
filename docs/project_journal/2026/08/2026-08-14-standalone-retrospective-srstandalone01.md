@@ -3982,6 +3982,48 @@ superseded_by:
   manifest, official OpenAI Skill validation, project-journal validation,
   tracked and working-tree bytecode exclusion, and `git diff --check` are
   clean.
+- A fresh ephemeral Codex CLI review of signed head `7a01fdb6` covered
+  `a3836660..7a01fdb6` in cbth task
+  `01a03404-bd7b-7d52-8a0a-9c76861635cd`. Equal materialize, validate, and
+  postvalidate receipts bind 113 commits, 112 parent edges, graph digest
+  `3d9ca582a69ef66e8f0bdb51af54feaef17a1e11ef34049eb57c750d0e441ebf`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The lane returned two P1 findings: the held run-directory descriptor was not
+  proved to remain the current object at its final named path, and unresolved
+  root-rollout components did not use the same conservative Unicode/case
+  comparison as other unresolved source components. It completed in 862
+  seconds; postvalidation, trusted-bundle and Python digest revalidation,
+  process quiescence, and exact task-root removal all completed. Its result is
+  stale after the finding fixes and is retained only as audit history.
+- Bound run-directory validation now reopens and retains the complete final
+  named chain, requires its terminal `(device, inode, file type)` identity to
+  equal the already held directory descriptor, rejects unresolved suffixes,
+  and revalidates the named and ancestor chains before returning. This protects
+  the selected runtime-directory object identity while continuing to ignore
+  benign timestamp and child-entry churn. Unresolved root-rollout components
+  now use Unicode NFC plus case folding before the closed rollout-name matcher;
+  resolved object identities remain exact. Regressions move a held directory
+  into `.codex/rollout-moved.jsonl` and replace its safe original name, and
+  reject uppercase and long-s unresolved rollout aliases before any creator or
+  write can run.
+- The Final19 Python 3.13.12 inventory contains 1,934 exact test IDs from 22
+  authenticated sources under manifest digest
+  `3b9afc31e85eadf5e197efbae6c7a52ffec2a9aa5c20b37b093d1ac7e7686d77`.
+  Shards 0 through 3 pass 457/457 in 1,579.755 seconds, 523/523 in
+  1,413.904 seconds, 519/519 in 1,330.210 seconds, and 435/435 in
+  1,334.610 seconds, for exact aggregate coverage of 1,934/1,934 in
+  5,658.479 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 63.449 seconds.
+- The two exact Final18 P1 regressions pass 2/2; complete
+  orchestrator-support, checkpoint-security, checkpoint-store,
+  source-overlap/spool-focused, bootstrap, module-boundary, CI-contract, and
+  Skill-contract suites pass 37/37, 15/15, 2/2, 4/4, 12/12, 19/19, 33/33,
+  and 5/5 on the Final19 tree. Repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint` 1.7.12, the generated
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, tracked and working-tree bytecode exclusion, and
+  `git diff --check` are clean.
 
 ## Follow-up Work
 

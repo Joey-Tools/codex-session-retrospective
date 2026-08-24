@@ -68,10 +68,15 @@ def _root_rollout_overlap(*paths: Path) -> bool:
     resolved_name = os.path.relpath(paths[2], paths[3]).partition(os.sep)[0]
     return any(
         (
-            transport_paths.ROOT_ROLLOUT_RELATIVE_RE.fullmatch(lexical_name),
-            transport_paths.ROOT_ROLLOUT_RELATIVE_RE.fullmatch(resolved_name),
+            _root_rollout_component_matches((lexical_name, True)),
+            _root_rollout_component_matches((resolved_name, True)),
         )
     )
+
+
+def _root_rollout_component_matches(component: _ComparedComponent) -> bool:
+    name = _unresolved_component_key(component[0]) if component[1] else component[0]
+    return transport_paths.ROOT_ROLLOUT_RELATIVE_RE.fullmatch(name) is not None
 
 
 def _ordinary_object_overlap(
@@ -102,8 +107,8 @@ def _root_rollout_object_overlap(
     for index, identity in enumerate(temporary.identities):
         if identity != source_identity:
             continue
-        suffix = temporary.suffix_after(index)
-        if suffix and transport_paths.ROOT_ROLLOUT_RELATIVE_RE.fullmatch(suffix[0]):
+        suffix = _components_after(temporary, index)
+        if suffix and _root_rollout_component_matches(suffix[0]):
             return True
     return False
 
@@ -230,5 +235,11 @@ def require_bound_run_directory_outside_sources(
                     )
                 source_chain.revalidate()
         normalized = require_run_directory_outside_sources(run_dir, source_root)
+        with path_identity.bound_path_identity_chain(normalized) as named_chain:
+            if named_chain.unresolved or named_chain.identities[-1] != expected:
+                raise safe_io.UnsafePathError(
+                    "bound runtime directory name changed after it was opened"
+                )
+            named_chain.revalidate()
         ancestors.revalidate()
     return normalized
