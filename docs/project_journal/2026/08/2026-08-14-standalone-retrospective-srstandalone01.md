@@ -3934,6 +3934,54 @@ superseded_by:
   the descriptor-ownership fix. An earlier argument-free Darwin runner
   invocation included a mistaken `--help`, exited without retained terminal
   status, and is also non-counting; Final17 supplies the accepted evidence.
+- A fresh ephemeral Codex CLI review of signed head `e65ccd07` covered
+  `a3836660..e65ccd07` in cbth task
+  `01a033d8-1cd0-75f2-a56c-83ddfece66a6`. Equal materialize, validate, and
+  postvalidate receipts bind 112 commits, 111 parent edges, graph digest
+  `72b648161fffed483390ae68d0f4a60a572fb0f0fafc6ac2fdffb05713eb33c3`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The lane used installed private release
+  `284f0f54daba1e9e17e922e4fa87aa6b586e37a4`, sync-manifest digest
+  `158a80e941aba3f7b19322ccdcce529b3a15badbd5baac4fa884a25564279a36`,
+  guard digest
+  `2c8432731619e40cfae28a59e27d97be9cf58d48672d33a8b675141436a62cf8`,
+  and the unchanged owner-private Python digest. It returned one P1: a
+  missing source component such as `archived_sessions` could be reached by an
+  unresolved case-insensitive alias, and `create=True` would create that
+  directory before post-open rejection. The lane completed in 465 seconds;
+  postvalidation, digest revalidation, process quiescence, and exact reviewer
+  task-root removal all completed.
+- Unresolved path components now compare conservatively under Unicode NFC and
+  case folding whenever either aligned component is not yet bound to an object.
+  Two existing, resolved, identity-distinct objects remain distinct. The full
+  descriptor/object source-overlap check now runs before any owner-only
+  directory creation, while the held-descriptor check remains after open. The
+  missing uppercase `ARCHIVED_SESSIONS` regression proves the safe-I/O creator
+  is never called and no directory is created; a separate normalization test
+  proves the conservative comparison is limited to unresolved components.
+  A pre-open directory substitution now fails closed without writing either
+  the attacker or displaced directory, replacing the prior weaker expectation
+  that the displaced directory could still receive checkpoint state.
+- The Final18 Python 3.13.12 inventory contains 1,932 exact test IDs from 22
+  authenticated sources under manifest digest
+  `accdccf7b783cbd7f23581ef430a82cd2a5b8ad7078a529a3ebb73f4bd3baa70`.
+  Shards 0 through 3 pass 456/456 in 1,659.426 seconds, 523/523 in
+  1,478.146 seconds, 518/518 in 1,385.835 seconds, and 435/435 in
+  1,389.468 seconds, for exact aggregate coverage of 1,932/1,932 in
+  5,912.875 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 67.840 seconds. Final17 became stale when its reviewer
+  finding changed the source and test trees; it remains audit history rather
+  than final-head acceptance evidence.
+- The two exact alias findings pass 2/2; complete orchestrator-support,
+  checkpoint-security, checkpoint-store, source-overlap/spool-focused,
+  bootstrap, module-boundary, CI-contract, and Skill-contract suites pass
+  35/35, 15/15, 2/2, 4/4, 12/12, 19/19, 33/33, and 5/5 on the Final18 tree.
+  Repository-wide Ruff 0.13.2 lint, formatting for all ten changed Python
+  files, both workflows under `actionlint` 1.7.12, the generated bootstrap
+  manifest, official OpenAI Skill validation, project-journal validation,
+  tracked and working-tree bytecode exclusion, and `git diff --check` are
+  clean.
 
 ## Follow-up Work
 

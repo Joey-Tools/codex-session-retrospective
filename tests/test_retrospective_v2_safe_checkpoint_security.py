@@ -258,14 +258,17 @@ class CheckpointSecurityTests(unittest.TestCase):
                 swapped = True
             return descriptor
 
-        with mock.patch("retrospective_v2.safe_io.os.open", side_effect=racing_open):
+        with (
+            mock.patch("retrospective_v2.safe_io.os.open", side_effect=racing_open),
+            self.assertRaises(CheckpointPermissionError),
+        ):
             store.initialize({"value": "pinned"})
 
         self.assertTrue(swapped)
         self.assertFalse((attacker / ".checkpoint.lock").exists())
         self.assertFalse((attacker / "checkpoint.json").exists())
-        self.assertTrue((pinned / ".checkpoint.lock").is_file())
-        self.assertTrue((pinned / "checkpoint.json").is_file())
+        self.assertFalse((pinned / ".checkpoint.lock").exists())
+        self.assertFalse((pinned / "checkpoint.json").exists())
 
     def test_checkpoint_replace_failure_preserves_previous_revision(self) -> None:
         initial = self.store.initialize({"value": "before"})

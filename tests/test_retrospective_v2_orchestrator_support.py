@@ -101,6 +101,49 @@ class PublisherCanaryPathContractTests(unittest.TestCase):
 
             self.assertFalse((source_root / "retrospective-run").exists())
 
+    def test_missing_casefold_source_alias_is_rejected_before_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            codex_root = root / "account-home" / ".codex"
+            codex_root.mkdir(parents=True, mode=0o700)
+            casefold_alias = codex_root / "ARCHIVED_SESSIONS"
+            run_dir = casefold_alias / "retrospective-run"
+            with (
+                mock.patch.object(
+                    orchestrator_support.temporary_paths,
+                    "local_codex_root",
+                    return_value=codex_root,
+                ),
+                mock.patch.object(
+                    orchestrator_support.safe_io,
+                    "open_owner_only_directory",
+                ) as open_directory,
+                self.assertRaisesRegex(
+                    orchestrator_support.safe_io.UnsafePathError,
+                    "overlaps a retrospective source root",
+                ),
+            ):
+                orchestrator_support.temporary_paths.open_run_directory(
+                    run_dir,
+                    create=True,
+                )
+
+            open_directory.assert_not_called()
+            self.assertFalse(casefold_alias.exists())
+            self.assertFalse((codex_root / "archived_sessions").exists())
+
+    def test_unicode_casefold_is_limited_to_unresolved_components(self) -> None:
+        path_separation = orchestrator_support.temporary_paths.path_separation
+        decomposed = (("A\N{COMBINING RING ABOVE}", True),)
+        composed = (("\N{LATIN SMALL LETTER A WITH RING ABOVE}", True),)
+        self.assertTrue(path_separation._component_prefix(decomposed, composed))
+        self.assertFalse(
+            path_separation._component_prefix(
+                ((decomposed[0][0], False),),
+                ((composed[0][0], False),),
+            )
+        )
+
     def test_bound_run_directory_rejects_post_open_source_alias(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)

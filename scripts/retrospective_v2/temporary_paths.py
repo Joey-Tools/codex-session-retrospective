@@ -106,16 +106,18 @@ def open_run_directory(
 ) -> tuple[Path, int]:
     """Open a run directory across lexical and bound-object source checks."""
     normalized = Path(os.path.abspath(os.fspath(Path(run_dir).expanduser())))
-    path_separation.require_run_directory_lexically_outside_sources(
-        normalized,
-        local_codex_root(),
-    )
+    source_root = local_codex_root()
+    path_separation.require_run_directory_outside_sources(normalized, source_root)
     opened_path, descriptor = safe_io.open_owner_only_directory(
         normalized,
         create=create,
     )
     try:
-        require_bound_run_directory_outside_sources(opened_path, descriptor)
+        path_separation.require_bound_run_directory_outside_sources(
+            opened_path,
+            descriptor,
+            source_root,
+        )
     except BaseException as primary:
         try:
             os.close(descriptor)

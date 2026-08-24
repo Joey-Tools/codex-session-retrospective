@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Callable
+import unicodedata
 
 try:
     from . import path_identity, safe_io, transport_paths
@@ -14,8 +15,41 @@ except (ImportError, ModuleNotFoundError):
     import transport_paths  # type: ignore[no-redef]
 
 
-def _component_prefix(left: tuple[str, ...], right: tuple[str, ...]) -> bool:
-    return len(left) <= len(right) and right[: len(left)] == left
+_ComparedComponent = tuple[str, bool]
+
+
+def _unresolved_component_key(component: str) -> str:
+    return unicodedata.normalize("NFC", component).casefold()
+
+
+def _components_equal(
+    left: _ComparedComponent,
+    right: _ComparedComponent,
+) -> bool:
+    if left[0] == right[0]:
+        return True
+    if not (left[1] or right[1]):
+        return False
+    return _unresolved_component_key(left[0]) == _unresolved_component_key(right[0])
+
+
+def _component_prefix(
+    left: tuple[_ComparedComponent, ...],
+    right: tuple[_ComparedComponent, ...],
+) -> bool:
+    return len(left) <= len(right) and all(
+        _components_equal(left_component, right_component)
+        for left_component, right_component in zip(left, right, strict=False)
+    )
+
+
+def _components_after(
+    chain: path_identity.BoundPathIdentityChain,
+    identity_index: int,
+) -> tuple[_ComparedComponent, ...]:
+    return tuple((name, False) for name in chain.names[identity_index:]) + tuple(
+        (name, True) for name in chain.unresolved
+    )
 
 
 def _ordinary_source_overlap(*paths: Path) -> bool:
@@ -45,11 +79,11 @@ def _ordinary_object_overlap(
     source: path_identity.BoundPathIdentityChain,
 ) -> bool:
     for temporary_index, temporary_identity in enumerate(temporary.identities):
-        temporary_suffix = temporary.suffix_after(temporary_index)
+        temporary_suffix = _components_after(temporary, temporary_index)
         for source_index, source_identity in enumerate(source.identities):
             if temporary_identity != source_identity:
                 continue
-            source_suffix = source.suffix_after(source_index)
+            source_suffix = _components_after(source, source_index)
             if _component_prefix(temporary_suffix, source_suffix) or _component_prefix(
                 source_suffix,
                 temporary_suffix,
