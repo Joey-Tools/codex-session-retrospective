@@ -3697,6 +3697,46 @@ superseded_by:
   1.7.12, the generated bootstrap manifest, the official OpenAI Skill
   validator, project-journal validation, tracked-bytecode exclusion, and
   `git diff --check` are clean on the same implementation tree.
+- A clean-context Codex CLI review of signed head `f55950d4` covered
+  `a3836660..f55950d4` from an independently materialized and validated
+  owner-private workspace. The paired receipts bound 106 commits and 105
+  parent edges under graph digest
+  `d75e992a39bdcef7e72182c6a36dc0f999306b2e8cc525760efe36f1958fa733`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Codex CLI 0.149.0 thread
+  `01a0312d-2709-7fb1-b323-648671cc24da` reported one P2: the legacy
+  `export-retained` command could create or replace an output below a local
+  session source before proving source-path isolation. Postvalidation, trusted
+  control digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  Python digest
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`,
+  process quiescence, and exact task-root cleanup were all revalidated.
+- Legacy transient and retained outputs now share one adapter around the v2
+  source-overlap authority. `export-retained` applies it to the expanded output
+  before symlink inspection, ancestor inspection, directory creation, or
+  replacement. Regressions reject active, archived, absent `history.jsonl`,
+  absent `session_index.jsonl`, root rollout, and resolved Codex-root alias
+  destinations before creation while retaining the safe
+  `rollout-summary-retained.jsonl` negative. The finding-focused output group
+  passes 5/5 without skips.
+- The Final10 Python 3.13.12 inventory contains 1,915 exact test IDs from 22
+  authenticated sources under manifest digest
+  `9f1d83b18b3b23e5c48c482f7a0bbbc306811f81e1461b435bf99b2475229c18`.
+  Shards 0 through 3 pass 453/453 in 1,512.864 seconds, 519/519 in 1,371.290
+  seconds, 512/512 in 1,279.930 seconds, and 431/431 in 1,254.681 seconds,
+  for exact aggregate coverage of 1,915/1,915 in 5,418.765 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 62.647
+  seconds, and CI contracts pass 33/33 in 2.665 seconds. Ruff 0.13.2 lint and
+  changed-test formatting, both workflows under `actionlint` 1.7.12, the
+  generated bootstrap manifest, the official OpenAI Skill validator,
+  project-journal validation, tracked-bytecode exclusion, and
+  `git diff --check` are clean on the same Final10 implementation tree. Two
+  attempted Ruff invocations through the absent `.codex-tmp/python/bin/ruff`
+  path were pre-execution launcher errors and are explicitly non-counting; the
+  fixed `/Users/hoteng/.pyenv/shims/ruff` entrypoint supplied the accepted
+  results.
 
 ## Follow-up Work
 

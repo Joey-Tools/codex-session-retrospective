@@ -1007,8 +1007,17 @@ def remote_backing_path_ref(host: str, rollout_ref: str) -> str:
     return path_ref(f"remote_rollout_v1|{host}|{rollout_ref}") or ""
 
 
+def require_output_outside_session_sources(path: Path, *, label: str) -> Path:
+    try:
+        return temporary_paths.require_run_directory_outside_sources(path)
+    except safe_io.UnsafePathError as error:
+        raise SystemExit(f"{label} must not overlap session sources") from error
+
+
 def ensure_safe_output_dir(path: Path) -> Path:
-    expanded = path.expanduser()
+    expanded = require_output_outside_session_sources(
+        path.expanduser(), label="output directory for transient artifacts"
+    )
     raw_parts = expanded.parts
     if not any(
         raw_parts[index : index + len(SAFE_OUTPUT_PARTS)] == SAFE_OUTPUT_PARTS
@@ -1016,12 +1025,6 @@ def ensure_safe_output_dir(path: Path) -> Path:
     ):
         raise SystemExit("output directory for transient artifacts must be under .codex-local/session-retrospective")
     reject_symlink_ancestors(expanded, label="output directory for transient artifacts")
-    try:
-        temporary_paths.require_run_directory_outside_sources(expanded)
-    except safe_io.UnsafePathError as error:
-        raise SystemExit(
-            "output directory for transient artifacts must not overlap session sources"
-        ) from error
     parts = expanded.resolve(strict=False).parts
     for index in range(len(parts) - len(SAFE_OUTPUT_PARTS) + 1):
         if parts[index : index + len(SAFE_OUTPUT_PARTS)] == SAFE_OUTPUT_PARTS:
@@ -11629,7 +11632,9 @@ def cmd_validate_output(args: argparse.Namespace) -> int:
 def cmd_export_retained(args: argparse.Namespace) -> int:
     run_dir = Path(args.run_dir)
     files = retained_export_files_from_run(run_dir)
-    output = Path(args.output)
+    output = require_output_outside_session_sources(
+        Path(args.output).expanduser(), label="retained output directory"
+    )
     if output.is_symlink():
         raise SystemExit(f"refusing symlinked retained output directory: {output}")
     reject_symlink_ancestors(output, label="retained output directory")

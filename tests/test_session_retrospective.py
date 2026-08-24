@@ -31573,6 +31573,88 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     ]
                 )
 
+    def test_export_retained_rejects_local_source_paths_before_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            source_root = Path(raw) / "source"
+            write_local_evidence(source_root)
+            rollout = (
+                source_root
+                / "sessions"
+                / "2026"
+                / "05"
+                / "01"
+                / "rollout-2026-05-01T10-00-00-source.jsonl"
+            )
+            write_jsonl(
+                rollout,
+                [message("user", "Fresh task.", "2026-05-01T10:00:00Z")],
+            )
+            run_dir = safe_output_dir(raw)
+            MODULE.run_scan(
+                types.SimpleNamespace(
+                    source=[f"local={source_root}"],
+                    output=str(run_dir),
+                    state=None,
+                    max_raw_bytes=1000,
+                    allow_partial_hosts=True,
+                ),
+                mode="daily",
+                start=MODULE.parse_time("2026-05-01T00:00:00Z"),
+                end=MODULE.parse_time("2026-05-02T00:00:00Z"),
+            )
+
+            codex_root = Path(raw) / "home" / ".codex"
+            codex_root.mkdir(parents=True)
+            root_alias = Path(raw) / "codex-root-alias"
+            root_alias.symlink_to(codex_root, target_is_directory=True)
+            cases = (
+                ("active", codex_root / "sessions" / "retained"),
+                ("archived", codex_root / "archived_sessions" / "retained"),
+                ("history", codex_root / "history.jsonl" / "retained"),
+                ("index", codex_root / "session_index.jsonl" / "retained"),
+                ("rollout", codex_root / "rollout-absent.jsonl" / "retained"),
+                ("resolved-alias", root_alias / "rollout-aliased.jsonl" / "retained"),
+            )
+            with mock.patch.object(
+                MODULE.temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ):
+                for label, retained_output in cases:
+                    with self.subTest(label=label):
+                        with self.assertRaisesRegex(
+                            SystemExit,
+                            "retained output directory must not overlap session sources",
+                        ):
+                            MODULE.main(
+                                [
+                                    "export-retained",
+                                    "--run-dir",
+                                    str(run_dir),
+                                    "--output",
+                                    str(retained_output),
+                                ]
+                            )
+                        self.assertFalse(retained_output.exists())
+
+                allowed = codex_root / "rollout-summary-retained.jsonl"
+                self.assertEqual(
+                    0,
+                    MODULE.main(
+                        [
+                            "export-retained",
+                            "--run-dir",
+                            str(run_dir),
+                            "--output",
+                            str(allowed),
+                        ]
+                    ),
+                )
+                self.assertEqual(
+                    set(MODULE.RETAINED_OUTPUT_FILES),
+                    {p.name for p in allowed.iterdir()},
+                )
+
     def test_export_retained_rejects_symlink_output_dir(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw) / ".codex"
