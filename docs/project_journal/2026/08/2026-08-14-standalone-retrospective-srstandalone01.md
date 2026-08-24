@@ -4124,6 +4124,33 @@ superseded_by:
   Python 3.13 OpenAI Skill validator, project-journal validation, tracked and
   source/test-tree bytecode exclusion, and `git diff --check` are clean on
   the Final24 tree.
+- The signed Final24 anchor is `829f4477` with tree `684cba67`; its
+  exact-secret admission is clean with complete temporary cleanup and no
+  reviewer start. A second fresh ephemeral `gpt-5.6-sol` reviewer at `xhigh`
+  reasoning used a new independently materialized read-only workspace. Equal
+  receipts bound 116 commits, 115 parent edges, graph digest
+  `f4b848d31012f9e6dd973693fec465248e593782099e54a8009db09114984cfa`,
+  and the unchanged local-config digest.
+- The second clean-context review returned one P1 finding: `Sex: female`
+  remained outside the controlled demographic grammar and therefore crossed
+  the detector, post-redactor, and retained validator. Postvalidation and all
+  trusted-control digests remained exact, the reviewer process was absent, and
+  the exact task root was removed. The shared grammar and its three-layer
+  regression now include the labeled `sex` field.
+- Final25 uses Python 3.13.12 and an exact inventory of 1,937 test IDs from 22
+  authenticated sources under manifest digest
+  `6b55e7ed72ab6a622c12d175fde7397ae70ee8c6f8ce76a13019aa00fd4f69e6`.
+  Shards 0 through 3 pass 458/458 in 1,867.028 seconds, 523/523 in
+  1,669.124 seconds, 521/521 in 1,573.026 seconds, and 435/435 in
+  1,571.840 seconds. The independent Darwin security inventory passes 14/14
+  in 68.266 seconds. All five logs total 471,738 bytes below the 40 MiB
+  aggregate ceiling.
+- Repository-wide Ruff 0.13.2 lint, affected-file formatting, both workflows
+  under actionlint 1.7.12, the generated bootstrap manifest, CI contract
+  33/33, module boundaries 19/19, Skill contract 5/5, the official Python
+  3.13 OpenAI Skill validator, project-journal validation, tracked and
+  source/test-tree bytecode exclusion, and `git diff --check` are clean on the
+  Final25 tree.
 
 ## Follow-up Work
 

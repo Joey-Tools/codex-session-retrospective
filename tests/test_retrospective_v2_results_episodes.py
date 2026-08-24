@@ -2822,6 +2822,7 @@ class ResultValidationTests(unittest.TestCase):
 
     def test_demographic_fields_share_retained_privacy_policy(self) -> None:
         for source in (
+            "Sex: female",
             "Gender: woman",
             "Gender identity: nonbinary",
             "Race: Black",
