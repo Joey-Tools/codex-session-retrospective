@@ -2597,6 +2597,61 @@ class ResultValidationTests(unittest.TestCase):
             with self.subTest(safe_prose=safe_prose):
                 self.assertEqual((), scan_for_leaks(safe_prose))
 
+    def test_encryption_and_vehicle_fields_share_retained_privacy_policy(
+        self,
+    ) -> None:
+        cases = (
+            ("Encryption key: N7vK2mQ9xR4pT8wZ", "credential", "[REDACTED_CREDENTIAL]"),
+            ("Recovery key: blue-sparrow-47", "credential", "[REDACTED_CREDENTIAL]"),
+            (
+                "VIN: 1HGCM82633A004352",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Vehicle identification number: 1HGCM82633A004352",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "License plate: ABC-1234",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Registration plate: ABC-1234",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+        )
+
+        for source, category, replacement in cases:
+            with self.subTest(source=source):
+                self.assertIn(
+                    category,
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(
+                    replacement,
+                    result_validation_module.post_redact(source),
+                )
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value(
+                        {"problem_statement": source}
+                    )
+
+        for safe_prose in (
+            "The encryption key parser failed closed.",
+            "Improve VIN validation before release.",
+            "The license plate detector needs a regression test.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertEqual((), scan_for_leaks(safe_prose))
+                self.assertEqual(
+                    safe_prose,
+                    result_validation_module.post_redact(safe_prose),
+                )
+
     def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
         jwt_segment = "".join(("eyJ", "A" * 8))
         stateless_github = "".join(

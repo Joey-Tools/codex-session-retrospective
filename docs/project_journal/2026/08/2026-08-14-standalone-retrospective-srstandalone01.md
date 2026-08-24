@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-23
+updated: 2026-08-24
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -3737,6 +3737,48 @@ superseded_by:
   path were pre-execution launcher errors and are explicitly non-counting; the
   fixed `/Users/hoteng/.pyenv/shims/ruff` entrypoint supplied the accepted
   results.
+- The exact-head Codex Review Gate for `b7abe298` created its sole controlled
+  `@codex review` marker as issue comment `5390178455`, then classified all 33
+  unresolved historical review threads as applicable. A complete 90-thread
+  GraphQL snapshot showed 57 resolved threads, 14 unresolved outdated threads,
+  and 19 unresolved current-line threads. Current-tree and regression evidence
+  classified 29 of the 33 as already fixed by later signed commits. The v1
+  three-host comparison thread is non-applicable because preserving the legacy
+  zero-difference baseline is an explicit migration property; formal v2 runs
+  use the authenticated canonical five-host inventory. The CI `main` branch
+  thread is also non-applicable because the repository default branch, remote
+  HEAD, workflow push target, and PR base are all `master`.
+- Two current findings remained valid: labeled encryption or recovery keys and
+  labeled vehicle identifiers could pass the retained privacy validator. The
+  shared credential grammar now covers controlled `encryption key` and
+  `recovery key` assignments. The shared personal-identifier grammar now covers
+  VIN, vehicle-identification-number, license-plate, and registration-plate
+  labels, including bounded camel-case forms. Result-level regressions prove
+  scan and post-redaction agreement, retained-value rejection, and safe-prose
+  negatives; export regressions exercise the same detector through complete
+  retained validation.
+- The exact finding-focused isolated run passes 5/5 in 193.339 seconds. The
+  affected result suite passes 99/99 in 10.689 seconds, export validation passes
+  76/76 in 174.629 seconds, the audited result contract passes 25/25 in 3.735
+  seconds, and module boundaries pass 19/19 in 1.936 seconds. An earlier
+  nine-test probe passed seven tests but its two publication tests were rejected
+  before setup because that launcher omitted required `-I`; it is explicitly
+  non-counting and the isolated 5/5 rerun supplies the accepted evidence.
+- The resulting Python 3.13 inventory contains 1,916 exact test IDs from 22
+  authenticated sources under manifest digest
+  `3a63fcea3f73d24aac56c9b69f98a7cef58aaadbf97328f84e037ad4e32a792a`;
+  its four closed shard selections contain 453, 519, 513, and 431 tests. CI
+  contracts pass 33/33 in 2.321 seconds and the independent Darwin security
+  inventory passes 14/14 in 57.665 seconds. The direct import-only invocation
+  of `tests/darwin_security.py` executed no tests and is non-counting; the
+  canonical closed runner supplies the accepted Darwin result.
+- Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the official
+  OpenAI Skill validator, project-journal validation, tracked-bytecode
+  exclusion, and `git diff --check` are clean on the same implementation tree.
+  The first direct validator environment lacked PyYAML and failed before skill
+  validation; it is non-counting, while the isolated offline PyYAML environment
+  returned `Skill is valid!`.
 
 ## Follow-up Work
 

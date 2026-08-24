@@ -562,6 +562,9 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:tax(?:payer)?[_ -]?(?:identification|id))(?:[_ -]?(?:number|no))?|"
     r"passport(?:[_ -]?(?:number|no|id))?|"
     r"driver(?:['\u2019]s)?[_ -]?licen[cs]e(?:[_ -]?(?:number|no|id))?|"
+    r"vin|vehicle[_ -]+identification(?:[_ -]+(?:number|no|id))?|"
+    r"(?:licen[cs]e|registration)[_ -]+plate"
+    r"(?:[_ -]+(?:number|no|id))?|"
     r"(?:credit|debit|payment)[_ -]?card(?:[_ -]?(?:number|no))?|"
     r"card[_ -]?(?:number|no)|"
     r"(?:bank[_ -]?)?account[_ -]?(?:number|no)|"
@@ -571,7 +574,8 @@ _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"insurance(?:Policy|Member)(?:Number|No|Id|Identifier)|"
     r"healthPlanBeneficiary(?:Number|No|Id|Identifier)|"
     r"nationalInsuranceNumber|nationalId|taxId|"
-    r"passport(?:Number|Id)|driversLicenseNumber|creditCard(?:Number)?|"
+    r"passport(?:Number|Id)|driversLicenseNumber|vehicleIdentificationNumber|"
+    r"(?:license|registration)Plate(?:Number|No|Id)?|creditCard(?:Number)?|"
     r"debitCard(?:Number)?|paymentCard(?:Number)?|cardNumber|"
     r"bankAccountNumber|accountNumber|routingNumber)))"
 )
@@ -1682,6 +1686,7 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"(?:authorization|aws[\s_-]?secret[\s_-]?access[\s_-]?key|"
     r"secret[\s_-]?access[\s_-]?key|access[\s_-]?token|"
     r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
+    r"(?:encryption|recovery)[\s_-]?key|"
     r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?code|"
     + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT
     + r"|"
