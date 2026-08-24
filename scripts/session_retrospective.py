@@ -945,7 +945,15 @@ def path_ref_key() -> bytes:
     if env_key:
         PATH_REF_KEY = parse_opaque_ref_key(env_key, label="CODEX_SESSION_RETROSPECTIVE_KEY")
         return PATH_REF_KEY
-    key_path = Path(os.environ.get("CODEX_SESSION_RETROSPECTIVE_KEY_FILE", OPAQUE_REF_KEY_FILE.as_posix())).expanduser()
+    key_path = require_output_outside_session_sources(
+        Path(
+            os.environ.get(
+                "CODEX_SESSION_RETROSPECTIVE_KEY_FILE",
+                OPAQUE_REF_KEY_FILE.as_posix(),
+            )
+        ).expanduser(),
+        label="opaque ref key file",
+    )
     if key_path.exists():
         PATH_REF_KEY = read_opaque_ref_key_file(key_path)
     else:

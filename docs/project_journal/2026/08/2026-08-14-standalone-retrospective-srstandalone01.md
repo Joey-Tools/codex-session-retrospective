@@ -3779,6 +3779,38 @@ superseded_by:
   The first direct validator environment lacked PyYAML and failed before skill
   validation; it is non-counting, while the isolated offline PyYAML environment
   returned `Skill is valid!`.
+- The next current-head GitHub Codex snapshot reported three additional P1
+  findings. The legacy opaque-reference key path and the public v2 streaming
+  spool constructor could create state below an active or archived session
+  source before proving source-path separation. The shared personal-data
+  detector also omitted labeled account handles and login or screen names.
+  Both filesystem entry points now invoke the canonical lexical-and-resolved
+  source-overlap authority before existence checks or directory creation. The
+  retained privacy policy now covers subject-qualified and standalone handle,
+  login-name, and screen-name labels plus bounded camel-case forms while
+  retaining safe prose negatives.
+- The exact isolated finding group passes 5/5 in 87.448 seconds. The affected
+  result suite passes 100/100 in 10.521 seconds, export validation passes 76/76
+  in 166.102 seconds, and the audited result plus module-boundary suites pass
+  44/44 in 5.489 seconds. Regressions cover active, archived, root-history, and
+  resolved-alias key destinations; active, archived, and alias spool roots;
+  no pre-rejection filesystem creation; and scan, post-redaction, and retained
+  rejection for the new personal-data labels.
+- The Final12 Python 3.13.12 inventory contains 1,919 exact test IDs from 22
+  authenticated sources under manifest digest
+  `9ce492dfd961eaf71da9acc79884c765347112b9235f93c13245ad6aee1fc966`.
+  Shards 0 through 3 pass 453/453 in 1,650.406 seconds, 520/520 in 1,491.290
+  seconds, 515/515 in 1,400.998 seconds, and 431/431 in 1,375.412 seconds,
+  for exact aggregate coverage of 1,919/1,919 in 5,918.106 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 72.648
+  seconds, and CI contracts pass 33/33 in 2.658 seconds.
+- Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the isolated
+  official OpenAI Skill validator, project-journal validation, tracked-bytecode
+  exclusion, and `git diff --check` are clean on the same implementation tree.
+  One direct `uv` validator invocation combined `-S` with a site-installed
+  PyYAML dependency and failed before validation; it is non-counting, while the
+  canonical Joey validation wrapper returned `Skill is valid!`.
 
 ## Follow-up Work
 

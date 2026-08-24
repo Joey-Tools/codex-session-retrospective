@@ -3492,6 +3492,41 @@ class OrchestratorTests(unittest.TestCase):
         source_inputs.rollback(materialized)
         self.assertFalse(orphan_path.exists())
 
+    def test_streaming_source_spool_rejects_source_roots_before_create(self) -> None:
+        codex_root = self.root / "source-account" / ".codex"
+        sessions = codex_root / "sessions"
+        archived = codex_root / "archived_sessions"
+        sessions.mkdir(parents=True)
+        archived.mkdir()
+        alias = self.root / "source-alias"
+        alias.symlink_to(sessions, target_is_directory=True)
+
+        with mock.patch.object(
+            source_spool.temporary_paths,
+            "local_codex_root",
+            return_value=codex_root,
+        ):
+            for run_dir in (
+                sessions / "active-run",
+                archived / "archived-run",
+                alias / "aliased-run",
+            ):
+                with (
+                    self.subTest(run_dir=run_dir),
+                    self.assertRaisesRegex(
+                        safe_io.UnsafePathError,
+                        "overlaps a retrospective source root",
+                    ),
+                ):
+                    source_inputs.StreamingRawPayloadStaging(
+                        self.identity,
+                        run_dir,
+                        max_bytes=16,
+                        max_records=1,
+                        spool_ref="source-overlap",
+                    )
+                self.assertFalse(run_dir.exists())
+
     def test_streaming_source_spool_primary_cleanup_failure_is_security_terminal(
         self,
     ) -> None:

@@ -8342,6 +8342,60 @@ class SessionRetrospectiveTests(unittest.TestCase):
             (outside / "session-retrospective" / "opaque_ref_key").exists()
         )
 
+    def test_opaque_ref_key_path_rejects_session_sources_before_create(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            codex_root = Path(raw) / "account" / ".codex"
+            sessions = codex_root / "sessions"
+            archived = codex_root / "archived_sessions"
+            sessions.mkdir(parents=True)
+            archived.mkdir()
+            alias = Path(raw) / "sessions-alias"
+            alias.symlink_to(sessions, target_is_directory=True)
+            candidates = (
+                sessions / "active" / "opaque_ref_key",
+                archived / "archived" / "opaque_ref_key",
+                alias / "aliased" / "opaque_ref_key",
+                codex_root / "history.jsonl",
+            )
+
+            with mock.patch.object(
+                MODULE.temporary_paths,
+                "local_codex_root",
+                return_value=codex_root,
+            ):
+                for candidate in candidates:
+                    with (
+                        self.subTest(candidate=candidate),
+                        mock.patch.dict(
+                            os.environ,
+                            {"CODEX_SESSION_RETROSPECTIVE_KEY_FILE": str(candidate)},
+                        ),
+                        self.assertRaisesRegex(
+                            SystemExit,
+                            "opaque ref key file must not overlap session sources",
+                        ),
+                    ):
+                        MODULE.PATH_REF_KEY = None
+                        MODULE.path_ref_key()
+                    self.assertFalse(candidate.exists())
+
+                default_parent = sessions / "default-relative"
+                default_parent.mkdir()
+                with (
+                    mock.patch.dict(os.environ, {}, clear=False),
+                    contextlib.chdir(default_parent),
+                    self.assertRaisesRegex(
+                        SystemExit,
+                        "opaque ref key file must not overlap session sources",
+                    ),
+                ):
+                    os.environ.pop("CODEX_SESSION_RETROSPECTIVE_KEY_FILE", None)
+                    MODULE.PATH_REF_KEY = None
+                    MODULE.path_ref_key()
+                self.assertFalse((default_parent / ".codex-local").exists())
+
+        MODULE.PATH_REF_KEY = None
+
     def test_opaque_ref_key_file_rejects_group_readable_permissions(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             key_file = (

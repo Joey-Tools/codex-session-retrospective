@@ -46,7 +46,7 @@ class StreamingRawPayloadStaging:
         ) or not isinstance(spool_ref, str):
             raise TypeError("source transport spool bounds are invalid")
         self.identity = identity
-        self.run_dir = run_dir.expanduser().absolute()
+        self.run_dir = temporary_paths.require_run_directory_outside_sources(run_dir)
         self.max_bytes = max_bytes
         self.max_records = max_records
         self.spool_root = safe_io.ensure_owner_only_directory(

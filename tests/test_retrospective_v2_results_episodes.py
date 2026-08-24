@@ -2652,6 +2652,43 @@ class ResultValidationTests(unittest.TestCase):
                     result_validation_module.post_redact(safe_prose),
                 )
 
+    def test_account_handle_fields_share_retained_privacy_policy(self) -> None:
+        sources = (
+            "User handle: @alice_smith",
+            "Account login: alice_smith",
+            "Login name: alice_smith",
+            "Screen name: alice_smith",
+            "userHandle: @alice_smith",
+            "accountLoginName: alice_smith",
+        )
+
+        for source in sources:
+            with self.subTest(source=source):
+                self.assertIn(
+                    "personal_identifier",
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result_validation_module.post_redact(source),
+                )
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value(
+                        {"problem_statement": source}
+                    )
+
+        for safe_prose in (
+            "Improve login name parsing.",
+            "The screen name detector needs a regression test.",
+            "Close the file handle before cleanup.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertEqual((), scan_for_leaks(safe_prose))
+                self.assertEqual(
+                    safe_prose,
+                    result_validation_module.post_redact(safe_prose),
+                )
+
     def test_shared_credential_policy_redacts_legacy_retained_families(self) -> None:
         jwt_segment = "".join(("eyJ", "A" * 8))
         stateless_github = "".join(

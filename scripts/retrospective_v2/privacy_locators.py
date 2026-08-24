@@ -550,6 +550,7 @@ _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
     r"(?:dob|date[_ -]+of[_ -]+birth|birth[_ -]?(?:date|day)|"
     r"(?-i:(?:dateOfBirth|DateOfBirth)))"
 )
+_ACCOUNT_HANDLE_FIELD_PATTERN_TEXT = r"(?:handle|login(?:[_ -]+name)?|screen[_ -]+name)"
 _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
     r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"
     r"mrn|medical[_ -]?record(?:[_ -]?(?:number|no|id))?|"
@@ -593,11 +594,15 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + _PERSONAL_POSSESSIVE_PATTERN_TEXT
     + r"[_ -]?"
     r"(?:id|identifier|number|no|address|"
+    + _ACCOUNT_HANDLE_FIELD_PATTERN_TEXT
+    + r"|"
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
     + r")|"
     r"(?-i:"
     + _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT
-    + r"(?:Id|Identifier|Number|No|Address|DOB|Dob|DateOfBirth))|"
+    + r"(?:Id|Identifier|Number|No|Address|Handle|Login|LoginName|ScreenName|"
+    r"DOB|Dob|DateOfBirth))|"
+    r"(?:login|screen)[_ -]+name|"
     r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
     r"shipping|tenant|user)[_ -]?address|"
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
