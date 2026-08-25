@@ -2795,6 +2795,107 @@ class ResultValidationTests(unittest.TestCase):
                     result_validation_module.post_redact(safe_prose),
                 )
 
+    def test_dot_delimited_sensitive_fields_share_retained_privacy_policy(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "first.name: Alice Smith",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "user.address: 123 Main Street",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "date.of.birth: 1990-01-02",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "login.name: alice_smith",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "emergency.contact.name: Alice Smith",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "gender.identity: nonbinary",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "medical.record.number: 12345678",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "biometric.template: synthetic-template",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "phone.number: 6123 4567",
+                "personal_identifier",
+                "phone.number: [REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "location.coordinates: 51.5000, -0.1000",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "tool.call.id: call_ABCDEFG123456",
+                "raw_id",
+                "[REDACTED_RAW_ID]",
+            ),
+            (
+                "original.prompt: proprietary payload.",
+                "original_prompt",
+                "[REDACTED_ORIGINAL_PROMPT]",
+            ),
+            (
+                "tool.output: private diagnostic text.",
+                "tool_output",
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
+        )
+
+        for source, category, replacement in cases:
+            with self.subTest(source=source):
+                self.assertIn(
+                    category,
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(
+                    replacement,
+                    result_validation_module.post_redact(source),
+                )
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value(
+                        {"problem_statement": source}
+                    )
+
+        for safe_prose in (
+            "date.of.birth parsing is documented.",
+            "gender.identity parsing is documented.",
+            "medical.record.number parsing is documented.",
+            "biometric.template parsing is documented.",
+            "original.prompt parsing is documented.",
+            "tool.output parsing is documented.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertEqual((), scan_for_leaks(safe_prose))
+                self.assertEqual(
+                    safe_prose,
+                    result_validation_module.post_redact(safe_prose),
+                )
+
     def test_health_biometric_contact_and_cookie_fields_share_privacy_policy(
         self,
     ) -> None:

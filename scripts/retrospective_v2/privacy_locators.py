@@ -373,7 +373,7 @@ _DOTTED_NUMERIC_VERSION_RE = re.compile(
 )
 _PHONE_FIELD_PATTERN_TEXT = (
     r"\b(?:(?:call|phone|tel|telephone|mobile)"
-    r"(?:[ _-]?(?:number|no))?|contact(?:[ _-]?(?:phone|number|no))?)"
+    r"(?:[._ -]?(?:number|no))?|contact(?:[._ -]?(?:phone|number|no))?)"
 )
 _SHORT_PHONE_VALUE_PATTERN_TEXT = (
     r"(?![0-9]{4}-[0-9]{2}-[0-9]{2}(?![0-9]))"
@@ -533,13 +533,13 @@ _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT = (
 )
 _PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
 _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT = (
-    r"mother(?:['\u2019]s|s)?[_ -]+maiden[_ -]+name"
+    r"mother(?:['\u2019]s|s)?[._ -]+maiden[._ -]+name"
 )
 _PERSONAL_NAME_FIELD_PATTERN_TEXT = (
     r"(?:"
     + _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT
     + r"|nickname|surname|(?:(?:display|family|first|full|given|last|legal|"
-    r"maiden|middle|preferred)[_ -]+)?names?)"
+    r"maiden|middle|preferred)[._ -]+)?names?)"
 )
 _PERSONAL_CONTEXTUAL_NAME_FIELD_PATTERN_TEXT = (
     r"(?:"
@@ -549,12 +549,14 @@ _PERSONAL_CONTEXTUAL_NAME_FIELD_PATTERN_TEXT = (
     r"Names?))"
 )
 _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
-    r"(?:dob|date[_ -]+of[_ -]+birth|birth[_ -]?(?:date|day)|"
+    r"(?:dob|date[._ -]+of[._ -]+birth|birth[._ -]?(?:date|day)|"
     r"(?-i:(?:dateOfBirth|DateOfBirth)))"
 )
-_ACCOUNT_HANDLE_FIELD_PATTERN_TEXT = r"(?:handle|login(?:[_ -]+name)?|screen[_ -]+name)"
+_ACCOUNT_HANDLE_FIELD_PATTERN_TEXT = (
+    r"(?:handle|login(?:[._ -]+name)?|screen[._ -]+name)"
+)
 _RELATIONSHIP_NAME_FIELD_PATTERN_TEXT = (
-    r"(?:emergency[_ -]+contact|next[_ -]+of[_ -]+kin)(?:[_ -]+name)?|"
+    r"(?:emergency[._ -]+contact|next[._ -]+of[._ -]+kin)(?:[._ -]+name)?|"
     r"(?-i:(?:emergencyContact|EmergencyContact|nextOfKin|NextOfKin)(?:Name)?)"
 )
 _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
@@ -583,27 +585,27 @@ _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
     r"(?:protected|Protected)HealthInformation))"
 )
 _CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT = (
-    r"(?:sex[_ -]+assigned[_ -]+at[_ -]+birth|sex[_ -]+at[_ -]+birth|"
-    r"assigned[_ -]+sex(?:[_ -]+at[_ -]+birth)?|birth[_ -]+sex|sex|"
-    r"gender[_ -]+assigned[_ -]+at[_ -]+birth|gender[_ -]+at[_ -]+birth|"
-    r"assigned[_ -]+gender(?:[_ -]+at[_ -]+birth)?|birth[_ -]+gender|"
-    r"age(?:[_ -]+range)?|gender(?:[_ -]+(?:identity|expression))?|races?|"
+    r"(?:sex[._ -]+assigned[._ -]+at[._ -]+birth|sex[._ -]+at[._ -]+birth|"
+    r"assigned[._ -]+sex(?:[._ -]+at[._ -]+birth)?|birth[._ -]+sex|sex|"
+    r"gender[._ -]+assigned[._ -]+at[._ -]+birth|gender[._ -]+at[._ -]+birth|"
+    r"assigned[._ -]+gender(?:[._ -]+at[._ -]+birth)?|birth[._ -]+gender|"
+    r"age(?:[._ -]+range)?|gender(?:[._ -]+(?:identity|expression))?|races?|"
     r"ethnicit(?:y|ies)|"
-    r"(?:ethnic|racial)[_ -]+(?:background|group|identity|origin)|"
-    r"religious[_ -]+(?:affiliations?|beliefs?|denominations?|identities)|"
-    r"faiths?|creeds?|pronouns?|castes?|marital[_ -]+status(?:es)?|"
-    r"family[_ -]+status(?:es)?|"
+    r"(?:ethnic|racial)[._ -]+(?:background|group|identity|origin)|"
+    r"religious[._ -]+(?:affiliations?|beliefs?|denominations?|identities)|"
+    r"faiths?|creeds?|pronouns?|castes?|marital[._ -]+status(?:es)?|"
+    r"family[._ -]+status(?:es)?|"
     r"(?:disabilit(?:y|ies)|pregnanc(?:y|ies)|veterans?)"
-    r"(?:[_ -]+status(?:es)?)?|"
+    r"(?:[._ -]+status(?:es)?)?|"
     r"(?:military|immigration|residency|visa|socioeconomic)"
-    r"[_ -]+status(?:es)?|"
-    r"(?:country|place)[_ -]+of[_ -]+origin|national[_ -]+origin|ancestry|"
-    r"nationalit(?:y|ies)(?:[_ -]+status(?:es)?)?|"
-    r"citizenships?(?:[_ -]+status(?:es)?)?|"
-    r"country[_ -]+of[_ -]+citizenship|"
-    r"(?:primary|native)[_ -]+language|sexual[_ -]+orientation|religion|"
-    r"philosophical[_ -]+beliefs?|political[_ -]+(?:affiliations?|opinions?)|"
-    r"(?:trade[_ -]+)?union[_ -]+memberships?|"
+    r"[._ -]+status(?:es)?|"
+    r"(?:country|place)[._ -]+of[._ -]+origin|national[._ -]+origin|ancestry|"
+    r"nationalit(?:y|ies)(?:[._ -]+status(?:es)?)?|"
+    r"citizenships?(?:[._ -]+status(?:es)?)?|"
+    r"country[._ -]+of[._ -]+citizenship|"
+    r"(?:primary|native)[._ -]+language|sexual[._ -]+orientation|religion|"
+    r"philosophical[._ -]+beliefs?|political[._ -]+(?:affiliations?|opinions?)|"
+    r"(?:trade[._ -]+)?union[._ -]+memberships?|"
     r"(?-i:(?:sex|Sex)(?:AssignedAtBirth|AtBirth)|"
     r"(?:assigned|Assigned)Sex(?:AtBirth)?|(?:birth|Birth)Sex|"
     r"(?:gender|Gender)(?:AssignedAtBirth|AtBirth)|"
@@ -630,30 +632,30 @@ _CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT = (
     r"(?:(?:trade|Trade)Union|(?:union|Union))(?:Membership|Memberships)))"
 )
 _BIOMETRIC_TEMPLATE_FIELD_PATTERN_TEXT = (
-    r"(?:(?:biometric|fingerprint|face|facial|retina)[_ -]+template|voiceprint|"
+    r"(?:(?:biometric|fingerprint|face|facial|retina)[._ -]+template|voiceprint|"
     r"(?-i:(?:biometric|Biometric|fingerprint|Fingerprint|face|Face|facial|Facial|"
     r"retina|Retina)Template))"
 )
 _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT = (
-    r"(?:ssn|social[_ -]?security(?:[_ -]?(?:number|no))?|"
-    r"mrn|medical[_ -]?record(?:[_ -]?(?:number|no|id))?|"
-    r"patient[_ -]?(?:id|identifier)|"
-    r"insurance[_ -]+(?:policy|member)"
-    r"(?:[_ -]+(?:number|no|id|identifier))?|"
-    r"health[_ -]+insurance(?:[_ -]+(?:number|no|id|identifier))|"
-    r"health[_ -]+plan[_ -]+beneficiary"
-    r"(?:[_ -]+(?:number|no|id|identifier))?|"
-    r"national[_ -]?(?:insurance|identity)(?:[_ -]?(?:number|no|id))?|"
-    r"(?:tax(?:payer)?[_ -]?(?:identification|id))(?:[_ -]?(?:number|no))?|"
-    r"passport(?:[_ -]?(?:number|no|id))?|"
-    r"driver(?:['\u2019]s)?[_ -]?licen[cs]e(?:[_ -]?(?:number|no|id))?|"
-    r"vin|vehicle[_ -]+identification(?:[_ -]+(?:number|no|id))?|"
-    r"(?:licen[cs]e|registration)[_ -]+plate"
-    r"(?:[_ -]+(?:number|no|id))?|"
-    r"(?:credit|debit|payment)[_ -]?card(?:[_ -]?(?:number|no))?|"
-    r"card[_ -]?(?:number|no)|"
-    r"(?:bank[_ -]?)?account[_ -]?(?:number|no)|"
-    r"routing[_ -]?(?:number|no)|iban|"
+    r"(?:ssn|social[._ -]?security(?:[._ -]?(?:number|no))?|"
+    r"mrn|medical[._ -]?record(?:[._ -]?(?:number|no|id))?|"
+    r"patient[._ -]?(?:id|identifier)|"
+    r"insurance[._ -]+(?:policy|member)"
+    r"(?:[._ -]+(?:number|no|id|identifier))?|"
+    r"health[._ -]+insurance(?:[._ -]+(?:number|no|id|identifier))|"
+    r"health[._ -]+plan[._ -]+beneficiary"
+    r"(?:[._ -]+(?:number|no|id|identifier))?|"
+    r"national[._ -]?(?:insurance|identity)(?:[._ -]?(?:number|no|id))?|"
+    r"(?:tax(?:payer)?[._ -]?(?:identification|id))(?:[._ -]?(?:number|no))?|"
+    r"passport(?:[._ -]?(?:number|no|id))?|"
+    r"driver(?:['\u2019]s)?[._ -]?licen[cs]e(?:[._ -]?(?:number|no|id))?|"
+    r"vin|vehicle[._ -]+identification(?:[._ -]+(?:number|no|id))?|"
+    r"(?:licen[cs]e|registration)[._ -]+plate"
+    r"(?:[._ -]+(?:number|no|id))?|"
+    r"(?:credit|debit|payment)[._ -]?card(?:[._ -]?(?:number|no))?|"
+    r"card[._ -]?(?:number|no)|"
+    r"(?:bank[._ -]?)?account[._ -]?(?:number|no)|"
+    r"routing[._ -]?(?:number|no)|iban|"
     r"(?-i:(?:socialSecurityNumber|medicalRecord(?:Number|Id)|"
     r"patient(?:Id|Identifier)|"
     r"insurance(?:Policy|Member)(?:Number|No|Id|Identifier)|"
@@ -679,7 +681,7 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     r"\b(?:"
     + _PERSONAL_SUBJECT_PATTERN_TEXT
     + _PERSONAL_POSSESSIVE_PATTERN_TEXT
-    + r"[_ -]?"
+    + r"[._ -]?"
     r"(?:id|identifier|number|no|address|"
     + _ACCOUNT_HANDLE_FIELD_PATTERN_TEXT
     + r"|"
@@ -689,9 +691,9 @@ _LABELED_PERSONAL_FIELD_PATTERN_TEXT = (
     + _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT
     + r"(?:Id|Identifier|Number|No|Address|Handle|Login|LoginName|ScreenName|"
     r"DOB|Dob|DateOfBirth))|"
-    r"(?:login|screen)[_ -]+name|"
+    r"(?:login|screen)[._ -]+name|"
     r"(?:billing|client|customer|employee|home|mailing|person|postal|residential|"
-    r"shipping|tenant|user)[_ -]?address|"
+    r"shipping|tenant|user)[._ -]?address|"
     + _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT
     + r"|"
     + _LABELED_SENSITIVE_NUMBER_FIELD_PATTERN_TEXT
@@ -820,8 +822,8 @@ _PERSONAL_VALUE_CAPTURE_PATTERN_TEXT = (
 )
 _ADDRESS_COMPONENT_FIELD_PATTERN_TEXT = (
     r"(?:apt|apartment|unit|suite|city|state|province|region|county|country|"
-    r"address[_ -]+line[_ -]*[2-9]|post(?:al)?[_ -]+code|postcode|"
-    r"zip(?:[_ -]+code)?)\b"
+    r"address[._ -]+line[._ -]*[2-9]|post(?:al)?[._ -]+code|postcode|"
+    r"zip(?:[._ -]+code)?)\b"
 )
 _NAME_TRAILING_METADATA_KEY_PATTERN_TEXT = (
     r"(?:note|notes|state|status|verification|verified)"
@@ -919,22 +921,22 @@ _UNAMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
     r"\b(?:"
     + _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT
     + r"|surname|(?:family|first|full|given|last|legal|maiden|middle|preferred)"
-    r"[_ -]+name|(?-i:(?:family|first|full|given|last|legal|maiden|middle|"
+    r"[._ -]+name|(?-i:(?:family|first|full|given|last|legal|maiden|middle|"
     r"preferred|Family|First|Full|Given|Last|Legal|Maiden|Middle|Preferred)Name))"
 )
 _AMBIGUOUS_BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
-    r"\b(?:nickname|display[_ -]+name|(?-i:(?:display|Display)Name))"
+    r"\b(?:nickname|display[._ -]+name|(?-i:(?:display|Display)Name))"
 )
 _BARE_LABELED_NAME_FIELD_PATTERN_TEXT = (
     r"\b(?:"
     + _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT
     + r"|nickname|surname|(?:display|family|first|full|given|last|legal|maiden|"
-    r"middle|preferred)[_ -]+name|(?-i:(?:display|family|first|full|given|last|"
+    r"middle|preferred)[._ -]+name|(?-i:(?:display|family|first|full|given|last|"
     r"legal|maiden|middle|preferred|Display|Family|First|Full|Given|Last|Legal|"
     r"Maiden|Middle|Preferred)Name))"
 )
 _BARE_LABELED_ADDRESS_FIELD_PATTERN_TEXT = (
-    r"\b(?:address|street[_ -]+address|(?-i:(?:street|Street)Address))"
+    r"\b(?:address|street[._ -]+address|(?-i:(?:street|Street)Address))"
 )
 BARE_LABELED_NAME_VALUE_RE = re.compile(
     r"(?:(?:\A|(?<=[\r\n]))[ \t]*(?:[-*+>][ \t]+)?|"
@@ -1194,7 +1196,7 @@ PERSONAL_LABELED_VALUE_PATTERNS = (
 _COORDINATE_NUMBER_PATTERN_TEXT = r"[+-]?(?:[0-9]{1,3}(?:\.[0-9]{1,15})?|\.[0-9]{1,15})"
 LABELED_COORDINATE_PAIR_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?P<personal>"
-    r"(?:gps|home|location)[_ -]+coordinates?"
+    r"(?:gps|home|location)[._ -]+coordinates?"
     r"[ \t]*(?:=|:)[ \t]*"
     r"(?P<latitude>"
     + _COORDINATE_NUMBER_PATTERN_TEXT
@@ -1561,26 +1563,26 @@ LONG_HEX_ID_RE = re.compile(
     re.ASCII | re.IGNORECASE,
 )
 RAW_ID_LABEL_RE = re.compile(
-    r"\b(?:session|thread|conversation|turn|message|tool[_ -]?call|request|"
+    r"\b(?:session|thread|conversation|turn|message|tool[._ -]?call|request|"
     r"run|job|attempt|trace|span|correlation|event|response|task)"
-    r"[_ -]?(?:id|ref|identifier)\s*(?:=|:|#)\s*"
+    r"[._ -]?(?:id|ref|identifier)\s*(?:=|:|#)\s*"
     r"(?![a-z][a-z0-9_]*_ref_v2:)[A-Za-z0-9._:-]{6,}",
     re.ASCII | re.IGNORECASE,
 )
 RAW_IDENTIFIER_PATTERNS = (UUID_RE, LONG_HEX_ID_RE, RAW_ID_LABEL_RE)
 _SOURCE_PROMPT_LABEL_PATTERN_TEXT = (
     r"(?:"
-    r"(?:raw|original|verbatim)[ _-]+(?:prompt|request|message|input|text)|"
-    r"prompt(?:[ _-]+text)?|input|request|"
-    r"(?:user|assistant|system|developer)[ _-]+"
+    r"(?:raw|original|verbatim)[._ -]+(?:prompt|request|message|input|text)|"
+    r"prompt(?:[._ -]+text)?|input|request|"
+    r"(?:user|assistant|system|developer)[._ -]+"
     r"(?:message|prompt|input|request)"
     r")"
 )
 _SOURCE_TOOL_OUTPUT_LABEL_PATTERN_TEXT = (
     r"(?:"
-    r"(?:tool|command)[ _-]+(?:output|response|result)|"
-    r"(?:execution|process|subprocess)[ _-]+output|"
-    r"(?:terminal|console|shell)[ _-]+output|stdout|stderr|transcript"
+    r"(?:tool|command)[._ -]+(?:output|response|result)|"
+    r"(?:execution|process|subprocess)[._ -]+output|"
+    r"(?:terminal|console|shell)[._ -]+output|stdout|stderr|transcript"
     r")"
 )
 _SOURCE_PAYLOAD_LABEL_PATTERN_TEXT = (

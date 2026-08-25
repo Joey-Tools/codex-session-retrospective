@@ -2487,7 +2487,7 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
         ):
             validate_retained_artifacts(dotted)
 
-    def test_dotted_health_fields_are_rejected_without_matching_plain_prose(
+    def test_dot_delimited_sensitive_fields_are_rejected_without_plain_prose(
         self,
     ) -> None:
         for value in (
@@ -2500,18 +2500,29 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "patient.lab.result: elevated ALT",
             "genetic.profile: BRCA positive",
             "protected.health.information: restricted",
+            "first.name: Alice Smith",
+            "user.address: 123 Main Street",
+            "date.of.birth: 1990-01-02",
+            "login.name: alice_smith",
+            "emergency.contact.name: Alice Smith",
+            "gender.identity: nonbinary",
+            "medical.record.number: 12345678",
+            "biometric.template: synthetic-template",
+            "phone.number: 6123 4567",
+            "location.coordinates: 51.5000, -0.1000",
+            "tool.call.id: call_ABCDEFG123456",
+            "original.prompt: proprietary payload.",
+            "tool.output: private diagnostic text.",
         ):
             with self.subTest(value=value):
-                with self.assertRaisesRegex(
-                    RetainedPrivacyError, "personal identifier"
-                ):
+                with self.assertRaises(RetainedPrivacyError):
                     reporting_module.validate_retained_value({"cause": value})
 
         reporting_module.validate_retained_value(
             {
                 "cause": (
-                    "patient.record and protected.health.information parsing "
-                    "are documented."
+                    "patient.record, gender.identity, medical.record.number, "
+                    "original.prompt, and tool.output parsing are documented."
                 )
             }
         )

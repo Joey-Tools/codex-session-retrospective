@@ -4939,6 +4939,48 @@ superseded_by:
   `git diff --check` are clean on the same source tree. A repository-wide Ruff
   format probe is non-counting because it found four unrelated pre-existing
   files outside this change that would be reformatted; none was modified.
+- Signed head `69cb2d2f` had clean exact-secret admission, then one fresh
+  independently materialized Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at
+  `xhigh` reasoning inspected `a3836660..69cb2d2f`. Equal prelaunch and
+  postvalidation receipts bind 137 commits, 136 parent edges, graph digest
+  `71acc97796b26bd75f55e8e8fc59d17286afb4d70797060071fc54c0669ecd55`,
+  and the unchanged local-config digest. Thread
+  `01a03aca-56ee-7232-8537-fa89bf6c3594` completed in 892 seconds and found
+  one remaining retained-privacy gap: dot-delimited personal, demographic,
+  sensitive-number, and biometric field labels still bypassed the shared
+  grammar outside the health-specific branches. Postvalidation and the
+  trusted control manifest remained clean, no reviewer process remained, and
+  the exact owner-private task root was removed after identity and inventory
+  validation.
+- The follow-up applies one structured-label delimiter policy across personal
+  names, birth dates, handles, relationship names, demographics, biometrics,
+  sensitive numbers, phone labels, addresses, coordinates, raw IDs, source
+  prompts, and tool-output labels. Positive regressions cover every family,
+  including `gender.identity`, `date.of.birth`, `medical.record.number`,
+  `biometric.template`, `tool.call.id`, `original.prompt`, and `tool.output`;
+  assignment-free prose remains covered where it is not independently a URL.
+  The two exact regressions pass, and the complete results/episodes plus export
+  modules pass 187/187 in 248.230 seconds.
+- The first four-shard attempt for this follow-up is non-counting because it
+  launched the Homebrew Python directly. Its group-writable `Cellar` ancestor
+  correctly failed the executable-authority contract and caused systematic
+  derived failures in shards 1 and 2; shards 0 and 3 were interrupted once,
+  all four sessions reached terminal state, and no shard process remained.
+  The trusted owner-private Python 3.13.12 copy produced the byte-identical
+  final inventory and was used for every accepted full-suite result.
+- Final58 freezes 1,960 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `7dce1fb5b0f32a7eff36ffd29036c008b12d39e9d1d41335fbdd496dcef81771`.
+  Shards 0 through 3 pass 467/467 in 1,850.337 seconds, 526/526 in
+  1,627.366 seconds, 526/526 in 1,529.439 seconds, and 441/441 in
+  1,578.829 seconds, for exact aggregate coverage of 1,960/1,960 without
+  skips. The independent Darwin security inventory passes 14/14 in 66.185
+  seconds. Result-contract, module-boundary, CI, Skill, and Bootstrap
+  entrypoints pass 25/25, 20/20, 33/33, 6/6, and 12/12. Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint` 1.7.12, the
+  generated bootstrap manifest, the official OpenAI Skill validator,
+  project-journal validation, tracked bytecode exclusion, and
+  `git diff --check` are clean on the same source tree.
 
 ## Follow-up Work
 
