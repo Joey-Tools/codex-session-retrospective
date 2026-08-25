@@ -2243,6 +2243,12 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "DOB: [REDACTED_PERSONAL_IDENTIFIER] 1990-01-02",
             'DOB: "[REDACTED_PERSONAL_IDENTIFIER]" 1990-01-02',
             "DOB: [REDACTED_PERSONAL_IDENTIFIER_19900102]",
+            "Medical histories: diabetes",
+            "health_statuses: diabetic",
+            "Genetic profiles: BRCA positive",
+            "medicalHistories: diabetes",
+            "healthStatuses: diabetic",
+            "geneticProfiles: BRCA positive",
             "**Customer name:** Alice Smith",
         ):
             with self.subTest(personal_value=personal_value, phase="direct"):
@@ -2302,6 +2308,9 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "DOB: [REDACTED_PERSONAL_IDENTIFIER]]",
             r"DOB: \"[REDACTED_PERSONAL_IDENTIFIER]\"",
             "Address: [REDACTED_PERSONAL_IDENTIFIER]",
+            "Medical histories parsing is documented.",
+            "Health statuses handling is documented.",
+            "Genetic profiles parsing is documented.",
             "Address: 0x1000",
             "Address: 0x1000, status: active",
             "Address: 0x1000, 0x2000",

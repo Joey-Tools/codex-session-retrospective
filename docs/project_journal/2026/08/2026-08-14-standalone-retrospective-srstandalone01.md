@@ -4748,6 +4748,47 @@ superseded_by:
   coverage of 1,955/1,955 without skips. The independent Darwin security
   inventory passes 14/14 in 74 seconds. All five bounded logs total 475,128
   bytes, and every process-group supervisor reached terminal exit zero.
+- Signed head `95a0575c` had clean exact-secret admission. The first isolated
+  Codex CLI launch was a zero-start, non-counting transport attempt: sandboxed
+  access to the Codex state database failed before `thread.started`, no model
+  result was produced, postvalidation and trusted-control revalidation were
+  clean, no process remained, and the exact task root was removed. A new
+  independently materialized and validated workspace then launched the one
+  actual fresh Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  over `a3836660..95a0575c`. Equal prelaunch and postvalidation receipts bind
+  133 commits, 132 parent edges, graph digest
+  `6a5e662b23cec51f0d09fc59d924609c4d1c41f4400276d4de9294ac8163c863`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a039a9-f757-7303-bb15-950033d4d977` completed in 876 seconds and
+  found one retained-privacy gap: plural compound health fields such as
+  `Medical histories`, `healthStatuses`, and `Genetic profiles` bypassed the
+  shared health-information grammar. The reviewer completed 121 read-only
+  commands; three failed commands were bounded read-only searches, and the
+  conservative command audit matched only read-only searches and `awk`
+  inspection. Postvalidation reproduced the original receipts and trusted
+  control digests, no reviewer process remained, and the exact owner-private
+  task root was removed after identity and inventory validation.
+- The shared health-information grammar now covers plural delimited and
+  camel-case forms of `history`, `status`, and `profile`. Positive regressions
+  cover `Medical histories`, `health_statuses`, `medicalHistories`,
+  `healthStatuses`, `Genetic profiles`, and `geneticProfiles`; negative
+  regressions keep documentation prose about those field families retainable.
+  The two focused entrypoints pass 2/2. Result-contract, module-boundary, CI,
+  Skill, and Bootstrap entrypoints pass 25/25, 20/20, 33/33, 6/6, and 12/12.
+  Repository-wide Ruff 0.13.2 lint and changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the official
+  OpenAI Skill validator, tracked bytecode exclusion, and `git diff --check`
+  are clean.
+- Final49 freezes 1,955 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `30646171e3df539b280f5fdc87f565d9e4df724e22e2839896c128504cc37bc5`.
+  Shards 0 through 3 pass 466/466 in 2,225.941 seconds, 525/525 in
+  1,982.544 seconds, 525/525 in 1,876.358 seconds, and 439/439 in
+  1,923.881 seconds, for exact aggregate coverage of 1,955/1,955 without
+  skips. The independent Darwin security inventory passes 14/14 in 113.015
+  seconds. All five bounded logs total 475,129 bytes, and every process-group
+  supervisor reached terminal exit zero.
 
 ## Follow-up Work
 

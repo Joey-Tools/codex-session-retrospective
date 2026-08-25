@@ -2885,6 +2885,16 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "Medical histories: diabetes",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "health_statuses: diabetic",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "Genetic information: BRCA positive",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
@@ -2900,7 +2910,17 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "medicalHistories: diabetes",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "healthStatus: diabetic",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "healthStatuses: diabetic",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
@@ -2985,7 +3005,17 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "Genetic profiles: BRCA positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "geneticProfile: BRCA positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "geneticProfiles: BRCA positive",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
@@ -3161,8 +3191,11 @@ class ResultValidationTests(unittest.TestCase):
             "Lab result parsing is documented.",
             "Test result parsing is documented.",
             "Medical condition parsing is documented.",
+            "Medical histories parsing is documented.",
             "Health status handling is documented.",
+            "Health statuses handling is documented.",
             "The genetic information detector needs a regression test.",
+            "Genetic profiles parsing is documented.",
             "Health data parsing is documented.",
             "Clinical information handling is documented.",
             "Protected health information parsing is documented.",
