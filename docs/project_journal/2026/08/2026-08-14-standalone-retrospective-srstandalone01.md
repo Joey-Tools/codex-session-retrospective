@@ -4388,6 +4388,38 @@ superseded_by:
   results/episodes, result-contract-audit, and export tests pass 2/2, 102/102,
   25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
   and 33/33.
+- The clean-context Codex CLI reviewer for signed head `ccb503f9` used an
+  independently materialized and validated read-only workspace over
+  `a3836660..ccb503f9`. Equal pre/post receipts bound 124 commits, 123 parent
+  edges, graph digest
+  `565909cae8d71ab0e22e7ace82dc5a86f9d393935b0102a48d455db2612e02c4`,
+  and the unchanged local-config digest. Thread
+  `01a03706-39f9-70c3-8727-94cbbb5667e8` returned two P1 findings: common
+  medical, health, and clinical data fields, plus ethnic or racial background
+  and religious affiliation fields, could still bypass all retained privacy
+  layers. Postvalidation reproduced the prelaunch receipt, the trusted
+  30-file control and Python records were byte-identical, no reviewer process
+  remained, and the exact task root was removed.
+- Health privacy matching is now compositional across medical, health, and
+  clinical domains plus condition, data, history, information, record, and
+  status attributes; genetic and protected-health-information families have
+  equivalent ordinary and camel-case coverage. Demographic matching is also
+  compositional across ethnic or racial background, group, identity, and
+  origin, plus religious affiliation, belief, denomination, and identity.
+  Representative assignment, snake-case, hyphenated, camel-case, Markdown,
+  narrative, and safe-discussion regressions exercise all three privacy layers.
+- Final35 uses the owner-controlled Python 3.13.12 runtime and 1,940 exact test
+  IDs from 22 authenticated sources under manifest digest
+  `bc763998d1e61d77bb7a2608f796828499bce985378887b3c551555718051b03`.
+  Shards 0 through 3 pass 460/460 in 1,956.769 seconds, 523/523 in
+  1,733.397 seconds, 521/521 in 1,631.312 seconds, and 436/436 in
+  1,630.969 seconds. The independent Darwin security inventory passes 14/14
+  in 76.949 seconds without skips. Focused health/demographic, complete
+  results/episodes, result-contract-audit, and export tests pass 2/2, 102/102,
+  25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
+  and 33/33. Ruff lint and changed-file format checks, actionlint, the
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, bytecode scanning, and the final diff check are clean.
 
 ## Follow-up Work
 
