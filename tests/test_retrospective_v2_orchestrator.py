@@ -9897,7 +9897,9 @@ class OrchestratorTests(unittest.TestCase):
 
         self.assertFalse((coordinator.run_dir / "raw-inputs").exists())
         self.assertEqual(3, snapshots.call_count)
-        self.assertEqual(4, hashed_payloads)
+        # Initial, pre-delete, and post-rename inventories each take two
+        # complete snapshots; deletion revalidates the retained commitment once.
+        self.assertEqual(2 + 2 + 2 + 1, hashed_payloads)
         self.assertGreaterEqual(len(budget_deadlines), 5)
         self.assertEqual({budget_deadlines[0]}, set(budget_deadlines))
 

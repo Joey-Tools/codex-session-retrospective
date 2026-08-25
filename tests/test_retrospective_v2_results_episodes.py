@@ -2890,6 +2890,26 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "Medical diagnoses: HIV positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "patient_diagnosis: HIV positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "health medications: example medication",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "clinical treatments: example treatment",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "health_statuses: diabetic",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
@@ -2911,6 +2931,26 @@ class ResultValidationTests(unittest.TestCase):
             ),
             (
                 "medicalHistories: diabetes",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "medicalDiagnosis: HIV positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "patientDiagnosis: HIV positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "healthMedications: example medication",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "clinicalTreatments: example treatment",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
@@ -3192,6 +3232,10 @@ class ResultValidationTests(unittest.TestCase):
             "Test result parsing is documented.",
             "Medical condition parsing is documented.",
             "Medical histories parsing is documented.",
+            "Medical diagnoses parsing is documented.",
+            "Patient diagnoses parsing is documented.",
+            "Health medications parsing is documented.",
+            "Clinical treatments parsing is documented.",
             "Health status handling is documented.",
             "Health statuses handling is documented.",
             "The genetic information detector needs a regression test.",

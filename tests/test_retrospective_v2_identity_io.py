@@ -300,6 +300,144 @@ class SafeIoTests(unittest.TestCase):
             [entry["relative_path"] for entry in snapshot["entries"]],
         )
 
+    def test_cleanup_inventory_rejects_child_added_between_snapshot_passes(
+        self,
+    ) -> None:
+        tree = self.root / "insertion-race"
+        tree.mkdir(mode=0o700)
+        atomic_write_bytes(tree / "original", b"original\n")
+        parent_fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        real_inspect = safe_io._inspect_tree_descriptor
+        injected = False
+        root_passes = 0
+
+        def inject_after_first_snapshot(*args, **kwargs):
+            nonlocal injected, root_passes
+            result = real_inspect(*args, **kwargs)
+            if kwargs["relative_path"] == ".":
+                root_passes += 1
+            if root_passes == 1 and not injected:
+                atomic_write_bytes(tree / "late", b"late\n")
+                injected = True
+            return result
+
+        try:
+            with (
+                mock.patch.object(
+                    safe_io,
+                    "_inspect_tree_descriptor",
+                    side_effect=inject_after_first_snapshot,
+                ),
+                self.assertRaisesRegex(
+                    safe_io.TreeInventoryLimitExceeded,
+                    "entry bound",
+                ),
+            ):
+                safe_io.inspect_tree_inventory_at(
+                    parent_fd,
+                    tree.name,
+                    budget=self._inventory_budget(),
+                    display_path=tree,
+                )
+        finally:
+            os.close(parent_fd)
+
+        self.assertTrue(injected)
+        self.assertEqual(b"late\n", (tree / "late").read_bytes())
+
+    def test_cleanup_inventory_rejects_same_size_content_change_between_passes(
+        self,
+    ) -> None:
+        tree = self.root / "content-race"
+        tree.mkdir(mode=0o700)
+        payload = tree / "payload"
+        atomic_write_bytes(payload, b"first\n")
+        initial_inode = payload.stat().st_ino
+        parent_fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        real_inspect = safe_io._inspect_tree_descriptor
+        mutated = False
+        root_passes = 0
+
+        def mutate_after_first_snapshot(*args, **kwargs):
+            nonlocal mutated, root_passes
+            result = real_inspect(*args, **kwargs)
+            if kwargs["relative_path"] == ".":
+                root_passes += 1
+            if root_passes == 1 and not mutated:
+                with payload.open("r+b") as stream:
+                    stream.write(b"other\n")
+                    stream.flush()
+                    os.fsync(stream.fileno())
+                mutated = True
+            return result
+
+        try:
+            with (
+                mock.patch.object(
+                    safe_io,
+                    "_inspect_tree_descriptor",
+                    side_effect=mutate_after_first_snapshot,
+                ),
+                self.assertRaisesRegex(UnsafePathError, "between inventory snapshots"),
+            ):
+                safe_io.inspect_tree_inventory_at(
+                    parent_fd,
+                    tree.name,
+                    budget=self._inventory_budget(),
+                    display_path=tree,
+                )
+        finally:
+            os.close(parent_fd)
+
+        self.assertEqual(initial_inode, payload.stat().st_ino)
+        self.assertEqual(b"other\n", payload.read_bytes())
+
+    def test_cleanup_inventory_accepts_resolved_child_entry_churn(self) -> None:
+        tree = self.root / "benign-churn"
+        tree.mkdir(mode=0o700)
+        atomic_write_bytes(tree / "payload", b"stable\n")
+        parent_fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        real_inspect = safe_io._inspect_tree_descriptor
+        churned = False
+        root_passes = 0
+
+        def churn_after_first_snapshot(*args, **kwargs):
+            nonlocal churned, root_passes
+            counts, entries = real_inspect(*args, **kwargs)
+            if kwargs["relative_path"] == ".":
+                root_passes += 1
+            if root_passes == 1 and not churned:
+                transient = tree / "transient"
+                transient.mkdir(mode=0o700)
+                transient.rmdir()
+                entries[0] = {
+                    **entries[0],
+                    "link_count": entries[0]["link_count"] + 1,
+                    "size": entries[0]["size"] + 4096,
+                }
+                churned = True
+            return counts, entries
+
+        try:
+            with mock.patch.object(
+                safe_io,
+                "_inspect_tree_descriptor",
+                side_effect=churn_after_first_snapshot,
+            ):
+                snapshot = safe_io.inspect_tree_inventory_at(
+                    parent_fd,
+                    tree.name,
+                    budget=self._inventory_budget(),
+                    display_path=tree,
+                )
+        finally:
+            os.close(parent_fd)
+
+        self.assertTrue(churned)
+        self.assertEqual(
+            [".", "payload"], [e["relative_path"] for e in snapshot["entries"]]
+        )
+
     def test_cleanup_inventory_budget_is_shared_across_actual_trees(self) -> None:
         for name in ("first", "second"):
             tree = self.root / name

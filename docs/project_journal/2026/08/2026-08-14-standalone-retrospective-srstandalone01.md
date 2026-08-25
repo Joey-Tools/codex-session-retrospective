@@ -4829,6 +4829,68 @@ superseded_by:
   skips. The independent Darwin security inventory passes 14/14 in 123.033
   seconds. All five bounded logs total 475,129 bytes, and every process-group
   supervisor reached terminal exit zero.
+- Signed head `3746577d` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..3746577d` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 135 commits, 134 parent edges, graph digest
+  `6d5eec06253dee080dfb6303ea2b2b552e40c7e140fbce47cba8e7be761a0131`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a03a29-f761-7c02-80a4-cbc8b1c61a38` completed in 806 seconds and
+  returned two findings. Prefixed retained medical fields such as
+  `medicalDiagnosis`, `patientDiagnosis`, and `healthMedications` bypassed the
+  shared health-information policy. Cleanup inventory enumerated each
+  directory only once, while directory inode, mode, link count, and size could
+  not prove the protected child-name, object-type, and content set complete.
+  The reviewer completed 72 of 75 read-only commands; the three failed commands
+  were read-only searches. Postvalidation reproduced the original receipts,
+  the trusted 30-file control manifest remained byte-identical, no reviewer
+  process remained, and the exact owner-private task root was removed after
+  identity and inventory validation.
+- The retained-health grammar now covers prefixed allergy, blood-type,
+  condition, diagnosis, history, laboratory/test-result, medication,
+  procedure, prescription, record, status, symptom, and treatment fields for
+  `medical`, `health`, `clinical`, and `patient` prefixes in delimited and
+  camel-case forms. Positive regressions cover the reported bypasses; negative
+  regressions preserve documentation prose about the same field families.
+- Cleanup inventory now takes two complete descriptor-root snapshots. The
+  first pass consumes the caller's shared entry and path-byte budget; the
+  second pass uses the same absolute deadline and a validation budget bounded
+  by the first pass's exact observed scale. Both passes bind relative paths,
+  object type and identity, owner-only access policy, and complete regular-file
+  content commitments before the normalized snapshots are compared. Directory
+  link count and size are deliberately not protected properties because
+  completed child-entry churn can change them without changing the final child
+  set. This remains point-in-time detection and fail-closed retention, not a
+  claim that a malicious same-UID writer cannot mutate after the final
+  revalidation. A shared safe-component validator removes the duplicated
+  inspect/remove branches, so the exact engine branch inventory remains
+  10,001 rather than raising the complexity gate.
+- Focused privacy, same-size content mutation, inserted-child, benign directory
+  churn, shared cleanup budget, delete-time commitment, and partial-delete
+  recovery regressions pass. Complete identity I/O, results/episodes, and
+  export modules pass 54/54, 102/102, and 83/83; cleanup orchestrator selectors
+  pass 5/5; and module boundaries pass 20/20. One five-selector orchestrator
+  invocation omitted isolated mode and failed before each test body; it is
+  non-counting. The first Final53 shard attempt was intentionally interrupted
+  with exit 130 after the exact complexity gate exposed a 25-branch draft
+  increase; all four stale shard logs were removed before the refactored source
+  manifest was generated, and that attempt is also non-counting.
+- Final53 freezes 1,958 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `67338e58d9fca26b57ea9d152b2506bb88f7820c04190c542a996daa1f805148`.
+  Shards 0 through 3 pass 466/466 in 1,926.780 seconds, 526/526 in
+  1,705.641 seconds, 526/526 in 1,606.935 seconds, and 440/440 in
+  1,657.545 seconds, for exact aggregate coverage of 1,958/1,958 without
+  skips. The independent Darwin security inventory passes 14/14 in 73.323
+  seconds. All five bounded logs total 475,685 bytes, and every process-group
+  supervisor reached terminal exit zero. Result-contract, module-boundary, CI,
+  Skill, and Bootstrap entrypoints pass 25/25, 20/20, 33/33, 6/6, and 12/12.
+  Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the official
+  OpenAI Skill validator, project-journal validation, tracked bytecode
+  exclusion, and `git diff --check` are clean on the same source tree.
 
 ## Follow-up Work
 

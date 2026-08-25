@@ -1188,8 +1188,7 @@ def secure_remove_tree_at(
 ) -> dict[str, int]:
     """Remove one owner-only tree through an already anchored parent fd."""
 
-    if not name or name in {".", ".."} or "/" in name or "\x00" in name:
-        raise UnsafePathError("remove-tree name must be one safe component")
+    _require_safe_tree_component(name, operation="remove-tree")
     expected_entries = _expected_cleanup_entries(expected_inventory)
     active_budget = _unbounded_cleanup_budget() if budget is None else budget
     return _secure_remove_tree_at(
@@ -1202,6 +1201,11 @@ def secure_remove_tree_at(
         depth=0,
         budget=active_budget,
     )
+
+
+def _require_safe_tree_component(name: str, *, operation: str) -> None:
+    if not name or name in {".", ".."} or "/" in name or "\x00" in name:
+        raise UnsafePathError(f"{operation} name must be one safe component")
 
 
 def _cleanup_inventory_entry(
@@ -1387,16 +1391,12 @@ def _inspect_tree_descriptor(
                     current.st_uid,
                     current.st_gid,
                     stat.S_IMODE(current.st_mode),
-                    current.st_nlink,
-                    current.st_size,
                 ) != (
                     child_anchored.st_dev,
                     child_anchored.st_ino,
                     child_anchored.st_uid,
                     child_anchored.st_gid,
                     stat.S_IMODE(child_anchored.st_mode),
-                    child_anchored.st_nlink,
-                    child_anchored.st_size,
                 ):
                     raise UnsafePathError(
                         f"inspected tree changed while inventoried: {child_path}"
@@ -1429,21 +1429,46 @@ def _inspect_tree_descriptor(
         final.st_uid,
         final.st_gid,
         stat.S_IMODE(final.st_mode),
-        final.st_nlink,
-        final.st_size,
     ) != (
         anchored.st_dev,
         anchored.st_ino,
         anchored.st_uid,
         anchored.st_gid,
         stat.S_IMODE(anchored.st_mode),
-        anchored.st_nlink,
-        anchored.st_size,
     ):
         raise UnsafePathError(
             f"inspected tree changed while inventoried: {display_path}"
         )
     return counts, entries
+
+
+def _stable_inventory_entry(entry: Mapping[str, Any]) -> tuple[Any, ...]:
+    file_metadata = int(entry["object_type"] != "directory")
+    return (
+        entry["access_policy"],
+        entry["content_commitment"],
+        entry["device"],
+        entry["group"],
+        entry["inode"],
+        entry["link_count"] * file_metadata,
+        entry["mode"],
+        entry["object_type"],
+        entry["owner"],
+        entry["relative_path"],
+        entry["size"] * file_metadata,
+    )
+
+
+def _stable_inventory_snapshot(
+    counts: Mapping[str, int],
+    entries: Sequence[Mapping[str, Any]],
+) -> tuple[Any, ...]:
+    return (
+        counts["byte_count"],
+        counts["directory_count"],
+        counts["file_count"],
+        tuple(_stable_inventory_entry(entry) for entry in entries),
+    )
 
 
 def inspect_tree_inventory_at(
@@ -1453,10 +1478,9 @@ def inspect_tree_inventory_at(
     budget: TreeInventoryBudget,
     display_path: Path,
 ) -> dict[str, Any]:
-    """Inventory one owner-only tree without following caller-controlled links."""
+    """Inventory one owner-only tree with two stable descriptor-root snapshots."""
 
-    if not name or name in {".", ".."} or "/" in name or "\x00" in name:
-        raise UnsafePathError("inspect-tree name must be one safe component")
+    _require_safe_tree_component(name, operation="inspect-tree")
     budget.checkpoint()
     try:
         observed = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
@@ -1484,14 +1508,38 @@ def inspect_tree_inventory_at(
             raise UnsafePathError(
                 f"inspected tree changed while opened: {display_path}"
             )
-        counts, entries = _inspect_tree_descriptor(
+        entries_before = budget.entry_count
+        path_bytes_before = budget.path_byte_count
+        first_counts, first_entries = _inspect_tree_descriptor(
             descriptor,
             budget=budget,
             depth=0,
             display_path=display_path,
             relative_path=".",
         )
-        entries.sort(key=lambda item: os.fsencode(item["relative_path"]))
+        first_entries.sort(key=lambda item: os.fsencode(item["relative_path"]))
+
+        validation_budget = TreeInventoryBudget(
+            max_entries=max(1, budget.entry_count - entries_before),
+            max_path_bytes=max(1, budget.path_byte_count - path_bytes_before),
+            max_depth=budget.max_depth,
+            deadline=budget.deadline,
+            clock=budget.clock,
+        )
+        second_counts, second_entries = _inspect_tree_descriptor(
+            descriptor,
+            budget=validation_budget,
+            depth=0,
+            display_path=display_path,
+            relative_path=".",
+        )
+        second_entries.sort(key=lambda item: os.fsencode(item["relative_path"]))
+        if _stable_inventory_snapshot(
+            first_counts, first_entries
+        ) != _stable_inventory_snapshot(second_counts, second_entries):
+            raise UnsafePathError(
+                f"inspected tree changed between inventory snapshots: {display_path}"
+            )
         current_root = os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
         if (
             current_root.st_dev,
@@ -1499,21 +1547,17 @@ def inspect_tree_inventory_at(
             current_root.st_uid,
             current_root.st_gid,
             stat.S_IMODE(current_root.st_mode),
-            current_root.st_nlink,
-            current_root.st_size,
         ) != (
             anchored.st_dev,
             anchored.st_ino,
             anchored.st_uid,
             anchored.st_gid,
             stat.S_IMODE(anchored.st_mode),
-            anchored.st_nlink,
-            anchored.st_size,
         ):
             raise UnsafePathError(
                 f"inspected tree name changed while inventoried: {display_path}"
             )
-        return {"counters": counts, "entries": entries}
+        return {"counters": second_counts, "entries": second_entries}
     finally:
         os.close(descriptor)
 
