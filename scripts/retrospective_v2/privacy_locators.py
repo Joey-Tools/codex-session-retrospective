@@ -561,6 +561,8 @@ _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
 _CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT = (
     r"(?:sex[_ -]+assigned[_ -]+at[_ -]+birth|sex[_ -]+at[_ -]+birth|"
     r"assigned[_ -]+sex(?:[_ -]+at[_ -]+birth)?|birth[_ -]+sex|sex|"
+    r"gender[_ -]+assigned[_ -]+at[_ -]+birth|gender[_ -]+at[_ -]+birth|"
+    r"assigned[_ -]+gender(?:[_ -]+at[_ -]+birth)?|birth[_ -]+gender|"
     r"age(?:[_ -]+range)?|gender(?:[_ -]+(?:identity|expression))?|race|ethnicity|"
     r"pronouns?|caste|marital[_ -]+status|family[_ -]+status|"
     r"(?:disability|pregnancy|veteran)(?:[_ -]+status)?|"
@@ -573,6 +575,8 @@ _CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT = (
     r"(?:trade[_ -]+)?union[_ -]+membership|"
     r"(?-i:(?:sex|Sex)(?:AssignedAtBirth|AtBirth)|"
     r"(?:assigned|Assigned)Sex(?:AtBirth)?|(?:birth|Birth)Sex|"
+    r"(?:gender|Gender)(?:AssignedAtBirth|AtBirth)|"
+    r"(?:assigned|Assigned)Gender(?:AtBirth)?|(?:birth|Birth)Gender|"
     r"(?:age|Age)Range|(?:gender|Gender)(?:Identity|Expression)|"
     r"(?:marital|Marital)Status|(?:family|Family)Status|"
     r"(?:disability|Disability|pregnancy|Pregnancy)Status|"

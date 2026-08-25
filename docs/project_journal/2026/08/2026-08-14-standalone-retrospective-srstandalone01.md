@@ -4329,6 +4329,36 @@ superseded_by:
   and 33/33; Ruff lint/format, actionlint, the bootstrap manifest, the official
   OpenAI Skill validator, project-journal validation, bytecode scans, and
   `git diff --check` are clean.
+- The clean-context Codex CLI reviewer for signed head `a1cf707b` used an
+  independently materialized and validated read-only workspace over
+  `a3836660..a1cf707b`. Equal pre/post receipts bound 122 commits, 121 parent
+  edges, graph digest
+  `82c158819be6068b5b5581203981861570d104a651f0b1debc99c29259ab8264`,
+  and the unchanged local-config digest. Thread
+  `01a0369b-8309-74b1-afe0-0d93e09405e7` returned one P1 finding: equivalent
+  `gender assigned at birth` fields could still bypass the shared leak
+  scanner, post-redactor, and retained validator. Postvalidation reproduced
+  the prelaunch receipt, the trusted 30-file control manifest, Skill, guard,
+  and Python digests remained exact, no reviewer process remained, and the
+  exact task root was removed.
+- The demographic grammar now also recognizes ordinary, snake-case,
+  hyphenated, camel-case, Markdown, and narrative forms for gender assigned
+  at birth, gender at birth, assigned gender, and birth gender. The shared
+  privacy-policy regression proves those variants are detected, post-redacted,
+  and rejected from retained output while discussion-only prose remains safe.
+- Final33 uses the same owner-controlled Python 3.13.12 runtime and 1,940 exact
+  test IDs from 22 authenticated sources under manifest digest
+  `ea198987489a35a6ea2bd4b0585789201eeaed0d30bb892c63c4505aadaf5459`.
+  Shards 0 through 3 pass 460/460 in 1,941.594 seconds, 523/523 in
+  1,737.475 seconds, 521/521 in 1,644.424 seconds, and 436/436 in
+  1,645.212 seconds. The independent Darwin security inventory passes 14/14
+  in 95.857 seconds without skips. Focused demographic, complete
+  results/episodes, result-contract-audit, and export tests pass 1/1, 102/102,
+  25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
+  and 33/33. One initial CI-contract invocation omitted the required `-S` and
+  failed closed; it is invocation-invalid and non-counting. Ruff lint and
+  changed-file format checks, actionlint, the bootstrap manifest, and the
+  official OpenAI Skill validator are clean on the same tree.
 
 ## Follow-up Work
 
