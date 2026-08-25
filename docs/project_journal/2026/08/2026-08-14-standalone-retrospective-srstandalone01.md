@@ -4359,6 +4359,35 @@ superseded_by:
   failed closed; it is invocation-invalid and non-counting. Ruff lint and
   changed-file format checks, actionlint, the bootstrap manifest, and the
   official OpenAI Skill validator are clean on the same tree.
+- The clean-context Codex CLI reviewer for signed head `7a38bd4e` used an
+  independently materialized and validated read-only workspace over
+  `a3836660..7a38bd4e`. Equal pre/post receipts bound 123 commits, 122 parent
+  edges, graph digest
+  `226836dcca563274adba1826b4552f3798c04845a94caf65f96f718fc3fb340a`,
+  and the unchanged local-config digest. Thread
+  `01a036d4-b24c-7913-9a0a-1f937cd7fd0e` returned two P1 findings: common
+  medical, health, and genetic fields, plus ethnic origin, racial origin, and
+  religious belief aliases, could still bypass all three retained privacy
+  layers. Postvalidation reproduced the prelaunch receipt, the trusted
+  30-file control and Python records were byte-identical, no reviewer process
+  remained, and the exact task root was removed.
+- The shared health grammar now covers medical and health conditions, health
+  status, medical and health information, medical history, and genetic data
+  or information. The demographic grammar now covers ethnic and racial origin
+  plus religious belief aliases. Ordinary, snake-case, hyphenated, camel-case,
+  Markdown, and narrative forms are detected, post-redacted, and rejected
+  from retained output; explicit discussion-only regression cases remain
+  accepted.
+- Final34 uses the owner-controlled Python 3.13.12 runtime and 1,940 exact test
+  IDs from 22 authenticated sources under manifest digest
+  `f283021b0765e57d24dac559a2d8aba40c44f55d929c5c2eb70e2d8b57a301f2`.
+  Shards 0 through 3 pass 460/460 in 1,848.971 seconds, 523/523 in
+  1,653.624 seconds, 521/521 in 1,557.389 seconds, and 436/436 in
+  1,563.077 seconds. The independent Darwin security inventory passes 14/14
+  in 73.182 seconds without skips. Focused health/demographic, complete
+  results/episodes, result-contract-audit, and export tests pass 2/2, 102/102,
+  25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
+  and 33/33.
 
 ## Follow-up Work
 
