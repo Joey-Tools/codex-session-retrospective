@@ -406,14 +406,16 @@ source acceptance.
   inside, contains, or aliases either canonical local `sessions/` or
   `archived_sessions/` source root. `start` performs this check before creating
   checkpoint, lock, raw-input, or sidecar state. A sibling owner-private run
-  cache beneath `~/.codex/session-retrospective/` remains valid.
+  cache beneath
+  `/absolute/canonical/account-home/.codex/session-retrospective/` remains
+  valid.
 - `doctor`, CLI `start`, and the public `start_run` facade apply the same
   bidirectional lexical and resolved-path separation to the durable history
   repository before readiness can pass or run state can be created. A history
   repository inside, above, or aliased into either source root is rejected; a
-  sibling repository remains valid. Bare `~` is resolved from the canonical
-  account home rather than ambient `HOME`, so environment poisoning cannot
-  redirect this comparison.
+  sibling repository remains valid. Production defaults and exact bindings use
+  the account-database-derived canonical home rather than ambient `HOME`, so
+  environment poisoning cannot redirect this comparison.
 - Successful publication removes raw shards. Blocked raw state expires within
   seven days and remains an explicit recoverability/coverage outcome.
 

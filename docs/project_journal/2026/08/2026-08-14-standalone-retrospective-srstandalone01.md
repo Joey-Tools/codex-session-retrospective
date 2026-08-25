@@ -4268,6 +4268,33 @@ superseded_by:
   5/5, 20/20, and 33/33; Ruff lint/format, the official Python 3.13 OpenAI
   Skill validator, project-journal validation, and `git diff --check` are
   clean on the same tree.
+- The signed canonical-path documentation anchor is `4bdba35b` with tree
+  `dab015c0` and parent `673a19c1`; host verification accepted Joey's EDDSA
+  signature. Exact-secret admission over `a3836660..4bdba35b` returned clean,
+  started no reviewer, and completed temporary cleanup.
+- A new fresh Codex CLI 0.149.0 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  used one independently materialized and validated read-only workspace.
+  Equal receipts bound 120 commits, 119 parent edges, graph digest
+  `417a2f4f37b3418d6251f3f778e7bad3202eafb6723b18f75674cb26aa5173ef`,
+  and the unchanged local-config digest. Thread
+  `01a03636-aac1-7180-8e6d-c320fffc8387` returned one P2 finding: two
+  cutover references and one data-contract reference still used shell `~`
+  notation, while the test covered only three production documents.
+  Postvalidation reproduced the prelaunch receipt, trusted-control and Python
+  digests remained exact, no reviewer process remained, and the exact
+  owner-private task root was removed.
+- All normative Markdown now uses the canonical account-home placeholder for
+  production automation, cutover, and run-cache paths. The Skill contract
+  scans README, Skill, and every `references/*.md` file and rejects either
+  `$HOME/.codex` or `~/.codex`, while separately requiring the placeholder in
+  the three path-authority references.
+- Final30 uses Python 3.13.12 and 1,940 exact test IDs from 22 authenticated
+  sources under manifest digest
+  `72ac538bdffb0428fc949870228ce4a7baab4d68272991522a429bcf7a380577`.
+  Shards 0 through 3 pass 460/460 in 1,884.664 seconds, 523/523 in
+  1,680.751 seconds, 521/521 in 1,585.834 seconds, and 436/436 in
+  1,587.358 seconds. The independent Darwin security inventory passes 14/14
+  in 67.843 seconds without skips.
 
 ## Follow-up Work
 

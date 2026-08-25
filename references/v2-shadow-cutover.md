@@ -88,9 +88,10 @@ or lease protocol:
 5. run and publish one exact 90-day Baseline genesis;
 6. use the `automation_update` capability to update verified existing records or
    first-register exactly `daily-session-retrospective` and
-   `weekly-session-retrospective` at their stable `~/.codex/automations/**`
-   paths, then have the separate cutover controller issue the internal authority
-   record and run a bounded Daily canary.
+   `weekly-session-retrospective` at their stable
+   `/absolute/canonical/account-home/.codex/automations/**` paths, then have the
+   separate cutover controller issue the internal authority record and run a
+   bounded Daily canary.
 
 The internal cutover authority verifies the installed TOML records, exact
 installed v2 CLI path, active mode-specific production prompts, authenticated
@@ -110,7 +111,8 @@ lines, embedded control characters, unknown fields, and nested tables fail
 closed.
 It rejects reference-only templates, v1 paths, shadow/partial coverage controls,
 and unrelated IDs. The separate controller writes
-`~/.codex/session-retrospective/automation-cutover-v2.json`; production marker
+`/absolute/canonical/account-home/.codex/session-retrospective/automation-cutover-v2.json`;
+production marker
 issuance embeds and authenticates that record and the installed commit. Missing
 `automation_update` capability leaves cutover blocked, including when an old
 record already exists.

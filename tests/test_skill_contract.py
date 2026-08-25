@@ -57,8 +57,6 @@ class SkillContractTests(unittest.TestCase):
             with self.subTest(document=document[:32]):
                 self.assertIn(shell_runtime, document)
                 self.assertIn("account database", document)
-                self.assertNotIn("$HOME/.codex", document)
-                self.assertNotIn("~/.codex", document)
         for document in (skill, readme, cli_reference):
             with self.subTest(copies_document=document[:32]):
                 self.assertIn("venv --copies", document)
@@ -66,6 +64,27 @@ class SkillContractTests(unittest.TestCase):
         self.assertNotIn('python3 "$V2_CLI"', cli_reference)
         self.assertNotIn('python3 -I -B -S "$V2_CLI"', cli_reference)
         self.assertEqual(10, cli_reference.count(invocation))
+
+    def test_normative_documents_reject_ambient_home_production_paths(self) -> None:
+        documents = {
+            "README.md": (ROOT / "README.md").read_text(encoding="utf-8"),
+            "SKILL.md": (ROOT / "SKILL.md").read_text(encoding="utf-8"),
+        }
+        for path in sorted((ROOT / "references").glob("*.md")):
+            documents[f"references/{path.name}"] = path.read_text(encoding="utf-8")
+
+        for name, document in documents.items():
+            with self.subTest(document=name):
+                self.assertNotIn("$HOME/.codex", document)
+                self.assertNotIn("~/.codex", document)
+
+        canonical_home = "/absolute/canonical/account-home"
+        for name in ("v2-cli.md", "v2-data-contract.md", "v2-shadow-cutover.md"):
+            with self.subTest(canonical_document=name):
+                self.assertIn(
+                    canonical_home,
+                    documents[f"references/{name}"],
+                )
 
     def test_references_and_entry_points_exist(self) -> None:
         for name in (
