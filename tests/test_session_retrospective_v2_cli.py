@@ -547,6 +547,30 @@ class CliContractTests(unittest.TestCase):
         with self.assertRaises(authority.AutomationCutoverBlocked):
             authority.verify_automation_cutover_record(self.identity, tampered)
 
+    def test_cutover_snapshot_rejects_boolean_record_version(self) -> None:
+        automation_root = self.automation_root()
+        for automation_id, mode in authority.STABLE_AUTOMATION_MODES.items():
+            record = self.write_automation_record(automation_id, mode)
+            if automation_id == "daily-session-retrospective":
+                record.write_text(
+                    record.read_text(encoding="utf-8").replace(
+                        "version = 1", "version = true"
+                    ),
+                    encoding="utf-8",
+                )
+
+        snapshot_path = self.root / "boolean-version-pre-update.json"
+        with self.assertRaisesRegex(
+            authority.AutomationCutoverBlocked,
+            "does not own the stable ID",
+        ):
+            authority.capture_automation_cutover_snapshot(
+                snapshot_path,
+                identity=self.identity,
+                automation_root=automation_root,
+            )
+        self.assertFalse(snapshot_path.exists())
+
     def test_cutover_record_fails_closed_without_capability_or_for_unrelated_id(
         self,
     ) -> None:

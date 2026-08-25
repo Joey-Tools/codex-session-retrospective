@@ -2276,7 +2276,8 @@ def _automation_pre_update_row(
             "pre-update automation record is invalid"
         ) from exc
     if (
-        document.get("version") != 1
+        type(document.get("version")) is not int
+        or document.get("version") != 1
         or document.get("id") != automation_id
         or document.get("kind") != "cron"
     ):

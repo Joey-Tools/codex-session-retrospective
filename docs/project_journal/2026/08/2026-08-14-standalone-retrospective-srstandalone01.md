@@ -4636,6 +4636,45 @@ superseded_by:
   runner, publication test, or wrapper. These supplemental timeouts do not
   create a coverage gap because the same frozen Final41 manifest completed all
   1,953 tests exactly once across the four terminal shards.
+- Signed head `fde4d2ec` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..fde4d2ec` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 130 commits, 129 parent edges, graph digest
+  `a04be4f8a8bfbdb3d1afa8b6daf973f29e861b9cbcf72f7a98749c3ab92d9f1b`,
+  and the unchanged local-config digest. Thread
+  `01a038ea-4f20-7cb3-bc93-f65c105047e0` completed in 1,298 seconds and found
+  that the pre-update automation snapshot accepted TOML `version = true`
+  because Python boolean equality treated `True` as integer `1`; the existing
+  boolean regression covered only the post-update installed-record validator.
+  The 110 completed command events used only bounded trusted-guidance reads or
+  the exact sanitized Git prefix with read-only subcommands. The trusted
+  30-file control manifest remained byte-identical, no reviewer process
+  remained, and the exact owner-private task root was removed after identity
+  and inventory validation. A first parent-sandbox launch could not initialize
+  the Codex state database, produced no `thread.started` event or model output,
+  and remains zero-start/non-counting.
+- The pre-update snapshot now requires exact integer type and value for record
+  version before it recognizes ownership of a stable automation ID. A direct
+  `capture_automation_cutover_snapshot` regression proves that `version = true`
+  fails without publishing the snapshot file. The focused regression passes
+  alone and with three adjacent cutover tests; module boundaries pass 20/20,
+  and the combined result-contract, module-boundary, CI, Skill, and Bootstrap
+  entrypoints pass 96/96 in 14.202 seconds.
+- Final42 freezes 1,954 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `36065c41fe3a0de9b96ce1bffe4a74524adecf2d5380b447b62e59d4a78b47af`.
+  Shards 0 through 3 pass 465/465 in 1,866.364 seconds, 525/525 in
+  1,669.454 seconds, 525/525 in 1,568.990 seconds, and 439/439 in
+  1,618.526 seconds, for exact aggregate coverage of 1,954/1,954 without
+  skips. Their four bounded logs total 472,387 bytes. The independent Darwin
+  security inventory passes 14/14 in 70.046 seconds. Ruff 0.13.2 lint and
+  changed-file formatting, both workflows under `actionlint` 1.7.12, the
+  generated bootstrap manifest, the official OpenAI Skill validator using the
+  offline Python 3.13 cache, and tracked-bytecode exclusion are clean on the
+  same source tree. One sandboxed Skill-validator launch was blocked from the
+  existing uv cache and is non-counting; the approved offline retry returned
+  `Skill is valid!`.
 
 ## Follow-up Work
 
