@@ -561,7 +561,7 @@ _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
     r"(?:conditions?|data|history|information|records?|status)|"
     r"genetic[_ -]+(?:data|information|profile|records?|status)|"
     r"protected[_ -]+health[_ -]+information|"
-    r"(?-i:(?:known|Known)Allergies|(?:blood|Blood)Type|"
+    r"(?-i:(?:known|Known)(?:Allergy|Allergies)|(?:blood|Blood)Type|"
     r"(?:medical|Medical|health|Health|clinical|Clinical)"
     r"(?:Condition|Conditions|Data|History|Information|Record|Records|Status)|"
     r"(?:genetic|Genetic)(?:Data|Information|Profile|Record|Records|Status)|"
@@ -2179,6 +2179,137 @@ def _normalized_personal_sensitive_value(value: str) -> str:
     return " ".join(candidate.split())
 
 
+_LABELED_VALUE_GROUPS = (
+    "value",
+    "double_quoted_value",
+    "single_quoted_value",
+    "escaped_double_quoted_value",
+)
+_CONTAINER_CLOSER = {"[": "]", "{": "}"}
+_CONTAINER_DELIMITERS = frozenset(" \t\r\n,:[]{}")
+_CONTAINER_STRUCTURAL_KEYS = frozenset(
+    {"code", "id", "label", "name", "severity", "status", "type", "value"}
+)
+
+
+def _labeled_value_group_span(match: re.Match[str]) -> tuple[int, int] | None:
+    for group in _LABELED_VALUE_GROUPS:
+        try:
+            start, end = match.span(group)
+        except IndexError:
+            continue
+        if start >= 0:
+            return start, end
+    return None
+
+
+def _sensitive_container_span(match: re.Match[str]) -> tuple[int, int] | None:
+    value_span = _labeled_value_group_span(match)
+    if value_span is None:
+        return None
+    start, _matched_end = value_span
+    source = match.string
+    if start >= len(source) or source[start] not in _CONTAINER_CLOSER:
+        return None
+
+    stack = [_CONTAINER_CLOSER[source[start]]]
+    quote: str | None = None
+    escaped = False
+    for index in range(start + 1, len(source)):
+        character = source[index]
+        if quote is not None:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == quote:
+                quote = None
+            continue
+        if character in {'"', "'"}:
+            quote = character
+            continue
+        if character in _CONTAINER_CLOSER:
+            stack.append(_CONTAINER_CLOSER[character])
+            continue
+        if character in "]}":
+            if character != stack[-1]:
+                return start, len(source)
+            stack.pop()
+            if not stack:
+                return start, index + 1
+    return start, len(source)
+
+
+def _decoded_container_string(token: str) -> str:
+    if len(token) < 2 or token[-1] != token[0]:
+        return token[1:]
+    if token.startswith('"'):
+        try:
+            decoded = json.loads(token)
+        except json.JSONDecodeError:
+            decoded = re.sub(r'\\(["\\])', r"\1", token[1:-1])
+        return decoded if isinstance(decoded, str) else token[1:-1]
+    return re.sub(r"\\(['\\])", r"\1", token[1:-1])
+
+
+def _container_token_is_object_key(source: str, index: int, end: int) -> bool:
+    while index < end and source[index] in " \t\r\n":
+        index += 1
+    return index < end and source[index] == ":"
+
+
+def _sensitive_container_scalar_values(match: re.Match[str]) -> Iterator[str]:
+    span = _sensitive_container_span(match)
+    if span is None:
+        return
+    start, end = span
+    source = match.string
+    seen: set[str] = set()
+
+    index = start + 1
+    while index < end:
+        character = source[index]
+        if character in {'"', "'"}:
+            quote = character
+            token_start = index
+            index += 1
+            escaped = False
+            while index < end:
+                current = source[index]
+                index += 1
+                if escaped:
+                    escaped = False
+                elif current == "\\":
+                    escaped = True
+                elif current == quote:
+                    break
+            token = _normalized_personal_sensitive_value(
+                _decoded_container_string(source[token_start:index])
+            )
+        elif character in _CONTAINER_DELIMITERS:
+            index += 1
+            continue
+        else:
+            token_start = index
+            while (
+                index < end
+                and source[index] not in _CONTAINER_DELIMITERS
+                and source[index] not in {'"', "'"}
+            ):
+                index += 1
+            token = _normalized_personal_sensitive_value(source[token_start:index])
+            if token.casefold() in {"false", "null", "true"}:
+                continue
+        if (
+            _container_token_is_object_key(source, index, end)
+            and token.casefold() in _CONTAINER_STRUCTURAL_KEYS
+        ):
+            continue
+        if token and token not in seen:
+            seen.add(token)
+            yield token
+
+
 def _decoded_sensitive_labeled_value(match: re.Match[str]) -> str:
     for group in (
         "value",
@@ -2368,6 +2499,20 @@ def _address_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
     return values + components + normalized_components
 
 
+def _personal_sensitive_values(match: re.Match[str]) -> Iterator[str]:
+    return chain(
+        _personal_sensitive_overlap_values(match),
+        _sensitive_container_scalar_values(match),
+    )
+
+
+def _address_sensitive_values(match: re.Match[str]) -> Iterator[str]:
+    return chain(
+        _address_sensitive_overlap_values(match),
+        _sensitive_container_scalar_values(match),
+    )
+
+
 def _name_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
     values = _personal_sensitive_overlap_values(match)
     component_sources = map(
@@ -2386,6 +2531,13 @@ def _name_sensitive_overlap_values(match: re.Match[str]) -> tuple[str, ...]:
         )
     )
     return values + components
+
+
+def _name_sensitive_values(match: re.Match[str]) -> Iterator[str]:
+    return chain(
+        _name_sensitive_overlap_values(match),
+        _sensitive_container_scalar_values(match),
+    )
 
 
 def _contains_nonstatus_personal_value(values: Iterable[str]) -> bool:
@@ -2537,7 +2689,7 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
         )
     )
     personal_values = chain.from_iterable(
-        map(_personal_sensitive_overlap_values, personal_matches)
+        map(_personal_sensitive_values, personal_matches)
     )
     name_matches = chain.from_iterable(
         map(
@@ -2545,7 +2697,7 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
             _NAME_LABELED_VALUE_PATTERNS,
         )
     )
-    name_values = chain.from_iterable(map(_name_sensitive_overlap_values, name_matches))
+    name_values = chain.from_iterable(map(_name_sensitive_values, name_matches))
     address_matches = chain.from_iterable(
         map(
             lambda pattern: _filtered_personal_matches(pattern, value),
@@ -2553,7 +2705,7 @@ def sensitive_labeled_values(value: str) -> Iterator[str]:
         )
     )
     address_values = chain.from_iterable(
-        map(_address_sensitive_overlap_values, address_matches)
+        map(_address_sensitive_values, address_matches)
     )
     contextual_phone_values = filter(
         lambda candidate: 7 <= sum(map(str.isdigit, candidate)) <= 15,
@@ -2688,7 +2840,12 @@ def personal_identifier_spans(value: str) -> Iterator[tuple[int, int]]:
                 ]
                 if not minimum_digit_count <= digit_count <= maximum_digit_count:
                     continue
-            candidates.append((match.start(group), match.end(group)))
+            start, end = match.span(group)
+            if pattern in PERSONAL_LABELED_VALUE_PATTERNS:
+                container_span = _sensitive_container_span(match)
+                if container_span is not None:
+                    end = max(end, container_span[1])
+            candidates.append((start, end))
     candidates.sort(key=lambda span: (span[0], span[1]))
     if not candidates:
         return

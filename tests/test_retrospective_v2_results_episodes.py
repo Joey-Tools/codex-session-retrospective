@@ -2912,6 +2912,21 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "knownAllergy: penicillin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                '"knownAllergies": ["penicillin","peanuts"]',
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                '"knownAllergies": [{"name":"penicillin"},{"name":"peanuts"}]',
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "**Allergy:** penicillin",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
@@ -2976,6 +2991,44 @@ class ResultValidationTests(unittest.TestCase):
                     replacement,
                     result_validation_module.post_redact(source),
                 )
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value(
+                        {"problem_statement": source}
+                    )
+
+        container_values = tuple(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                '"knownAllergies": ["penicillin","peanuts"]'
+            )
+        )
+        self.assertIn("penicillin", container_values)
+        self.assertIn("peanuts", container_values)
+        object_values = tuple(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                'knownAllergies: {"penicillin":true,"name":"peanuts"}'
+            )
+        )
+        self.assertIn("penicillin", object_values)
+        self.assertIn("peanuts", object_values)
+        self.assertNotIn("name", object_values)
+
+        for source, expected in (
+            (
+                '"knownAllergies": [\n  "penicillin",\n  "peanuts"\n]',
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                'knownAllergies: [{"name":"penicillin] severe"},'
+                '{"name":"peanuts"}] after review',
+                "[REDACTED_PERSONAL_IDENTIFIER] after review",
+            ),
+            (
+                'knownAllergies: ["penicillin", "peanuts"',
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+        ):
+            with self.subTest(container_source=source):
+                self.assertEqual(expected, result_validation_module.post_redact(source))
                 with self.assertRaises(reporting_module.RetainedPrivacyError):
                     reporting_module.validate_retained_value(
                         {"problem_statement": source}

@@ -3097,6 +3097,78 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
 
             self.assertEqual(validation_count, 2)
 
+    def test_descriptor_bundle_budget_is_checked_before_content_reads(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "parent"
+            output = parent / "retained-v2"
+            parent.mkdir(mode=0o700)
+            output.mkdir(mode=0o700)
+            for name in RETAINED_ARTIFACT_NAMES:
+                artifact = output / name
+                artifact.write_bytes(b"x")
+                os.chmod(artifact, 0o600)
+            parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+            anchor = export_module._AnchoredExport(output, parent_fd)
+            try:
+                with (
+                    mock.patch.object(export_module, "MAX_RETAINED_BUNDLE_BYTES", 4),
+                    mock.patch.object(
+                        export_module,
+                        "_read_artifact_at",
+                        wraps=export_module._read_artifact_at,
+                    ) as read,
+                    self.assertRaisesRegex(
+                        RetainedInventoryError,
+                        "preparation limit",
+                    ),
+                ):
+                    export_module._read_exact_artifacts_at(anchor)
+                read.assert_not_called()
+            finally:
+                anchor.close()
+
+    def test_descriptor_bundle_read_binds_preflight_file_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            parent = Path(temporary) / "parent"
+            output = parent / "retained-v2"
+            parent.mkdir(mode=0o700)
+            output.mkdir(mode=0o700)
+            for name in RETAINED_ARTIFACT_NAMES:
+                artifact = output / name
+                artifact.write_bytes(b"x")
+                os.chmod(artifact, 0o600)
+            changed_name = RETAINED_ARTIFACT_NAMES[1]
+            original_read = export_module._read_artifact_at
+            read_count = 0
+
+            def mutate_before_second_read(*args, **kwargs):
+                nonlocal read_count
+                read_count += 1
+                if read_count == 2:
+                    (output / changed_name).write_bytes(b"xx")
+                    os.chmod(output / changed_name, 0o600)
+                return original_read(*args, **kwargs)
+
+            parent_fd = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+            anchor = export_module._AnchoredExport(output, parent_fd)
+            try:
+                with (
+                    mock.patch.object(
+                        export_module,
+                        "_read_artifact_at",
+                        side_effect=mutate_before_second_read,
+                    ),
+                    self.assertRaisesRegex(
+                        RetainedInventoryError,
+                        "changed before it was read",
+                    ),
+                ):
+                    export_module._read_exact_artifacts_at(anchor)
+            finally:
+                anchor.close()
+
+            self.assertEqual(2, read_count)
+
     def test_export_is_owner_only_atomic_and_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = (

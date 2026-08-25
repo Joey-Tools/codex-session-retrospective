@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import datetime as dt
 import fcntl
 import hashlib
+from itertools import islice
 import json
 import os
 from pathlib import Path
@@ -800,28 +801,70 @@ def _write_artifact_at(
         os.close(descriptor)
 
 
+def _artifact_metadata_key(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_uid,
+        metadata.st_gid,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+    )
+
+
+def _inspect_artifact_at(
+    directory_fd: int,
+    name: str,
+    *,
+    display_path: Path,
+) -> os.stat_result:
+    try:
+        metadata = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+    except OSError as exc:
+        raise RetainedInventoryError(
+            f"cannot inspect retained artifact {display_path}"
+        ) from exc
+    current_uid = getattr(os, "geteuid", lambda: metadata.st_uid)()
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_uid != current_uid
+        or stat.S_IMODE(metadata.st_mode) != _FILE_MODE
+        or metadata.st_nlink != 1
+        or metadata.st_size > MAX_RETAINED_BUNDLE_BYTES
+    ):
+        raise RetainedInventoryError(
+            f"retained artifact is not owner-only and bounded: {display_path}"
+        )
+    return metadata
+
+
 def _read_artifact_at(
     directory_fd: int,
     name: str,
     *,
     display_path: Path,
+    expected_metadata: os.stat_result | None = None,
+    maximum_bytes: int | None = None,
 ) -> bytes:
-    try:
-        expected = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
-    except OSError as exc:
+    observed = _inspect_artifact_at(
+        directory_fd,
+        name,
+        display_path=display_path,
+    )
+    if expected_metadata is not None and _artifact_metadata_key(
+        observed
+    ) != _artifact_metadata_key(expected_metadata):
         raise RetainedInventoryError(
-            f"cannot inspect retained artifact {display_path}"
-        ) from exc
-    current_uid = getattr(os, "geteuid", lambda: expected.st_uid)()
-    if (
-        not stat.S_ISREG(expected.st_mode)
-        or expected.st_uid != current_uid
-        or stat.S_IMODE(expected.st_mode) != _FILE_MODE
-        or expected.st_nlink != 1
-        or expected.st_size > MAX_RETAINED_BUNDLE_BYTES
-    ):
+            f"retained artifact changed before it was read: {display_path}"
+        )
+    expected = observed
+    effective_maximum = (
+        MAX_RETAINED_BUNDLE_BYTES if maximum_bytes is None else maximum_bytes
+    )
+    if expected.st_size > effective_maximum:
         raise RetainedInventoryError(
-            f"retained artifact is not owner-only and bounded: {display_path}"
+            "staged retained bundle exceeds the 256 MiB preparation limit"
         )
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(name, flags, dir_fd=directory_fd)
@@ -838,11 +881,7 @@ def _read_artifact_at(
                 f"retained artifact access policy is invalid: {display_path}"
             ) from exc
         opened = os.fstat(descriptor)
-        if (opened.st_dev, opened.st_ino, opened.st_size) != (
-            expected.st_dev,
-            expected.st_ino,
-            expected.st_size,
-        ):
+        if _artifact_metadata_key(opened) != _artifact_metadata_key(expected):
             raise RetainedInventoryError(
                 f"retained artifact changed while opened: {display_path}"
             )
@@ -861,11 +900,7 @@ def _read_artifact_at(
                 f"retained artifact grew while read: {display_path}"
             )
         after = os.fstat(descriptor)
-        if (after.st_dev, after.st_ino, after.st_size) != (
-            expected.st_dev,
-            expected.st_ino,
-            expected.st_size,
-        ):
+        if _artifact_metadata_key(after) != _artifact_metadata_key(expected):
             raise RetainedInventoryError(
                 f"retained artifact changed while read: {display_path}"
             )
@@ -893,7 +928,11 @@ def _read_exact_artifacts_at(
     directory_fd = anchor.child_fd(child_name)
     display = anchor.output if child_name is None else anchor.parent / child_name
     try:
-        names = os.listdir(directory_fd)
+        with os.scandir(directory_fd) as entries:
+            names = [
+                entry.name
+                for entry in islice(entries, len(RETAINED_ARTIFACT_NAMES) + 1)
+            ]
         if set(names) != set(RETAINED_ARTIFACT_NAMES) or len(names) != len(
             RETAINED_ARTIFACT_NAMES
         ):
@@ -902,18 +941,39 @@ def _read_exact_artifacts_at(
             raise RetainedInventoryError(
                 f"staged retained inventory mismatch: missing={missing}, extra={extra}"
             )
-        artifacts = {
-            name: _read_artifact_at(
+        metadata = {
+            name: _inspect_artifact_at(
                 directory_fd,
                 name,
                 display_path=display / name,
             )
             for name in RETAINED_ARTIFACT_NAMES
         }
-        if sum(len(value) for value in artifacts.values()) > MAX_RETAINED_BUNDLE_BYTES:
+        if sum(item.st_size for item in metadata.values()) > MAX_RETAINED_BUNDLE_BYTES:
             raise RetainedInventoryError(
                 "staged retained bundle exceeds the 256 MiB preparation limit"
             )
+        artifacts: dict[str, bytes] = {}
+        remaining = MAX_RETAINED_BUNDLE_BYTES
+        for name in RETAINED_ARTIFACT_NAMES:
+            expected = metadata[name]
+            if expected.st_size > remaining:
+                raise RetainedInventoryError(
+                    "staged retained bundle exceeds the 256 MiB preparation limit"
+                )
+            content = _read_artifact_at(
+                directory_fd,
+                name,
+                display_path=display / name,
+                expected_metadata=expected,
+                maximum_bytes=remaining,
+            )
+            if len(content) > remaining:
+                raise RetainedInventoryError(
+                    "staged retained bundle exceeds the 256 MiB preparation limit"
+                )
+            artifacts[name] = content
+            remaining -= len(content)
         return artifacts
     finally:
         os.close(directory_fd)

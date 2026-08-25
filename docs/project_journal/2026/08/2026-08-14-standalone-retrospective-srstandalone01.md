@@ -4449,6 +4449,52 @@ superseded_by:
   1,595.079 seconds, 522/522 in 1,493.160 seconds, and 436/436 in
   1,501.914 seconds. The independent Darwin security inventory passes 14/14
   in 70.913 seconds without skips.
+- The clean-context Codex CLI reviewer for signed head `639e0673` used a fresh
+  independently materialized and validated read-only workspace over
+  `a3836660..639e0673`. Equal prelaunch and postvalidation receipts bound 126
+  commits, 125 parent edges, graph digest
+  `e93fde4aaa0d62177cecca9d9b5b10c6aebbe70ba4973e8f0eeed724528dcd1e`,
+  and the unchanged local-config digest. Thread
+  `01a0376f-ed3c-7102-8010-1121b14032e1` returned three P1 findings: a
+  multi-value allergy container exposed every item after the first, the
+  descriptor-based export reader checked its 256 MiB aggregate budget only
+  after reading all eight files, and singular camel-case `knownAllergy` was
+  absent from the closed health grammar. Postvalidation reproduced the
+  receipt, trusted controls remained byte-identical, no reviewer process
+  remained, and the exact task root was removed.
+- Shared personal-field matching now balances nested list and object values
+  across quoted and multiline content, fails closed over the remaining input
+  for malformed containers, and contributes individual scalar values to
+  source-overlap checks. Singular and plural camel-case known-allergy fields
+  use the same scanner, post-redactor, and retained validator. The export
+  reader now freezes every file's object identity, owner/group, mode, link
+  count, and size, rejects an oversized aggregate before the first content
+  read, and applies the remaining shared budget plus that exact metadata to
+  each descriptor read. Aggregate pre-read and pre-open mutation regressions
+  accompany multiline, nested, malformed, and scalar-overlap privacy cases.
+- Focused reviewer-fix tests pass 6/6. Complete results/episodes,
+  export/reporting, and result-contract-audit modules pass 102/102, 81/81,
+  and 25/25. The isolated module-boundary, CI-contract, and Skill-contract
+  entrypoints pass 20/20, 33/33, and 6/6 with the exact branch inventory
+  updated from 9,952 to 10,001. One combined contract invocation omitted the
+  required `-I` and selected a symlinked Homebrew interpreter; it failed
+  closed and is invocation-invalid/non-counting.
+- The first post-reviewer four-shard attempt is non-counting because a final
+  source-overlap refinement was made while its four processes were active.
+  Each process received one interrupt and terminated; no partial result is
+  used as final-tree evidence.
+- Final38 freezes 1,945 unique test IDs from 22 authenticated sources under
+  manifest digest
+  `2e7aa22ac7ef7cdb567b118b44c212a1d43c716c17ef410e1d2f0ebf6a8c348d`.
+  Shards 0 through 3 pass 461/461 in 1,796.669 seconds, 525/525 in
+  1,599.796 seconds, 523/523 in 1,505.780 seconds, and 436/436 in
+  1,513.088 seconds. The independent Darwin security inventory passes 14/14
+  in 63.432 seconds without skips.
+- On the same source tree, the isolated module-boundary, CI-contract, and
+  Skill-contract entrypoints pass 20/20, 33/33, and 6/6. Ruff lint and format,
+  actionlint, the official OpenAI Skill validator, project-journal validation,
+  and `git diff --check` pass; tracked and source-test bytecode inventories are
+  empty.
 
 ## Follow-up Work
 
