@@ -4675,6 +4675,45 @@ superseded_by:
   same source tree. One sandboxed Skill-validator launch was blocked from the
   existing uv cache and is non-counting; the approved offline retry returned
   `Skill is valid!`.
+- Signed head `7cac345b` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..7cac345b` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 131 commits, 130 parent edges, graph digest
+  `d1a92ea653c21b7756b97f8b1a15b74cb470e3bd4aa07a2f88bc86a5e4983991`,
+  and the unchanged local-config digest. Thread
+  `01a03923-a36e-7b31-913d-5f541e8e423e` completed in 1,663 seconds and found
+  two retained-boundary gaps: patient name fields were missing from both the
+  delimited and camel-case personal-subject grammars, and failed cleanup of a
+  partial retained-export staging directory was silently discarded while a
+  primary staging failure was active. The reviewer completed 170 bounded
+  command events, postvalidation reproduced the original receipts and trusted
+  control digests, no reviewer process remained, and the exact task root was
+  removed after identity and inventory validation.
+- The shared personal-subject grammar now covers `patient` and `Patient`
+  without classifying narrative patient-name prose as a retained value.
+  Retained-export staging records cleanup uncertainty on the exact primary
+  exception with the existing content-free temporary-cleanup marker and uses
+  the shared primary-preserving descriptor close. The implementation keeps the
+  exact 10,001 engine branch budget unchanged. Focused regressions pass 2/2;
+  complete results/episodes and export modules pass 102/102 and 83/83; the
+  independent result-contract audit and module-boundary suites pass 25/25 and
+  20/20. One isolated package-selector command imported zero real tests and is
+  explicitly non-counting; the direct-file contract entrypoints are the
+  authoritative evidence.
+- Final44 freezes 1,955 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `bdda5298e2ab0fad0818018c7f375ff7466086c248b19a0ccf06ad55b6431c2a`.
+  Shards 0 through 3 pass 466/466 in 1,870.787 seconds, 525/525 in
+  1,652.834 seconds, 525/525 in 1,549.273 seconds, and 439/439 in
+  1,602.374 seconds, for exact aggregate coverage of 1,955/1,955 without
+  skips. Their four bounded logs total 472,721 bytes. The independent Darwin
+  security inventory passes 14/14 in 71.069 seconds. Result-contract,
+  module-boundary, CI, Skill, and Bootstrap entrypoints pass 25/25, 20/20,
+  33/33, 6/6, and 12/12. Repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint` 1.7.12, the generated
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, tracked bytecode exclusion, and `git diff --check` are clean.
 
 ## Follow-up Work
 

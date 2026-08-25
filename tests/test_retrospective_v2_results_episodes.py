@@ -1769,6 +1769,8 @@ class ResultValidationTests(unittest.TestCase):
             "Customer given name: Alice",
             "Customer given_name: Alice",
             "Customer given-name: Alice",
+            "patient_name: Alice Smith",
+            "patientName: Alice Smith",
             "customerSurname: Smith",
             "customerFamilyName: Smith",
             "customerGivenName: Alice",
@@ -1817,6 +1819,16 @@ class ResultValidationTests(unittest.TestCase):
                     result_validation_module.privacy_locators.redact_personal_identifiers(
                         name_label
                     ),
+                )
+        for safe_patient_prose in (
+            "Improve patient name parsing.",
+            "Patient name handling is documented.",
+        ):
+            with self.subTest(safe_patient_prose=safe_patient_prose):
+                self.assertEqual((), scan_for_leaks(safe_patient_prose))
+                self.assertEqual(
+                    safe_patient_prose,
+                    result_validation_module.post_redact(safe_patient_prose),
                 )
         for narrative_name, expected in (
             (

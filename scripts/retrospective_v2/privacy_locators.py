@@ -524,11 +524,12 @@ BARE_GROUPED_IBAN_RE = re.compile(
 )
 _LUHN_DOUBLED_DIGITS = (0, 2, 4, 6, 8, 1, 3, 5, 7, 9)
 _PERSONAL_SUBJECT_PATTERN_TEXT = (
-    r"(?:account|client|customer|employee|organization|person|tenant|user)"
+    r"(?:account|client|customer|employee|organization|patient|person|tenant|user)"
 )
 _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT = (
     r"(?:account|Account|client|Client|customer|Customer|employee|Employee|"
-    r"organization|Organization|person|Person|tenant|Tenant|user|User)"
+    r"organization|Organization|patient|Patient|person|Person|tenant|Tenant|"
+    r"user|User)"
 )
 _PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
 _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT = (

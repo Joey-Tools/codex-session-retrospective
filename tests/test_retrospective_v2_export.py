@@ -2119,6 +2119,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "familyName: Smith",
             "givenName: Alice",
             "Customer legal name: Alice Smith",
+            "patient_name: Alice Smith",
+            "patientName: Alice Smith",
             "Customer legal_name: Alice Smith",
             "Customer legal-name: Alice Smith",
             "Customer preferred name: Alice",
@@ -3359,6 +3361,46 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
             self.assertNotIsInstance(
                 caught.exception, export_module.InvalidExistingExportError
             )
+
+    def test_stage_marks_incomplete_cleanup_without_replacing_primary(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / ".codex-local" / "cleanup" / "retained-v2"
+            artifacts = assemble_retained_artifacts(run_state(), review_data())
+            primary = ExportConflictError("simulated retained staging failure")
+
+            with (
+                mock.patch.object(
+                    export_module,
+                    "_write_artifact_at",
+                    side_effect=primary,
+                ),
+                mock.patch.object(
+                    export_module.safe_io,
+                    "secure_remove_tree_at",
+                    side_effect=export_module.safe_io.UnsafePathError(
+                        "simulated retained staging cleanup failure"
+                    ),
+                ),
+                self.assertRaises(ExportConflictError) as caught,
+            ):
+                stage_retained_artifacts(output, artifacts)
+
+            self.assertIs(primary, caught.exception)
+            self.assertIs(
+                primary,
+                export_module.temporary_paths.incomplete_cleanup_primary(primary),
+            )
+            self.assertEqual(
+                ["sensitive temporary cleanup incomplete at retained-export-staging"],
+                getattr(primary, "__notes__", []),
+            )
+            staging = [
+                candidate
+                for candidate in output.parent.iterdir()
+                if candidate.name.startswith(".retained-v2.staging-")
+            ]
+            self.assertEqual(1, len(staging))
+            staging[0].rmdir()
 
     def test_export_rejects_outside_ignored_area_and_conflicting_retry(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

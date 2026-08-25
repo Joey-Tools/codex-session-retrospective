@@ -345,10 +345,11 @@ class _AnchoredExport:
             anchored.close()
             raise
 
-    def close(self) -> None:
+    def close(self, *, primary: BaseException | None = None) -> None:
         if self.parent_fd >= 0:
-            os.close(self.parent_fd)
+            descriptor = self.parent_fd
             self.parent_fd = -1
+            temporary_paths._close_descriptor(descriptor, primary=primary)
 
     def assert_current(self) -> None:
         try:
@@ -1287,6 +1288,7 @@ def stage_retained_artifacts(
     bundle_digest = validated["manifest"]["retained_bundle_digest_v2"]["value"]
     anchor = _AnchoredExport.open(output_dir, create_parent=True)
     temporary_name: str | None = None
+    primary: BaseException | None = None
     try:
         with anchor.lock():
             target_exists = anchor.exists()
@@ -1387,11 +1389,18 @@ def stage_retained_artifacts(
                 before_unlock=before_unlock,
             )
     except (OSError, safe_io.UnsafePathError) as exc:
-        raise RetainedExportError(
+        primary = RetainedExportError(
             f"failed to stage retained bundle at {anchor.output}: {exc}"
-        ) from exc
+        )
+        raise primary from exc
+    except BaseException as exc:
+        primary = exc
+        raise
     finally:
         if temporary_name is not None:
+            assert primary is not None, (
+                "temporary retained export lacks a primary failure"
+            )
             try:
                 safe_io.secure_remove_tree_at(
                     anchor.parent_fd,
@@ -1399,8 +1408,11 @@ def stage_retained_artifacts(
                     display_path=anchor.parent / temporary_name,
                 )
             except (OSError, safe_io.UnsafePathError):
-                pass
-        anchor.close()
+                temporary_paths.mark_incomplete_cleanup(
+                    primary,
+                    stage="retained-export-staging",
+                )
+        anchor.close(primary=primary)
 
 
 def export_retained_bundle(
