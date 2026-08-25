@@ -4295,6 +4295,40 @@ superseded_by:
   1,680.751 seconds, 521/521 in 1,585.834 seconds, and 436/436 in
   1,587.358 seconds. The independent Darwin security inventory passes 14/14
   in 67.843 seconds without skips.
+- The final clean-context Codex processor for signed head `7a0760ff` used an
+  independently materialized and validated read-only workspace over
+  `a3836660..7a0760ff`. Equal pre/post receipts bound 121 commits, 120 parent
+  edges, graph digest
+  `4a556b668411c180882e6a126265accaf35e5e745a0b4a2130dd676129e542f2`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a0365e-48b0-7f11-b5bf-8800586eb8d5` returned one P1 finding:
+  demographic fields such as `Sex assigned at birth` and `Gender expression`
+  could bypass the shared leak scanner, post-redactor, and retained validator.
+  Trusted-control and Python digests remained exact, no reviewer process
+  remained, and the exact task root was removed after postvalidation.
+- The shared demographic field grammar now recognizes ordinary, snake-case,
+  camel-case, Markdown, and narrative forms for sex assigned at birth, sex at
+  birth, assigned sex, birth sex, and gender expression. The existing shared
+  privacy-policy regression proves all variants are detected, post-redacted,
+  and rejected from retained output while discussion-only prose remains safe.
+- One initial four-shard attempt used `/opt/homebrew/bin/python3.13`; the
+  executable-authority contract correctly rejected its group-writable Cellar
+  ancestor. That invocation and all of its shard output are non-counting. The
+  replacement Final32 run uses the owner-controlled Python 3.13.12 runtime
+  with SHA-256
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`.
+  Its 1,940 exact test IDs from 22 authenticated sources use manifest digest
+  `a94d7730ebdf4e09b6d1611275be9561cb3c9c59f2f2b874f62d42ef90604c16`.
+  Shards 0 through 3 pass 460/460 in 1,809.596 seconds, 523/523 in
+  1,609.343 seconds, 521/521 in 1,513.275 seconds, and 436/436 in
+  1,516.652 seconds. The independent Darwin security inventory passes 14/14
+  in 66.396 seconds without skips. Focused demographic, complete
+  results/episodes, result-contract-audit, and export tests pass 1/1, 102/102,
+  25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
+  and 33/33; Ruff lint/format, actionlint, the bootstrap manifest, the official
+  OpenAI Skill validator, project-journal validation, bytecode scans, and
+  `git diff --check` are clean.
 
 ## Follow-up Work
 
