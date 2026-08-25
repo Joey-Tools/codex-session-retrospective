@@ -4495,6 +4495,40 @@ superseded_by:
   actionlint, the official OpenAI Skill validator, project-journal validation,
   and `git diff --check` pass; tracked and source-test bytecode inventories are
   empty.
+- The platform reviewer role returned a zero-start
+  `agent type is currently not available` launch failure. The authorized
+  clean-context fallback used ephemeral Codex CLI thread
+  `01a037bd-a60b-7a30-8732-c435efead506` in an independently materialized
+  read-only workspace over signed head `681a7871`. Equal prelaunch and
+  postvalidation receipts bind 127 commits, 126 parent edges, graph digest
+  `a458151d1e345c2e4a25501e25c48d5c44f2adae091348a6c859c8406a515258`,
+  and the unchanged local-config digest. The trusted control manifest, Python,
+  and Skill digests remained unchanged; 149 terminal command events contain
+  no bare or mutating Git, networked Git, or filesystem mutation command, no
+  reviewer process remained, and the exact task root was removed.
+- That reviewer returned one high-severity finding: plural health and
+  demographic labels such as `Diagnoses`, `Medications`, `Nationalities`,
+  `politicalOpinions`, and `unionMemberships` bypassed direct privacy
+  matching and source-overlap redaction. The closed field grammar now admits
+  the corresponding plural plain, snake-case, kebab-case, and camel-case
+  labels while preserving singular labels. Focused privacy tests pass 3/3;
+  complete results/episodes, result-contract-audit, and module-boundary suites
+  pass 102/102, 25/25, and 20/20. An initial isolated module-selector command
+  imported no tests and is non-counting; the first valid focused run exposed a
+  `statuses?` singular-regression typo, which was corrected to
+  `status(?:es)?` before the passing runs.
+- Final39 freezes 1,945 unique test IDs from 22 authenticated sources under
+  manifest digest
+  `6557b0751d82f27e2f6642463af764ca7d789d9a8c6febc77c59d97c15921cb3`.
+  Shards 0 through 3 pass 461/461 in 1,883.555 seconds, 525/525 in
+  1,683.034 seconds, 523/523 in 1,591.647 seconds, and 436/436 in
+  1,598.085 seconds. The independent Darwin security inventory passes 14/14
+  in 63.895 seconds without skips.
+- On the same frozen tree, module-boundary, CI-contract, and Skill-contract
+  entrypoints pass 20/20, 33/33, and 6/6. Ruff 0.13.2 lint and formatting,
+  actionlint 1.7.12 for both workflows, the generated bootstrap manifest, the
+  official OpenAI Skill validator, project-journal validation, bytecode
+  inventories, and `git diff --check` are clean.
 
 ## Follow-up Work
 
