@@ -4891,6 +4891,54 @@ superseded_by:
   under `actionlint` 1.7.12, the generated bootstrap manifest, the official
   OpenAI Skill validator, project-journal validation, tracked bytecode
   exclusion, and `git diff --check` are clean on the same source tree.
+- Signed head `d99c413e` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..d99c413e` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 136 commits, 135 parent edges, graph digest
+  `34102389cd7860b5c66d3a2e1d4f9ab4fcebeb1ec647ec083b4f3e2ca4b939c8`,
+  and the unchanged local-config digest. Thread
+  `01a03a77-9836-75a2-b0b2-891d15e4fbb5` completed in 904 seconds and found
+  one retained-privacy gap: dot-delimited health fields such as
+  `patient.record` bypassed the shared controlled-health grammar. The reviewer
+  completed 124 read-only commands; 123 exited zero and the only nonzero
+  command was a bounded `rg` search with no match. Postvalidation reproduced
+  the original receipts, the trusted 30-file control manifest remained
+  byte-identical, no reviewer process remained, and the exact owner-private
+  task root was removed after identity and inventory validation.
+- The controlled-health grammar now treats a dot as a structured delimiter at
+  every delimited branch rather than special-casing the reported field.
+  Positive regressions cover `known.allergy`, `blood.type`, `patient.record`,
+  `health.status`, `lab.result`, `patient.blood.type`, `patient.lab.result`,
+  `genetic.profile`, and `protected.health.information`; negative regressions
+  keep non-assignment documentation prose retainable. The focused privacy
+  entrypoints pass 2/2, and the complete results/episodes and export modules
+  pass 102/102 and 84/84.
+- The first post-fix full-suite attempt used manifest digest
+  `fb6fcc21cba93e8ccecc708c5f0500c3fbec9a89e50e738d29a8cab25693e0dc`.
+  It was intentionally interrupted once per shard and is non-counting after a
+  local audit noticed that several newly generalized dot-delimiter branches
+  still lacked direct regression cases. All four processes reached terminal
+  `KeyboardInterrupt` exits before tracked files changed. One interrupted
+  cleanup reported an incomplete-tree marker; the post-quiescence inspection
+  found no shard process and no retained child beneath the four expected
+  runtime temporary roots. No partial result from that attempt is used as gate
+  evidence.
+- Final56 freezes 1,959 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `63610a65e62ad541bbf8d9d2689f817716e948f7862c0d12a7614362174c3b43`.
+  Shards 0 through 3 pass 466/466 in 2,160.742 seconds, 526/526 in
+  1,931.751 seconds, 527/527 in 1,821.720 seconds, and 440/440 in
+  1,878.299 seconds, for exact aggregate coverage of 1,959/1,959 without
+  skips. The independent Darwin security inventory passes 14/14 in 70.513
+  seconds. Result-contract, module-boundary, CI, Skill, and Bootstrap
+  entrypoints pass 25/25, 20/20, 33/33, 6/6, and 12/12. Repository-wide Ruff
+  0.13.2 lint, changed-file formatting, both workflows under `actionlint`
+  1.7.12, the generated bootstrap manifest, the official OpenAI Skill
+  validator, project-journal validation, tracked bytecode exclusion, and
+  `git diff --check` are clean on the same source tree. A repository-wide Ruff
+  format probe is non-counting because it found four unrelated pre-existing
+  files outside this change that would be reformatted; none was modified.
 
 ## Follow-up Work
 

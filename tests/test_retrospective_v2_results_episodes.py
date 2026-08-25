@@ -2965,6 +2965,51 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "patient.record: HIV positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "known.allergy: penicillin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "blood.type: AB negative",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "health.status: diabetic",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "lab.result: elevated ALT",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "patient.blood.type: AB negative",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "patient.lab.result: elevated ALT",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "genetic.profile: BRCA positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "protected.health.information: restricted",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "geneticInformation: BRCA positive",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
@@ -3232,6 +3277,8 @@ class ResultValidationTests(unittest.TestCase):
             "Test result parsing is documented.",
             "Medical condition parsing is documented.",
             "Medical histories parsing is documented.",
+            "patient.record parsing is documented.",
+            "protected.health.information parsing is documented.",
             "Medical diagnoses parsing is documented.",
             "Patient diagnoses parsing is documented.",
             "Health medications parsing is documented.",

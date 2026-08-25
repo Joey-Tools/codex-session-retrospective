@@ -2253,6 +2253,15 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "patientDiagnosis: HIV positive",
             "healthMedications: example medication",
             "clinicalTreatments: example treatment",
+            "known.allergy: penicillin",
+            "blood.type: AB negative",
+            "patient.record: HIV positive",
+            "health.status: diabetic",
+            "lab.result: elevated ALT",
+            "patient.blood.type: AB negative",
+            "patient.lab.result: elevated ALT",
+            "genetic.profile: BRCA positive",
+            "protected.health.information: restricted",
             "Disabilities: paraplegia",
             "disability_statuses: disabled",
             "pregnancyStatuses: pregnant",
@@ -2317,6 +2326,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             r"DOB: \"[REDACTED_PERSONAL_IDENTIFIER]\"",
             "Address: [REDACTED_PERSONAL_IDENTIFIER]",
             "Medical histories parsing is documented.",
+            "patient.record parsing is documented.",
+            "protected.health.information parsing is documented.",
             "Medical diagnoses parsing is documented.",
             "Patient diagnoses parsing is documented.",
             "Health medications parsing is documented.",
@@ -2475,6 +2486,35 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "forbidden locator or credential-shaped value",
         ):
             validate_retained_artifacts(dotted)
+
+    def test_dotted_health_fields_are_rejected_without_matching_plain_prose(
+        self,
+    ) -> None:
+        for value in (
+            "known.allergy: penicillin",
+            "blood.type: AB negative",
+            "patient.record: HIV positive",
+            "health.status: diabetic",
+            "lab.result: elevated ALT",
+            "patient.blood.type: AB negative",
+            "patient.lab.result: elevated ALT",
+            "genetic.profile: BRCA positive",
+            "protected.health.information: restricted",
+        ):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(
+                    RetainedPrivacyError, "personal identifier"
+                ):
+                    reporting_module.validate_retained_value({"cause": value})
+
+        reporting_module.validate_retained_value(
+            {
+                "cause": (
+                    "patient.record and protected.health.information parsing "
+                    "are documented."
+                )
+            }
+        )
 
     def test_retained_credentials_use_the_complete_shared_detector(self) -> None:
         slack_probe = "".join(("xoxb-", "A" * 16))
