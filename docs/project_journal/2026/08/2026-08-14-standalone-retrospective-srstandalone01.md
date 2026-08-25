@@ -4714,6 +4714,40 @@ superseded_by:
   formatting, both workflows under `actionlint` 1.7.12, the generated
   bootstrap manifest, the official OpenAI Skill validator, project-journal
   validation, tracked bytecode exclusion, and `git diff --check` are clean.
+- Signed head `61abe5c3` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..61abe5c3` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 132 commits, 131 parent edges, graph digest
+  `40312a1f226b7dc17fb31e846eb546b83db56a84e173a02211316d9b49889815`,
+  and the unchanged local-config digest. Thread
+  `01a03973-c3ed-7511-a1ca-64aa6f1c2b54` completed in 670 seconds and found
+  one retained-privacy gap: plural patient subjects and plural name fields
+  such as `patients_name` and `patientNames` bypassed the shared personal-name
+  detector. The reviewer completed 82 read-only commands; two failed `rg`
+  commands had no matches, and one conservative audit match was a read-only
+  `git diff | awk | sort` pipeline. Postvalidation reproduced the original
+  receipts, the trusted 30-file control manifest remained byte-identical, no
+  reviewer process remained, and the exact owner-private task root was removed
+  after identity and inventory validation.
+- The shared personal-name grammar now covers singular and plural patient
+  subjects plus singular and plural delimited or camel-case name fields.
+  Positive regressions cover the named bypasses and their combined forms;
+  negative regressions keep ordinary patient-name parsing and documentation
+  prose retainable. The two focused entrypoints pass 2/2. Result-contract,
+  module-boundary, CI, Skill, and Bootstrap entrypoints pass 25/25, 20/20,
+  33/33, 6/6, and 12/12. Repository-wide Ruff 0.13.2 lint and changed-file
+  formatting, both workflows under `actionlint` 1.7.12, the generated
+  bootstrap manifest, the official OpenAI Skill validator, tracked bytecode
+  exclusion, and `git diff --check` are clean.
+- Final46 freezes 1,955 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `29029e6183157f7bc49f00066bdbd8725676f0dd3458d32c87dd4e83e1fe3664`.
+  Shards 0 through 3 pass 466/466 in 1,876 seconds, 525/525 in 1,651 seconds,
+  525/525 in 1,550 seconds, and 439/439 in 1,604 seconds, for exact aggregate
+  coverage of 1,955/1,955 without skips. The independent Darwin security
+  inventory passes 14/14 in 74 seconds. All five bounded logs total 475,128
+  bytes, and every process-group supervisor reached terminal exit zero.
 
 ## Follow-up Work
 

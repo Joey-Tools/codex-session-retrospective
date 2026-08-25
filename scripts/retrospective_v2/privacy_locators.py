@@ -524,11 +524,11 @@ BARE_GROUPED_IBAN_RE = re.compile(
 )
 _LUHN_DOUBLED_DIGITS = (0, 2, 4, 6, 8, 1, 3, 5, 7, 9)
 _PERSONAL_SUBJECT_PATTERN_TEXT = (
-    r"(?:account|client|customer|employee|organization|patient|person|tenant|user)"
+    r"(?:account|client|customer|employee|organization|patients?|person|tenant|user)"
 )
 _PERSONAL_CAMEL_SUBJECT_PATTERN_TEXT = (
     r"(?:account|Account|client|Client|customer|Customer|employee|Employee|"
-    r"organization|Organization|patient|Patient|person|Person|tenant|Tenant|"
+    r"organization|Organization|patients?|Patients?|person|Person|tenant|Tenant|"
     r"user|User)"
 )
 _PERSONAL_POSSESSIVE_PATTERN_TEXT = r"(?:['\u2019]s)?"
@@ -539,13 +539,14 @@ _PERSONAL_NAME_FIELD_PATTERN_TEXT = (
     r"(?:"
     + _MOTHERS_MAIDEN_NAME_FIELD_PATTERN_TEXT
     + r"|nickname|surname|(?:(?:display|family|first|full|given|last|legal|"
-    r"maiden|middle|preferred)[_ -]+)?name)"
+    r"maiden|middle|preferred)[_ -]+)?names?)"
 )
 _PERSONAL_CONTEXTUAL_NAME_FIELD_PATTERN_TEXT = (
     r"(?:"
     + _PERSONAL_NAME_FIELD_PATTERN_TEXT
     + r"|(?-i:(?:display|Display|family|Family|first|First|full|Full|given|Given|"
-    r"last|Last|legal|Legal|maiden|Maiden|middle|Middle|preferred|Preferred)Name))"
+    r"last|Last|legal|Legal|maiden|Maiden|middle|Middle|preferred|Preferred)"
+    r"Names?))"
 )
 _PERSONAL_BIRTH_DATE_FIELD_PATTERN_TEXT = (
     r"(?:dob|date[_ -]+of[_ -]+birth|birth[_ -]?(?:date|day)|"

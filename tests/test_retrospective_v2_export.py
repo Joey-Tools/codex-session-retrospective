@@ -2121,6 +2121,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Customer legal name: Alice Smith",
             "patient_name: Alice Smith",
             "patientName: Alice Smith",
+            "patients_name: Alice Smith",
+            "patientNames: Alice Smith",
+            "patients_names: Alice Smith",
+            "patientsNames: Alice Smith",
             "Customer legal_name: Alice Smith",
             "Customer legal-name: Alice Smith",
             "Customer preferred name: Alice",
@@ -2639,6 +2643,8 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "credential is not required before deployment",
             "credential was not present during dry run",
             "credential is not available in this environment",
+            "Improve patient names parsing.",
+            "Patient names handling is documented.",
             "The pin is bent.",
         ):
             with self.subTest(safe_narrative=safe_narrative):
