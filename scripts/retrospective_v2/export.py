@@ -866,7 +866,7 @@ def _read_artifact_at(
         raise RetainedInventoryError(
             "staged retained bundle exceeds the 256 MiB preparation limit"
         )
-    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     descriptor = os.open(name, flags, dir_fd=directory_fd)
     try:
         try:

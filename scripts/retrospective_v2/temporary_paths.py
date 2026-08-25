@@ -12,10 +12,11 @@ import stat
 from typing import Iterator
 
 try:
-    from . import path_separation, safe_io
+    from . import path_separation, process_lifecycle, safe_io
     from .transport_contracts import source_root_commitment
 except (ImportError, ModuleNotFoundError):
     import path_separation  # type: ignore[no-redef]
+    import process_lifecycle  # type: ignore[no-redef]
     import safe_io  # type: ignore[no-redef]
     from transport_contracts import source_root_commitment  # type: ignore[no-redef]
 
@@ -58,6 +59,13 @@ def incomplete_cleanup_primary(error: BaseException) -> BaseException | None:
             return error
         current = current.__cause__ or current.__context__
     return None
+
+
+def raise_if_incomplete_cleanup(error: BaseException) -> None:
+    """Rethrow process-group or sensitive temporary cleanup uncertainty."""
+    process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
+    if incomplete_cleanup_primary(error) is not None:
+        raise error
 
 
 def local_codex_root() -> Path:

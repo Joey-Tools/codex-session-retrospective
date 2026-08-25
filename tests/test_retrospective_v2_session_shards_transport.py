@@ -30,6 +30,7 @@ REMOTE_HOST_CONTEXT_HELPER_FIXTURE = (
 
 from retrospective_v2 import transport as MODULE  # noqa: E402
 from retrospective_v2 import transport_session_shards as SHARDS_MODULE  # noqa: E402
+from retrospective_v2 import process_lifecycle  # noqa: E402
 from retrospective_v2.contracts import (  # noqa: E402
     SESSION_SHARDS_PREFIX_COMMITMENT_DOMAIN,
     session_shards_resume_cursor,
@@ -1828,6 +1829,58 @@ class RemoteSessionShardsRelayTests(unittest.TestCase):
             relay.call_args.kwargs["stream_filter"],
             MODULE.RemoteSessionShardsFilter,
         )
+
+    def test_remote_relay_does_not_downgrade_incomplete_cleanup(self) -> None:
+        rollout = "sessions/2026/07/14/rollout-cleanup.jsonl"
+        process_error = RuntimeError("remote relay failed")
+
+        def persistent_process_cleanup_failure(_process) -> int:
+            raise RuntimeError("simulated persistent process cleanup failure")
+
+        process_lifecycle.finish_cleanup(
+            mock.Mock(),
+            signal_retirement=process_lifecycle.GroupSignalRetirement(),
+            terminate_and_reap=persistent_process_cleanup_failure,
+            reap_only=persistent_process_cleanup_failure,
+            active_error=process_error,
+        )
+        temporary_error = RuntimeError("remote relay failed")
+        SHARDS_MODULE.temporary_paths.mark_incomplete_cleanup(
+            temporary_error,
+            stage="simulated session-shards spool cleanup",
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            remote_helper, remote_helper_commitment = (
+                MODULE.snapshot_remote_host_context_helper(
+                    REMOTE_HOST_CONTEXT_HELPER_FIXTURE,
+                    Path(raw) / "snapshots",
+                )
+            )
+            args = command_args(
+                rollout,
+                host="remote-a",
+                remote_helper=str(remote_helper),
+                remote_helper_commitment=remote_helper_commitment,
+            )
+            for failure, expected in (
+                (
+                    process_error,
+                    process_lifecycle.ProcessGroupCleanupIncompleteError,
+                ),
+                (temporary_error, RuntimeError),
+            ):
+                with (
+                    self.subTest(failure=failure),
+                    mock.patch.object(
+                        MODULE,
+                        "_relay_remote_host_context_command",
+                        side_effect=failure,
+                    ),
+                    self.assertRaises(expected) as caught,
+                ):
+                    MODULE.cmd_session_shards(args)
+                if failure is temporary_error:
+                    self.assertIs(caught.exception, temporary_error)
 
     def test_compact_record_fanout_fits_the_remote_wire_budget(self) -> None:
         data = b"{}\n" * MODULE.MAX_SESSION_SHARDS_RECORD_DATA_FRAMES

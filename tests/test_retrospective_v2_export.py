@@ -3097,6 +3097,50 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
 
             self.assertEqual(validation_count, 2)
 
+    @unittest.skipUnless(hasattr(os, "mkfifo"), "requires POSIX FIFO support")
+    def test_artifact_read_rejects_fifo_replacement_without_blocking(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            os.chmod(root, 0o700)
+            artifact = root / "artifact.json"
+            artifact.write_bytes(b"{}\n")
+            os.chmod(artifact, 0o600)
+            directory_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+            real_open = os.open
+
+            def replace_with_fifo(
+                name: str,
+                flags: int,
+                mode: int = 0o777,
+                *,
+                dir_fd: int | None = None,
+            ) -> int:
+                self.assertEqual("artifact.json", name)
+                self.assertTrue(flags & os.O_NONBLOCK)
+                artifact.unlink()
+                os.mkfifo(artifact, 0o600)
+                return real_open(name, flags, mode, dir_fd=dir_fd)
+
+            try:
+                with (
+                    mock.patch.object(
+                        export_module.os,
+                        "open",
+                        side_effect=replace_with_fifo,
+                    ),
+                    self.assertRaisesRegex(
+                        RetainedInventoryError,
+                        "access policy is invalid",
+                    ),
+                ):
+                    export_module._read_artifact_at(
+                        directory_fd,
+                        "artifact.json",
+                        display_path=artifact,
+                    )
+            finally:
+                os.close(directory_fd)
+
     def test_descriptor_bundle_budget_is_checked_before_content_reads(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             parent = Path(temporary) / "parent"

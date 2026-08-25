@@ -1633,11 +1633,14 @@ def cmd_session_shards(
                 ),
                 flush=True,
             )
-    except FileNotFoundError:
+    except FileNotFoundError as exc:
+        temporary_paths.raise_if_incomplete_cleanup(exc)
         message = "rollout not found"
-    except OSError:
+    except OSError as exc:
+        temporary_paths.raise_if_incomplete_cleanup(exc)
         message = "rollout unreadable"
     except (RuntimeError, ValueError) as exc:
+        temporary_paths.raise_if_incomplete_cleanup(exc)
         message = str(exc)
     else:
         return 0

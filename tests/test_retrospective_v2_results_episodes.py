@@ -1464,6 +1464,31 @@ class ResultValidationTests(unittest.TestCase):
                 "Example Union was referenced",
                 "[REDACTED_ORIGINAL_PROMPT] was referenced",
             ),
+            (
+                "religiousAffiliations: Quaker",
+                "Quaker was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "religiousDenominations: Alpha Sect",
+                "Alpha Sect was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "religiousIdentities: Devout",
+                "Devout was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "maritalStatuses: married",
+                "Married was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
+            (
+                "familyStatuses: caregiver",
+                "Caregiver was referenced",
+                "[REDACTED_ORIGINAL_PROMPT] was referenced",
+            ),
         )
         for source, output, expected in cases:
             with self.subTest(source=source):
@@ -3200,9 +3225,12 @@ class ResultValidationTests(unittest.TestCase):
             "ethnicBackground: Han Chinese",
             "racialBackground: Example background",
             "religiousAffiliation: Example faith",
+            "religiousAffiliations: Example faith",
             "ethnicGroup: Example group",
             "racialIdentity: Example identity",
             "religiousDenomination: Example denomination",
+            "religiousDenominations: Example denomination",
+            "religiousIdentities: Example identity",
             "sexAssignedAtBirth: female",
             "sexAtBirth: female",
             "assignedSex: female",
@@ -3215,7 +3243,9 @@ class ResultValidationTests(unittest.TestCase):
             "birthGender: female",
             "ageRange: 40-49",
             "maritalStatus: married",
+            "maritalStatuses: married",
             "familyStatus: caregiver",
+            "familyStatuses: caregiver",
             "disabilityStatus: disabled",
             "pregnancyStatus: pregnant",
             "veteranStatus: veteran",

@@ -22,7 +22,6 @@ try:
     from . import (
         catalog,
         contracts as common_contracts,
-        process_lifecycle,
         temporary_paths,
         transport_resume,
     )
@@ -82,7 +81,6 @@ try:
 except (ImportError, ModuleNotFoundError):
     import catalog  # type: ignore[no-redef]
     import contracts as common_contracts  # type: ignore[no-redef]
-    import process_lifecycle  # type: ignore[no-redef]
     import temporary_paths  # type: ignore[no-redef]
     import transport_resume  # type: ignore[no-redef]
     from contracts import (  # type: ignore[no-redef]
@@ -1950,7 +1948,7 @@ def _run_private_transport_worker(argv: Sequence[str] | None = None) -> int:
             ),
         )
     except RemoteTransportUnavailableError as error:
-        process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
+        temporary_paths.raise_if_incomplete_cleanup(error)
         _emit_source_transport_gap(
             args,
             reason="remote_host_context_transport_unavailable",

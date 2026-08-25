@@ -4529,6 +4529,56 @@ superseded_by:
   actionlint 1.7.12 for both workflows, the generated bootstrap manifest, the
   official OpenAI Skill validator, project-journal validation, bytecode
   inventories, and `git diff --check` are clean.
+- Signed head `c525d4f4` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.0 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..c525d4f4` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 128 commits, 127 parent edges, graph digest
+  `2e3faffe725403c4174f0293fe04336edaff6b7090433474c64f419465039ccc`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a03802-48f1-7cc2-8085-4a56df1fab5b` returned four findings:
+  plural camel-case demographic fields remained incomplete; publisher
+  readiness and canary fallbacks could downgrade a marked temporary-cleanup
+  failure; source transport and session-shards fallbacks had the same
+  downgrade; and retained-artifact open could block on a FIFO replacement
+  because it omitted `O_NONBLOCK`. Postvalidation reproduced the original
+  receipts, the trusted 30-file control manifest, Skill, guard, and Python
+  digests remained exact, no reviewer process remained, and the exact
+  owner-private task root was removed.
+- The shared demographic grammar now covers plural religious affiliation,
+  denomination, and identity plus marital and family status camel-case forms.
+  One centralized temporary-cleanup classifier is used by publisher readiness,
+  canary, source transport, and session-shards fallback paths, preserving
+  process-group cleanup precedence. Retained artifact opens now include
+  `O_NONBLOCK` before descriptor and content validation, so a regular-file to
+  FIFO replacement fails without hanging. Exact focused regressions pass 7/7;
+  complete results/episodes, orchestrator support, source transport,
+  session-shards, and export modules pass 102/102, 39/39, 138/138, 43/43, and
+  82/82. The combined affected set passes 404/404; result, module-boundary,
+  CI, and Skill contracts pass 25/25, 20/20, 33/33, and 6/6. Ruff lint and
+  formatting plus `git diff --check` are clean. Three diagnostic invocations
+  are explicitly non-counting: one isolated single-file launcher could not
+  import the repository test package, one privacy fixture independently
+  matched narrative privacy before its value was narrowed, and one GPG
+  content-drift fixture used a group-readable fake signature before its mode
+  was corrected to exercise the intended drift property.
+- Final40 freezes 1,949 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `5a20244561ae5cc6ed0d8ed15490ffe0d58ead39900133816b3dea2bf4e415f2`.
+  Shards 0 through 3 pass 462/462 in 2,381.431 seconds, 525/525 in
+  2,163.788 seconds, 525/525 in 2,049.853 seconds, and 437/437 in
+  2,050.889 seconds, for exact aggregate coverage of 1,949/1,949 without
+  skips. The independent Darwin security inventory passes 14/14 in 68.606
+  seconds. All five owner-only logs total 473,968 bytes under the 40 MiB
+  aggregate ceiling, and every process-group supervisor reached terminal exit
+  zero without hitting its time or output limit. Result-contract,
+  module-boundary, CI, Skill, and Bootstrap entrypoints pass 25/25, 20/20,
+  33/33, 6/6, and 12/12. Repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint` 1.7.12, the generated
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, source/test bytecode exclusion, and `git diff --check` are clean
+  on the same tree.
 
 ## Follow-up Work
 

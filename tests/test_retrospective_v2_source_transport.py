@@ -2326,6 +2326,13 @@ class SourceTransportProtocolTests(unittest.TestCase):
             reap_only=persistent_cleanup_failure,
             active_error=cleanup_failure,
         )
+        temporary_cleanup_failure = transport.RemoteTransportUnavailableError(
+            "remote-host-context transport unavailable"
+        )
+        temporary_paths.mark_incomplete_cleanup(
+            temporary_cleanup_failure,
+            stage="simulated remote transport spool cleanup",
+        )
         failure_cases = (
             (
                 transport.RemoteTransportUnavailableError(
@@ -2357,6 +2364,11 @@ class SourceTransportProtocolTests(unittest.TestCase):
                 cleanup_failure,
                 False,
                 process_lifecycle.ProcessGroupCleanupIncompleteError,
+            ),
+            (
+                temporary_cleanup_failure,
+                False,
+                transport.RemoteTransportUnavailableError,
             ),
         )
         for index, (failure, emits_gap, expected_error) in enumerate(failure_cases):

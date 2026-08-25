@@ -883,6 +883,14 @@ class PublisherCanaryProcessTests(unittest.TestCase):
         )
         return error
 
+    @staticmethod
+    def _mark_temporary_cleanup_incomplete(error: RuntimeError) -> RuntimeError:
+        orchestrator_support.temporary_paths.mark_incomplete_cleanup(
+            error,
+            stage="simulated publisher cleanup",
+        )
+        return error
+
     def test_bounded_canary_accepts_valid_sign_and_verify_output(self) -> None:
         self.assertTrue(
             orchestrator_support.publisher_sign_verify_canary(
@@ -1002,6 +1010,50 @@ class PublisherCanaryProcessTests(unittest.TestCase):
                 gnupg_home=self.gnupg_home,
                 gpg_program=self.gpg_program,
             )
+
+    def test_readiness_does_not_downgrade_incomplete_temporary_cleanup(self) -> None:
+        error = self._mark_temporary_cleanup_incomplete(
+            orchestrator_support.finalize.LocalGitPublicationError(
+                "simulated readiness failure"
+            )
+        )
+        with (
+            mock.patch.object(
+                orchestrator_support.finalize,
+                "validate_publisher_keyring",
+                side_effect=error,
+            ),
+            self.assertRaises(
+                orchestrator_support.finalize.LocalGitPublicationError
+            ) as caught,
+        ):
+            orchestrator_support.publisher_readiness(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+        self.assertIs(caught.exception, error)
+
+    def test_canary_does_not_downgrade_incomplete_temporary_cleanup(self) -> None:
+        error = self._mark_temporary_cleanup_incomplete(
+            orchestrator_support._PublisherCanaryProcessError(
+                "simulated canary failure"
+            )
+        )
+        with (
+            mock.patch.object(
+                orchestrator_support,
+                "_run_bounded_publisher_canary_process",
+                side_effect=error,
+            ),
+            self.assertRaises(
+                orchestrator_support._PublisherCanaryProcessError
+            ) as caught,
+        ):
+            orchestrator_support.publisher_sign_verify_canary(
+                gnupg_home=self.gnupg_home,
+                gpg_program=self.gpg_program,
+            )
+        self.assertIs(caught.exception, error)
 
     def test_canary_does_not_downgrade_cleanup_only_failure(self) -> None:
         error = orchestrator_support._PublisherCanaryProcessError(
@@ -1490,6 +1542,7 @@ class PublisherCanaryProcessTests(unittest.TestCase):
             del environment
             signature = Path(command[command.index("--output") + 1])
             signature.write_bytes(b"signature")
+            signature.chmod(0o600)
             self.gpg_program.write_text("#!/bin/sh\nexit 1\n", encoding="ascii")
             self.gpg_program.chmod(0o700)
             return subprocess.CompletedProcess(command, 0, b"", b"")

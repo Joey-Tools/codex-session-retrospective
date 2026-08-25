@@ -358,7 +358,7 @@ def publisher_readiness(
         finalize.LocalGitPublicationError,
         gpg_keyring_snapshot.ConfigFreeKeyringError,
     ) as error:
-        process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
+        temporary_paths.raise_if_incomplete_cleanup(error)
         return safe_result
     safe_result["ready"] = identity.get("fingerprint") == PUBLISHER_FINGERPRINT
     if safe_result["ready"]:
@@ -606,7 +606,7 @@ def publisher_sign_verify_canary(
         executable_authority.ExecutableAuthorityError,
         gpg_keyring_snapshot.ConfigFreeKeyringError,
     ) as error:
-        process_lifecycle.raise_if_incomplete_process_group_cleanup(error)
+        temporary_paths.raise_if_incomplete_cleanup(error)
         return False
     if verified.returncode != 0:
         return False
