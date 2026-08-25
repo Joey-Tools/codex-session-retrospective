@@ -2249,6 +2249,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "medicalHistories: diabetes",
             "healthStatuses: diabetic",
             "geneticProfiles: BRCA positive",
+            "Disabilities: paraplegia",
+            "disability_statuses: disabled",
+            "pregnancyStatuses: pregnant",
+            "militaryStatuses: active duty",
             "**Customer name:** Alice Smith",
         ):
             with self.subTest(personal_value=personal_value, phase="direct"):
@@ -2311,6 +2315,10 @@ class RetrospectiveV2ReportingTests(unittest.TestCase):
             "Medical histories parsing is documented.",
             "Health statuses handling is documented.",
             "Genetic profiles parsing is documented.",
+            "Disabilities parsing is documented.",
+            "Disability statuses handling is documented.",
+            "Pregnancy statuses handling is documented.",
+            "Military statuses handling is documented.",
             "Address: 0x1000",
             "Address: 0x1000, status: active",
             "Address: 0x1000, 0x2000",

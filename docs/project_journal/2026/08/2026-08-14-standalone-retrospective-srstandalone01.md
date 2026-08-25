@@ -4789,6 +4789,46 @@ superseded_by:
   skips. The independent Darwin security inventory passes 14/14 in 113.015
   seconds. All five bounded logs total 475,129 bytes, and every process-group
   supervisor reached terminal exit zero.
+- Signed head `ec7a73f4` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..ec7a73f4` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 134 commits, 133 parent edges, graph digest
+  `ff124a11f5678df5eb269ab11ad13d0beb2271d303f3415fe05ae020ced8998e`,
+  and the unchanged local-config digest. Thread
+  `01a039e6-66ba-7b82-8bdd-e784dac606d6` completed in 598 seconds and found one
+  retained-privacy gap: plural disability nouns and plural identity-status
+  fields such as `Disabilities`, `disability_statuses`, `pregnancyStatuses`,
+  and `militaryStatuses` bypassed the shared controlled-demographic grammar.
+  The reviewer completed 75 read-only commands. Its one failed command was an
+  `rg` search with no match; the conservative command audit matched only
+  another read-only `rg` search. Postvalidation reproduced the original
+  receipts and trusted control digests, no reviewer process remained, and the
+  exact owner-private task root was removed after identity and inventory
+  validation.
+- The controlled-demographic grammar now covers singular and plural disability,
+  pregnancy, and veteran nouns; singular and plural delimited status fields;
+  and matching camel-case `Status` or `Statuses` forms across military,
+  immigration, residency, visa, and socioeconomic identities. Positive
+  regressions cover the reviewer examples and every updated branch; negative
+  regressions keep documentation prose about those plural forms retainable.
+  Focused regressions pass 2/2, complete results/episodes and export modules
+  pass 102/102 and 83/83, and the contract matrix passes 96/96. One
+  package-style selector imported zero real tests and one focused run whose
+  pollable session metadata was not retained; both are explicitly
+  non-counting, and direct-file pollable reruns provide the authoritative
+  evidence. Repository-wide Ruff 0.13.2 lint and changed-file formatting, both
+  workflows under `actionlint` 1.7.12, the generated bootstrap manifest, and
+  the official OpenAI Skill validator are clean.
+- Final51 freezes 1,955 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `f166d37aac5914b8f780a38bfd660d111164dba5ed773e8d972210c9e06c6cf7`.
+  Shards 0 through 3 pass 466/466 in 2,649.858 seconds, 525/525 in
+  2,434.486 seconds, 525/525 in 2,281.616 seconds, and 439/439 in
+  2,356.898 seconds, for exact aggregate coverage of 1,955/1,955 without
+  skips. The independent Darwin security inventory passes 14/14 in 123.033
+  seconds. All five bounded logs total 475,129 bytes, and every process-group
+  supervisor reached terminal exit zero.
 
 ## Follow-up Work
 
