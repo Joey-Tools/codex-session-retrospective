@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -1633,10 +1634,166 @@ def _bounded_artifact_names(directory_fd: int) -> list[str] | None:
     return names
 
 
-def _temporary_staging_metadata(
+def _directory_identity_and_policy(metadata: os.stat_result) -> tuple[int, ...]:
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_uid,
+        metadata.st_gid,
+        stat.S_IMODE(metadata.st_mode),
+    )
+
+
+def _orphan_file_inventory_entry(
+    metadata: os.stat_result,
+    *,
+    content: bytes,
+    name: str,
+) -> dict[str, Any]:
+    return {
+        "access_policy": "owner-only-no-acl",
+        "content_commitment": "sha256:" + hashlib.sha256(content).hexdigest(),
+        "device": metadata.st_dev,
+        "group": metadata.st_gid,
+        "inode": metadata.st_ino,
+        "link_count": metadata.st_nlink,
+        "mode": stat.S_IMODE(metadata.st_mode),
+        "object_type": "file",
+        "owner": metadata.st_uid,
+        "relative_path": name,
+        "size": metadata.st_size,
+    }
+
+
+def _observe_orphan_artifacts(
+    directory_fd: int,
+    names: list[str],
+    *,
+    display_path: Path,
+) -> tuple[dict[str, bytes], dict[str, dict[str, Any]]]:
+    metadata: dict[str, os.stat_result] = {}
+    total_bytes = 0
+    current_uid = getattr(os, "geteuid", lambda: os.fstat(directory_fd).st_uid)()
+    for name in names:
+        item = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(item.st_mode)
+            or item.st_uid != current_uid
+            or stat.S_IMODE(item.st_mode) != _FILE_MODE
+            or item.st_nlink != 1
+            or item.st_size > MAX_RETAINED_BUNDLE_BYTES
+        ):
+            raise RetainedInventoryError(
+                f"orphan retained artifact is not owner-only and bounded: "
+                f"{display_path / name}"
+            )
+        total_bytes += item.st_size
+        if total_bytes > MAX_RETAINED_BUNDLE_BYTES:
+            raise RetainedInventoryError(
+                "orphan retained bundle exceeds the 256 MiB inspection limit"
+            )
+        metadata[name] = item
+
+    artifacts: dict[str, bytes] = {}
+    inventory: dict[str, dict[str, Any]] = {}
+    for name in sorted(names, key=os.fsencode):
+        content = _read_artifact_at(
+            directory_fd,
+            name,
+            display_path=display_path / name,
+        )
+        after = os.stat(name, dir_fd=directory_fd, follow_symlinks=False)
+        expected_entry = _orphan_file_inventory_entry(
+            metadata[name],
+            content=content,
+            name=name,
+        )
+        if _orphan_file_inventory_entry(after, content=content, name=name) != (
+            expected_entry
+        ):
+            raise ExportConflictError(
+                f"orphan retained artifact changed during inspection: "
+                f"{display_path / name}"
+            )
+        artifacts[name] = content
+        inventory[name] = expected_entry
+    return artifacts, inventory
+
+
+def _prove_orphan_inventory(
+    anchor: _AnchoredExport,
+    name: str,
+    *,
+    budget: _GcBudget,
+    directory_metadata: os.stat_result,
+    expected_files: Mapping[str, Mapping[str, Any]],
+) -> tuple[os.stat_result, list[dict[str, Any]]]:
+    tree_budget = safe_io.TreeInventoryBudget(
+        max_entries=1 + len(RETAINED_ARTIFACT_NAMES),
+        max_path_bytes=_GC_MAX_PATH_BYTES,
+        max_depth=1,
+        deadline=budget.deadline,
+    )
+    try:
+        snapshot = safe_io.inspect_tree_inventory_at(
+            anchor.parent_fd,
+            name,
+            budget=tree_budget,
+            display_path=anchor.parent / name,
+        )
+    except safe_io.TreeInventoryLimitExceeded as exc:
+        if time.monotonic() >= budget.deadline:
+            raise _GcBudgetExhausted("deadline_exhausted") from exc
+        raise ExportConflictError(
+            "orphan retained inventory exceeded its structural bounds"
+        ) from exc
+    except safe_io.UnsafePathError as exc:
+        raise ExportConflictError(
+            "orphan retained inventory changed during proof"
+        ) from exc
+    budget.checkpoint()
+
+    entries = snapshot["entries"]
+    by_path = {entry["relative_path"]: entry for entry in entries}
+    root = by_path.get(".")
+    current = os.stat(name, dir_fd=anchor.parent_fd, follow_symlinks=False)
+    root_identity = (
+        None
+        if root is None
+        else (
+            root["device"],
+            root["inode"],
+            root["owner"],
+            root["group"],
+            root["mode"],
+        )
+    )
+    if not (
+        _directory_identity_and_policy(directory_metadata)
+        == root_identity
+        == _directory_identity_and_policy(current)
+    ):
+        raise ExportConflictError(
+            "orphan retained directory identity or access policy changed during proof"
+        )
+    observed_files = {path: entry for path, entry in by_path.items() if path != "."}
+    if observed_files != dict(expected_files):
+        raise ExportConflictError(
+            "orphan retained inventory or content changed during proof"
+        )
+    if (
+        snapshot["counters"]["directory_count"] != 1
+        or snapshot["counters"]["file_count"] != len(expected_files)
+        or snapshot["counters"]["byte_count"] > MAX_RETAINED_BUNDLE_BYTES
+    ):
+        raise ExportConflictError("orphan retained inventory proof is inconsistent")
+    return current, entries
+
+
+def _temporary_staging_observation(
     anchor: _AnchoredExport,
     temporary_name: str,
-) -> os.stat_result | None:
+) -> tuple[os.stat_result, dict[str, dict[str, Any]]] | None:
     try:
         descriptor = anchor.child_fd(temporary_name)
     except RetainedInventoryError:
@@ -1650,35 +1807,25 @@ def _temporary_staging_metadata(
             or not set(names).issubset(RETAINED_ARTIFACT_NAMES)
         ):
             return None
-        total_bytes = 0
-        current_uid = getattr(os, "geteuid", lambda: before.st_uid)()
-        for name in names:
-            metadata = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid != current_uid
-                or stat.S_IMODE(metadata.st_mode) != _FILE_MODE
-                or metadata.st_nlink != 1
-                or metadata.st_size > MAX_RETAINED_BUNDLE_BYTES
-            ):
-                return None
-            total_bytes += metadata.st_size
-            if total_bytes > MAX_RETAINED_BUNDLE_BYTES:
-                return None
-        after = os.fstat(descriptor)
-        if (
-            before.st_dev,
-            before.st_ino,
-            before.st_mtime_ns,
-        ) != (
-            after.st_dev,
-            after.st_ino,
-            after.st_mtime_ns,
+        try:
+            _artifacts, inventory = _observe_orphan_artifacts(
+                descriptor,
+                names,
+                display_path=anchor.parent / temporary_name,
+            )
+        except RetainedInventoryError:
+            return None
+        after = safe_io.validate_owner_only_directory_descriptor(
+            descriptor,
+            anchor.parent / temporary_name,
+        )
+        if _directory_identity_and_policy(before) != _directory_identity_and_policy(
+            after
         ):
             raise ExportConflictError(
                 "temporary retained export changed during orphan inspection"
             )
-        return after
+        return after, inventory
     finally:
         os.close(descriptor)
 
@@ -1706,9 +1853,17 @@ def _collect_temporary_orphan(
         with anchor.lock():
             if not anchor.exists(name):
                 return True
-            metadata = _temporary_staging_metadata(anchor, name)
-            if metadata is None:
+            observation = _temporary_staging_observation(anchor, name)
+            if observation is None:
                 return False
+            metadata, expected_files = observation
+            metadata, inventory = _prove_orphan_inventory(
+                anchor,
+                name,
+                budget=budget,
+                directory_metadata=metadata,
+                expected_files=expected_files,
+            )
             if not _orphan_expired(metadata, clock):
                 retained.append(str(temporary_path))
                 return True
@@ -1717,6 +1872,7 @@ def _collect_temporary_orphan(
                 anchor.parent_fd,
                 name,
                 display_path=temporary_path,
+                expected_inventory=inventory,
             )
             os.fsync(anchor.parent_fd)
             deleted.append(str(temporary_path))
@@ -1758,7 +1914,24 @@ def _collect_installed_orphan(
             descriptor = anchor.child_fd()
             try:
                 directory_names = _bounded_artifact_names(descriptor)
-                metadata = os.fstat(descriptor)
+                metadata = safe_io.validate_owner_only_directory_descriptor(
+                    descriptor,
+                    anchor.output,
+                )
+                if (
+                    directory_names is not None
+                    and set(directory_names) == set(RETAINED_ARTIFACT_NAMES)
+                    and len(directory_names) == len(RETAINED_ARTIFACT_NAMES)
+                ):
+                    _artifacts, expected_files = _observe_orphan_artifacts(
+                        descriptor,
+                        directory_names,
+                        display_path=anchor.output,
+                    )
+                    after = safe_io.validate_owner_only_directory_descriptor(
+                        descriptor,
+                        anchor.output,
+                    )
             finally:
                 os.close(descriptor)
             if (
@@ -1769,25 +1942,21 @@ def _collect_installed_orphan(
                 raise ExportConflictError(
                     "installed retained orphan inventory changed during GC inspection"
                 )
-            _validate_at(anchor)
-            budget.checkpoint()
-            current_metadata = os.stat(
-                anchor.name,
-                dir_fd=anchor.parent_fd,
-                follow_symlinks=False,
-            )
-            if (
-                metadata.st_dev,
-                metadata.st_ino,
-                metadata.st_mtime_ns,
-            ) != (
-                current_metadata.st_dev,
-                current_metadata.st_ino,
-                current_metadata.st_mtime_ns,
-            ):
+            if _directory_identity_and_policy(
+                metadata
+            ) != _directory_identity_and_policy(after):
                 raise ExportConflictError(
                     "installed retained orphan changed during GC inspection"
                 )
+            _validate_at(anchor)
+            budget.checkpoint()
+            metadata, inventory = _prove_orphan_inventory(
+                anchor,
+                anchor.name,
+                budget=budget,
+                directory_metadata=after,
+                expected_files=expected_files,
+            )
             if not _orphan_expired(metadata, clock):
                 retained.append(str(anchor.output))
                 return True
@@ -1799,6 +1968,7 @@ def _collect_installed_orphan(
                 anchor.parent_fd,
                 anchor.name,
                 display_path=anchor.output,
+                expected_inventory=inventory,
             )
             os.fsync(anchor.parent_fd)
             deleted.append(str(anchor.output))

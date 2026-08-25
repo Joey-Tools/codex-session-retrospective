@@ -2892,6 +2892,36 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "Allergies: penicillin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "known_allergies: penicillin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "known-allergies: penicillin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "knownAllergies: penicillin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Allergy:** penicillin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Allergy was penicillin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "Biometric template: opaque-template-data",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
@@ -2959,6 +2989,8 @@ class ResultValidationTests(unittest.TestCase):
             "Health data parsing is documented.",
             "Clinical information handling is documented.",
             "Protected health information parsing is documented.",
+            "Allergy parsing is documented.",
+            "Known allergies handling is documented.",
             "The biometric template detector needs a regression test.",
             "Emergency contact parsing is documented.",
             "Improve health insurance number parsing.",

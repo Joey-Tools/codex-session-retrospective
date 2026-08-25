@@ -4420,6 +4420,35 @@ superseded_by:
   and 33/33. Ruff lint and changed-file format checks, actionlint, the
   bootstrap manifest, the official OpenAI Skill validator, project-journal
   validation, bytecode scanning, and the final diff check are clean.
+- The clean-context Codex CLI reviewer for signed head `37e8caba` used a fresh
+  independently materialized and validated read-only workspace over
+  `a3836660..37e8caba`. Equal prelaunch and postvalidation receipts bound 125
+  commits, 124 parent edges, graph digest
+  `d6d8f17a0cdbdafbc666b84fdb636ee596b53cc73a479421c8519f2588d4ae1d`,
+  and the unchanged local-config digest. Thread
+  `01a03738-6f0f-7d01-9e4d-f3c88ff8f994` returned two findings: allergy fields
+  could bypass all retained privacy layers, and orphan GC treated directory
+  `mtime` drift as direct mutation evidence instead of triggering an exact
+  object/content/access-policy proof. The trusted 30-file control and Python
+  records were byte-identical after the lane, no reviewer process remained,
+  and the exact task root was removed.
+- The shared health grammar now covers singular, plural, known, snake-case,
+  hyphenated, camel-case, Markdown, and narrative allergy fields. Orphan GC now
+  binds each file's object identity, owner/mode/link policy, exact inventory,
+  and SHA-256 content commitment, revalidates directory identity and access
+  policy while excluding timestamps from mutation evidence, and passes the
+  same authenticated inventory to descriptor-bound deletion. Benign temporary
+  and installed directory timestamp churn remains eligible, while a same-size
+  content mutation after proof is retained and rejected. Focused regressions
+  pass 4/4; complete export, results/episodes, and result-contract-audit suites
+  pass 79/79, 102/102, and 25/25.
+- Final36 uses the owner-controlled Python 3.13.12 runtime and 1,943 exact test
+  IDs from 22 authenticated sources under manifest digest
+  `a45b848df8465f2a2e627fc842b27892b5c33c20c374d9aa4ee7a9a669ce3184`.
+  Shards 0 through 3 pass 460/460 in 1,784.777 seconds, 525/525 in
+  1,595.079 seconds, 522/522 in 1,493.160 seconds, and 436/436 in
+  1,501.914 seconds. The independent Darwin security inventory passes 14/14
+  in 70.913 seconds without skips.
 
 ## Follow-up Work
 

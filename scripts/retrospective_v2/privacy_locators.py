@@ -556,12 +556,12 @@ _RELATIONSHIP_NAME_FIELD_PATTERN_TEXT = (
     r"(?-i:(?:emergencyContact|EmergencyContact|nextOfKin|NextOfKin)(?:Name)?)"
 )
 _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
-    r"(?:diagnosis|medication|blood[_ -]+type|"
+    r"(?:diagnosis|medication|(?:known[_ -]+)?allerg(?:y|ies)|blood[_ -]+type|"
     r"(?:medical|health|clinical)[_ -]+"
     r"(?:conditions?|data|history|information|records?|status)|"
     r"genetic[_ -]+(?:data|information|profile|records?|status)|"
     r"protected[_ -]+health[_ -]+information|"
-    r"(?-i:(?:blood|Blood)Type|"
+    r"(?-i:(?:known|Known)Allergies|(?:blood|Blood)Type|"
     r"(?:medical|Medical|health|Health|clinical|Clinical)"
     r"(?:Condition|Conditions|Data|History|Information|Record|Records|Status)|"
     r"(?:genetic|Genetic)(?:Data|Information|Profile|Record|Records|Status)|"

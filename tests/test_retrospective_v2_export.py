@@ -3380,6 +3380,133 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
             self.assertEqual(result["deleted"], [str(staging.resolve())])
             self.assertFalse(staging.exists())
 
+    def test_gc_accepts_temporary_orphan_timestamp_only_churn(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".codex-local" / "temporary-orphan-mtime"
+            root.mkdir(mode=0o700, parents=True)
+            staging = root / f".retained-v2.staging-123-{'c' * 24}"
+            staging.mkdir(mode=0o700)
+            artifact = staging / "manifest.json"
+            artifact.write_bytes(b"{}\n")
+            os.chmod(artifact, 0o600)
+            created_at = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+            timestamp = created_at.timestamp()
+            os.utime(staging, (timestamp, timestamp), follow_symlinks=False)
+            real_names = export_module._bounded_artifact_names
+            churn_observed = False
+
+            def names_with_timestamp_churn(directory_fd: int):
+                nonlocal churn_observed
+                names = real_names(directory_fd)
+                metadata = os.fstat(directory_fd)
+                os.utime(
+                    staging,
+                    ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 1_000_000),
+                    follow_symlinks=False,
+                )
+                churn_observed = True
+                return names
+
+            with mock.patch.object(
+                export_module,
+                "_bounded_artifact_names",
+                side_effect=names_with_timestamp_churn,
+            ):
+                result = garbage_collect_expired_exports(
+                    root,
+                    now=created_at
+                    + export_module.MAX_EXPORT_RETENTION
+                    + dt.timedelta(seconds=1),
+                )
+
+            self.assertTrue(churn_observed)
+            self.assertEqual(result["deleted"], [str(staging.resolve())])
+            self.assertFalse(staging.exists())
+
+    def test_gc_accepts_installed_orphan_timestamp_only_churn(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".codex-local" / "installed-orphan-mtime"
+            output = root / "retained-v2"
+            exported_at = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+            export_retained_bundle(
+                output,
+                run_state(),
+                review_data(),
+                now=exported_at,
+                retention_deadline=exported_at + dt.timedelta(hours=1),
+            )
+            (root / ".retained-v2.retention-v2.json").unlink()
+            timestamp = exported_at.timestamp()
+            os.utime(output, (timestamp, timestamp), follow_symlinks=False)
+            real_validate = export_module._validate_at
+            churn_observed = False
+
+            def validate_with_timestamp_churn(anchor):
+                nonlocal churn_observed
+                result = real_validate(anchor)
+                metadata = output.stat(follow_symlinks=False)
+                os.utime(
+                    output,
+                    ns=(metadata.st_atime_ns, metadata.st_mtime_ns + 1_000_000),
+                    follow_symlinks=False,
+                )
+                churn_observed = True
+                return result
+
+            with mock.patch.object(
+                export_module,
+                "_validate_at",
+                side_effect=validate_with_timestamp_churn,
+            ):
+                result = garbage_collect_expired_exports(
+                    root,
+                    now=exported_at
+                    + export_module.MAX_EXPORT_RETENTION
+                    + dt.timedelta(seconds=1),
+                )
+
+            self.assertTrue(churn_observed)
+            self.assertEqual(result["deleted"], [str(output.resolve())])
+            self.assertFalse(output.exists())
+
+    def test_gc_rejects_orphan_content_mutation_after_proof(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".codex-local" / "temporary-orphan-content"
+            root.mkdir(mode=0o700, parents=True)
+            staging = root / f".retained-v2.staging-123-{'d' * 24}"
+            staging.mkdir(mode=0o700)
+            artifact = staging / "manifest.json"
+            artifact.write_bytes(b"{}\n")
+            os.chmod(artifact, 0o600)
+            created_at = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+            timestamp = created_at.timestamp()
+            os.utime(staging, (timestamp, timestamp), follow_symlinks=False)
+            real_expired = export_module._orphan_expired
+            mutation_observed = False
+
+            def mutate_before_eligibility(metadata, clock):
+                nonlocal mutation_observed
+                artifact.write_bytes(b"[]\n")
+                mutation_observed = True
+                return real_expired(metadata, clock)
+
+            with (
+                mock.patch.object(
+                    export_module,
+                    "_orphan_expired",
+                    side_effect=mutate_before_eligibility,
+                ),
+                self.assertRaises(export_module.safe_io.UnsafePathError),
+            ):
+                garbage_collect_expired_exports(
+                    root,
+                    now=created_at + export_module.MAX_EXPORT_RETENTION,
+                )
+
+            self.assertTrue(mutation_observed)
+            self.assertTrue(staging.is_dir())
+            self.assertEqual(artifact.read_bytes(), b"[]\n")
+
     def test_gc_does_not_check_deadline_inside_delete_commit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / ".codex-local" / "gc-delete-commit"
