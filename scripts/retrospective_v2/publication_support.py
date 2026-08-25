@@ -160,6 +160,14 @@ from .publication_state import (  # noqa: F401
 )
 
 
+_RETAINED_ARTIFACT_READ_FLAGS = (
+    os.O_RDONLY
+    | getattr(os, "O_NOFOLLOW", 0)
+    | getattr(os, "O_NONBLOCK", 0)
+    | getattr(os, "O_CLOEXEC", 0)
+)
+
+
 _DESCRIPTOR_CWD_EXEC_SOURCE = (
     "import os,sys\n"
     "descriptor=int(sys.argv[1])\n"
@@ -895,8 +903,11 @@ def _read_inventory_artifacts_anchored(
                     dir_fd=directory_fd,
                     follow_symlinks=False,
                 )
-                flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
-                descriptor = os.open(name, flags, dir_fd=directory_fd)
+                descriptor = os.open(
+                    name,
+                    _RETAINED_ARTIFACT_READ_FLAGS,
+                    dir_fd=directory_fd,
+                )
             except OSError as exc:
                 raise ArtifactValidationError(
                     f"cannot open retained artifact: {name}"
@@ -1083,11 +1094,8 @@ def _parse_declared_bundle_digest(value: Any) -> str:
 
 @contextmanager
 def _checked_open(path: Path, expected: os.stat_result):
-    flags = os.O_RDONLY
-    if hasattr(os, "O_NOFOLLOW"):
-        flags |= os.O_NOFOLLOW
     try:
-        descriptor = os.open(path, flags)
+        descriptor = os.open(path, _RETAINED_ARTIFACT_READ_FLAGS)
     except OSError as exc:
         raise ArtifactValidationError(
             f"cannot open retained artifact: {path.name}"

@@ -4097,6 +4097,93 @@ class SourceTransportProtocolTests(unittest.TestCase):
         self.assertEqual("gap", frames[-1]["status"])
         self.assertEqual("source_enumeration_changed", frames[-1]["reason"])
 
+    @unittest.skipUnless(
+        hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"),
+        "requires POSIX FIFO support",
+    )
+    def test_candidate_fifo_replacement_during_discovery_is_nonblocking(self) -> None:
+        history = self.codex_root / "history.jsonl"
+        history.write_bytes(self._line("fifo-discovery"))
+        real_open = os.open
+        replaced = False
+
+        def replace_with_fifo(name, flags, *args, **kwargs):
+            nonlocal replaced
+            if (
+                name == history.name
+                and kwargs.get("dir_fd") is not None
+                and not replaced
+            ):
+                replaced = True
+                self.assertTrue(flags & os.O_NONBLOCK)
+                history.unlink()
+                os.mkfifo(history, 0o600)
+            return real_open(name, flags, *args, **kwargs)
+
+        supports_dir_fd = transport_source.os.supports_dir_fd
+        with mock.patch.object(
+            transport_source.os,
+            "open",
+            side_effect=replace_with_fifo,
+        ) as patched_open:
+            with mock.patch.object(
+                transport_source.os,
+                "supports_dir_fd",
+                frozenset((*supports_dir_fd, patched_open)),
+            ):
+                frames = self._direct_source_frames(
+                    "candidate-fifo-discovery",
+                    source_kind="history",
+                    max_records=8,
+                )
+
+        self.assertTrue(replaced)
+        self.assertEqual("gap", frames[-1]["status"])
+        self.assertEqual("source_enumeration_changed", frames[-1]["reason"])
+        self.assertTrue(stat.S_ISFIFO(history.lstat().st_mode))
+
+    @unittest.skipUnless(
+        hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"),
+        "requires POSIX FIFO support",
+    )
+    def test_candidate_fifo_replacement_before_terminal_is_nonblocking(self) -> None:
+        history = self.codex_root / "history.jsonl"
+        history.write_bytes(self._line("fifo-terminal"))
+        real_open = os.open
+        candidate_opens = 0
+
+        def replace_before_terminal(name, flags, *args, **kwargs):
+            nonlocal candidate_opens
+            if name == history.name and kwargs.get("dir_fd") is not None:
+                candidate_opens += 1
+                self.assertTrue(flags & os.O_NONBLOCK)
+                if candidate_opens == 3:
+                    history.unlink()
+                    os.mkfifo(history, 0o600)
+            return real_open(name, flags, *args, **kwargs)
+
+        supports_dir_fd = transport_source.os.supports_dir_fd
+        with mock.patch.object(
+            transport_source.os,
+            "open",
+            side_effect=replace_before_terminal,
+        ) as patched_open:
+            with mock.patch.object(
+                transport_source.os,
+                "supports_dir_fd",
+                frozenset((*supports_dir_fd, patched_open)),
+            ):
+                frames = self._direct_source_frames(
+                    "candidate-fifo-terminal",
+                    source_kind="history",
+                    max_records=8,
+                )
+
+        self.assertEqual(3, candidate_opens)
+        self.assertEqual("gap", frames[-1]["status"])
+        self.assertEqual("source_enumeration_changed", frames[-1]["reason"])
+        self.assertTrue(stat.S_ISFIFO(history.lstat().st_mode))
+
     def test_archived_rollout_membership_change_before_terminal_is_a_gap(
         self,
     ) -> None:

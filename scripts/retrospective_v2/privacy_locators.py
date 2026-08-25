@@ -557,12 +557,17 @@ _RELATIONSHIP_NAME_FIELD_PATTERN_TEXT = (
 )
 _CONTROLLED_HEALTH_FIELD_PATTERN_TEXT = (
     r"(?:diagnos(?:is|es)|medications?|(?:known[_ -]+)?allerg(?:y|ies)|"
+    r"symptoms?|treatments?|procedures?|prescriptions?|"
+    r"(?:lab(?:oratory)?|test)[_ -]+results?|"
     r"blood[_ -]+type|"
     r"(?:medical|health|clinical)[_ -]+"
     r"(?:conditions?|data|history|information|records?|status)|"
     r"genetic[_ -]+(?:data|information|profile|records?|status)|"
     r"protected[_ -]+health[_ -]+information|"
     r"(?-i:(?:known|Known)(?:Allergy|Allergies)|(?:blood|Blood)Type|"
+    r"(?:symptom|Symptom)s?|(?:treatment|Treatment)s?|"
+    r"(?:procedure|Procedure)s?|(?:prescription|Prescription)s?|"
+    r"(?:lab|Lab|laboratory|Laboratory|test|Test)(?:Result|Results)|"
     r"(?:medical|Medical|health|Health|clinical|Clinical)"
     r"(?:Condition|Conditions|Data|History|Information|Record|Records|Status)|"
     r"(?:genetic|Genetic)(?:Data|Information|Profile|Record|Records|Status)|"

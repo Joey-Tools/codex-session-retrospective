@@ -6657,7 +6657,7 @@ class DurablePublicationTests(unittest.TestCase):
         original = target.read_bytes()
         real_open = os.open
 
-        for scenario in ("replacement", "symlink", "oversize"):
+        for scenario in ("replacement", "symlink", "oversize", "fifo"):
             with self.subTest(scenario=scenario):
                 safe_io.atomic_write_bytes(target, original)
                 inventory = build_artifact_inventory(bundle)
@@ -6685,6 +6685,10 @@ class DurablePublicationTests(unittest.TestCase):
                         triggered = True
                         if scenario in {"replacement", "symlink"}:
                             os.replace(replacement, target)
+                        elif scenario == "fifo":
+                            self.assertTrue(flags & os.O_NONBLOCK)
+                            target.unlink()
+                            os.mkfifo(target, 0o600)
                         else:
                             descriptor = real_open(
                                 target,
@@ -6712,6 +6716,44 @@ class DurablePublicationTests(unittest.TestCase):
                     target.unlink(missing_ok=True)
                     safe_io.atomic_write_bytes(target, original)
                     replacement.unlink(missing_ok=True)
+
+    @unittest.skipUnless(
+        hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"),
+        "requires POSIX FIFO support",
+    )
+    def test_artifact_inventory_rejects_fifo_replacement_without_blocking(
+        self,
+    ) -> None:
+        _, bundle = self.build_exportable_run("inventory-fifo-race")
+        target = bundle / "manifest.json"
+        original = target.read_bytes()
+        real_open = os.open
+        replaced = False
+
+        def replace_with_fifo(path, flags, mode=0o777, *, dir_fd=None):
+            nonlocal replaced
+            if Path(path) == target and dir_fd is None and not replaced:
+                replaced = True
+                self.assertTrue(flags & os.O_NONBLOCK)
+                target.unlink()
+                os.mkfifo(target, 0o600)
+            return real_open(path, flags, mode, dir_fd=dir_fd)
+
+        try:
+            with (
+                mock.patch.object(
+                    publication_support.os,
+                    "open",
+                    side_effect=replace_with_fifo,
+                ),
+                self.assertRaises(finalize_module.ArtifactValidationError),
+            ):
+                build_artifact_inventory(bundle)
+            self.assertTrue(replaced)
+            self.assertTrue(stat.S_ISFIFO(target.lstat().st_mode))
+        finally:
+            target.unlink(missing_ok=True)
+            safe_io.atomic_write_bytes(target, original)
 
     def test_privacy_reread_accepts_benign_timestamp_change(self) -> None:
         _, bundle = self.build_exportable_run("privacy-benign-timestamp")

@@ -4579,6 +4579,63 @@ superseded_by:
   bootstrap manifest, the official OpenAI Skill validator, project-journal
   validation, source/test bytecode exclusion, and `git diff --check` are clean
   on the same tree.
+- Signed head `6dd136d3` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..6dd136d3` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 129 commits, 128 parent edges, graph digest
+  `40e3503dec0cebb98074797acd06f4f5a8ed22b798629e3f4c2d031a660e02ef`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a03867-1d91-7fc0-a3c5-d501961db0cd` returned three P1 findings:
+  retained health-field labels omitted symptoms, treatments, procedures,
+  prescriptions, and laboratory/test results; source discovery and terminal
+  rereads could block after regular-file-to-FIFO replacement; and retained
+  publication inventory/privacy rereads had the same blocking-open gap.
+  Postvalidation reproduced the original receipts, the trusted 30-file
+  control manifest, Skill, guard, and Python digests remained exact, 95
+  reviewer command events stayed read-only, no reviewer process remained, and
+  the exact owner-private task root was removed. Two parent launch-shape
+  failures occurred before any model event and remain zero-start/non-counting.
+- The shared retained-health grammar now covers the omitted plain, snake-case,
+  kebab-case, camel-case, and PascalCase field labels while retaining negative
+  narrative prose. Source candidate opens and both retained publication read
+  paths use no-follow, nonblocking, close-on-exec descriptors before regular
+  file, identity, content, and access-policy validation. Discovery races become
+  explicit `source_enumeration_changed` gaps; publication races remain
+  `ArtifactValidationError`. Exact focused regressions pass 6/6 in 80.072
+  seconds. Complete results/episodes, source transport, and session-shards
+  modules pass 102/102, 140/140, and 44/44. Result-contract,
+  module-boundary, CI, Skill, and Bootstrap entrypoints pass 25/25, 20/20,
+  33/33, 6/6, and 12/12; the exact engine branch inventory decreases from
+  10,002 to 10,001 after conditional flag assembly moves to one shared
+  constant.
+- Final41 freezes 1,953 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `55c86e322501eb998a1f4a3a083c1fd723c79ff3d89f03588419c04e6eaf7e34`.
+  The owner-controlled Python digest remains
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`.
+  Shards 0 through 3 pass 464/464 in 1,912.897 seconds, 525/525 in
+  1,717.330 seconds, 525/525 in 1,615.905 seconds, and 439/439 in
+  1,669.835 seconds, for exact aggregate coverage of 1,953/1,953 without
+  skips. Their four bounded logs total 472,221 bytes. The independent Darwin
+  security inventory passes 14/14 in 76.414 seconds. Repository-wide Ruff
+  0.13.2 lint, changed-file formatting, both workflows under `actionlint`
+  1.7.12, the generated bootstrap manifest, the official OpenAI Skill
+  validator under cached Python 3.13.0 and PyYAML 6.0.3, project-journal
+  validation, tracked bytecode exclusion, and `git diff --check` are clean.
+  A repository-wide formatting probe remains non-counting because it identifies
+  four unchanged pre-existing files; this change does not reformat them.
+- Three diagnostic test invocations are explicitly non-counting: the first
+  six-test command omitted `-I` and replaced `os.open` without preserving the
+  mocked `supports_dir_fd` capability; a combined affected-module run reached
+  publication tests but exceeded its 40-minute aggregate deadline; and a
+  publication-only supplement reached 74 completed cases before its 60-minute
+  deadline. The latter two supervisors reported post-TERM group cleanup as
+  unverified, but a later exact-argv process census found no surviving module
+  runner, publication test, or wrapper. These supplemental timeouts do not
+  create a coverage gap because the same frozen Final41 manifest completed all
+  1,953 tests exactly once across the four terminal shards.
 
 ## Follow-up Work
 

@@ -340,7 +340,7 @@ def _open_relative_from_codex_root(
     directory = getattr(os, "O_DIRECTORY", 0)
     close_on_exec = getattr(os, "O_CLOEXEC", 0)
     directory_flags = os.O_RDONLY | directory | nofollow | close_on_exec
-    file_flags = os.O_RDONLY | nofollow | close_on_exec
+    file_flags = os.O_RDONLY | nofollow | getattr(os, "O_NONBLOCK", 0) | close_on_exec
     relative_parts = () if relative_path is None else relative_path.parts
     if relative_path is not None and (
         not relative_parts or any(part in {"", ".", ".."} for part in relative_parts)
@@ -699,7 +699,7 @@ def _source_transport_candidate_paths(
         transport_discovery.SourceDiscoveryBudgetExceeded,
     ) as exc:
         return result(source_exists=True, gap_reason=exc.reason)
-    except FileNotFoundError:
+    except (FileNotFoundError, NotADirectoryError, ValueError):
         return result(source_exists=True, gap_reason="source_enumeration_changed")
     except BaseException:
         anchor.close()

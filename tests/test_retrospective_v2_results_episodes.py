@@ -2802,6 +2802,46 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_PERSONAL_IDENTIFIER]",
             ),
             (
+                "Symptoms: severe migraines",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Treatment was chemotherapy",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "**Procedure:** coronary bypass",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "Prescriptions: warfarin",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "lab_result: elevated ALT",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "test-results: positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "labResult: elevated ALT",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
+                "laboratoryResults: positive",
+                "personal_identifier",
+                "[REDACTED_PERSONAL_IDENTIFIER]",
+            ),
+            (
                 "Blood type: AB negative",
                 "personal_identifier",
                 "[REDACTED_PERSONAL_IDENTIFIER]",
@@ -3096,6 +3136,12 @@ class ResultValidationTests(unittest.TestCase):
 
         for safe_prose in (
             "Improve diagnosis handling.",
+            "Improve symptom handling.",
+            "Treatment parsing is documented.",
+            "Procedure parsing is documented.",
+            "Prescription parsing is documented.",
+            "Lab result parsing is documented.",
+            "Test result parsing is documented.",
             "Medical condition parsing is documented.",
             "Health status handling is documented.",
             "The genetic information detector needs a regression test.",

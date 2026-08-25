@@ -1485,6 +1485,53 @@ class SessionShardsLocalTests(unittest.TestCase):
         self.assertEqual((directory_rc, directory_frames), (1, []))
         self.assertIn("not a regular file", directory_error)
 
+    @unittest.skipUnless(
+        hasattr(os, "mkfifo") and hasattr(os, "O_NONBLOCK"),
+        "requires POSIX FIFO support",
+    )
+    def test_rollout_fifo_replacement_at_open_is_nonblocking(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            codex_root = Path(raw) / ".codex"
+            rollout = write_rollout(codex_root, b'{"n":1}\n')
+            target = codex_root / rollout
+            real_open = os.open
+            replaced = False
+
+            def replace_with_fifo(name, flags, *args, **kwargs):
+                nonlocal replaced
+                if (
+                    name == target.name
+                    and kwargs.get("dir_fd") is not None
+                    and not replaced
+                ):
+                    replaced = True
+                    self.assertTrue(flags & os.O_NONBLOCK)
+                    target.unlink()
+                    os.mkfifo(target, 0o600)
+                return real_open(name, flags, *args, **kwargs)
+
+            supports_dir_fd = SHARDS_MODULE.os.supports_dir_fd
+            with mock.patch.object(
+                SHARDS_MODULE.os,
+                "open",
+                side_effect=replace_with_fifo,
+            ) as patched_open:
+                with (
+                    mock.patch.object(
+                        SHARDS_MODULE.os,
+                        "supports_dir_fd",
+                        frozenset((*supports_dir_fd, patched_open)),
+                    ),
+                    self.assertRaisesRegex(ValueError, "not a regular file"),
+                ):
+                    MODULE._open_session_shard_source(
+                        codex_root,
+                        MODULE.pathlib.PurePosixPath(rollout),
+                    )
+
+            self.assertTrue(replaced)
+            self.assertTrue(stat.S_ISFIFO(target.lstat().st_mode))
+
     def test_openat_traversal_survives_ancestor_name_swap(self) -> None:
         safe_data = b'{"source":"safe"}\n'
         unsafe_data = b'{"source":"outside"}\n'
