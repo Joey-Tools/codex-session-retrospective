@@ -3421,7 +3421,11 @@ class ResultValidationTests(unittest.TestCase):
             "patient_ids: PAT-001",
             "patientIds: PAT-001",
             "insurance_policy_numbers: POLICY-001",
+            "insurancePolicy: bronze-plan",
+            "insuranceMember: MEMBER-001",
+            "healthInsurance: PLAN-001",
             "health_plan_beneficiary_ids: BENEFICIARY-001",
+            "healthPlanBeneficiary: BENEFICIARY-001",
             "national_ids: NATIONAL-001",
             "tax_ids: TAX-001",
             "passport_numbers: X0000000",
@@ -3429,6 +3433,7 @@ class ResultValidationTests(unittest.TestCase):
             "drivers_license_numbers: LICENSE-001",
             "vins: VIN-001",
             "vehicle_identification_numbers: VIN-001",
+            "vehicleIdentification: VIN-001",
             "license_plates: PLATE-001",
             "credit_card_numbers: 4111111111111111",
             "bank_account_numbers: ACCOUNT-001",
@@ -3448,6 +3453,19 @@ class ResultValidationTests(unittest.TestCase):
                     reporting_module.validate_retained_value(
                         {"problem_statement": source}
                     )
+
+        for safe_prose in (
+            "insurancePolicy parsing is documented.",
+            "healthInsurance parsing is documented.",
+            "healthPlanBeneficiary parsing is documented.",
+            "vehicleIdentification parsing is documented.",
+        ):
+            with self.subTest(safe_prose=safe_prose):
+                self.assertEqual((), scan_for_leaks(safe_prose))
+                self.assertEqual(
+                    safe_prose,
+                    result_validation_module.post_redact(safe_prose),
+                )
 
     def test_demographic_fields_share_retained_privacy_policy(self) -> None:
         for source in (

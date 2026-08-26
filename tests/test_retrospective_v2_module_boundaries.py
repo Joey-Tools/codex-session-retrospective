@@ -381,7 +381,7 @@ BOUNDED_MODULE_LINES = {
     "finalize.py": 120,
     "authority.py": 3_400,
     "orchestrator_execution_contract.py": 200,
-    "cleanup_inventory.py": 925,
+    "cleanup_inventory.py": 950,
     "cleanup_sidecars.py": 300,
     "orchestrator.py": 800,
     "orchestrator_components.py": 250,
@@ -1293,8 +1293,8 @@ spec.loader.exec_module(module)
         duplicates = [owners for owners in duplicate_bodies.values() if len(owners) > 1]
         self.assertEqual([], duplicates)
         # Keep the engine and migration-only Git adapter branch inventory exact.
-        self.assertEqual(10_045, branch_total)
-        self.assertLessEqual(branch_total, 10_045)
+        self.assertEqual(10_058, branch_total)
+        self.assertLessEqual(branch_total, 10_058)
         self.assertLessEqual(functions_over_200, 22)
         self.assertLessEqual(sliced_functions_over_200, 3)
 

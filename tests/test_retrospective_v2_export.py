@@ -3599,6 +3599,77 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
             self.assertEqual(after["deleted"], [str(output.resolve())])
             self.assertFalse(output.exists())
 
+    def test_gc_rejects_entry_added_after_expired_bundle_inventory_proof(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".codex-local" / "retained-race"
+            output = root / "retained-v2"
+            now = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+            deadline = now + dt.timedelta(hours=1)
+            export_retained_bundle(
+                output,
+                run_state(),
+                review_data(),
+                now=now,
+                retention_deadline=deadline,
+            )
+            real_validate = export_module._validate_at
+            late_entry = output / "late-owner-file.bin"
+
+            def validate_then_add_entry(anchor):
+                result = real_validate(anchor)
+                late_entry.write_bytes(b"must survive")
+                os.chmod(late_entry, 0o600)
+                return result
+
+            with (
+                mock.patch.object(
+                    export_module,
+                    "_validate_at",
+                    side_effect=validate_then_add_entry,
+                ),
+                self.assertRaises(export_module.safe_io.UnsafePathError),
+            ):
+                garbage_collect_expired_exports(root, now=deadline)
+
+            self.assertEqual(b"must survive", late_entry.read_bytes())
+            self.assertTrue(output.is_dir())
+            self.assertTrue((root / ".retained-v2.retention-v2.json").is_file())
+
+    def test_gc_bounds_expired_bundle_inventory_before_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary) / ".codex-local" / "retained-wide"
+            output = root / "retained-v2"
+            now = dt.datetime(2026, 7, 15, 0, 0, tzinfo=dt.UTC)
+            deadline = now + dt.timedelta(hours=1)
+            export_retained_bundle(
+                output,
+                run_state(),
+                review_data(),
+                now=now,
+                retention_deadline=deadline,
+            )
+            late_entry = output / "unexpected.bin"
+            late_entry.write_bytes(b"must survive")
+            os.chmod(late_entry, 0o600)
+
+            with (
+                mock.patch.object(
+                    export_module,
+                    "_validate_at",
+                    side_effect=AssertionError("validation must not run"),
+                ),
+                self.assertRaisesRegex(
+                    ExportConflictError,
+                    "exceeded its structural bounds",
+                ),
+            ):
+                garbage_collect_expired_exports(root, now=deadline)
+
+            self.assertEqual(b"must survive", late_entry.read_bytes())
+            self.assertTrue(output.is_dir())
+
     def test_gc_collects_partial_hidden_staging_orphan(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary) / ".codex-local" / "temporary-orphan"
@@ -4207,7 +4278,7 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
             original_remove = export_module.safe_io.secure_remove_tree_at
             swapped = False
 
-            def replace_parent(directory_fd, name, *, display_path):
+            def replace_parent(directory_fd, name, *, display_path, **kwargs):
                 nonlocal swapped
                 if not swapped:
                     root.rename(moved_root)
@@ -4220,6 +4291,7 @@ class RetrospectiveV2ExportTests(unittest.TestCase):
                     directory_fd,
                     name,
                     display_path=display_path,
+                    **kwargs,
                 )
 
             with mock.patch.object(

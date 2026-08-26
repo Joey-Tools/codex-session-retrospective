@@ -5164,6 +5164,50 @@ superseded_by:
   module-boundary, CI, Skill, and Bootstrap contracts pass 20/20, 33/33,
   6/6, and 12/12. Both workflows pass `actionlint`; the bootstrap manifest,
   official Skill validator, and project-journal validator are clean.
+- Signed follow-up head `f1e01621` had clean exact-secret admission. A fresh
+  independently materialized Codex CLI `gpt-5.6-sol` reviewer at `xhigh`
+  reasoning inspected `a3836660..f1e01621` under the prior trusted review
+  bundle. Equal materialization and validation receipts bind 143 commits, 142
+  parent edges, graph digest
+  `a0f8d410520d72d39fc70ff74e827a5eda2a0d5d955aaca258fa4e5c6dbcd8a4`,
+  and the unchanged local-config digest. Thread
+  `01a03d0d-3324-7641-89ee-563d98097315` completed in 1,115.495 seconds and
+  found three gaps: suffixless CamelCase insurance, beneficiary, and vehicle
+  labels bypassed privacy detection; ordinary expired-bundle GC deleted
+  without an exact inventory binding; and a marker descriptor close failure
+  could skip rollback after a partial marker write. Postvalidation remained
+  exact, trusted controls were byte-identical, and the exact owner-private
+  review root was removed through identity-bound cleanup.
+- The follow-up aligns suffixless CamelCase sensitive labels with their
+  separated-form policy while retaining assignment-free prose. Ordinary
+  expired bundles now receive a bounded two-pass owner-only inventory before
+  content validation; deletion consumes that exact identity, access-policy,
+  structure, and content inventory, so a late file or directory survives and
+  GC fails closed. Marker rollback preserves the write failure as primary,
+  records a close failure as secondary evidence, verifies the created marker
+  identity before unlink, persists rollback, and permits a clean retry. The
+  module-boundary inventory explicitly records the resulting cleanup owner and
+  branch counts rather than silently weakening either runtime check.
+- Focused evidence passes the six exact reviewer regressions in 3.488 seconds,
+  results/privacy 104/104 in 16.439 seconds, export 86/86 in 267.560 seconds,
+  module boundaries 20/20, and CI contracts 33/33. One complete orchestrator
+  module attempt is non-counting because the response transport disappeared
+  before its terminal summary and no matching process remained; the canonical
+  full-suite shards provide the required replacement coverage. Ruff 0.13.2
+  lint and formatting are clean for all seven changed Python files. Both
+  workflows pass `actionlint` 1.7.12; Skill and Bootstrap contracts pass 6/6
+  and 12/12; the bootstrap manifest, official Skill validator, and
+  project-journal validator are clean.
+- Final70 freezes 1,980 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `0295e46c46a4ef3e7c51a6e9be75f550b4b084c0cc1fe952dda646bccab24683`.
+  Shards 0 through 3 pass 471/471 in 2,097.719 seconds, 531/531 in
+  1,833.092 seconds, 535/535 in 1,725.376 seconds, and 443/443 in
+  1,782.634 seconds, for exact aggregate coverage of 1,980/1,980 without
+  skips. Each shard used an independent process group with a 3,600-second
+  hard deadline and a 1 MiB retained-log ceiling. The independent Darwin
+  security inventory passes 16/16 in 89.857 seconds. The canonical source
+  tree remains free of bytecode after all terminal runs.
 
 ## Follow-up Work
 

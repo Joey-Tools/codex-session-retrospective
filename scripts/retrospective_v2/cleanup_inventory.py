@@ -520,7 +520,11 @@ def _create_marker(
             )
         return
     succeeded = False
+    created_identity: tuple[int, int] | None = None
+    primary: BaseException | None = None
     try:
+        created = os.fstat(descriptor)
+        created_identity = (created.st_dev, created.st_ino)
         safe_io.harden_created_owner_only_file_descriptor(descriptor, marker_path)
         view = memoryview(payload)
         written = 0
@@ -531,13 +535,52 @@ def _create_marker(
             written += count
         os.fsync(descriptor)
         succeeded = True
-    finally:
+    except BaseException as error:
+        primary = error
+    try:
         os.close(descriptor)
-        if not succeeded:
+    except BaseException as close_error:
+        if primary is None:
+            primary = close_error
+        else:
+            primary.add_note(
+                "cleanup progress marker descriptor close failed: "
+                + type(close_error).__name__
+            )
+    if not succeeded:
+        cleanup_error: BaseException | None = None
+        if created_identity is None:
+            cleanup_error = safe_io.UnsafePathError(
+                "cleanup progress marker rollback lacks created-object identity"
+            )
+        else:
             try:
+                current = os.stat(
+                    marker_name,
+                    dir_fd=quarantine_fd,
+                    follow_symlinks=False,
+                )
+                if (current.st_dev, current.st_ino) != created_identity:
+                    raise safe_io.UnsafePathError(
+                        "cleanup progress marker changed before rollback: "
+                        f"{marker_path}"
+                    )
                 os.unlink(marker_name, dir_fd=quarantine_fd)
+                os.fsync(quarantine_fd)
             except FileNotFoundError:
                 pass
+            except BaseException as error:
+                cleanup_error = error
+        if cleanup_error is not None:
+            if primary is None:
+                primary = cleanup_error
+            else:
+                primary.add_note(
+                    "cleanup progress marker rollback failed: "
+                    + type(cleanup_error).__name__
+                )
+    if primary is not None:
+        raise primary
     os.fsync(quarantine_fd)
     if not _read_marker(quarantine_fd, quarantine_path, marker_name, payload):
         raise safe_io.UnsafePathError(

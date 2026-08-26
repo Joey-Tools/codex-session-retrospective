@@ -1862,6 +1862,51 @@ def _prove_orphan_inventory(
     return current, entries
 
 
+def _prove_expired_bundle_inventory(
+    anchor: _AnchoredExport,
+    *,
+    budget: _GcBudget,
+) -> list[dict[str, Any]]:
+    tree_budget = safe_io.TreeInventoryBudget(
+        max_entries=1 + len(RETAINED_ARTIFACT_NAMES),
+        max_path_bytes=_GC_MAX_PATH_BYTES,
+        max_depth=1,
+        deadline=budget.deadline,
+    )
+    try:
+        snapshot = safe_io.inspect_tree_inventory_at(
+            anchor.parent_fd,
+            anchor.name,
+            budget=tree_budget,
+            display_path=anchor.output,
+        )
+    except safe_io.TreeInventoryLimitExceeded as exc:
+        if time.monotonic() >= budget.deadline:
+            raise _GcBudgetExhausted("deadline_exhausted") from exc
+        raise ExportConflictError(
+            "expired retained bundle inventory exceeded its structural bounds"
+        ) from exc
+    except safe_io.UnsafePathError as exc:
+        raise ExportConflictError(
+            "expired retained bundle inventory changed during proof"
+        ) from exc
+    budget.checkpoint()
+
+    entries = snapshot["entries"]
+    expected_paths = {".", *RETAINED_ARTIFACT_NAMES}
+    if (
+        {entry["relative_path"] for entry in entries} != expected_paths
+        or len(entries) != len(expected_paths)
+        or snapshot["counters"]["directory_count"] != 1
+        or snapshot["counters"]["file_count"] != len(RETAINED_ARTIFACT_NAMES)
+        or snapshot["counters"]["byte_count"] > MAX_RETAINED_BUNDLE_BYTES
+    ):
+        raise ExportConflictError(
+            "expired retained bundle inventory proof is inconsistent"
+        )
+    return entries
+
+
 def _temporary_staging_observation(
     anchor: _AnchoredExport,
     temporary_name: str,
@@ -2127,7 +2172,12 @@ def _garbage_collect_directory(
                 if not eligible:
                     retained.append(str(anchor.output))
                     continue
+                inventory: list[dict[str, Any]] | None = None
                 if anchor.exists():
+                    inventory = _prove_expired_bundle_inventory(
+                        anchor,
+                        budget=budget,
+                    )
                     validation = _validate_at(anchor)
                     budget.checkpoint()
                     if validation["bundle_digest"] != state["bundle_digest"]:
@@ -2140,10 +2190,15 @@ def _garbage_collect_directory(
                     )
                 if anchor.exists():
                     budget.checkpoint()
+                    if inventory is None:
+                        raise ExportConflictError(
+                            "expired retained bundle inventory proof is missing"
+                        )
                     safe_io.secure_remove_tree_at(
                         anchor.parent_fd,
                         anchor.name,
                         display_path=anchor.output,
+                        expected_inventory=inventory,
                     )
                 safe_io.read_bounded_bytes_at(
                     anchor.parent_fd,

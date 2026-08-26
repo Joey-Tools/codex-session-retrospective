@@ -10063,6 +10063,94 @@ class OrchestratorTests(unittest.TestCase):
         self.assertTrue(recovered["cleaned"])
         self.assertFalse((coordinator.run_dir / "raw-inputs").exists())
 
+    def test_cleanup_marker_write_and_close_failure_removes_partial_marker(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            quarantine_path = Path(temporary) / "quarantine"
+            quarantine_path.mkdir(mode=0o700)
+            quarantine_fd = os.open(
+                quarantine_path,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            marker_name = f"started-{'a' * 64}.json"
+            payload = b'{"schema":"cleanup_quarantine_progress_v1"}\n'
+            real_open = cleanup_inventory.os.open
+            real_write = cleanup_inventory.os.write
+            real_close = cleanup_inventory.os.close
+            marker_fd: int | None = None
+            marker_write_count = 0
+
+            def track_marker_open(path, flags, mode=0o777, *, dir_fd=None):
+                nonlocal marker_fd
+                descriptor = real_open(path, flags, mode, dir_fd=dir_fd)
+                if path == marker_name and dir_fd == quarantine_fd:
+                    marker_fd = descriptor
+                return descriptor
+
+            def fail_marker_write(descriptor, value):
+                nonlocal marker_write_count
+                if descriptor != marker_fd:
+                    return real_write(descriptor, value)
+                marker_write_count += 1
+                if marker_write_count == 1:
+                    return real_write(descriptor, bytes(value[:1]))
+                raise OSError("simulated marker write failure")
+
+            def fail_marker_close(descriptor):
+                if descriptor == marker_fd:
+                    raise OSError("simulated marker close failure")
+                return real_close(descriptor)
+
+            try:
+                with (
+                    mock.patch.object(
+                        cleanup_inventory.os,
+                        "open",
+                        side_effect=track_marker_open,
+                    ),
+                    mock.patch.object(
+                        cleanup_inventory.os,
+                        "write",
+                        side_effect=fail_marker_write,
+                    ),
+                    mock.patch.object(
+                        cleanup_inventory.os,
+                        "close",
+                        side_effect=fail_marker_close,
+                    ),
+                    self.assertRaisesRegex(
+                        OSError,
+                        "simulated marker write failure",
+                    ) as caught,
+                ):
+                    cleanup_inventory._create_marker(
+                        quarantine_fd,
+                        quarantine_path,
+                        marker_name,
+                        payload,
+                    )
+                self.assertIn(
+                    "cleanup progress marker descriptor close failed: OSError",
+                    getattr(caught.exception, "__notes__", []),
+                )
+                self.assertFalse((quarantine_path / marker_name).exists())
+                self.assertIsNotNone(marker_fd)
+                real_close(marker_fd)
+                marker_fd = None
+
+                cleanup_inventory._create_marker(
+                    quarantine_fd,
+                    quarantine_path,
+                    marker_name,
+                    payload,
+                )
+                self.assertEqual(payload, (quarantine_path / marker_name).read_bytes())
+            finally:
+                if marker_fd is not None:
+                    real_close(marker_fd)
+                os.close(quarantine_fd)
+
     def test_cleanup_v5_rejects_markerless_quarantine_subset(self) -> None:
         coordinator = self.start_daily("cleanup-markerless-subset")
         payload = coordinator.run_dir / "raw-inputs" / "markerless.bin"
