@@ -5128,6 +5128,42 @@ superseded_by:
   1,682.668 seconds, for exact aggregate coverage of 1,975/1,975 without
   skips. Every shard used an independent process group with a 3,600-second hard
   deadline and reached terminal success.
+- Signed head `952f26ef` had clean exact-secret admission. Its dedicated
+  reviewer-role spawn was a zero-start platform rejection. One authorized
+  `fork_context=false` clean-context Codex subagent then ran for the full
+  30-minute parent deadline without a terminal artifact; it was interrupted
+  once and classified transport-inconclusive. Prelaunch, postvalidation, and
+  trusted-control receipts remained byte-identical, and its exact
+  owner-private task root was removed through an identity-bound cleanup.
+- A fresh independently materialized Codex CLI 0.149.1 `gpt-5.6-sol` reviewer
+  at `xhigh` reasoning then inspected `a3836660..952f26ef`. Two wrapper launches
+  were zero-start because a process-wide file-size limit also constrained the
+  existing Codex state database; a transport-only no-repository-read probe
+  isolated that startup issue. The bounded replacement used per-stream byte
+  ceilings and a 30-minute process-group deadline. Thread
+  `01a03ccc-af31-7de0-b3db-1a4d5a4e4262` completed in 645.474 seconds and found
+  two gaps: plural biometric and sensitive-ID labels could bypass retained
+  privacy, and bounded-read descriptor cleanup could attach its close failure
+  to an unrelated outer exception. Postvalidation and trusted-control digests
+  remained exact, and the task root was safely removed.
+- The follow-up pluralizes biometric templates, voiceprints, and every existing
+  labeled sensitive-number family across separated and camel forms. Bounded
+  reads now capture only an exception raised by the current read scope and pass
+  that explicit primary into descriptor cleanup; an unrelated outer
+  `FileExistsError` cannot suppress a successful read's file or parent close
+  failure. Exact reviewer-fix regressions and both complete affected modules
+  pass 160/160 in 13.994 seconds. Ruff 0.13.2 lint/format and
+  `git diff --check` are clean for the four changed Python files.
+- Final68 freezes 1,977 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `26965e2c3629d8f9dfc3a2835165e114e15df4bf538dba29195b324f571e1f2e`.
+  Shards 0 through 3 pass 471/471 in 2,628.002 seconds, 530/530 in
+  2,337.463 seconds, 533/533 in 2,189.864 seconds, and 443/443 in
+  2,272.255 seconds, for exact aggregate coverage of 1,977/1,977 without
+  skips. The Darwin security inventory passes 16/16 in 102.992 seconds;
+  module-boundary, CI, Skill, and Bootstrap contracts pass 20/20, 33/33,
+  6/6, and 12/12. Both workflows pass `actionlint`; the bootstrap manifest,
+  official Skill validator, and project-journal validator are clean.
 
 ## Follow-up Work
 

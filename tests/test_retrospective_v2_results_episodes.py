@@ -3394,8 +3394,10 @@ class ResultValidationTests(unittest.TestCase):
             "Allergy parsing is documented.",
             "Known allergies handling is documented.",
             "The biometric template detector needs a regression test.",
+            "Biometric templates parsing is documented.",
             "Emergency contact parsing is documented.",
             "Improve health insurance number parsing.",
+            "Passport numbers parsing is documented.",
             "Improve cookie header parsing.",
         ):
             with self.subTest(safe_prose=safe_prose):
@@ -3404,6 +3406,48 @@ class ResultValidationTests(unittest.TestCase):
                     safe_prose,
                     result_validation_module.post_redact(safe_prose),
                 )
+
+    def test_plural_biometric_and_sensitive_id_fields_share_privacy_policy(
+        self,
+    ) -> None:
+        for source in (
+            "biometric_templates: template-A",
+            "fingerprint-templates: template-A",
+            "face.templates: template-A",
+            "biometricTemplates: template-A",
+            "voiceprints: sample-A",
+            "mrns: MRN-001",
+            "medical_record_ids: MRN-001",
+            "patient_ids: PAT-001",
+            "patientIds: PAT-001",
+            "insurance_policy_numbers: POLICY-001",
+            "health_plan_beneficiary_ids: BENEFICIARY-001",
+            "national_ids: NATIONAL-001",
+            "tax_ids: TAX-001",
+            "passport_numbers: X0000000",
+            "passportNumbers: X0000000",
+            "drivers_license_numbers: LICENSE-001",
+            "vins: VIN-001",
+            "vehicle_identification_numbers: VIN-001",
+            "license_plates: PLATE-001",
+            "credit_card_numbers: 4111111111111111",
+            "bank_account_numbers: ACCOUNT-001",
+            "routing_numbers: ROUTING-001",
+            "ibans: GB00EXAMPLE0000000000",
+        ):
+            with self.subTest(source=source):
+                self.assertIn(
+                    "personal_identifier",
+                    {finding.category for finding in scan_for_leaks(source)},
+                )
+                self.assertEqual(
+                    "[REDACTED_PERSONAL_IDENTIFIER]",
+                    result_validation_module.post_redact(source),
+                )
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value(
+                        {"problem_statement": source}
+                    )
 
     def test_demographic_fields_share_retained_privacy_policy(self) -> None:
         for source in (

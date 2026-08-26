@@ -1002,6 +1002,66 @@ class SafeIoTests(unittest.TestCase):
                     machine_result["error"]["reason_code"],
                 )
 
+    def test_bounded_read_close_failure_is_not_hidden_by_outer_exception(
+        self,
+    ) -> None:
+        document = self.root / "outer-exception.json"
+        atomic_write_bytes(document, b'{"value":"bounded"}\n')
+        real_open_parent = safe_io._open_parent_directory
+        real_open_file = safe_io.open_checked_file_at
+        real_close = os.close
+
+        for failure_scope in ("file", "parent"):
+            with self.subTest(failure_scope=failure_scope):
+                parent_descriptor: int | None = None
+                file_descriptor: int | None = None
+
+                def capture_parent(*args, **kwargs):
+                    nonlocal parent_descriptor
+                    normalized, parent_descriptor = real_open_parent(*args, **kwargs)
+                    return normalized, parent_descriptor
+
+                def capture_file(*args, **kwargs):
+                    nonlocal file_descriptor
+                    file_descriptor = real_open_file(*args, **kwargs)
+                    return file_descriptor
+
+                def close_then_fail(descriptor: int) -> None:
+                    real_close(descriptor)
+                    selected = (
+                        file_descriptor
+                        if failure_scope == "file"
+                        else parent_descriptor
+                    )
+                    if descriptor == selected:
+                        raise OSError(f"synthetic {failure_scope} close failure")
+
+                try:
+                    raise FileExistsError("outer recovery branch")
+                except FileExistsError:
+                    with (
+                        mock.patch.object(
+                            safe_io,
+                            "_open_parent_directory",
+                            side_effect=capture_parent,
+                        ),
+                        mock.patch.object(
+                            safe_io,
+                            "open_checked_file_at",
+                            side_effect=capture_file,
+                        ),
+                        mock.patch.object(
+                            safe_io.os,
+                            "close",
+                            side_effect=close_then_fail,
+                        ),
+                        self.assertRaisesRegex(
+                            OSError,
+                            f"synthetic {failure_scope} close failure",
+                        ),
+                    ):
+                        read_bounded_json(document)
+
     def test_bounded_file_hash_covers_the_complete_payload(self) -> None:
         prefix = b"p" * (64 * 1024)
         suffix = b"s" * (64 * 1024)

@@ -2815,8 +2815,12 @@ def _validate_bounded_read_limit(value: int, *, label: str) -> None:
         raise ValueError(f"{label} must be a non-negative integer")
 
 
-def _close_bounded_read_descriptor(descriptor: int, *, label: str) -> None:
-    primary = sys.exception()
+def _close_bounded_read_descriptor(
+    descriptor: int,
+    *,
+    label: str,
+    primary: BaseException | None,
+) -> None:
     try:
         os.close(descriptor)
     except OSError as error:
@@ -2869,6 +2873,7 @@ def _read_verified_bounded_file_at(
         display_path=display_path,
         require_owner_only=require_owner_only,
     )
+    primary: BaseException | None = None
     try:
         before = os.fstat(descriptor)
         _validate_bounded_read_policy(
@@ -2950,10 +2955,14 @@ def _read_verified_bounded_file_at(
             payload_digest=first_digest.hex(),
             payload_digest_exact=True,
         )
+    except BaseException as error:
+        primary = error
+        raise
     finally:
         _close_bounded_read_descriptor(
             descriptor,
             label="bounded-read file descriptor close failed",
+            primary=primary,
         )
 
 
@@ -2984,6 +2993,7 @@ def read_bounded_bytes(
     require_owner_only: bool = True,
 ) -> bytes:
     normalized, directory_fd = _open_parent_directory(path, create_parents=False)
+    primary: BaseException | None = None
     try:
         return read_bounded_bytes_at(
             directory_fd,
@@ -2992,10 +3002,14 @@ def read_bounded_bytes(
             max_bytes=max_bytes,
             require_owner_only=require_owner_only,
         )
+    except BaseException as error:
+        primary = error
+        raise
     finally:
         _close_bounded_read_descriptor(
             directory_fd,
             label="bounded-read parent descriptor close failed",
+            primary=primary,
         )
 
 
@@ -3008,6 +3022,7 @@ def _observe_file_bounded(
     on_oversize: Callable[[int, int, Path], BoundedFileObservation],
 ) -> BoundedFileObservation:
     normalized, directory_fd = _open_parent_directory(path, create_parents=False)
+    primary: BaseException | None = None
     try:
         return _read_verified_bounded_file_at(
             directory_fd,
@@ -3018,10 +3033,14 @@ def _observe_file_bounded(
             require_owner_only=require_owner_only,
             on_oversize=on_oversize,
         )
+    except BaseException as error:
+        primary = error
+        raise
     finally:
         _close_bounded_read_descriptor(
             directory_fd,
             label="bounded-read parent descriptor close failed",
+            primary=primary,
         )
 
 
@@ -3104,6 +3123,7 @@ def read_bounded_json(
     require_owner_only: bool = True,
 ) -> Any:
     normalized, directory_fd = _open_parent_directory(path, create_parents=False)
+    primary: BaseException | None = None
     try:
         return read_bounded_json_at(
             directory_fd,
@@ -3112,10 +3132,14 @@ def read_bounded_json(
             max_bytes=max_bytes,
             require_owner_only=require_owner_only,
         )
+    except BaseException as error:
+        primary = error
+        raise
     finally:
         _close_bounded_read_descriptor(
             directory_fd,
             label="bounded JSON parent descriptor close failed",
+            primary=primary,
         )
 
 
