@@ -1870,14 +1870,14 @@ _CREDENTIAL_ASSIGNMENT_ONLY_FIELD_PATTERN_TEXT = (
 )
 _LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
     r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|Otp|OTP|OtpCode|OTPCode|"
-    r"MfaCode|MFACode|"
+    r"MfaCode|MFACode|VerificationCode|SmsCode|SMSCode|AuthenticatorCode|"
     r"TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
     r"RecoveryPhrase|ApiKey|AccessKey|PrivateKey)"
 )
 _PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
     r"(?:Credential|Secret|Password|Passphrase|Passcode|PIN|Pin|Otp|OTP|"
-    r"OtpCode|OTPCode|MfaCode|"
-    r"MFACode|TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
+    r"OtpCode|OTPCode|MfaCode|MFACode|VerificationCode|SmsCode|SMSCode|"
+    r"AuthenticatorCode|TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
     r"RecoveryPhrase|APIKey|ApiKey|AccessKey|PrivateKey|"
     r"(?:Access|API|Api|Auth|Authorization|Client|Refresh|ID|Id|Session|"
     r"CSRF|Csrf|XSRF|Xsrf)Token)"

@@ -2571,10 +2571,18 @@ class ResultValidationTests(unittest.TestCase):
             "Verification code: 123456",
             "verification_code: 123456",
             "verificationCode: 123456",
+            "userVerificationCode: 123456",
+            "UserVerificationCode: 123456",
             "SMS code: 123456",
             "smsCode: 123456",
+            "accountSmsCode: 123456",
+            "AccountSmsCode: 123456",
+            "accountSMSCode: 123456",
+            "AccountSMSCode: 123456",
             "Authenticator code: 123456",
             "authenticatorCode: 123456",
+            "userAuthenticatorCode: 123456",
+            "AccountAuthenticatorCode: 123456",
             "MFA code: 123456",
             "2FA code: 123456",
             "two_factor_code: 123456",
@@ -2605,6 +2613,9 @@ class ResultValidationTests(unittest.TestCase):
             "Improve verification code parsing.",
             "Document SMS code parsing.",
             "Review authenticator code handling.",
+            "userVerificationCode parsing is documented.",
+            "accountSMSCode parsing is documented.",
+            "AccountAuthenticatorCode parsing is documented.",
         ):
             with self.subTest(safe_text=safe_text):
                 self.assertEqual((), scan_for_leaks(safe_text))

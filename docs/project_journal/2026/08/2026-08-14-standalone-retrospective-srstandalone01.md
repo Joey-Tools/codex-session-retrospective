@@ -5243,6 +5243,19 @@ superseded_by:
   regression passes in 0.324 seconds; the complete results/privacy module
   passes 104/104 in 14.358 seconds; module-boundary and CI contracts pass 20/20
   and 33/33; and Ruff lint/format remain clean.
+- A fresh independently materialized Codex CLI review of signed head
+  `87963f5d` completed in 405.866 seconds and found one P1: the new compact
+  authentication-code labels were covered without a business prefix, but the
+  existing lower/Pascal suffix tables did not recognize forms such as
+  `userVerificationCode` and `AccountAuthenticatorCode`. Postvalidation and
+  trusted-control comparison remained exact, and task-root cleanup completed.
+- The follow-up extends both compact suffix tables with verification, SMS, and
+  authenticator code variants, including `Sms` and `SMS` capitalization. Eight
+  prefixed positive cases now share the full credential scan, redaction,
+  extractor, and retained-rejection assertions, while three prefixed
+  assignment-free prose cases remain accepted. The exact regression passes in
+  0.462 seconds; results/privacy passes 104/104 in 14.642 seconds; and the
+  module-boundary and CI contracts pass 20/20 and 33/33.
 
 ## Follow-up Work
 
