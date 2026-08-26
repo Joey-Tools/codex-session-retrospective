@@ -24,6 +24,10 @@ import time
 from collections.abc import Iterable
 from typing import Any, BinaryIO
 
+sys.dont_write_bytecode = True
+
+from retrospective_v2 import private_output  # noqa: E402
+
 DATE_FORMAT = "%Y/%m/%d"
 MAX_SESSION_META_LIMIT = 500
 MAX_SESSION_META_CANDIDATE_LIMIT = MAX_SESSION_META_LIMIT + 1
@@ -1580,83 +1584,8 @@ def _read_local_rollout_bytes(
         return data
 
 
-def _open_output_parent(output: pathlib.Path) -> int:
-    if not output.is_absolute() or output.name in ("", ".", ".."):
-        raise ValueError("output path must name an absolute file")
-    directory_flag = getattr(os, "O_DIRECTORY", None)
-    nofollow_flag = getattr(os, "O_NOFOLLOW", None)
-    if directory_flag is None or nofollow_flag is None:
-        raise OSError("secure output writes require O_DIRECTORY and O_NOFOLLOW")
-    flags = os.O_RDONLY | directory_flag | nofollow_flag | getattr(os, "O_CLOEXEC", 0)
-    anchor = pathlib.Path(output.anchor)
-    directory_fd = os.open(str(anchor), flags)
-    try:
-        for part in output.parent.relative_to(anchor).parts:
-            if part in ("", ".", ".."):
-                raise ValueError("output path has an invalid directory component")
-            try:
-                next_fd = os.open(part, flags, dir_fd=directory_fd)
-            except FileNotFoundError:
-                try:
-                    os.mkdir(part, mode=0o700, dir_fd=directory_fd)
-                except FileExistsError:
-                    pass
-                next_fd = os.open(part, flags, dir_fd=directory_fd)
-            os.close(directory_fd)
-            directory_fd = next_fd
-        return directory_fd
-    except Exception:
-        os.close(directory_fd)
-        raise
-
-
 def _write_private_bytes(output: pathlib.Path, data: bytes) -> None:
-    parent_fd = _open_output_parent(output)
-    try:
-        try:
-            target_stat = os.stat(output.name, dir_fd=parent_fd, follow_symlinks=False)
-        except FileNotFoundError:
-            target_stat = None
-        if target_stat is not None and not stat.S_ISREG(target_stat.st_mode):
-            raise ValueError("output path exists and is not a regular file")
-
-        last_error: FileExistsError | None = None
-        for attempt in range(100):
-            temp_name = f".{output.name}.tmp-{os.getpid()}-{attempt}"
-            flags = (
-                os.O_WRONLY
-                | os.O_CREAT
-                | os.O_EXCL
-                | getattr(os, "O_NOFOLLOW", 0)
-                | getattr(os, "O_CLOEXEC", 0)
-            )
-            try:
-                fd = os.open(temp_name, flags, 0o600, dir_fd=parent_fd)
-            except FileExistsError as error:
-                last_error = error
-                continue
-            try:
-                with os.fdopen(fd, "wb") as handle:
-                    handle.write(data)
-                    os.fchmod(handle.fileno(), 0o600)
-                os.replace(
-                    temp_name,
-                    output.name,
-                    src_dir_fd=parent_fd,
-                    dst_dir_fd=parent_fd,
-                )
-                return
-            except Exception:
-                try:
-                    os.unlink(temp_name, dir_fd=parent_fd)
-                except FileNotFoundError:
-                    pass
-                raise
-        raise FileExistsError(
-            f"could not create private temporary output for {output}"
-        ) from last_error
-    finally:
-        os.close(parent_fd)
+    private_output.write_private_bytes(output, data)
 
 
 def _flat_archived_rollout_matches_date(

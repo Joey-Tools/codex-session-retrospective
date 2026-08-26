@@ -148,6 +148,7 @@ else:
         "path_identity.py",
         "path_separation.py",
         "privacy_locators.py",
+        "private_output.py",
         "process_lifecycle.py",
         "publication_abort_authority.py",
         "publication_abort_replay.py",

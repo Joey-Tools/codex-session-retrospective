@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -2808,6 +2809,64 @@ class SessionRetrospectiveTests(unittest.TestCase):
     def test_remote_probe_script_is_executable(self) -> None:
         self.assertTrue(os.access(REMOTE_PROBE_SCRIPT, os.X_OK))
 
+    def test_local_helper_disables_bytecode_before_package_import(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            scripts = Path(raw).resolve() / "scripts"
+            scripts.mkdir(mode=0o700)
+            shutil.copy2(SCRIPT, scripts / SCRIPT.name)
+            shutil.copytree(
+                SCRIPT.parent / "retrospective_v2",
+                scripts / "retrospective_v2",
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+            )
+            environment = dict(os.environ)
+            environment.pop("PYTHONDONTWRITEBYTECODE", None)
+            environment.pop("PYTHONPYCACHEPREFIX", None)
+
+            completed = subprocess.run(
+                [sys.executable, str(scripts / SCRIPT.name), "--help"],
+                cwd=scripts,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertIn("usage:", completed.stdout)
+            self.assertEqual([], list(scripts.rglob("__pycache__")))
+            self.assertEqual([], list(scripts.rglob("*.py[co]")))
+
+    def test_remote_probe_disables_bytecode_before_package_import(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            scripts = Path(raw).resolve() / "scripts"
+            scripts.mkdir(mode=0o700)
+            shutil.copy2(REMOTE_PROBE_SCRIPT, scripts / REMOTE_PROBE_SCRIPT.name)
+            shutil.copytree(
+                SCRIPT.parent / "retrospective_v2",
+                scripts / "retrospective_v2",
+                ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+            )
+            environment = dict(os.environ)
+            environment.pop("PYTHONDONTWRITEBYTECODE", None)
+            environment.pop("PYTHONPYCACHEPREFIX", None)
+
+            completed = subprocess.run(
+                [sys.executable, str(scripts / REMOTE_PROBE_SCRIPT.name), "--help"],
+                cwd=scripts,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+
+            self.assertEqual(0, completed.returncode, completed.stderr)
+            self.assertIn("usage:", completed.stdout)
+            self.assertEqual([], list(scripts.rglob("__pycache__")))
+            self.assertEqual([], list(scripts.rglob("*.py[co]")))
+
     def test_remote_probe_preflight_delegates_without_a_host_registry(self) -> None:
         with mock.patch.object(
             REMOTE_PROBE,
@@ -2830,7 +2889,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir="/tmp") as raw:
             root = Path(raw).resolve()
             output_parent = root / "output"
-            output_parent.mkdir()
+            output_parent.mkdir(mode=0o700)
             output = REMOTE_PROBE._resolve_output_path(
                 str(output_parent / "chunk.jsonl")
             )
@@ -2852,7 +2911,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
         with tempfile.TemporaryDirectory(dir="/tmp") as raw:
             root = Path(raw).resolve()
             output_parent = root / "output"
-            output_parent.mkdir()
+            output_parent.mkdir(mode=0o700)
             output = REMOTE_PROBE._resolve_output_path(
                 str(output_parent / "chunk.jsonl")
             )
@@ -2894,6 +2953,185 @@ class SessionRetrospectiveTests(unittest.TestCase):
             self.assertIsNotNone(replace_dir_fds[0][0])
             self.assertEqual(replace_dir_fds[0][0], replace_dir_fds[0][1])
 
+    def test_remote_probe_private_output_rejects_world_writable_parent(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "hostile-output"
+            output_parent.mkdir(mode=0o700)
+            output_parent.chmod(0o777)
+            output = output_parent / "chunk.jsonl"
+
+            with self.assertRaisesRegex(PermissionError, "mode must be 0o700"):
+                REMOTE_PROBE._write_private_bytes(output, b"sensitive\n")
+
+            self.assertFalse(output.exists())
+            self.assertEqual(list(output_parent.iterdir()), [])
+
+    def test_remote_probe_private_output_rejects_temporary_entry_replacement(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "output"
+            output_parent.mkdir(mode=0o700)
+            output = output_parent / "chunk.jsonl"
+            real_validate = REMOTE_PROBE.private_output._validate_bound_file
+            validation_count = 0
+            replacement_name: str | None = None
+
+            def replace_before_validation(
+                descriptor: int,
+                parent_fd: int,
+                name: str,
+                display_path: Path,
+                *,
+                expected_identity: tuple[int, ...] | None = None,
+                expected_digest: str | None = None,
+            ) -> tuple[tuple[int, ...], str]:
+                nonlocal validation_count, replacement_name
+                validation_count += 1
+                if validation_count == 2:
+                    os.unlink(name, dir_fd=parent_fd)
+                    os.symlink("replacement", name, dir_fd=parent_fd)
+                    replacement_name = name
+                return real_validate(
+                    descriptor,
+                    parent_fd,
+                    name,
+                    display_path,
+                    expected_identity=expected_identity,
+                    expected_digest=expected_digest,
+                )
+
+            with (
+                mock.patch.object(
+                    REMOTE_PROBE.private_output,
+                    "_validate_bound_file",
+                    side_effect=replace_before_validation,
+                ),
+                self.assertRaisesRegex(
+                    PermissionError,
+                    "private output directory entry changed",
+                ),
+            ):
+                REMOTE_PROBE._write_private_bytes(output, b"sensitive\n")
+
+            self.assertFalse(output.exists())
+            self.assertIsNotNone(replacement_name)
+            replacement = output_parent / str(replacement_name)
+            self.assertTrue(replacement.is_symlink())
+            self.assertEqual(os.readlink(replacement), "replacement")
+
+    def test_remote_probe_private_output_rejects_same_size_content_mutation(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "output"
+            output_parent.mkdir(mode=0o700)
+            output = output_parent / "chunk.jsonl"
+            real_validate = REMOTE_PROBE.private_output._validate_bound_file
+            validation_count = 0
+
+            def mutate_before_validation(
+                descriptor: int,
+                parent_fd: int,
+                name: str,
+                display_path: Path,
+                *,
+                expected_identity: tuple[int, ...] | None = None,
+                expected_digest: str | None = None,
+            ) -> tuple[tuple[int, ...], str]:
+                nonlocal validation_count
+                validation_count += 1
+                if validation_count == 2:
+                    self.assertEqual(
+                        len(b"sensitive\n"),
+                        os.pwrite(descriptor, b"tampered!\n", 0),
+                    )
+                    os.fsync(descriptor)
+                return real_validate(
+                    descriptor,
+                    parent_fd,
+                    name,
+                    display_path,
+                    expected_identity=expected_identity,
+                    expected_digest=expected_digest,
+                )
+
+            with (
+                mock.patch.object(
+                    REMOTE_PROBE.private_output,
+                    "_validate_bound_file",
+                    side_effect=mutate_before_validation,
+                ),
+                self.assertRaisesRegex(PermissionError, "content digest changed"),
+            ):
+                REMOTE_PROBE._write_private_bytes(output, b"sensitive\n")
+
+            self.assertFalse(output.exists())
+            self.assertEqual(list(output_parent.iterdir()), [])
+
+    def test_remote_probe_private_output_allows_timestamp_churn(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "output"
+            output_parent.mkdir(mode=0o700)
+            output = output_parent / "chunk.jsonl"
+            real_validate = REMOTE_PROBE.private_output._validate_bound_file
+            validation_count = 0
+
+            def touch_before_validation(
+                descriptor: int,
+                parent_fd: int,
+                name: str,
+                display_path: Path,
+                *,
+                expected_identity: tuple[int, ...] | None = None,
+                expected_digest: str | None = None,
+            ) -> tuple[tuple[int, ...], str]:
+                nonlocal validation_count
+                validation_count += 1
+                if validation_count == 2:
+                    os.utime(descriptor)
+                return real_validate(
+                    descriptor,
+                    parent_fd,
+                    name,
+                    display_path,
+                    expected_identity=expected_identity,
+                    expected_digest=expected_digest,
+                )
+
+            with mock.patch.object(
+                REMOTE_PROBE.private_output,
+                "_validate_bound_file",
+                side_effect=touch_before_validation,
+            ):
+                REMOTE_PROBE._write_private_bytes(output, b"sensitive\n")
+
+            self.assertEqual(output.read_bytes(), b"sensitive\n")
+            self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+
+    @darwin_security_test
+    def test_remote_probe_private_output_rejects_extended_acl_parent(self) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "acl-output"
+            output_parent.mkdir(mode=0o700)
+            subprocess.run(
+                ["/bin/chmod", "+a", "everyone allow write", str(output_parent)],
+                check=True,
+            )
+            try:
+                with self.assertRaisesRegex(PermissionError, "extended ACL"):
+                    REMOTE_PROBE._write_private_bytes(
+                        output_parent / "chunk.jsonl",
+                        b"sensitive\n",
+                    )
+            finally:
+                subprocess.run(
+                    ["/bin/chmod", "-N", str(output_parent)],
+                    check=True,
+                )
+
+            self.assertEqual(list(output_parent.iterdir()), [])
+
     def test_remote_probe_fetch_rollout_writes_private_output(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw) / ".codex"
@@ -2919,8 +3157,8 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 ],
             )
             task_output_root = Path(raw) / "task-output"
+            task_output_root.mkdir(mode=0o700)
             output = task_output_root / "rollout.jsonl"
-            output.parent.mkdir(parents=True)
             output.write_text("old\n", encoding="utf-8")
             os.chmod(output, 0o644)
 
@@ -8316,10 +8554,10 @@ class SessionRetrospectiveTests(unittest.TestCase):
             env["CODEX_SESSION_RETROSPECTIVE_KEY_FILE"] = str(key_file)
 
             first = subprocess.check_output(
-                [sys.executable, "-c", probe], env=env, text=True
+                [sys.executable, "-B", "-c", probe], env=env, text=True
             ).strip()
             second = subprocess.check_output(
-                [sys.executable, "-c", probe], env=env, text=True
+                [sys.executable, "-B", "-c", probe], env=env, text=True
             ).strip()
 
         self.assertEqual(first, second)

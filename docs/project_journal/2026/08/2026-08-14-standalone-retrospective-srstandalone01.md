@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-25
+updated: 2026-08-26
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -4981,6 +4981,52 @@ superseded_by:
   generated bootstrap manifest, the official OpenAI Skill validator,
   project-journal validation, tracked bytecode exclusion, and
   `git diff --check` are clean on the same source tree.
+- Signed head `4e46a1bf` had clean exact-secret admission, then one fresh
+  independently materialized Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at
+  `xhigh` reasoning inspected `a3836660..4e46a1bf`. The fresh retry found one
+  private-output race: `remote_codex_probe.py` accepted an output parent under
+  a shared temporary ancestor, released its temporary descriptor before
+  publication, and used a predictable temporary name without proving the
+  parent access policy or the published file's identity and content.
+  Postvalidation reproduced the prelaunch receipts and trusted control
+  digests; the reviewer process and exact owner-private task root were then
+  safely removed.
+- Private output publication now has one module owner. It opens or creates an
+  exact owner-only, ACL-free parent through a held descriptor; creates a
+  random exclusive no-follow temporary; and binds parent identity/access
+  policy plus file identity, size, link count, content digest, and access
+  policy before and after same-directory replacement. Regressions distinguish
+  benign timestamp and pinned-parent rename churn from parent symlink/access
+  drift, temporary-entry replacement, same-inode same-size content mutation,
+  and extended ACLs. Temporary cleanup never unlinks a name that no longer
+  matches the held descriptor.
+- Two pre-final full-suite attempts are non-counting. The first exercised an
+  older oversized migration probe before the output owner was extracted. The
+  second started with a canonical `session_retrospective.pyc` already created
+  by the cross-process path-reference regression; later bootstrap authority
+  checks correctly failed closed on the source cache. The root cause was that
+  the test's two importlib child processes omitted `-B`; a parent's `-B` flag
+  is not inherited as an environment variable. Both child argv now include
+  `-B`, while both local and remote script-copy regressions prove that package
+  imports do not create bytecode when the ambient bytecode environment is
+  absent. No authority check was weakened.
+- The final focused evidence passes: secure output and bytecode entrypoints
+  9/9, the exact child-bytecode regressions 3/3, Bootstrap 12/12, module
+  boundaries 20/20, CI contracts 33/33, identity and safe I/O 54/54,
+  transport architecture 2/2, the complete legacy/session module 924/924 in
+  182.969 seconds, and the Darwin security inventory 15/15 in 67.205 seconds.
+  Ruff 0.13.2 lint, the generated bootstrap manifest, and `git diff --check`
+  are clean. A formatter probe still identifies only the legacy monolithic
+  `session_retrospective.py` as pre-existing whole-file format debt; the task
+  does not mechanically rewrite that 12,000-line source.
+- Final62 freezes 1,967 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `081246d11ad44cbeac79916fbd52b9996af97d1901c69e7ef0e743d3f528a6a6`.
+  Shards 0 through 3 pass 468/468 in 1,884.103 seconds, 528/528 in
+  1,659.861 seconds, 529/529 in 1,567.658 seconds, and 442/442 in
+  1,617.333 seconds, for exact aggregate coverage of 1,967/1,967 without
+  skips. The canonical source tree remains free of bytecode after inventory
+  generation and all four terminal shard runs.
 
 ## Follow-up Work
 
