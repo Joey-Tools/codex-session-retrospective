@@ -5456,6 +5456,66 @@ superseded_by:
   formatting probe still identifies four pre-existing files outside this
   change as needing mechanical formatting; they remain outside this focused
   privacy fix.
+- Final83 used a new zero-context Codex CLI reviewer in an independently
+  materialized and validated workspace for exact range
+  `a3836660..fb69c802`. Matching receipts bind 152 commits, 151 parent edges,
+  graph digest
+  `fa23abdfb359a0054f4e37007f22a35914f8107a84e5cc0eda916b0881ec077c`,
+  and the unchanged local-config digest. The reviewer completed in 764.509
+  seconds with one P1 finding. Its 137-command event audit found no mutating,
+  network, test-execution, outside-path, or Git-prefix violation;
+  postvalidation and the 30-file trusted-control digest were exact, and
+  identity-bound task-root cleanup completed.
+- The Final83 finding showed that plural credential-code collections separated
+  only by whitespace, semicolons, or unmarked newlines extended the redaction
+  span only through the first item. A copied later code could therefore evade
+  both direct redaction and short-value source-overlap. The collection parser
+  now distinguishes explicit separators from unmarked separators and accepts
+  an unmarked continuation only after a closed compact-code shape proof. This
+  covers numeric and uppercase-bearing code atoms while leaving ordinary
+  lowercase prose suffixes such as `during login` outside the credential span.
+  Newline separators are selected before space-only separators so trailing
+  horizontal whitespace cannot truncate an otherwise valid multiline
+  collection.
+  Direct redaction, source-overlap, and prose-preservation regressions cover all
+  three separator forms plus that ordering boundary. Results/episodes passes
+  105/105 in 15.516 seconds, result-contract audit passes 25/25 in 5.023
+  seconds, and module boundaries pass 20/20 in 2.975 seconds with exact branch
+  inventory 10,086.
+- Final84 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `6abd0c84fd55dd71aed160190c766a6ecf27f97f96c28e62ef0b55470ff86efa`.
+  Shards 0 through 3 pass 471/471 in 2,140.101 seconds, 531/531 in
+  1,888.599 seconds, 535/535 in 1,780.566 seconds, and 444/444 in
+  1,840.061 seconds, for exact aggregate coverage of 1,981/1,981. Every shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The independent
+  Darwin security inventory passes 16/16 in 78.269 seconds.
+- On the Final84 tree, repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint`, Skill contracts 6/6,
+  Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean.
+- A pre-commit diff audit after Final84 found that the space-only unmarked
+  separator alternative could consume horizontal whitespace before a newline
+  and prevent the newline alternative from matching. The alternatives were
+  reordered and an exact trailing-space multiline regression was added.
+  Final84 remains valid for its preceding tree but is superseded as final-tree
+  evidence by Final85.
+- Final85 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `985c006de0c43c83b498418f9d7a31af0716f2cbc9826974e11028f402d8f24a`.
+  Shards 0 through 3 pass 471/471 in 2,053.508 seconds, 531/531 in
+  1,795.486 seconds, 535/535 in 1,701.076 seconds, and 444/444 in
+  1,737.633 seconds, for exact aggregate coverage of 1,981/1,981. Every shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The independent
+  Darwin security inventory passes 16/16 in 77.880 seconds.
+- On the Final85 tree, repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint`, Skill contracts 6/6,
+  Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean.
 
 ## Follow-up Work
 

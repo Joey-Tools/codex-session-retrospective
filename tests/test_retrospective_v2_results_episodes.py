@@ -2637,6 +2637,22 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_CREDENTIAL]",
             ),
             (
+                "recovery_codes: 123456 654321",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "recovery_codes: 123456; 654321",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "recovery_codes:\n  123456\n  654321",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "recovery_codes:\n  123456  \n  654321",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
                 'recovery_codes: ("123456", "654321")',
                 "[REDACTED_CREDENTIAL]",
             ),
@@ -2721,6 +2737,10 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_CREDENTIAL] during login",
             ),
             (
+                "recovery_codes: 123456 during login",
+                "[REDACTED_CREDENTIAL] during login",
+            ),
+            (
                 'backupCodes: ["123456"',
                 "[REDACTED_CREDENTIAL]",
             ),
@@ -2747,6 +2767,10 @@ class ResultValidationTests(unittest.TestCase):
         for source in (
             'recovery_codes: ["123456", "654321"]',
             "recovery_codes: 123456, 654321",
+            "recovery_codes: 123456 654321",
+            "recovery_codes: 123456; 654321",
+            "recovery_codes:\n  123456\n  654321",
+            "recovery_codes:\n  123456  \n  654321",
             'recovery_codes: ("123456", "654321")',
             "recovery_codes: 123456 and 654321",
             "recovery_codes: 123456, 654321, and 789012",
@@ -2778,6 +2802,10 @@ class ResultValidationTests(unittest.TestCase):
             ("recovery_codes is 123456 and 654321", "123456"),
             ("recovery_codes is 123456 and 654321", "654321"),
             ("recovery_codes: 123456, 654321, and 789012", "789012"),
+            ("recovery_codes: 123456 654321", "654321"),
+            ("recovery_codes: 123456; 654321", "654321"),
+            ("recovery_codes:\n  123456\n  654321", "654321"),
+            ("recovery_codes:\n  123456  \n  654321", "654321"),
             ('authenticationCodes are ["123456", "654321"]', "654321"),
             ("recovery codes include 123456 and 654321", "123456"),
             ("recovery codes include 123456 and 654321", "654321"),

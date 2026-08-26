@@ -1728,12 +1728,17 @@ _CREDENTIAL_CODE_COLLECTION_FIELD_PREFIX_RE = re.compile(
 _CREDENTIAL_CODE_COLLECTION_SEPARATOR_RE = re.compile(
     r"(?:[ \t]*+,[ \t]*+and[ \t]++|[ \t]*+,[ \t]*+|"
     r"[ \t]++and[ \t]++|[ \t]++-[ \t]++|"
-    r"[ \t]*+\r?\n[ \t]*+-[ \t]++)",
+    r"[ \t]*+\r?\n[ \t]*+-[ \t]++|"
+    r"(?P<unmarked>[ \t]*+;[ \t]*+|[ \t]*+\r?\n[ \t]*+|[ \t]++))",
     re.IGNORECASE,
 )
 _CREDENTIAL_CODE_COLLECTION_YAML_ITEM_PREFIX_RE = re.compile(r"-[ \t]++")
 _CREDENTIAL_CODE_COLLECTION_ITEM_RE = re.compile(
     _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT + r"++"
+)
+_CREDENTIAL_CODE_COLLECTION_COMPACT_CODE_RE = re.compile(
+    r"(?=.{4,128}\Z)(?=.*[0-9A-Z])"
+    r"[A-Za-z0-9][A-Za-z0-9._~+/=-]*\Z"
 )
 _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT = (
     _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT
@@ -2346,8 +2351,19 @@ def _credential_code_collection_items(
         item = _CREDENTIAL_CODE_COLLECTION_ITEM_RE.match(source, separator.end())
         if item is None:
             return
+        if separator.lastgroup == "unmarked" and not (
+            _credential_code_collection_item_is_compact_code(
+                source[item.start() : item.end()]
+            )
+        ):
+            return
         yield item.span()
         cursor = item.end()
+
+
+def _credential_code_collection_item_is_compact_code(value: str) -> bool:
+    candidate = _normalized_personal_sensitive_value(value)
+    return _CREDENTIAL_CODE_COLLECTION_COMPACT_CODE_RE.fullmatch(candidate) is not None
 
 
 def _credential_code_collection_end(match: re.Match[str]) -> int:
