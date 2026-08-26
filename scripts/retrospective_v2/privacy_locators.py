@@ -1679,6 +1679,10 @@ _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT = (
     r"denied|expired|invalid|unavailable|absent|needed|necessary|revoked|"
     r"rotated|budget|count|limit)"
 )
+_CREDENTIAL_NARRATIVE_CONTINUATION_WORD_PATTERN_TEXT = (
+    r"(?:before|after|during|for|in|on|when|while|until|from|by|with|"
+    r"without|at|because|since|through|throughout|across|within|to)"
+)
 _SAFE_CREDENTIAL_VALUE_BOUNDARY_PATTERN_TEXT = r"(?=[)\]\}>\"']*\s*+(?:[.,;]\s*+)?+\Z)"
 _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT = (
     r"(?:"
@@ -1736,9 +1740,20 @@ _CREDENTIAL_CODE_COLLECTION_YAML_ITEM_PREFIX_RE = re.compile(r"-[ \t]++")
 _CREDENTIAL_CODE_COLLECTION_ITEM_RE = re.compile(
     _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT + r"++"
 )
+_CREDENTIAL_CODE_COLLECTION_PROSE_STOP_PATTERN_TEXT = (
+    r"(?:"
+    + _SAFE_CREDENTIAL_VALUE_PATTERN_TEXT
+    + r"|"
+    + _CREDENTIAL_NARRATIVE_CONNECTOR_PATTERN_TEXT
+    + r"|"
+    + _CREDENTIAL_NARRATIVE_CONTINUATION_WORD_PATTERN_TEXT
+    + r"|then)"
+)
 _CREDENTIAL_CODE_COLLECTION_COMPACT_CODE_RE = re.compile(
-    r"(?=.{4,128}\Z)(?=.*[0-9A-Z])"
-    r"[A-Za-z0-9][A-Za-z0-9._~+/=-]*\Z"
+    r"(?=.{4,128}\Z)"
+    r"(?!(?:" + _CREDENTIAL_CODE_COLLECTION_PROSE_STOP_PATTERN_TEXT + r")\Z)"
+    r"[A-Za-z0-9][A-Za-z0-9._~+/=-]*\Z",
+    re.IGNORECASE,
 )
 _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT = (
     _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT
@@ -1816,8 +1831,7 @@ _SAFE_CREDENTIAL_NARRATIVE_STATUS_PATTERN_TEXT = (
 )
 # Narrative status prose has a different boundary from assignments and headers.
 _SAFE_CREDENTIAL_NARRATIVE_CONTINUATION_PATTERN_TEXT = (
-    r"\s++(?:before|after|during|for|in|on|when|while|until|from|by|with|"
-    r"without|at|because|since|through|throughout|across|within|to)\b[^\r\n]*+"
+    r"\s++" + _CREDENTIAL_NARRATIVE_CONTINUATION_WORD_PATTERN_TEXT + r"\b[^\r\n]*+"
 )
 _SAFE_CREDENTIAL_NARRATIVE_PHRASE_PATTERN_TEXT = (
     _SAFE_CREDENTIAL_NARRATIVE_STATUS_PATTERN_TEXT

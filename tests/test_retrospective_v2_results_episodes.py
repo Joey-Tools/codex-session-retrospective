@@ -2641,6 +2641,14 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_CREDENTIAL]",
             ),
             (
+                "recovery_codes: abcd-efgh ijkl-mnop",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "recovery_codes: abcdefgh ijklmnop",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
                 "recovery_codes: 123456; 654321",
                 "[REDACTED_CREDENTIAL]",
             ),
@@ -2741,6 +2749,10 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_CREDENTIAL] during login",
             ),
             (
+                "recovery_codes: 123456 before retry",
+                "[REDACTED_CREDENTIAL] before retry",
+            ),
+            (
                 'backupCodes: ["123456"',
                 "[REDACTED_CREDENTIAL]",
             ),
@@ -2803,6 +2815,8 @@ class ResultValidationTests(unittest.TestCase):
             ("recovery_codes is 123456 and 654321", "654321"),
             ("recovery_codes: 123456, 654321, and 789012", "789012"),
             ("recovery_codes: 123456 654321", "654321"),
+            ("recovery_codes: abcd-efgh ijkl-mnop", "ijkl-mnop"),
+            ("recovery_codes: abcdefgh ijklmnop", "ijklmnop"),
             ("recovery_codes: 123456; 654321", "654321"),
             ("recovery_codes:\n  123456\n  654321", "654321"),
             ("recovery_codes:\n  123456  \n  654321", "654321"),

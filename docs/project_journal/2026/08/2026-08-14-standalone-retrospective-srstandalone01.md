@@ -5516,6 +5516,49 @@ superseded_by:
   Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
   manifest, the official OpenAI Skill validator, tracked and source/test-tree
   bytecode exclusion, and `git diff --check` are clean.
+- Final86 used a fresh zero-context Codex CLI reviewer in a newly materialized
+  and validated workspace for exact range `a3836660..694d1899`. Matching
+  receipts bind 153 commits, 152 parent edges, graph digest
+  `ac2272154f76a4c90041bc5696ca69b2d0f381988214448bd8f30661b7380b8f`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The Codex CLI completed in 460.960 seconds with one P1 finding. Its
+  82-command event audit records only successful read-only commands and no
+  mutating, network, test-execution, outside-path, or Git-prefix violation;
+  postvalidation and trusted-control revalidation were exact, and
+  identity-bound task-root cleanup completed.
+- The Final86 finding showed that the compact-code proof for unmarked
+  credential collections required a digit or uppercase character. An
+  all-lowercase collection such as `recovery_codes: abcd-efgh ijkl-mnop`
+  therefore protected only the first item; a retained result could copy the
+  second item without entering the short-value overlap index. The closed
+  compact-code grammar now accepts bounded ASCII credential atoms regardless
+  of letter case while explicitly excluding the existing safe credential
+  values, narrative continuation words, connectors, and `then`. Direct
+  redaction and copied-source regressions cover lowercase hyphenated and plain
+  alphabetic collections, while safe prose such as `during login` and `before
+  retry` remains outside the credential span. Results/episodes passes 105/105
+  in 16.607 seconds, result-contract audit passes 25/25 in 5.168 seconds, and
+  module boundaries pass 20/20 in 2.851 seconds with exact branch inventory
+  10,086. Final85 remains valid for its preceding tree but is superseded as
+  final-tree evidence by Final87.
+- Final87 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `ec6070406d207869c778a3927c851a8f70051d5a02dcb5adfe0f447511b7b07c`.
+  Shards 0 through 3 pass 471/471 in 2,014.276 seconds, 531/531 in
+  1,807.388 seconds, 535/535 in 1,700.397 seconds, and 444/444 in
+  1,749.781 seconds, for exact aggregate coverage of 1,981/1,981. Every shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The independent
+  Darwin security inventory passes 16/16 in 68.053 seconds.
+- On the Final87 implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint`, Skill contracts
+  6/6, Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean. One package-style
+  `unittest` invocation was invalid because isolated mode intentionally did
+  not expose `tests` as an importable package; the corrected file-based
+  contract entrypoints are the counted 6/6, 12/12, and 33/33 results.
 
 ## Follow-up Work
 
