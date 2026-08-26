@@ -5208,6 +5208,24 @@ superseded_by:
   hard deadline and a 1 MiB retained-log ceiling. The independent Darwin
   security inventory passes 16/16 in 89.857 seconds. The canonical source
   tree remains free of bytecode after all terminal runs.
+- Signed head `9c629fad` had clean exact-secret admission. A fresh independently
+  materialized Codex CLI `gpt-5.6-sol` reviewer at `xhigh` reasoning inspected
+  `a3836660..9c629fad` under the prior trusted review bundle. Equal
+  materialization and validation receipts bind 144 commits, 143 parent edges,
+  graph digest
+  `f04efc9271aecaddc95e0d9dfd2d05320d30e257c9636b91dc0263435510ab02`,
+  and the unchanged local-config digest. Thread
+  `01a03d9e-8030-7030-88e3-fff1fcfae501` completed in 577.575 seconds and found
+  one P1: the suffixless sensitive-label branch admitted lowerCamel names but
+  missed PascalCase insurance, health-plan, and vehicle-identification labels.
+  Postvalidation remained exact, trusted controls were byte-identical, and the
+  exact owner-private review root was removed through identity-bound cleanup.
+- The follow-up admits the PascalCase forms into the same personal-identifier
+  policy without treating assignment-free explanatory prose as retained
+  personal data. The exact regression passes, the complete results/privacy
+  module passes 104/104 in 16.974 seconds, module-boundary and CI contracts pass
+  20/20 and 33/33, and Ruff 0.13.2 lint/format plus `git diff --check` are clean
+  for the two changed Python files.
 
 ## Follow-up Work
 

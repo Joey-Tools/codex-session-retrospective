@@ -3422,10 +3422,14 @@ class ResultValidationTests(unittest.TestCase):
             "patientIds: PAT-001",
             "insurance_policy_numbers: POLICY-001",
             "insurancePolicy: bronze-plan",
+            "InsurancePolicy: bronze-plan",
             "insuranceMember: MEMBER-001",
+            "InsuranceMember: MEMBER-001",
             "healthInsurance: PLAN-001",
+            "HealthInsurance: PLAN-001",
             "health_plan_beneficiary_ids: BENEFICIARY-001",
             "healthPlanBeneficiary: BENEFICIARY-001",
+            "HealthPlanBeneficiary: BENEFICIARY-001",
             "national_ids: NATIONAL-001",
             "tax_ids: TAX-001",
             "passport_numbers: X0000000",
@@ -3434,6 +3438,7 @@ class ResultValidationTests(unittest.TestCase):
             "vins: VIN-001",
             "vehicle_identification_numbers: VIN-001",
             "vehicleIdentification: VIN-001",
+            "VehicleIdentification: VIN-001",
             "license_plates: PLATE-001",
             "credit_card_numbers: 4111111111111111",
             "bank_account_numbers: ACCOUNT-001",
@@ -3456,9 +3461,13 @@ class ResultValidationTests(unittest.TestCase):
 
         for safe_prose in (
             "insurancePolicy parsing is documented.",
+            "InsurancePolicy parsing is documented.",
             "healthInsurance parsing is documented.",
+            "HealthInsurance parsing is documented.",
             "healthPlanBeneficiary parsing is documented.",
+            "HealthPlanBeneficiary parsing is documented.",
             "vehicleIdentification parsing is documented.",
+            "VehicleIdentification parsing is documented.",
         ):
             with self.subTest(safe_prose=safe_prose):
                 self.assertEqual((), scan_for_leaks(safe_prose))
