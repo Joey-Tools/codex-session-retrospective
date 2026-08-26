@@ -2568,6 +2568,13 @@ class ResultValidationTests(unittest.TestCase):
             "OTP code: 123456",
             "otpCode: 123456",
             "deviceOtpCode: 123456",
+            "Verification code: 123456",
+            "verification_code: 123456",
+            "verificationCode: 123456",
+            "SMS code: 123456",
+            "smsCode: 123456",
+            "Authenticator code: 123456",
+            "authenticatorCode: 123456",
             "MFA code: 123456",
             "2FA code: 123456",
             "two_factor_code: 123456",
@@ -2590,8 +2597,17 @@ class ResultValidationTests(unittest.TestCase):
                     result["turns"][0]["generalized_working_text"],
                 )
                 self.assertEqual((), scan_for_leaks(result))
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value({"cause": source})
 
-        self.assertEqual((), scan_for_leaks("Improve OTP code parsing."))
+        for safe_text in (
+            "Improve OTP code parsing.",
+            "Improve verification code parsing.",
+            "Document SMS code parsing.",
+            "Review authenticator code handling.",
+        ):
+            with self.subTest(safe_text=safe_text):
+                self.assertEqual((), scan_for_leaks(safe_text))
 
     def test_post_redaction_preserves_only_unambiguous_dotted_versions(self) -> None:
         for source in (

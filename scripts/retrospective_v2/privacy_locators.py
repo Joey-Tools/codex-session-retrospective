@@ -1849,6 +1849,7 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT
     + r"|"
     r"passwd|pwd|(?-i:PIN)|otp(?:[ \t_-]?code)?|"
+    r"(?:verification|sms|authenticator)[ \t_-]?code|"
     r"(?:cvv|cvc|cid)(?:[ \t_-]?(?:number|code))?|"
     r"card[ \t_-]?(?:security|verification)[ \t_-]?(?:code|value)|"
     r"(?:security(?:[ \t_-]?question)?|recovery)[ \t_-]?answer|"

@@ -5226,6 +5226,23 @@ superseded_by:
   module passes 104/104 in 16.974 seconds, module-boundary and CI contracts pass
   20/20 and 33/33, and Ruff 0.13.2 lint/format plus `git diff --check` are clean
   for the two changed Python files.
+- Final signed head `4c0e0391` had clean exact-secret admission and a fresh
+  independently materialized Codex CLI review. Thread
+  `01a03dae-a848-7aa3-a3d5-45ded74fefc0` completed in 683.446 seconds with
+  `No findings.`; postvalidation remained exact, trusted controls were
+  byte-identical, and identity-bound cleanup completed. After push, the
+  automatic GitHub review gate correctly retained four unresolved historical
+  threads and eight combined thread/provider finding records. A direct
+  nine-case behavior probe proved the health-data and demographic examples
+  already rejected by all three privacy defenses, but confirmed that labeled
+  verification, SMS, and authenticator codes still bypassed them.
+- The gate follow-up adds only those controlled one-time authentication labels
+  to the existing credential field grammar. Space, snake, and camel forms now
+  produce credential findings, post-redaction, and final retained-value
+  rejection, while assignment-free parsing prose remains accepted. The exact
+  regression passes in 0.324 seconds; the complete results/privacy module
+  passes 104/104 in 14.358 seconds; module-boundary and CI contracts pass 20/20
+  and 33/33; and Ruff lint/format remain clean.
 
 ## Follow-up Work
 
