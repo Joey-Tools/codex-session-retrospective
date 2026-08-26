@@ -160,7 +160,7 @@ class CiContractTests(unittest.TestCase):
             run_darwin_security_tests.EXPECTED_DARWIN_SECURITY_TEST_IDS,
             observed,
         )
-        self.assertEqual(15, len(selected))
+        self.assertEqual(16, len(selected))
         with (
             mock.patch.object(
                 run_darwin_security_tests,

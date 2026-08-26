@@ -48,6 +48,8 @@ EXPECTED_DARWIN_SECURITY_TEST_IDS = (
     "tests.test_session_retrospective.SessionRetrospectiveTests."
     "test_history_git_rejects_extended_acl_repository",
     "tests.test_session_retrospective.SessionRetrospectiveTests."
+    "test_remote_probe_private_output_cleans_file_acl_drift_by_bound_identity",
+    "tests.test_session_retrospective.SessionRetrospectiveTests."
     "test_remote_probe_private_output_rejects_extended_acl_parent",
     "tests.test_session_retrospective_v2_cli.CliContractTests."
     "test_cutover_record_rejects_extended_acl",

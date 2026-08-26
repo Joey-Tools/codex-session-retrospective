@@ -9,6 +9,17 @@ import stat
 from . import safe_io
 
 
+class PrivateOutputCleanupError(OSError):
+    def __init__(self, status: str, display_path: Path, locator: str) -> None:
+        self.status = status
+        self.display_path = display_path
+        self.locator = locator
+        super().__init__(
+            "private output temporary cleanup incomplete: "
+            f"status={status}; locator={locator}; path={display_path}"
+        )
+
+
 def _parent_identity(metadata: os.stat_result) -> tuple[int, ...]:
     return (
         int(metadata.st_dev),
@@ -169,23 +180,69 @@ def _unlink_bound_temporary(
     descriptor: int,
     name: str,
     display_path: Path,
-) -> None:
+) -> str:
     try:
-        _require_name_matches_descriptor(
-            descriptor,
-            parent_descriptor,
+        descriptor_metadata = os.fstat(descriptor)
+    except OSError as error:
+        raise PrivateOutputCleanupError(
+            "descriptor-unreadable",
+            display_path,
+            "descriptor-object://unknown",
+        ) from error
+
+    locator = (
+        f"descriptor-object://{descriptor_metadata.st_dev}/{descriptor_metadata.st_ino}"
+    )
+
+    def require_unlinked(status: str) -> str:
+        try:
+            current_metadata = os.fstat(descriptor)
+        except OSError as error:
+            raise PrivateOutputCleanupError(
+                f"{status}-descriptor-unreadable",
+                display_path,
+                locator,
+            ) from error
+        if current_metadata.st_nlink != 0:
+            raise PrivateOutputCleanupError(
+                f"{status}-object-still-linked",
+                display_path,
+                locator,
+            )
+        return status
+
+    try:
+        named_metadata = os.stat(
             name,
-            display_path,
+            dir_fd=parent_descriptor,
+            follow_symlinks=False,
         )
-        safe_io.validate_owner_only_file_descriptor(
-            descriptor,
+    except FileNotFoundError:
+        return require_unlinked("entry-missing")
+    except OSError as error:
+        raise PrivateOutputCleanupError(
+            "entry-unreadable",
             display_path,
-            directory_fd=parent_descriptor,
-            name=name,
-        )
-    except (OSError, ValueError):
-        return
-    os.unlink(name, dir_fd=parent_descriptor)
+            locator,
+        ) from error
+
+    if (descriptor_metadata.st_dev, descriptor_metadata.st_ino) != (
+        named_metadata.st_dev,
+        named_metadata.st_ino,
+    ):
+        return require_unlinked("entry-replaced")
+
+    try:
+        os.unlink(name, dir_fd=parent_descriptor)
+    except FileNotFoundError:
+        return require_unlinked("entry-missing-after-validation")
+    except OSError as error:
+        raise PrivateOutputCleanupError(
+            "unlink-failed",
+            display_path,
+            locator,
+        ) from error
+    return require_unlinked("removed")
 
 
 def _validate_existing_target(parent_descriptor: int, output: Path) -> None:
@@ -297,19 +354,20 @@ def _write_private_bytes_at(
     finally:
         if temporary_name is not None:
             try:
-                _unlink_bound_temporary(
+                cleanup_status = _unlink_bound_temporary(
                     parent_descriptor,
                     descriptor,
                     temporary_name,
                     output.parent / temporary_name,
                 )
+                if cleanup_status != "removed" and operation_error is not None:
+                    operation_error.add_note(
+                        "private output temporary cleanup state: " + cleanup_status
+                    )
             except OSError as cleanup_error:
                 if operation_error is None:
                     raise
-                operation_error.add_note(
-                    "private output temporary cleanup failed: "
-                    f"{type(cleanup_error).__name__}"
-                )
+                operation_error.add_note(str(cleanup_error))
         try:
             os.close(descriptor)
         except OSError as close_error:

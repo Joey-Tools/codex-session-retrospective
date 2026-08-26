@@ -5027,6 +5027,42 @@ superseded_by:
   1,617.333 seconds, for exact aggregate coverage of 1,967/1,967 without
   skips. The canonical source tree remains free of bytecode after inventory
   generation and all four terminal shard runs.
+- Signed head `b68a2b7f` had clean exact-secret admission, then one fresh
+  independently materialized Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at
+  `xhigh` reasoning inspected `a3836660..b68a2b7f`. Equal prelaunch and
+  postvalidation receipts bind 139 commits, 138 parent edges, graph digest
+  `1fc8d570cc7b791c6247b77f657065893168863f03c0fc13a3bbb8039e84a7aa`,
+  and the unchanged local-config digest. The 1,287-second review found three
+  issues: common plural demographic labels bypassed retained-data privacy;
+  private-output cleanup could suppress an unreadable or access-policy state
+  while leaving sensitive temporary data; and the CLI admitted a direct
+  `/tmp` output even though the publisher requires an owner-private parent.
+  Postvalidation and the trusted 30-file control manifest remained exact, no
+  reviewer process remained, and the exact owner-private task root was
+  removed after identity and inventory validation.
+- The replacement fix extends the shared demographic grammar across plural
+  spaced, snake, dot, kebab, and camel labels. Private-output cleanup now uses
+  the held file identity as deletion authority, never deletes a replacement,
+  distinguishes missing, unreadable, replaced, unlink-failed, and
+  still-linked states, and propagates descriptor-bound cleanup evidence to
+  the CLI. Direct `/tmp` leaf output is rejected before transport; a nested
+  owner-private temporary directory remains supported. Regressions cover
+  retained privacy, mode and ACL drift, replacement, residual hard links, and
+  direct versus nested temporary output.
+- Replacement focused evidence passes: exact reviewer-fix regressions 8/8,
+  complete results/episodes 103/103 in 13.800 seconds, complete legacy/session
+  929/929 in 191.926 seconds, module boundaries 20/20, CI contracts 33/33,
+  and Darwin security 16/16 in 70.366 seconds. Ruff 0.13.2 and
+  `git diff --check` are clean on the same source tree.
+- Final64 freezes 1,972 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `f076f0fb6efb7be150d995d377638f5ade847174b7279b54f89dc52225dc4400`.
+  Shards 0 through 3 pass 470/470 in 1,808.661 seconds, 530/530 in
+  1,687.570 seconds, 530/530 in 1,483.630 seconds, and 442/442 in
+  1,537.651 seconds, for exact aggregate coverage of 1,972/1,972 without
+  skips. The three resumed shards used independent process groups with a
+  3,600-second hard deadline; all reached terminal success and no matching
+  test process remained.
 
 ## Follow-up Work
 

@@ -3010,15 +3010,231 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 self.assertRaisesRegex(
                     PermissionError,
                     "private output directory entry changed",
-                ),
+                ) as caught,
             ):
                 REMOTE_PROBE._write_private_bytes(output, b"sensitive\n")
 
             self.assertFalse(output.exists())
+            self.assertIn(
+                "entry-replaced",
+                "\n".join(getattr(caught.exception, "__notes__", ())),
+            )
             self.assertIsNotNone(replacement_name)
             replacement = output_parent / str(replacement_name)
             self.assertTrue(replacement.is_symlink())
             self.assertEqual(os.readlink(replacement), "replacement")
+
+    def test_remote_probe_private_output_cleanup_distinguishes_missing_and_unreadable_entries(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "output"
+            output_parent.mkdir(mode=0o700)
+            parent_fd = os.open(output_parent, os.O_RDONLY | os.O_DIRECTORY)
+            try:
+                missing_name = "missing.tmp"
+                missing_path = output_parent / missing_name
+                missing_path.write_bytes(b"sensitive\n")
+                missing_fd = os.open(missing_path, os.O_RDONLY)
+                try:
+                    missing_path.unlink()
+                    self.assertEqual(
+                        "entry-missing",
+                        REMOTE_PROBE.private_output._unlink_bound_temporary(
+                            parent_fd,
+                            missing_fd,
+                            missing_name,
+                            missing_path,
+                        ),
+                    )
+                finally:
+                    os.close(missing_fd)
+
+                unreadable_name = "unreadable.tmp"
+                unreadable_path = output_parent / unreadable_name
+                unreadable_path.write_bytes(b"sensitive\n")
+                unreadable_fd = os.open(unreadable_path, os.O_RDONLY)
+                try:
+                    with (
+                        mock.patch.object(
+                            REMOTE_PROBE.private_output.os,
+                            "stat",
+                            side_effect=PermissionError("blocked"),
+                        ),
+                        self.assertRaises(
+                            REMOTE_PROBE.private_output.PrivateOutputCleanupError
+                        ) as caught,
+                    ):
+                        REMOTE_PROBE.private_output._unlink_bound_temporary(
+                            parent_fd,
+                            unreadable_fd,
+                            unreadable_name,
+                            unreadable_path,
+                        )
+                    self.assertEqual("entry-unreadable", caught.exception.status)
+                    self.assertIn("descriptor-object://", caught.exception.locator)
+                finally:
+                    os.close(unreadable_fd)
+                    unreadable_path.unlink()
+            finally:
+                os.close(parent_fd)
+
+    def test_remote_probe_private_output_cleans_mode_drift_by_bound_identity(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "output"
+            output_parent.mkdir(mode=0o700)
+            output = output_parent / "chunk.jsonl"
+            real_validate = REMOTE_PROBE.private_output._validate_bound_file
+            validation_count = 0
+
+            def weaken_before_validation(
+                descriptor: int,
+                parent_fd: int,
+                name: str,
+                display_path: Path,
+                *,
+                expected_identity: tuple[int, ...] | None = None,
+                expected_digest: str | None = None,
+            ) -> tuple[tuple[int, ...], str]:
+                nonlocal validation_count
+                validation_count += 1
+                if validation_count == 2:
+                    os.fchmod(descriptor, 0o644)
+                return real_validate(
+                    descriptor,
+                    parent_fd,
+                    name,
+                    display_path,
+                    expected_identity=expected_identity,
+                    expected_digest=expected_digest,
+                )
+
+            with (
+                mock.patch.object(
+                    REMOTE_PROBE.private_output,
+                    "_validate_bound_file",
+                    side_effect=weaken_before_validation,
+                ),
+                self.assertRaisesRegex(PermissionError, "mode must be 0o600"),
+            ):
+                REMOTE_PROBE._write_private_bytes(output, b"sensitive\n")
+
+            self.assertFalse(output.exists())
+            self.assertEqual([], list(output_parent.iterdir()))
+
+    def test_remote_probe_private_output_reports_residual_hard_link_after_cleanup(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "output"
+            output_parent.mkdir(mode=0o700)
+            output = output_parent / "chunk.jsonl"
+            retained = output_parent / "retained-link"
+            real_validate = REMOTE_PROBE.private_output._validate_bound_file
+            validation_count = 0
+            temporary_name: str | None = None
+
+            def link_before_validation(
+                descriptor: int,
+                parent_fd: int,
+                name: str,
+                display_path: Path,
+                *,
+                expected_identity: tuple[int, ...] | None = None,
+                expected_digest: str | None = None,
+            ) -> tuple[tuple[int, ...], str]:
+                nonlocal validation_count, temporary_name
+                validation_count += 1
+                if validation_count == 2:
+                    temporary_name = name
+                    os.link(
+                        name,
+                        retained.name,
+                        src_dir_fd=parent_fd,
+                        dst_dir_fd=parent_fd,
+                        follow_symlinks=False,
+                    )
+                return real_validate(
+                    descriptor,
+                    parent_fd,
+                    name,
+                    display_path,
+                    expected_identity=expected_identity,
+                    expected_digest=expected_digest,
+                )
+
+            with (
+                mock.patch.object(
+                    REMOTE_PROBE.private_output,
+                    "_validate_bound_file",
+                    side_effect=link_before_validation,
+                ),
+                self.assertRaises(PermissionError) as caught,
+            ):
+                REMOTE_PROBE._write_private_bytes(output, b"sensitive\n")
+
+            self.assertIsNotNone(temporary_name)
+            self.assertFalse((output_parent / str(temporary_name)).exists())
+            self.assertEqual(b"sensitive\n", retained.read_bytes())
+            notes = "\n".join(getattr(caught.exception, "__notes__", ()))
+            self.assertIn("status=removed-object-still-linked", notes)
+            self.assertIn("locator=descriptor-object://", notes)
+
+    @darwin_security_test
+    def test_remote_probe_private_output_cleans_file_acl_drift_by_bound_identity(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory(dir="/tmp") as raw:
+            output_parent = Path(raw).resolve() / "output"
+            output_parent.mkdir(mode=0o700)
+            output = output_parent / "chunk.jsonl"
+            real_validate = REMOTE_PROBE.private_output._validate_bound_file
+            validation_count = 0
+
+            def add_acl_before_validation(
+                descriptor: int,
+                parent_fd: int,
+                name: str,
+                display_path: Path,
+                *,
+                expected_identity: tuple[int, ...] | None = None,
+                expected_digest: str | None = None,
+            ) -> tuple[tuple[int, ...], str]:
+                nonlocal validation_count
+                validation_count += 1
+                if validation_count == 2:
+                    subprocess.run(
+                        [
+                            "/bin/chmod",
+                            "+a",
+                            "everyone allow read",
+                            str(output_parent / name),
+                        ],
+                        check=True,
+                    )
+                return real_validate(
+                    descriptor,
+                    parent_fd,
+                    name,
+                    display_path,
+                    expected_identity=expected_identity,
+                    expected_digest=expected_digest,
+                )
+
+            with (
+                mock.patch.object(
+                    REMOTE_PROBE.private_output,
+                    "_validate_bound_file",
+                    side_effect=add_acl_before_validation,
+                ),
+                self.assertRaisesRegex(PermissionError, "extended ACL"),
+            ):
+                REMOTE_PROBE._write_private_bytes(output, b"sensitive\n")
+
+            self.assertFalse(output.exists())
+            self.assertEqual([], list(output_parent.iterdir()))
 
     def test_remote_probe_private_output_rejects_same_size_content_mutation(
         self,
@@ -3628,7 +3844,29 @@ class SessionRetrospectiveTests(unittest.TestCase):
 
         self.assertEqual(read_sizes, [initial_size + 1])
 
-    def test_remote_probe_remote_full_fetch_delegates_bounded_request(self) -> None:
+    def test_remote_probe_rejects_direct_shared_tmp_output_before_remote_relay(
+        self,
+    ) -> None:
+        direct_paths = {
+            "/tmp/rollout.jsonl",
+            str(Path("/tmp").resolve() / "rollout.jsonl"),
+        }
+        for output in direct_paths:
+            with (
+                self.subTest(output=output),
+                self.assertRaisesRegex(
+                    ValueError,
+                    "must use an owner-private subdirectory",
+                ),
+            ):
+                REMOTE_PROBE._resolve_output_path(output)
+
+        private_output = "/tmp/codex-retrospective-private/rollout.jsonl"
+        self.assertEqual(
+            Path(private_output).resolve(strict=False),
+            REMOTE_PROBE._resolve_output_path(private_output),
+        )
+
         with mock.patch.object(
             REMOTE_PROBE,
             "_relay_canonical_remote_helper",
@@ -3642,6 +3880,24 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 )
             )
 
+        self.assertEqual(2, result)
+        relay.assert_not_called()
+
+    def test_remote_probe_remote_full_fetch_delegates_bounded_request(self) -> None:
+        private_output = "/tmp/codex-retrospective-private/rollout.jsonl"
+        with mock.patch.object(
+            REMOTE_PROBE,
+            "_relay_canonical_remote_helper",
+            return_value=0,
+        ) as relay:
+            result = REMOTE_PROBE.cmd_fetch_rollout(
+                types.SimpleNamespace(
+                    host="remote-a",
+                    rollout="sessions/2026/05/01/rollout-2026-05-01T10-00-00.jsonl",
+                    output=private_output,
+                )
+            )
+
         self.assertEqual(0, result)
         relay.assert_called_once_with(
             [
@@ -3651,7 +3907,7 @@ class SessionRetrospectiveTests(unittest.TestCase):
                 "--rollout",
                 "sessions/2026/05/01/rollout-2026-05-01T10-00-00.jsonl",
                 "--output",
-                "/tmp/rollout.jsonl",
+                private_output,
             ],
             max_stdout_bytes=REMOTE_PROBE.MAX_REMOTE_STDOUT_BYTES,
         )

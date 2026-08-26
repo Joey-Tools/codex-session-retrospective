@@ -666,10 +666,14 @@ def _resolve_output_path(
         return _validate_output_path(task_output_root / raw_path, task_output_root)
     if _path_is_relative_to(raw_path, tmp_alias_root):
         raw_path = tmp_root / raw_path.relative_to(tmp_alias_root)
+    resolved_output = raw_path.resolve(strict=False)
     for root in (task_output_root, tmp_root):
-        if _path_is_relative_to(
-            raw_path.resolve(strict=False), root.resolve(strict=False)
-        ):
+        resolved_root = root.resolve(strict=False)
+        if _path_is_relative_to(resolved_output, resolved_root):
+            if root == tmp_root and resolved_output.parent == resolved_root:
+                raise ValueError(
+                    "output path under /tmp must use an owner-private subdirectory"
+                )
             return _validate_output_path(raw_path, root)
     raise ValueError(
         f"output path must stay under {task_output_root.resolve(strict=False)} or {tmp_root}"
@@ -3031,6 +3035,8 @@ def cmd_fetch_rollout(args: argparse.Namespace) -> int:
         print(f"host={alias}", file=sys.stderr)
         print(f"rollout={rollout_relative_path.as_posix()}", file=sys.stderr)
         print(f"error={error}", file=sys.stderr)
+        for note in getattr(error, "__notes__", ()):
+            print(f"error_note={note}", file=sys.stderr)
         return 1
     print(f"host={alias}")
     print(f"rollout={rollout_relative_path.as_posix()}")
@@ -3889,7 +3895,10 @@ def build_parser() -> argparse.ArgumentParser:
     fetch_rollout.add_argument(
         "--output",
         required=True,
-        help="Output path must resolve under .codex-tmp/remote-host-context/ or /tmp.",
+        help=(
+            "Output path must resolve under .codex-tmp/remote-host-context/ or "
+            "an owner-private subdirectory of /tmp; direct /tmp files are rejected."
+        ),
     )
     fetch_rollout.set_defaults(func=cmd_fetch_rollout)
 
