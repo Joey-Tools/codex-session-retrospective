@@ -5339,6 +5339,47 @@ superseded_by:
   contracts 6/6, Bootstrap contracts 12/12, the generated bootstrap manifest,
   the official OpenAI Skill validator, project-journal validation, source/test
   bytecode inventories, and `git diff --check` are clean.
+- Signed head `b9eee7c5` had clean exact-secret admission. The native reviewer
+  role was unavailable before an agent existed, so the required local Codex
+  processor used Codex CLI 0.149.1 with a zero-context, read-only, ephemeral
+  launch in a newly materialized and validated workspace. The exact
+  `a3836660..b9eee7c5` receipts bind 149 commits, 148 parent edges, graph digest
+  `9f8d4bdb184542750c4f49fdfdd63f8fe5e48ddba667b0dd28334926d93c4d56`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The reviewer completed in 426.902 seconds and found three P1 privacy gaps:
+  narrative tuple collections and plural `are`/`were` connectors were outside
+  the closed grammar, a serial comma before `and` could leave the last code
+  unredacted, and narrative non-container collections contributed only one code
+  to source-overlap protection. Postvalidation was exact, the 53-command event
+  audit found no mutating, network, parent-traversal, or outside-allowance read,
+  the trusted controls remained byte-identical, and identity-bound task-root
+  cleanup completed.
+- Credential parsing now shares one closed narrative-connector grammar across
+  compact and ordinary field forms, recognizes balanced tuple values, and
+  prioritizes the serial-comma separator before the plain-comma alternative.
+  One collection-value iterator is shared by redaction and source-overlap, while
+  structured containers remain owned by the existing container parser. Direct,
+  post-redaction, retained-result, source-overlap, and safe-prose regressions
+  cover every reported case. Results/episodes passes 105/105 in 15.485 seconds,
+  result-contract audit passes 25/25 in 5.148 seconds, and module boundaries
+  pass 20/20 in 2.583 seconds with exact branch inventory 10,082.
+- Final78 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `f3762a68cfbbe8b9ecfe29ef19363ad603791c666dccce19fc38d4e448e3a273`.
+  Shards 0 through 3 pass 471/471 in 2,080.121 seconds, 531/531 in
+  1,824.614 seconds, 535/535 in 1,720.820 seconds, and 444/444 in
+  1,779.523 seconds, for exact aggregate coverage of 1,981/1,981. Each shard
+  used an independent process group with a 3,600-second hard deadline, a
+  10-second termination grace, and a 1 MiB retained-log ceiling; all four logs
+  total 477,691 bytes. The independent Darwin security inventory passes 16/16
+  in 71.547 seconds.
+- On the Final78 implementation tree, repository-wide Ruff 0.13.2 lint,
+  affected-file formatting, both workflows under `actionlint` 1.7.12, Skill
+  contracts 6/6, Bootstrap contracts 12/12, CI contracts 33/33, the generated
+  bootstrap manifest, official OpenAI Skill validator, project-journal
+  validator, tracked and source/test bytecode inventories, and `git diff
+  --check` are clean.
 
 ## Follow-up Work
 

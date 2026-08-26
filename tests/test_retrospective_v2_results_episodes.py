@@ -2645,6 +2645,22 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_CREDENTIAL]",
             ),
             (
+                "recovery_codes: 123456, 654321, and 789012",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                'recovery_codes is ("123456", "654321")',
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                'authenticationCodes are ["123456", "654321"]',
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "backupCodes were 123456 and 654321",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
                 "recovery_codes:\n  - 123456\n  - 654321",
                 "[REDACTED_CREDENTIAL]",
             ),
@@ -2713,9 +2729,13 @@ class ResultValidationTests(unittest.TestCase):
             "recovery_codes: 123456, 654321",
             'recovery_codes: ("123456", "654321")',
             "recovery_codes: 123456 and 654321",
+            "recovery_codes: 123456, 654321, and 789012",
             "recovery_codes:\n  - 123456\n  - 654321",
             "authentication_code: 123456",
             'authenticationCodes: ["123456", "654321"]',
+            'recovery_codes is ("123456", "654321")',
+            'authenticationCodes are ["123456", "654321"]',
+            "backupCodes were 123456 and 654321",
             'credential is ["123456", "654321"] during login',
             'run deploy --recovery-codes ["123456", "654321"]',
         ):
@@ -2729,11 +2749,31 @@ class ResultValidationTests(unittest.TestCase):
                     {finding.category for finding in findings},
                 )
 
+        for source, copied_code in (
+            ("recovery_codes is 123456 and 654321", "123456"),
+            ("recovery_codes is 123456 and 654321", "654321"),
+            ("recovery_codes: 123456, 654321, and 789012", "789012"),
+            ('authenticationCodes are ["123456", "654321"]', "654321"),
+        ):
+            with self.subTest(narrative_overlap=source, copied_code=copied_code):
+                self.assertIn(
+                    "original_prompt",
+                    {
+                        finding.category
+                        for finding in scan_for_leaks(
+                            copied_code,
+                            original_prompts=[source],
+                        )
+                    },
+                )
+
         for safe_text in (
             "Review recovery codes handling.",
             "verificationCodes parsing is documented.",
             "authenticationCodes parsing is documented.",
             "AccountAuthenticatorCodes parsing is documented.",
+            "recovery_codes are rotated.",
+            "authenticationCodes were omitted.",
         ):
             with self.subTest(safe_text=safe_text):
                 self.assertFalse(

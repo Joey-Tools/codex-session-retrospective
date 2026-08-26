@@ -1715,12 +1715,18 @@ _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT = (
     + _CREDENTIAL_SINGLE_QUOTED_FRAGMENT_PATTERN_TEXT
     + r")"
 )
+_CREDENTIAL_NARRATIVE_CONNECTOR_PATTERN_TEXT = (
+    r"(?:is\b|are\b|was\b|were\b|set[ \t]++to\b)"
+)
 _CREDENTIAL_CODE_COLLECTION_FIELD_PREFIX_RE = re.compile(
-    r"codes['\"]?\s*+(?:(?:=|:)|(?:\bis\b|\bwas\b|\bset[ \t]++to\b))?+\s*+\Z",
+    r"codes['\"]?\s*+(?:(?:=|:)|"
+    + _CREDENTIAL_NARRATIVE_CONNECTOR_PATTERN_TEXT
+    + r")?+\s*+\Z",
     re.ASCII | re.IGNORECASE,
 )
 _CREDENTIAL_CODE_COLLECTION_SEPARATOR_RE = re.compile(
-    r"(?:[ \t]*+,[ \t]*+|[ \t]++and[ \t]++|[ \t]++-[ \t]++|"
+    r"(?:[ \t]*+,[ \t]*+and[ \t]++|[ \t]*+,[ \t]*+|"
+    r"[ \t]++and[ \t]++|[ \t]++-[ \t]++|"
     r"[ \t]*+\r?\n[ \t]*+-[ \t]++)",
     re.IGNORECASE,
 )
@@ -1834,7 +1840,7 @@ _SINGLE_QUOTED_CREDENTIAL_NARRATIVE_MATCH_PATTERN_TEXT = (
 )
 _CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT = (
     r"(?:"
-    + r"[\[{]"
+    + r"[([{]"
     + r"|"
     + _DOUBLE_QUOTED_CREDENTIAL_NARRATIVE_MATCH_PATTERN_TEXT
     + r"|"
@@ -1934,14 +1940,14 @@ _LOWER_CAMEL_CASE_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT = (
     _compact_case_credential_field_pattern(
         initial_pattern=r"[a-z]",
         suffix_pattern=_LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT,
-        connector_pattern=r"(?:is\b|was\b|set[ \t]++to\b)",
+        connector_pattern=_CREDENTIAL_NARRATIVE_CONNECTOR_PATTERN_TEXT,
     )
 )
 _PASCAL_CASE_CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT = (
     _compact_case_credential_field_pattern(
         initial_pattern=r"[A-Z]",
         suffix_pattern=_PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT,
-        connector_pattern=r"(?:is\b|was\b|set[ \t]++to\b)",
+        connector_pattern=_CREDENTIAL_NARRATIVE_CONNECTOR_PATTERN_TEXT,
     )
 )
 _CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT = (
@@ -2010,7 +2016,7 @@ _CREDENTIAL_CLI_VALUE_RE = re.compile(
 _CREDENTIAL_NARRATIVE_VALUE_RE = re.compile(
     _CREDENTIAL_NARRATIVE_FIELD_PATTERN_TEXT
     + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
-    + r"(?:\bis\b|\bwas\b|\bset\s++to\b)"
+    + _CREDENTIAL_NARRATIVE_CONNECTOR_PATTERN_TEXT
     + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
     + r"(?P<value>"
     + _CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT
@@ -2321,6 +2327,8 @@ def _credential_code_collection_items(
         return
     value_start, _value_end = value_span
     source = match.string
+    if value_start < len(source) and source[value_start] in _CONTAINER_CLOSER:
+        return
     cursor = value_start
     yaml_prefix = _CREDENTIAL_CODE_COLLECTION_YAML_ITEM_PREFIX_RE.match(source, cursor)
     if yaml_prefix is not None:
@@ -2488,6 +2496,13 @@ def _normalized_generic_sensitive_labeled_value(match: re.Match[str]) -> str:
     return _normalized_sensitive_value(_decoded_sensitive_labeled_value(match))
 
 
+def _credential_code_collection_sensitive_values(
+    match: re.Match[str],
+) -> Iterator[str]:
+    for start, end in _credential_code_collection_items(match):
+        yield _normalized_sensitive_value(match.string[start:end])
+
+
 def _credential_assignment_sensitive_values(match: re.Match[str]) -> Iterator[str]:
     container_span = _sensitive_container_span(match)
     if container_span is not None:
@@ -2496,10 +2511,9 @@ def _credential_assignment_sensitive_values(match: re.Match[str]) -> Iterator[st
             include_unknown_object_keys=False,
         )
         return
-    collection_items = tuple(_credential_code_collection_items(match))
-    if collection_items:
-        for start, end in collection_items:
-            yield _normalized_sensitive_value(match.string[start:end])
+    collection_values = tuple(_credential_code_collection_sensitive_values(match))
+    if collection_values:
+        yield from collection_values
         return
     yield _normalized_generic_sensitive_labeled_value(match)
 
@@ -2620,6 +2634,7 @@ def _credential_narrative_sensitive_overlap_values(
                         match,
                         include_unknown_object_keys=False,
                     ),
+                    _credential_code_collection_sensitive_values(match),
                 ),
             )
         )
