@@ -1716,10 +1716,15 @@ _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT = (
     + r")"
 )
 _CREDENTIAL_CODE_COLLECTION_FIELD_PREFIX_RE = re.compile(
-    r"codes['\"]?[ \t]*+(?:(?:=|:)|(?:\bis\b|\bwas\b|\bset[ \t]++to\b))?+[ \t]*+\Z",
+    r"codes['\"]?\s*+(?:(?:=|:)|(?:\bis\b|\bwas\b|\bset[ \t]++to\b))?+\s*+\Z",
     re.ASCII | re.IGNORECASE,
 )
-_CREDENTIAL_CODE_COLLECTION_SEPARATOR_RE = re.compile(r"[ \t]*+,[ \t]*+")
+_CREDENTIAL_CODE_COLLECTION_SEPARATOR_RE = re.compile(
+    r"(?:[ \t]*+,[ \t]*+|[ \t]++and[ \t]++|[ \t]++-[ \t]++|"
+    r"[ \t]*+\r?\n[ \t]*+-[ \t]++)",
+    re.IGNORECASE,
+)
+_CREDENTIAL_CODE_COLLECTION_YAML_ITEM_PREFIX_RE = re.compile(r"-[ \t]++")
 _CREDENTIAL_CODE_COLLECTION_ITEM_RE = re.compile(
     _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT + r"++"
 )
@@ -1859,7 +1864,7 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT
     + r"|"
     r"passwd|pwd|(?-i:PIN)|otp(?:[ \t_-]?codes?)?|"
-    r"(?:verification|sms|authenticator)[ \t_-]?codes?|"
+    r"(?:authentication|verification|sms|authenticator)[ \t_-]?codes?|"
     r"(?:cvv|cvc|cid)(?:[ \t_-]?(?:number|code))?|"
     r"card[ \t_-]?(?:security|verification)[ \t_-]?(?:code|value)|"
     r"(?:security(?:[ \t_-]?question)?|recovery)[ \t_-]?answer|"
@@ -1880,13 +1885,13 @@ _CREDENTIAL_ASSIGNMENT_ONLY_FIELD_PATTERN_TEXT = (
 )
 _LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
     r"(?:Token|Secret|Password|Passphrase|Passcodes?|Pin|Otp|OTP|OtpCodes?|OTPCodes?|"
-    r"MfaCodes?|MFACodes?|VerificationCodes?|SmsCodes?|SMSCodes?|AuthenticatorCodes?|"
+    r"MfaCodes?|MFACodes?|AuthenticationCodes?|VerificationCodes?|SmsCodes?|SMSCodes?|AuthenticatorCodes?|"
     r"TwoFactorCodes?|RecoveryCodes?|BackupCodes?|SeedPhrase|MnemonicPhrase|"
     r"RecoveryPhrase|ApiKey|AccessKey|PrivateKey)"
 )
 _PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
     r"(?:Credential|Secret|Password|Passphrase|Passcodes?|PIN|Pin|Otp|OTP|"
-    r"OtpCodes?|OTPCodes?|MfaCodes?|MFACodes?|VerificationCodes?|SmsCodes?|SMSCodes?|"
+    r"OtpCodes?|OTPCodes?|MfaCodes?|MFACodes?|AuthenticationCodes?|VerificationCodes?|SmsCodes?|SMSCodes?|"
     r"AuthenticatorCodes?|TwoFactorCodes?|RecoveryCodes?|BackupCodes?|SeedPhrase|MnemonicPhrase|"
     r"RecoveryPhrase|APIKey|ApiKey|AccessKey|PrivateKey|"
     r"(?:Access|API|Api|Auth|Authorization|Client|Refresh|ID|Id|Session|"
@@ -2242,8 +2247,8 @@ _LABELED_VALUE_GROUPS = (
     "single_quoted_value",
     "escaped_double_quoted_value",
 )
-_CONTAINER_CLOSER = {"[": "]", "{": "}"}
-_CONTAINER_DELIMITERS = frozenset(" \t\r\n,:[]{}")
+_CONTAINER_CLOSER = {"(": ")", "[": "]", "{": "}"}
+_CONTAINER_DELIMITERS = frozenset(" \t\r\n,:()[]{}")
 _CONTAINER_STRUCTURAL_KEYS = frozenset(
     {"code", "id", "label", "name", "severity", "status", "type", "value"}
 )
@@ -2288,7 +2293,7 @@ def _sensitive_container_span(match: re.Match[str]) -> tuple[int, int] | None:
         if character in _CONTAINER_CLOSER:
             stack.append(_CONTAINER_CLOSER[character])
             continue
-        if character in "]}":
+        if character in ")]}":
             if character != stack[-1]:
                 return start, len(source)
             stack.pop()
@@ -2315,9 +2320,16 @@ def _credential_code_collection_items(
     if value_span is None:
         return
     value_start, _value_end = value_span
-    yield value_start, match.end()
     source = match.string
-    cursor = match.end()
+    cursor = value_start
+    yaml_prefix = _CREDENTIAL_CODE_COLLECTION_YAML_ITEM_PREFIX_RE.match(source, cursor)
+    if yaml_prefix is not None:
+        cursor = yaml_prefix.end()
+    item = _CREDENTIAL_CODE_COLLECTION_ITEM_RE.match(source, cursor)
+    if item is None:
+        return
+    yield item.span()
+    cursor = item.end()
     while cursor < len(source):
         separator = _CREDENTIAL_CODE_COLLECTION_SEPARATOR_RE.match(source, cursor)
         if separator is None:
@@ -2391,7 +2403,11 @@ def _container_token_is_object_key(source: str, index: int, end: int) -> bool:
     return index < end and source[index] == ":"
 
 
-def _sensitive_container_scalar_values(match: re.Match[str]) -> Iterator[str]:
+def _sensitive_container_scalar_values(
+    match: re.Match[str],
+    *,
+    include_unknown_object_keys: bool = True,
+) -> Iterator[str]:
     span = _sensitive_container_span(match)
     if span is None:
         return
@@ -2433,9 +2449,9 @@ def _sensitive_container_scalar_values(match: re.Match[str]) -> Iterator[str]:
             token = _normalized_personal_sensitive_value(source[token_start:index])
             if token.casefold() in {"false", "null", "true"}:
                 continue
-        if (
-            _container_token_is_object_key(source, index, end)
-            and token.casefold() in _CONTAINER_STRUCTURAL_KEYS
+        if _container_token_is_object_key(source, index, end) and (
+            not include_unknown_object_keys
+            or token.casefold() in _CONTAINER_STRUCTURAL_KEYS
         ):
             continue
         if token and token not in seen:
@@ -2475,7 +2491,10 @@ def _normalized_generic_sensitive_labeled_value(match: re.Match[str]) -> str:
 def _credential_assignment_sensitive_values(match: re.Match[str]) -> Iterator[str]:
     container_span = _sensitive_container_span(match)
     if container_span is not None:
-        yield from _sensitive_container_scalar_values(match)
+        yield from _sensitive_container_scalar_values(
+            match,
+            include_unknown_object_keys=False,
+        )
         return
     collection_items = tuple(_credential_code_collection_items(match))
     if collection_items:
@@ -2597,7 +2616,10 @@ def _credential_narrative_sensitive_overlap_values(
                 None,
                 chain(
                     _personal_sensitive_overlap_values(match),
-                    _sensitive_container_scalar_values(match),
+                    _sensitive_container_scalar_values(
+                        match,
+                        include_unknown_object_keys=False,
+                    ),
                 ),
             )
         )

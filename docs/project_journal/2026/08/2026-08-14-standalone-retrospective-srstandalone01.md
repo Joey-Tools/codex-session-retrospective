@@ -5294,6 +5294,51 @@ superseded_by:
   generated bootstrap manifest, official OpenAI Skill validator,
   project-journal validator, source/test bytecode inventory, and
   `git diff --check` are clean on the same tree.
+- Signed head `8f557aff` had clean exact-secret admission. The first bounded
+  Codex CLI launch was a zero-start sandbox transport failure, and the native
+  reviewer role was unavailable before an agent existed. A host-level
+  clean-context Codex CLI reviewer then inspected `a3836660..8f557aff` in an
+  independently materialized workspace. Thread
+  `01a03e1e-79b2-7703-a4f9-42961e9de668` completed in 613.050 seconds with
+  three findings: `authentication_code(s)` remained outside the credential
+  grammar, tuple/YAML/`and` code collections could be only partially redacted,
+  and credential-object keys could enter source-overlap. Its event stream also
+  shows a read of host-global skill documentation outside the prompt's exact
+  workspace and trusted-bundle allowance, so the artifact is retained as a
+  conservative findings producer but is not the final local Codex processor.
+  Postvalidation, trusted-control comparison, and identity-bound task-root
+  cleanup all completed exactly.
+- The follow-up adds separated and compact authentication-code fields, extends
+  code collections through balanced tuples plus comma, `and`, and normalized
+  YAML-list separators, and retains only credential-object values for
+  source-overlap. Personal and health containers keep their existing
+  value-as-key policy, so an allergen represented as an object key remains
+  protected while credential structure such as `primary` and `backup` does
+  not become source prose. Focused finding and health-policy regressions pass
+  2/2; results/episodes passes 105/105; result-contract and module-boundary
+  suites pass 45/45 with exact branch inventory 10,080; CI contracts pass
+  33/33 under owner-controlled Python 3.13 with `-I -B -S`; and Ruff 0.13.2
+  lint/format plus `git diff --check` are clean.
+- One broad 1,173-test invocation without isolated mode produced 95 identical
+  pre-test publication setup errors and is non-counting. A direct isolated
+  test-file retry could not import the repository package and is also
+  invocation-invalid. The canonical inventory/shard runner supplies the
+  replacement evidence under the required isolated bootstrap; neither invalid
+  invocation is treated as a product failure or a passed gate.
+- Final76 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `ca826ca92c6cd10b9ecd7c46f3270373d1aeceacca45a5448ba92fa9d70d1898`.
+  Shards 0 through 3 pass 471/471 in 2,413.488 seconds, 531/531 in
+  2,187.165 seconds, 535/535 in 2,063.608 seconds, and 444/444 in
+  2,136.704 seconds, for exact aggregate coverage of 1,981/1,981. Each shard
+  used an independent process group with a 3,600-second hard deadline, a
+  10-second termination grace, and a 1 MiB retained-log ceiling. The
+  independent Darwin security inventory passes 16/16 in 97.438 seconds.
+- On the same final implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint` 1.7.12, Skill
+  contracts 6/6, Bootstrap contracts 12/12, the generated bootstrap manifest,
+  the official OpenAI Skill validator, project-journal validation, source/test
+  bytecode inventories, and `git diff --check` are clean.
 
 ## Follow-up Work
 

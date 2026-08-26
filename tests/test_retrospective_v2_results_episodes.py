@@ -2637,6 +2637,30 @@ class ResultValidationTests(unittest.TestCase):
                 "[REDACTED_CREDENTIAL]",
             ),
             (
+                'recovery_codes: ("123456", "654321")',
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "recovery_codes: 123456 and 654321",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "recovery_codes:\n  - 123456\n  - 654321",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "authentication_code: 123456",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                'authenticationCodes: ["123456", "654321"]',
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                'UserAuthenticationCodes: ["123456", "654321"]',
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
                 'verificationCodes: {"primary": "123456", "backup": "654321"}',
                 "[REDACTED_CREDENTIAL]",
             ),
@@ -2687,6 +2711,11 @@ class ResultValidationTests(unittest.TestCase):
         for source in (
             'recovery_codes: ["123456", "654321"]',
             "recovery_codes: 123456, 654321",
+            'recovery_codes: ("123456", "654321")',
+            "recovery_codes: 123456 and 654321",
+            "recovery_codes:\n  - 123456\n  - 654321",
+            "authentication_code: 123456",
+            'authenticationCodes: ["123456", "654321"]',
             'credential is ["123456", "654321"] during login',
             'run deploy --recovery-codes ["123456", "654321"]',
         ):
@@ -2703,6 +2732,7 @@ class ResultValidationTests(unittest.TestCase):
         for safe_text in (
             "Review recovery codes handling.",
             "verificationCodes parsing is documented.",
+            "authenticationCodes parsing is documented.",
             "AccountAuthenticatorCodes parsing is documented.",
         ):
             with self.subTest(safe_text=safe_text):
@@ -2712,6 +2742,29 @@ class ResultValidationTests(unittest.TestCase):
                     )
                 )
                 self.assertEqual((), scan_for_leaks(safe_text))
+
+        object_source = 'verificationCodes: {"primary": "123456", "backup": "654321"}'
+        overlap_values = set(
+            result_validation_module.privacy_locators.sensitive_labeled_values(
+                object_source
+            )
+        )
+        self.assertIn("123456", overlap_values)
+        self.assertIn("654321", overlap_values)
+        self.assertNotIn("primary", overlap_values)
+        self.assertNotIn("backup", overlap_values)
+        for object_key in ("primary", "backup"):
+            with self.subTest(object_key=object_key):
+                self.assertNotIn(
+                    "original_prompt",
+                    {
+                        finding.category
+                        for finding in scan_for_leaks(
+                            object_key,
+                            original_prompts=[object_source],
+                        )
+                    },
+                )
 
     def test_post_redaction_preserves_only_unambiguous_dotted_versions(self) -> None:
         for source in (
