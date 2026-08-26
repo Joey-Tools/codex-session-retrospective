@@ -5256,6 +5256,44 @@ superseded_by:
   assignment-free prose cases remain accepted. The exact regression passes in
   0.462 seconds; results/privacy passes 104/104 in 14.642 seconds; and the
   module-boundary and CI contracts pass 20/20 and 33/33.
+- A fresh independently materialized Codex CLI review of signed head
+  `abb541b1` completed in 1,076.103 seconds. Thread
+  `01a03dce-7060-7183-bd21-3db791b35978` found two P1 privacy gaps: a labeled
+  credential wrapped in an array or object was only redacted through its first
+  unquoted fragment, and plural authentication-code field names were outside
+  the closed field grammar. Equal postvalidation receipts bind 147 commits,
+  146 parent edges, graph digest
+  `bb96850bc96b1d838b52d554677e7dff7d506e7e312fb4ec972d5b31435ddd75`,
+  and the unchanged local-config digest. The 30-file trusted control inventory
+  remained byte-identical, and identity-bound task-root cleanup completed.
+- Credential redaction now merges deterministic spans and extends only an
+  already recognized assignment, CLI, or narrative field through a balanced
+  structured container. A code-collection field additionally consumes bounded
+  comma-separated atoms without extending ordinary singular fields. Container
+  scalar values from all three field forms participate in source-overlap, so a
+  copied short code remains protected after its label disappears. Plural plain,
+  snake, lower-camel, and Pascal authentication-code fields share the same
+  closed grammar; assignment-free parsing prose remains accepted. The exact
+  regressions pass 2/2, results/episodes passes 105/105, result-contract audit
+  passes 25/25, module boundaries pass 20/20 with exact branch inventory
+  10,077, and CI contracts pass 33/33 under the required isolated runtime. One
+  CI-contract invocation without `-S` and one ambient official-validator
+  invocation without PyYAML are invocation-invalid and non-counting; their
+  corrected contract-shaped runs pass.
+- Final74 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `0bfd6709d8a2d690253e8c1214fb170db8a7767506421fc26a41018cd9bef541`.
+  Shards 0 through 3 pass 471/471 in 2,251.470 seconds, 531/531 in
+  2,015.829 seconds, 535/535 in 1,889.899 seconds, and 444/444 in
+  1,957.822 seconds, for exact aggregate coverage of 1,981/1,981 without
+  skips. Each shard used an independent process group with a 3,600-second hard
+  deadline and a 1 MiB retained-log ceiling; all four logs total 477,691
+  bytes. The independent Darwin security inventory passes 16/16 in 79.367
+  seconds. Repository-wide Ruff 0.13.2 lint, affected-file formatting, both
+  workflows under `actionlint` 1.7.12, Skill 6/6, Bootstrap 12/12, the
+  generated bootstrap manifest, official OpenAI Skill validator,
+  project-journal validator, source/test bytecode inventory, and
+  `git diff --check` are clean on the same tree.
 
 ## Follow-up Work
 

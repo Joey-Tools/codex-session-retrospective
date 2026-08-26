@@ -1715,6 +1715,14 @@ _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT = (
     + _CREDENTIAL_SINGLE_QUOTED_FRAGMENT_PATTERN_TEXT
     + r")"
 )
+_CREDENTIAL_CODE_COLLECTION_FIELD_PREFIX_RE = re.compile(
+    r"codes['\"]?[ \t]*+(?:(?:=|:)|(?:\bis\b|\bwas\b|\bset[ \t]++to\b))?+[ \t]*+\Z",
+    re.ASCII | re.IGNORECASE,
+)
+_CREDENTIAL_CODE_COLLECTION_SEPARATOR_RE = re.compile(r"[ \t]*+,[ \t]*+")
+_CREDENTIAL_CODE_COLLECTION_ITEM_RE = re.compile(
+    _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT + r"++"
+)
 _SAFE_CREDENTIAL_VALUE_TRAILING_MATERIAL_PATTERN_TEXT = (
     _SAFE_CREDENTIAL_VALUE_ATOM_PATTERN_TEXT
     + r"(?:"
@@ -1821,6 +1829,8 @@ _SINGLE_QUOTED_CREDENTIAL_NARRATIVE_MATCH_PATTERN_TEXT = (
 )
 _CREDENTIAL_NARRATIVE_VALUE_MATCH_PATTERN_TEXT = (
     r"(?:"
+    + r"[\[{]"
+    + r"|"
     + _DOUBLE_QUOTED_CREDENTIAL_NARRATIVE_MATCH_PATTERN_TEXT
     + r"|"
     + _SINGLE_QUOTED_CREDENTIAL_NARRATIVE_MATCH_PATTERN_TEXT
@@ -1845,16 +1855,16 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"secret[\s_-]?access[\s_-]?key|access[\s_-]?token|"
     r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
     r"(?:encryption|recovery)[\s_-]?key|"
-    r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?code|"
+    r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?codes?|"
     + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT
     + r"|"
-    r"passwd|pwd|(?-i:PIN)|otp(?:[ \t_-]?code)?|"
-    r"(?:verification|sms|authenticator)[ \t_-]?code|"
+    r"passwd|pwd|(?-i:PIN)|otp(?:[ \t_-]?codes?)?|"
+    r"(?:verification|sms|authenticator)[ \t_-]?codes?|"
     r"(?:cvv|cvc|cid)(?:[ \t_-]?(?:number|code))?|"
     r"card[ \t_-]?(?:security|verification)[ \t_-]?(?:code|value)|"
     r"(?:security(?:[ \t_-]?question)?|recovery)[ \t_-]?answer|"
-    r"(?:mfa|2fa|two[ \t_-]?factor)[ \t_-]?code|"
-    r"(?:recovery|backup)[ \t_-]?code|"
+    r"(?:mfa|2fa|two[ \t_-]?factor)[ \t_-]?codes?|"
+    r"(?:recovery|backup)[ \t_-]?codes?|"
     r"credential|token|"
     r"(?:(?:session|http|auth(?:entication)?)[\s_-]?)?cookie(?:[\s_-]?header)?|"
     r"set[\s_-]?cookie(?:[\s_-]?header)?|" + _COMPACT_TOKEN_KEY_PATTERN_TEXT + r")"
@@ -1869,15 +1879,15 @@ _CREDENTIAL_ASSIGNMENT_ONLY_FIELD_PATTERN_TEXT = (
     r"(?![ \t]*+(?:=|:)[ \t]*+['\"]?GPIO[0-9]++\b)"
 )
 _LOWER_CAMEL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
-    r"(?:Token|Secret|Password|Passphrase|Passcode|Pin|Otp|OTP|OtpCode|OTPCode|"
-    r"MfaCode|MFACode|VerificationCode|SmsCode|SMSCode|AuthenticatorCode|"
-    r"TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
+    r"(?:Token|Secret|Password|Passphrase|Passcodes?|Pin|Otp|OTP|OtpCodes?|OTPCodes?|"
+    r"MfaCodes?|MFACodes?|VerificationCodes?|SmsCodes?|SMSCodes?|AuthenticatorCodes?|"
+    r"TwoFactorCodes?|RecoveryCodes?|BackupCodes?|SeedPhrase|MnemonicPhrase|"
     r"RecoveryPhrase|ApiKey|AccessKey|PrivateKey)"
 )
 _PASCAL_CASE_CREDENTIAL_SUFFIX_PATTERN_TEXT = (
-    r"(?:Credential|Secret|Password|Passphrase|Passcode|PIN|Pin|Otp|OTP|"
-    r"OtpCode|OTPCode|MfaCode|MFACode|VerificationCode|SmsCode|SMSCode|"
-    r"AuthenticatorCode|TwoFactorCode|RecoveryCode|BackupCode|SeedPhrase|MnemonicPhrase|"
+    r"(?:Credential|Secret|Password|Passphrase|Passcodes?|PIN|Pin|Otp|OTP|"
+    r"OtpCodes?|OTPCodes?|MfaCodes?|MFACodes?|VerificationCodes?|SmsCodes?|SMSCodes?|"
+    r"AuthenticatorCodes?|TwoFactorCodes?|RecoveryCodes?|BackupCodes?|SeedPhrase|MnemonicPhrase|"
     r"RecoveryPhrase|APIKey|ApiKey|AccessKey|PrivateKey|"
     r"(?:Access|API|Api|Auth|Authorization|Client|Refresh|ID|Id|Session|"
     r"CSRF|Csrf|XSRF|Xsrf)Token)"
@@ -1978,6 +1988,15 @@ _CREDENTIAL_LABELED_VALUE_RE = re.compile(
     + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
     + r"(?:=|:)"
     + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
+    + r"(?P<value>"
+    + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT
+    + r")",
+    re.IGNORECASE,
+)
+_CREDENTIAL_CLI_VALUE_RE = re.compile(
+    r"(?<![\w-])--"
+    + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
+    + _CREDENTIAL_SPACE_REQUIRED_ATOMIC_PATTERN_TEXT
     + r"(?P<value>"
     + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT
     + r")",
@@ -2090,25 +2109,8 @@ CREDENTIAL_REDACTION_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
         ),
         "[REDACTED_CREDENTIAL]",
     ),
-    (
-        "credential",
-        re.compile(
-            r"(?:"
-            + _CREDENTIAL_ASSIGNMENT_FIELD_PATTERN_TEXT
-            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
-            + r"(?:=|:)"
-            + _CREDENTIAL_SPACE_OPTIONAL_ATOMIC_PATTERN_TEXT
-            + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT
-            + r"|"
-            r"(?<![\w-])--"
-            + _CREDENTIAL_FIELD_NAME_PATTERN_TEXT
-            + _CREDENTIAL_SPACE_REQUIRED_ATOMIC_PATTERN_TEXT
-            + _CREDENTIAL_VALUE_MATCH_PATTERN_TEXT
-            + r")",
-            re.IGNORECASE,
-        ),
-        "[REDACTED_CREDENTIAL]",
-    ),
+    ("credential", _CREDENTIAL_LABELED_VALUE_RE, "[REDACTED_CREDENTIAL]"),
+    ("credential", _CREDENTIAL_CLI_VALUE_RE, "[REDACTED_CREDENTIAL]"),
     (
         "credential",
         _CREDENTIAL_NARRATIVE_VALUE_RE,
@@ -2197,9 +2199,9 @@ def contains_ip_address(value: str) -> bool:
 
 
 def contains_credential_material(value: str) -> bool:
-    return PRIVATE_KEY_BOUNDARY_RE.search(value) is not None or any(
-        pattern.search(value) is not None
-        for _category, pattern, _replacement in CREDENTIAL_REDACTION_PATTERNS
+    return (
+        PRIVATE_KEY_BOUNDARY_RE.search(value) is not None
+        or next(credential_spans(value), None) is not None
     )
 
 
@@ -2293,6 +2295,82 @@ def _sensitive_container_span(match: re.Match[str]) -> tuple[int, int] | None:
             if not stack:
                 return start, index + 1
     return start, len(source)
+
+
+def _credential_match_is_code_collection(match: re.Match[str]) -> bool:
+    value_span = _labeled_value_group_span(match)
+    if value_span is None:
+        return False
+    value_start, _value_end = value_span
+    prefix = match.string[match.start() : value_start]
+    return _CREDENTIAL_CODE_COLLECTION_FIELD_PREFIX_RE.search(prefix) is not None
+
+
+def _credential_code_collection_items(
+    match: re.Match[str],
+) -> Iterator[tuple[int, int]]:
+    if not _credential_match_is_code_collection(match):
+        return
+    value_span = _labeled_value_group_span(match)
+    if value_span is None:
+        return
+    value_start, _value_end = value_span
+    yield value_start, match.end()
+    source = match.string
+    cursor = match.end()
+    while cursor < len(source):
+        separator = _CREDENTIAL_CODE_COLLECTION_SEPARATOR_RE.match(source, cursor)
+        if separator is None:
+            return
+        item = _CREDENTIAL_CODE_COLLECTION_ITEM_RE.match(source, separator.end())
+        if item is None:
+            return
+        yield item.span()
+        cursor = item.end()
+
+
+def _credential_code_collection_end(match: re.Match[str]) -> int:
+    return max(
+        map(itemgetter(1), _credential_code_collection_items(match)),
+        default=match.end(),
+    )
+
+
+def credential_spans(value: str) -> Iterator[tuple[int, int]]:
+    """Yield merged credential spans, extending labeled structured values."""
+
+    candidates: list[tuple[int, int]] = []
+    for category, pattern, _replacement in CREDENTIAL_REDACTION_PATTERNS:
+        if category != "credential":
+            continue
+        for match in pattern.finditer(value):
+            start, end = match.span()
+            container_span = _sensitive_container_span(match)
+            if container_span is not None:
+                end = max(end, container_span[1])
+            else:
+                end = max(end, _credential_code_collection_end(match))
+            candidates.append((start, end))
+    candidates.sort(key=lambda span: (span[0], span[1]))
+    if not candidates:
+        return
+    start, end = candidates[0]
+    for candidate_start, candidate_end in candidates[1:]:
+        if candidate_start < end:
+            end = max(end, candidate_end)
+            continue
+        yield start, end
+        start, end = candidate_start, candidate_end
+    yield start, end
+
+
+def redact_credentials(value: str) -> str:
+    """Replace complete credential spans with the canonical placeholder."""
+
+    spans = tuple(credential_spans(value))
+    for start, end in reversed(spans):
+        value = value[:start] + "[REDACTED_CREDENTIAL]" + value[end:]
+    return value
 
 
 def _decoded_container_string(token: str) -> str:
@@ -2392,6 +2470,19 @@ def _decoded_sensitive_labeled_value(match: re.Match[str]) -> str:
 
 def _normalized_generic_sensitive_labeled_value(match: re.Match[str]) -> str:
     return _normalized_sensitive_value(_decoded_sensitive_labeled_value(match))
+
+
+def _credential_assignment_sensitive_values(match: re.Match[str]) -> Iterator[str]:
+    container_span = _sensitive_container_span(match)
+    if container_span is not None:
+        yield from _sensitive_container_scalar_values(match)
+        return
+    collection_items = tuple(_credential_code_collection_items(match))
+    if collection_items:
+        for start, end in collection_items:
+            yield _normalized_sensitive_value(match.string[start:end])
+        return
+    yield _normalized_generic_sensitive_labeled_value(match)
 
 
 def _normalized_personal_labeled_value(match: re.Match[str]) -> str:
@@ -2501,7 +2592,15 @@ def _credential_narrative_sensitive_overlap_values(
     match: re.Match[str],
 ) -> tuple[str, ...]:
     values = tuple(
-        dict.fromkeys(filter(None, _personal_sensitive_overlap_values(match)))
+        dict.fromkeys(
+            filter(
+                None,
+                chain(
+                    _personal_sensitive_overlap_values(match),
+                    _sensitive_container_scalar_values(match),
+                ),
+            )
+        )
     )
     for _round in range(3):
         derivatives = chain.from_iterable(
@@ -2727,9 +2826,14 @@ def _normalized_sensitive_overlap_value(value: str) -> str:
 def sensitive_labeled_values(value: str) -> Iterator[str]:
     """Yield closed-taxonomy field and bare-number values for overlap checks."""
 
-    credential_assignment_values = map(
-        _normalized_generic_sensitive_labeled_value,
-        _CREDENTIAL_LABELED_VALUE_RE.finditer(value),
+    credential_assignment_values = chain.from_iterable(
+        map(
+            _credential_assignment_sensitive_values,
+            chain(
+                _CREDENTIAL_LABELED_VALUE_RE.finditer(value),
+                _CREDENTIAL_CLI_VALUE_RE.finditer(value),
+            ),
+        )
     )
     credential_narrative_values = chain.from_iterable(
         map(

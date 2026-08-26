@@ -754,11 +754,15 @@ def scan_for_leaks(
             findings.add(LeakFinding("unredactable_secret", path, *placeholder_span))
         reference_field = _is_valid_reference_value(parts, text)
         overlap_exempt = reference_field and text in allowed_values
+        for start, end in privacy_locators.credential_spans(text):
+            findings.add(LeakFinding("credential", path, start, end))
         for (
             category,
             pattern,
             _replacement,
         ) in privacy_locators.DETERMINISTIC_REDACTION_PATTERNS:
+            if category == "credential":
+                continue
             for match in pattern.finditer(text):
                 findings.add(LeakFinding(category, path, match.start(), match.end()))
         for match in privacy_locators.URI_LOCATOR_RE.finditer(text):
@@ -824,11 +828,14 @@ def _post_redact_text(
             privacy_locators.personal_identifier_values(redacted),
         )
     )
+    redacted = privacy_locators.redact_credentials(redacted)
     for (
-        _category,
+        category,
         pattern,
         replacement,
     ) in privacy_locators.DETERMINISTIC_REDACTION_PATTERNS:
+        if category == "credential":
+            continue
         redacted = pattern.sub(replacement, redacted)
     redacted = privacy_locators.redact_mac_addresses(redacted)
     # Source-overlap markers must never split an already identified personal value.

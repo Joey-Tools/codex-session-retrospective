@@ -2620,6 +2620,99 @@ class ResultValidationTests(unittest.TestCase):
             with self.subTest(safe_text=safe_text):
                 self.assertEqual((), scan_for_leaks(safe_text))
 
+    def test_structured_and_plural_authentication_codes_are_fully_redacted(
+        self,
+    ) -> None:
+        cases = (
+            (
+                'Authentication failed with OTP: ["123456"] during login',
+                "Authentication failed with [REDACTED_CREDENTIAL] during login",
+            ),
+            (
+                "recovery_codes: [123456, 654321]",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "recovery_codes: 123456, 654321",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                'verificationCodes: {"primary": "123456", "backup": "654321"}',
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                'userVerificationCodes: ["123456", {"value": "654321"}]',
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                "AccountAuthenticatorCodes: ['123456', '654321']",
+                "[REDACTED_CREDENTIAL]",
+            ),
+            (
+                'credential is ["123456", "654321"] during login',
+                "[REDACTED_CREDENTIAL] during login",
+            ),
+            (
+                'run deploy --recovery-codes ["123456", "654321"]',
+                "run deploy [REDACTED_CREDENTIAL]",
+            ),
+            (
+                'userVerificationCodes: 123456, "654321" during login',
+                "[REDACTED_CREDENTIAL] during login",
+            ),
+            (
+                'backupCodes: ["123456"',
+                "[REDACTED_CREDENTIAL]",
+            ),
+        )
+        for source, expected in cases:
+            with self.subTest(source=source):
+                credential_findings = tuple(
+                    finding
+                    for finding in scan_for_leaks(source)
+                    if finding.category == "credential"
+                )
+                self.assertEqual(1, len(credential_findings))
+                value = extractor_result()
+                value["turns"][0]["generalized_working_text"] = source
+                result = validate_extractor_result(value, ALL_REFS)
+                self.assertEqual(
+                    expected,
+                    result["turns"][0]["generalized_working_text"],
+                )
+                self.assertEqual((), scan_for_leaks(result))
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value({"cause": source})
+
+        for source in (
+            'recovery_codes: ["123456", "654321"]',
+            "recovery_codes: 123456, 654321",
+            'credential is ["123456", "654321"] during login',
+            'run deploy --recovery-codes ["123456", "654321"]',
+        ):
+            with self.subTest(source_overlap=source):
+                findings = scan_for_leaks(
+                    "123456",
+                    original_prompts=[source],
+                )
+                self.assertIn(
+                    "original_prompt",
+                    {finding.category for finding in findings},
+                )
+
+        for safe_text in (
+            "Review recovery codes handling.",
+            "verificationCodes parsing is documented.",
+            "AccountAuthenticatorCodes parsing is documented.",
+        ):
+            with self.subTest(safe_text=safe_text):
+                self.assertFalse(
+                    result_validation_module.privacy_locators.contains_credential_material(
+                        safe_text
+                    )
+                )
+                self.assertEqual((), scan_for_leaks(safe_text))
+
     def test_post_redaction_preserves_only_unambiguous_dotted_versions(self) -> None:
         for source in (
             "The release used version v1.2.3.4 before rollback.",
