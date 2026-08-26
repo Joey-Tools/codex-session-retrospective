@@ -536,6 +536,12 @@ def directory_access_policy_flags(st: os.stat_result) -> int:
     return int(getattr(st, "st_flags", 0)) & _ANCESTOR_ACCESS_POLICY_FLAG_MASK
 
 
+def file_access_policy_flags(st: os.stat_result) -> int:
+    """Return only file flags that change mutation authority."""
+
+    return int(getattr(st, "st_flags", 0)) & _ANCESTOR_ACCESS_POLICY_FLAG_MASK
+
+
 def _ancestor_access_policy_identity(st: os.stat_result) -> tuple[int, ...]:
     return (
         int(st.st_dev),

@@ -2562,6 +2562,49 @@ class ResultValidationTests(unittest.TestCase):
             with self.subTest(safe_text=safe_text):
                 self.assertEqual((), scan_for_leaks(safe_text))
 
+    def test_plural_generic_credential_labels_are_redacted_and_indexed(self) -> None:
+        for label in (
+            "credentials",
+            "passwords",
+            "tokens",
+            "secrets",
+        ):
+            with self.subTest(label=label):
+                source = f"{label}: blueotter"
+                rewritten = f"{label} = blueotter"
+                for value in (source, rewritten):
+                    self.assertEqual(
+                        "[REDACTED_CREDENTIAL]",
+                        result_validation_module.post_redact(value),
+                    )
+                    self.assertIn(
+                        "credential",
+                        {finding.category for finding in scan_for_leaks(value)},
+                    )
+                self.assertIn(
+                    "original_prompt",
+                    {
+                        finding.category
+                        for finding in scan_for_leaks(
+                            "blueotter",
+                            original_prompts=[source],
+                        )
+                    },
+                )
+
+        for safe_text in (
+            "credentials are required before deployment",
+            "passwords were missing during dry run",
+            "tokens are redacted in the report",
+            "secrets are unavailable in this environment",
+        ):
+            with self.subTest(safe_text=safe_text):
+                self.assertEqual((), scan_for_leaks(safe_text))
+                self.assertEqual(
+                    safe_text,
+                    result_validation_module.post_redact(safe_text),
+                )
+
     def test_post_redaction_removes_one_time_and_recovery_codes(self) -> None:
         for source in (
             "OTP: 123456",

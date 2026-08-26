@@ -1886,9 +1886,8 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"secret[\s_-]?access[\s_-]?key|access[\s_-]?token|"
     r"client[\s_-]?secret|api[\s_-]?key|private[\s_-]?key|"
     r"(?:encryption|recovery)[\s_-]?key|"
-    r"secret(?:[\s_-]?key)?|password|pass[ \t_-]?phrase|pass[ \t_-]?codes?|"
-    + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT
-    + r"|"
+    r"secret(?:s|[\s_-]?keys?)?|passwords?|pass[ \t_-]?phrases?|"
+    r"pass[ \t_-]?codes?|" + _CREDENTIAL_PHRASE_FIELD_NAME_PATTERN_TEXT + r"|"
     r"passwd|pwd|(?-i:PIN)|otp(?:[ \t_-]?codes?)?|"
     r"(?:authentication|verification|sms|authenticator)[ \t_-]?codes?|"
     r"(?:cvv|cvc|cid)(?:[ \t_-]?(?:number|code))?|"
@@ -1896,7 +1895,7 @@ _CREDENTIAL_FIELD_NAME_PATTERN_TEXT = (
     r"(?:security(?:[ \t_-]?question)?|recovery)[ \t_-]?answer|"
     r"(?:mfa|2fa|two[ \t_-]?factor)[ \t_-]?codes?|"
     r"(?:recovery|backup)[ \t_-]?codes?|"
-    r"credential|token|"
+    r"credentials?|tokens?|"
     r"(?:(?:session|http|auth(?:entication)?)[\s_-]?)?cookie(?:[\s_-]?header)?|"
     r"set[\s_-]?cookie(?:[\s_-]?header)?|" + _COMPACT_TOKEN_KEY_PATTERN_TEXT + r")"
 )

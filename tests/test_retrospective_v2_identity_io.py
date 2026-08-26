@@ -48,6 +48,7 @@ from retrospective_v2.identity import (  # noqa: E402
 )
 from retrospective_v2 import identity as identity_module  # noqa: E402
 from retrospective_v2 import cli as cli_module  # noqa: E402
+from retrospective_v2 import cleanup_inventory  # noqa: E402
 from retrospective_v2 import safe_io  # noqa: E402
 from retrospective_v2.safe_io import (  # noqa: E402
     InvalidJsonError,
@@ -437,6 +438,45 @@ class SafeIoTests(unittest.TestCase):
         self.assertTrue(churned)
         self.assertEqual(
             [".", "payload"], [e["relative_path"] for e in snapshot["entries"]]
+        )
+
+    def test_complete_cleanup_replay_ignores_benign_directory_metadata_drift(
+        self,
+    ) -> None:
+        tree = self.root / "persisted-cleanup-claim"
+        nested = tree / "nested"
+        tree.mkdir(mode=0o700)
+        nested.mkdir(mode=0o700)
+        atomic_write_bytes(nested / "payload", b"stable\n")
+        parent_fd = os.open(self.root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            snapshot = safe_io.inspect_tree_inventory_at(
+                parent_fd,
+                tree.name,
+                budget=self._inventory_budget(),
+                display_path=tree,
+            )
+        finally:
+            os.close(parent_fd)
+
+        planned = snapshot["entries"]
+        observed = [dict(entry) for entry in planned]
+        for entry in observed:
+            if entry["object_type"] == "directory":
+                entry["link_count"] += 1
+                entry["size"] += 4096
+        self.assertTrue(cleanup_inventory._complete_entries_match(observed, planned))
+
+        changed_policy = [dict(entry) for entry in observed]
+        changed_policy[0]["mode"] ^= 0o020
+        self.assertFalse(
+            cleanup_inventory._complete_entries_match(changed_policy, planned)
+        )
+
+        changed_content = [dict(entry) for entry in observed]
+        changed_content[-1]["content_commitment"] = "sha256:" + "f" * 64
+        self.assertFalse(
+            cleanup_inventory._complete_entries_match(changed_content, planned)
         )
 
     def test_cleanup_inventory_budget_is_shared_across_actual_trees(self) -> None:

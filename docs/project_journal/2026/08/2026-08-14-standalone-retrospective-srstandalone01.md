@@ -5559,6 +5559,49 @@ superseded_by:
   `unittest` invocation was invalid because isolated mode intentionally did
   not expose `tests` as an importable package; the corrected file-based
   contract entrypoints are the counted 6/6, 12/12, and 33/33 results.
+- Final89 used trusted review controls from private release
+  `284f0f54daba1e9e17e922e4fa87aa6b586e37a4`, control digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  and guard digest
+  `2c8432731619e40cfae28a59e27d97be9cf58d48672d33a8b675141436a62cf8`.
+  Matching materialization and validation receipts for exact range
+  `a3836660..46d7e3a7` bind 154 commits, 153 parent edges, graph digest
+  `de4f1b48c181f3e213360b5831dd49f3965359ca25fbee6a7260727d5c3d3dfb`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  A zero-context Codex CLI reviewer completed in 586.263 seconds and reported
+  three actionable findings: generic plural credential labels could retain a
+  short value, complete cleanup replay compared derived directory size/link
+  metadata, and private-output identity compared benign file flags. The
+  55-command event audit contained two automated alerts for read-only `rg`
+  queries whose search patterns named mutating syscalls; manual adjudication
+  confirmed that neither command mutated state. Postvalidation, trusted-control
+  revalidation, and identity-bound task-root cleanup all completed exactly.
+- Final90 fixes those findings without widening unrelated policy. Plain
+  `credentials`, `passwords`, `tokens`, and `secrets` labels now share the
+  retained credential detector, redactor, and short source-overlap index while
+  existing safe camel/PascalCase concepts such as `CancellationToken` and
+  `DesignToken` remain allowed. Complete cleanup replay now ignores only
+  directory `size` and `link_count`, while exact path ordering, object type and
+  identity, content commitment, ownership, mode, ACL, and access-policy flags
+  remain bound. Private-output identity masks benign file flags and continues
+  to bind immutable, append-only, no-unlink, and restricted authority flags.
+  Focused results pass 106/106, result-contract/identity/module-boundary tests
+  pass 102/102, and the v1 compatibility module passes 930/930.
+- Final90 freezes 1,984 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `0c64c8b97a05b56ab34eb0135a077ea4125036ecaf3860f27eb7102cb5590470`.
+  Shards 0 through 3 pass 471/471 in 1,903.818 seconds, 533/533 in
+  1,669.407 seconds, 535/535 in 1,567.256 seconds, and 445/445 in
+  1,625.480 seconds, for exact aggregate coverage of 1,984/1,984. The
+  independent Darwin security inventory passes 16/16 in 69.624 seconds.
+- On the Final90 implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint`, Skill contracts
+  6/6, Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator under Python 3.13.0, tracked
+  and source/test-tree bytecode exclusion, and `git diff --check` are clean.
+  A separate repository-wide format probe remains non-counting because it
+  identified four pre-existing unformatted files outside this change.
 
 ## Follow-up Work
 

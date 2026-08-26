@@ -12,6 +12,7 @@ import os
 from pathlib import Path
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -3324,6 +3325,53 @@ class SessionRetrospectiveTests(unittest.TestCase):
 
             self.assertEqual(output.read_bytes(), b"sensitive\n")
             self.assertEqual(output.stat().st_mode & 0o777, 0o600)
+
+    def test_remote_probe_private_output_identity_masks_benign_file_flags(
+        self,
+    ) -> None:
+        common = {
+            "st_dev": 1,
+            "st_ino": 2,
+            "st_mode": stat.S_IFREG | 0o600,
+            "st_uid": os.getuid(),
+            "st_gid": os.getgid(),
+            "st_nlink": 1,
+            "st_size": len(b"sensitive\n"),
+            "st_gen": -1,
+        }
+        baseline = REMOTE_PROBE.private_output._file_identity(
+            types.SimpleNamespace(**common, st_flags=0)
+        )
+        for benign_flag in (
+            stat.UF_NODUMP,
+            stat.UF_HIDDEN,
+            stat.UF_COMPRESSED,
+            stat.UF_TRACKED,
+            stat.SF_ARCHIVED,
+        ):
+            with self.subTest(benign_flag=benign_flag):
+                self.assertEqual(
+                    baseline,
+                    REMOTE_PROBE.private_output._file_identity(
+                        types.SimpleNamespace(**common, st_flags=benign_flag)
+                    ),
+                )
+
+        for restrictive_flag in (
+            stat.UF_IMMUTABLE,
+            stat.UF_APPEND,
+            stat.SF_IMMUTABLE,
+            stat.SF_APPEND,
+            stat.SF_NOUNLINK,
+            stat.SF_RESTRICTED,
+        ):
+            with self.subTest(restrictive_flag=restrictive_flag):
+                self.assertNotEqual(
+                    baseline,
+                    REMOTE_PROBE.private_output._file_identity(
+                        types.SimpleNamespace(**common, st_flags=restrictive_flag)
+                    ),
+                )
 
     @darwin_security_test
     def test_remote_probe_private_output_rejects_extended_acl_parent(self) -> None:

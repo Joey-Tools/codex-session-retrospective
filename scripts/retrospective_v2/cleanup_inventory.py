@@ -641,7 +641,7 @@ def _complete_entries_match(
         if not _entry_matches(
             entry,
             expected,
-            relaxed_directory_metadata=False,
+            relaxed_directory_metadata=True,
         ):
             return False
     return True

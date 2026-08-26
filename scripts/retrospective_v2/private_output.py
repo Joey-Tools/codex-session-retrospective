@@ -43,7 +43,7 @@ def _file_identity(metadata: os.stat_result) -> tuple[int, ...]:
         int(stat.S_IMODE(metadata.st_mode)),
         int(metadata.st_nlink),
         int(metadata.st_size),
-        int(getattr(metadata, "st_flags", 0)),
+        safe_io.file_access_policy_flags(metadata),
         int(getattr(metadata, "st_gen", -1)),
     )
 
