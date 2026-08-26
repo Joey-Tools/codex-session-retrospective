@@ -7190,6 +7190,35 @@ class OrchestratorTests(unittest.TestCase):
         StageSchedulingOperations._rollback_raw_materializations(materialized)
         self.assertEqual(["second", "first"], rolled_back)
 
+    def test_staged_transaction_marks_incomplete_rollback_for_cli(self) -> None:
+        def fail_stage():
+            raise RuntimeError("synthetic staging failure")
+
+        def fail_rollback(_receipt):
+            raise OSError("synthetic staging rollback failure")
+
+        with self.assertRaisesRegex(RuntimeError, "staging failure") as caught:
+            StageSchedulingOperations._stage_raw_materializations(
+                [
+                    (lambda: "first", fail_rollback),
+                    (fail_stage, fail_rollback),
+                ]
+            )
+
+        self.assertIs(
+            caught.exception,
+            temporary_paths.incomplete_cleanup_primary(caught.exception),
+        )
+        machine_result = cli_module._failure_from_exception(
+            "advance",
+            caught.exception,
+        ).to_json()
+        self.assertEqual(
+            "temporary_cleanup_incomplete",
+            machine_result["error"]["code"],
+        )
+        self.assertEqual("incomplete", machine_result["result"]["temporary_cleanup"])
+
     def test_all_post_extraction_jobs_partition_under_complete_envelope_cap(
         self,
     ) -> None:

@@ -48,6 +48,11 @@ try:
 except (ImportError, ModuleNotFoundError):
     _safe_io = None
 
+try:
+    from . import temporary_paths as _temporary_paths
+except (ImportError, ModuleNotFoundError):
+    import temporary_paths as _temporary_paths  # type: ignore[no-redef]
+
 
 RAW_SHARD_SCHEMA_VERSION = 1
 SHARD_SET_SCHEMA_VERSION = 1
@@ -1198,6 +1203,10 @@ def materialize_ordered_raw_shards(
         try:
             rollback_ordered_raw_shards(stage_receipt)
         except BaseException as rollback_error:
+            _temporary_paths.mark_incomplete_cleanup(
+                error,
+                stage="raw-shard-materialization-rollback",
+            )
             if hasattr(error, "add_note"):
                 error.add_note(
                     "raw shard rollback was incomplete; "

@@ -5090,6 +5090,44 @@ superseded_by:
   skips. Every shard used an independent process group with a 3,600-second
   hard deadline, all reached terminal success, and no matching test process
   remained.
+- A subsequent zero-inheritance Codex subagent reviewed the independently
+  materialized and validated exact range `a3836660..8b817f0d`. The dedicated
+  reviewer role was unavailable, so the parent used a default clean-context
+  agent with `fork_context=false` as explicitly authorized. The bounded review
+  found three issues: additional plural demographic field families still
+  bypassed the shared retained-data privacy grammar; raw-shard staging failures
+  did not mark sensitive cleanup incomplete when rollback also failed; and a
+  parent-directory close failure could replace the primary bounded JSON read
+  error. The workspace postvalidated clean, trusted control bytes remained
+  exact, and the reviewer task root was safely removed.
+- The final follow-up systematically covers plural sex, gender, ethnic, racial,
+  origin, ancestry, citizenship, language, and religion labels across spaced,
+  snake, dot, kebab, and camel forms while preserving assignment-free prose.
+  Both raw-shard rollback owners now attach the shared sensitive temporary
+  cleanup marker to the original staging failure, so the CLI emits the
+  fail-closed `temporary_cleanup_incomplete` machine result. Bounded JSON reads
+  use the existing close helper, retaining `UnsafePathError`,
+  `InvalidJsonError`, or `ReadLimitExceeded` as primary and attaching close
+  evidence without changing CLI classification.
+- Final focused evidence passes catalog/sharding 31/31, identity and safe I/O
+  55/55, results/privacy 103/103 in 13.719 seconds, and orchestrator 148/148 in
+  606.778 seconds. One earlier orchestrator run is explicitly non-counting
+  because the target `safe_io.py` correction changed the implementation
+  authority while that process was running; the frozen-tree rerun is the
+  accepted result. Module-boundary, CI, Skill, and Bootstrap contracts pass
+  20/20, 33/33, 6/6, and 12/12. The Darwin security inventory passes 16/16 in
+  75.435 seconds. Repository-wide isolated Ruff 0.13.2 lint, formatting for all
+  eight changed Python files, both workflows under `actionlint`, the generated
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, tracked bytecode exclusion, and `git diff --check` are clean.
+- Final66 freezes 1,975 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `c513775af04e2722c9e878273da5a16ed9b5dbb16fad86a8670a30416c9e5c8a`.
+  Shards 0 through 3 pass 471/471 in 1,976.000 seconds, 530/530 in
+  1,731.416 seconds, 532/532 in 1,625.204 seconds, and 442/442 in
+  1,682.668 seconds, for exact aggregate coverage of 1,975/1,975 without
+  skips. Every shard used an independent process group with a 3,600-second hard
+  deadline and reached terminal success.
 
 ## Follow-up Work
 

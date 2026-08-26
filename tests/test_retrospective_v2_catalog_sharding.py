@@ -15,9 +15,11 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from retrospective_v2 import catalog  # noqa: E402
+from retrospective_v2 import cli as cli_module  # noqa: E402
 from retrospective_v2 import contracts  # noqa: E402
 from retrospective_v2 import raw_shard_staging  # noqa: E402
 from retrospective_v2 import sharding  # noqa: E402
+from retrospective_v2 import temporary_paths  # noqa: E402
 from retrospective_v2.identity import IdentityKey  # noqa: E402
 
 
@@ -1093,6 +1095,56 @@ class ShardingTests(unittest.TestCase):
                     or path.name.endswith(".tmp")
                     for path in run_directory.iterdir()
                 )
+            )
+
+    def test_streaming_shard_stage_marks_incomplete_rollback_for_cli(self) -> None:
+        payload = b'{"turn":1}\n'
+        records = [raw_record(candidate("retained-unit", payload), payload)]
+        plan = sharding.plan_ordered_raw_shards(records)
+        original_create = sharding._create_or_validate_staged_file
+
+        def create_then_fail(*args, **kwargs):
+            original_create(*args, **kwargs)
+            raise RuntimeError("synthetic raw shard stage failure")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            run_directory = Path(temporary) / "retained-raw-run"
+            with (
+                mock.patch.object(
+                    sharding,
+                    "_create_or_validate_staged_file",
+                    side_effect=create_then_fail,
+                ),
+                mock.patch.object(
+                    sharding,
+                    "rollback_ordered_raw_shards",
+                    side_effect=OSError("synthetic rollback failure"),
+                ),
+                self.assertRaisesRegex(
+                    RuntimeError,
+                    "raw shard stage failure",
+                ) as caught,
+            ):
+                sharding.materialize_ordered_raw_shards(
+                    records,
+                    run_directory,
+                    plan=plan,
+                )
+
+            self.assertIs(
+                caught.exception,
+                temporary_paths.incomplete_cleanup_primary(caught.exception),
+            )
+            machine_result = cli_module._failure_from_exception(
+                "advance",
+                caught.exception,
+            ).to_json()
+            self.assertEqual(
+                "temporary_cleanup_incomplete",
+                machine_result["error"]["code"],
+            )
+            self.assertEqual(
+                "incomplete", machine_result["result"]["temporary_cleanup"]
             )
 
     def test_streaming_shard_rollback_continues_after_receipt_mismatch(self) -> None:

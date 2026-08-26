@@ -47,6 +47,7 @@ from retrospective_v2.identity import (  # noqa: E402
     IdentityKeyMissingError,
 )
 from retrospective_v2 import identity as identity_module  # noqa: E402
+from retrospective_v2 import cli as cli_module  # noqa: E402
 from retrospective_v2 import safe_io  # noqa: E402
 from retrospective_v2.safe_io import (  # noqa: E402
     InvalidJsonError,
@@ -938,6 +939,68 @@ class SafeIoTests(unittest.TestCase):
             read_bounded_jsonl(records, max_bytes=128, max_lines=2)
         with self.assertRaises(ReadLimitExceeded):
             read_bounded_jsonl(records, max_bytes=128, max_line_bytes=4)
+
+    def test_json_parent_close_failure_preserves_primary_and_cli_classification(
+        self,
+    ) -> None:
+        invalid = self.root / "invalid-close.json"
+        atomic_write_bytes(invalid, b"not-json\n")
+        oversized = self.root / "oversized-close.json"
+        atomic_write_bytes(oversized, b'{"value":"too large"}\n')
+        unsafe = self.root / "unsafe-close.json"
+        atomic_write_bytes(unsafe, b"{}\n")
+        os.chmod(unsafe, 0o644)
+
+        real_open_parent = safe_io._open_parent_directory
+        real_close = os.close
+        for path, maximum, expected_type, expected_code, expected_reason in (
+            (invalid, 1024, InvalidJsonError, "invalid_input", "invalid_json"),
+            (
+                oversized,
+                4,
+                ReadLimitExceeded,
+                "invalid_input",
+                "read_limit_exceeded",
+            ),
+            (unsafe, 1024, UnsafePathError, "security_error", "unsafe_path"),
+        ):
+            with self.subTest(path=path.name):
+                parent_descriptor: int | None = None
+
+                def capture_parent(*args, **kwargs):
+                    nonlocal parent_descriptor
+                    normalized, parent_descriptor = real_open_parent(*args, **kwargs)
+                    return normalized, parent_descriptor
+
+                def close_then_fail(descriptor: int) -> None:
+                    real_close(descriptor)
+                    if descriptor == parent_descriptor:
+                        raise OSError("synthetic JSON parent close failure")
+
+                with (
+                    mock.patch.object(
+                        safe_io,
+                        "_open_parent_directory",
+                        side_effect=capture_parent,
+                    ),
+                    mock.patch.object(safe_io.os, "close", side_effect=close_then_fail),
+                    self.assertRaises(expected_type) as caught,
+                ):
+                    read_bounded_json(path, max_bytes=maximum)
+
+                self.assertIn(
+                    "bounded JSON parent descriptor close failed: OSError",
+                    getattr(caught.exception, "__notes__", ()),
+                )
+                machine_result = cli_module._failure_from_exception(
+                    "status",
+                    caught.exception,
+                ).to_json()
+                self.assertEqual(expected_code, machine_result["error"]["code"])
+                self.assertEqual(
+                    expected_reason,
+                    machine_result["error"]["reason_code"],
+                )
 
     def test_bounded_file_hash_covers_the_complete_payload(self) -> None:
         prefix = b"p" * (64 * 1024)

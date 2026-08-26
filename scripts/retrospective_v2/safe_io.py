@@ -3113,7 +3113,10 @@ def read_bounded_json(
             require_owner_only=require_owner_only,
         )
     finally:
-        os.close(directory_fd)
+        _close_bounded_read_descriptor(
+            directory_fd,
+            label="bounded JSON parent descriptor close failed",
+        )
 
 
 def read_bounded_jsonl(

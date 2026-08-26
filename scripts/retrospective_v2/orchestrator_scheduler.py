@@ -12,6 +12,7 @@ from . import (
     agent_task_inputs,
     catalog,
     controlled_gaps,
+    temporary_paths,
     transport as source_transport,
 )
 from .checkpoints import CheckpointNotFoundError, canonical_json_bytes, content_digest
@@ -232,6 +233,10 @@ class StageSchedulingOperations(OrchestratorComponent):
             try:
                 StageSchedulingOperations._rollback_raw_materializations(materialized)
             except BaseException as rollback_error:
+                temporary_paths.mark_incomplete_cleanup(
+                    error,
+                    stage="raw-shard-staging-rollback",
+                )
                 if hasattr(error, "add_note"):
                     error.add_note(
                         "raw shard staging rollback failed; "
