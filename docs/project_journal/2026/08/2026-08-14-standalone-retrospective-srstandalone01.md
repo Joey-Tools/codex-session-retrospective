@@ -5063,6 +5063,33 @@ superseded_by:
   skips. The three resumed shards used independent process groups with a
   3,600-second hard deadline; all reached terminal success and no matching
   test process remained.
+- Signed replacement head `5ee30127` had clean exact-secret admission. A
+  clean-context Codex CLI launch then failed before model start because the
+  outer sandbox denied its state-database initialization; postvalidation and
+  trusted-control comparison were exact and the task root was safely removed,
+  so that zero-start attempt is non-counting. A separate `fork_context=false`
+  Codex subagent reviewed the independently materialized and validated exact
+  range after the dedicated reviewer role reported platform unavailability.
+  It found one P1: bare plural `Ages: 42 and 47` was the remaining demographic
+  label form that bypassed the shared result-redaction and retained-history
+  privacy matcher. Its workspace postvalidated clean, the trusted controls
+  remained byte-identical, and the exact task root was removed after the agent
+  completed.
+- The replacement follow-up admits bare singular and plural age labels while
+  retaining assignment-free prose such as `Ages parsing is documented.` The
+  shared policy regression exercises leak detection, post-redaction, and final
+  retained-value rejection for the positive case and preserves the negative
+  boundary. The complete results/episodes module passes 103/103 in 13.277
+  seconds.
+- Final65 freezes the same 1,972 exact Python 3.13.12 test IDs from 22
+  authenticated sources under manifest digest
+  `8c5b277a995d20f4c32fbd7d97cc8881a51173e85c3a2b757ef0200b0ce65aeb`.
+  Shards 0 through 3 pass 470/470 in 1,919.689 seconds, 530/530 in
+  1,689.870 seconds, 530/530 in 1,596.633 seconds, and 442/442 in
+  1,648.492 seconds, for exact aggregate coverage of 1,972/1,972 without
+  skips. Every shard used an independent process group with a 3,600-second
+  hard deadline, all reached terminal success, and no matching test process
+  remained.
 
 ## Follow-up Work
 

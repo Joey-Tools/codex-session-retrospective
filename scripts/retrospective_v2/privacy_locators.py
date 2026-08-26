@@ -589,7 +589,7 @@ _CONTROLLED_DEMOGRAPHIC_FIELD_PATTERN_TEXT = (
     r"assigned[._ -]+sex(?:[._ -]+at[._ -]+birth)?|birth[._ -]+sex|sex|"
     r"gender[._ -]+assigned[._ -]+at[._ -]+birth|gender[._ -]+at[._ -]+birth|"
     r"assigned[._ -]+gender(?:[._ -]+at[._ -]+birth)?|birth[._ -]+gender|"
-    r"age(?:[._ -]+ranges?)?|"
+    r"ages?(?:[._ -]+ranges?)?|"
     r"gender(?:[._ -]+(?:identit(?:y|ies)|expressions?))?|races?|"
     r"ethnicit(?:y|ies)|"
     r"(?:ethnic|racial)[._ -]+(?:background|group|identity|origin)|"
