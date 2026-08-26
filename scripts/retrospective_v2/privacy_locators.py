@@ -2503,7 +2503,7 @@ def _credential_code_collection_sensitive_values(
     for start, end in _credential_code_collection_items(match):
         normalized = _normalized_sensitive_value(match.string[start:end])
         yield normalized
-        sentence_value = normalized.rstrip(".,;!?")
+        sentence_value = _normalized_personal_sensitive_value(normalized)
         if sentence_value and sentence_value != normalized:
             yield sentence_value
 

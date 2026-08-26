@@ -5419,6 +5419,43 @@ superseded_by:
   formatting, both workflows under `actionlint` 1.7.12, Skill contracts 6/6,
   Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
   manifest, and the official OpenAI Skill validator are clean.
+- Final81 used a fresh Codex CLI reviewer with no inherited conversation in an
+  independently materialized and validated workspace for exact range
+  `a3836660..df7b7a44`. Matching receipts bind 151 commits, 150 parent edges,
+  graph digest
+  `2a27fb280860c63a98159f9abde0840a6a1d47f66de54dadfd967af2660503d2`,
+  and the unchanged local-config digest. The reviewer completed in 638.424
+  seconds with one P1 finding. Its 45-command event audit found no mutating,
+  network, test-execution, outside-path, or Git-prefix violation;
+  postvalidation and trusted-control revalidation were exact, and
+  identity-bound task-root cleanup completed.
+- The Final81 finding showed that a final quoted short credential followed by
+  sentence punctuation, such as `"654321".`, retained a trailing quote in the
+  privacy alias. A result that copied the bare six-digit value could therefore
+  evade source-overlap detection. Collection extraction now derives the alias
+  through the same bounded personal-value normalizer used elsewhere while
+  preserving the exact normalized form. Direct redaction and source-overlap
+  regressions cover single- and double-quoted final codes plus a safe quoted
+  prose value. Results/episodes passes 105/105 in 17.211 seconds,
+  result-contract audit passes 25/25 in 4.893 seconds, and module boundaries
+  pass 20/20 in 2.670 seconds with exact branch inventory 10,084.
+- Final82 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `d18bd29ef05bf378cfff386f55d838a661c04bfef882a28b693e788ff6444eac`.
+  Shards 0 through 3 pass 471/471 in 1,911.661 seconds, 531/531 in
+  1,685.879 seconds, 535/535 in 1,584.894 seconds, and 444/444 in
+  1,635.876 seconds, for exact aggregate coverage of 1,981/1,981. Every shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The independent
+  Darwin security inventory passes 16/16 in 67.976 seconds.
+- On the Final82 tree, repository-wide Ruff 0.13.2 lint, affected-file
+  formatting, both workflows under `actionlint`, Skill contracts 6/6,
+  Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean. A repository-wide Ruff
+  formatting probe still identifies four pre-existing files outside this
+  change as needing mechanical formatting; they remain outside this focused
+  privacy fix.
 
 ## Follow-up Work
 
