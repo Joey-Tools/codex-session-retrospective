@@ -1716,7 +1716,8 @@ _CREDENTIAL_ADJACENT_SHELL_FRAGMENT_PATTERN_TEXT = (
     + r")"
 )
 _CREDENTIAL_NARRATIVE_CONNECTOR_PATTERN_TEXT = (
-    r"(?:is\b|are\b|was\b|were\b|set[ \t]++to\b)"
+    r"(?:is\b|are\b|was\b|were\b|set[ \t]++to\b|"
+    r"includ(?:e(?:s|d)?|ing)\b|contain(?:s|ed|ing)?\b)"
 )
 _CREDENTIAL_CODE_COLLECTION_FIELD_PREFIX_RE = re.compile(
     r"codes['\"]?\s*+(?:(?:=|:)|"
@@ -2500,7 +2501,11 @@ def _credential_code_collection_sensitive_values(
     match: re.Match[str],
 ) -> Iterator[str]:
     for start, end in _credential_code_collection_items(match):
-        yield _normalized_sensitive_value(match.string[start:end])
+        normalized = _normalized_sensitive_value(match.string[start:end])
+        yield normalized
+        sentence_value = normalized.rstrip(".,;!?")
+        if sentence_value and sentence_value != normalized:
+            yield sentence_value
 
 
 def _credential_assignment_sensitive_values(match: re.Match[str]) -> Iterator[str]:

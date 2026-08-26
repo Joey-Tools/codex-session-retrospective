@@ -5380,6 +5380,45 @@ superseded_by:
   bootstrap manifest, official OpenAI Skill validator, project-journal
   validator, tracked and source/test bytecode inventories, and `git diff
   --check` are clean.
+- Signed head `972fd23a` had clean exact-secret admission. The first Codex CLI
+  launch was a zero-model-start Desktop-sandbox app-server initialization
+  failure and is non-counting. The host-level retry completed in 625.926
+  seconds against an independently materialized and validated workspace for
+  exact range `a3836660..972fd23a`. Matching receipts bind 150 commits, 149
+  parent edges, graph digest
+  `db4884ccf34a54d188ef13a203b68606e63e4251c031d1fd3237b0c5dacc161d`,
+  and the unchanged local-config digest. The 65-command event audit found no
+  mutating, network, test-execution, outside-path, or Git-prefix violation.
+  Postvalidation and the 30-file trusted-control digest were exact, and
+  identity-bound task-root cleanup completed.
+- The Final79 reviewer found two P1 privacy gaps. Narrative credential
+  collections using `include` or `contain` variants were outside the closed
+  connector grammar, so copied short codes could evade source-overlap. Also,
+  sentence punctuation on the final unquoted collection item entered the exact
+  short-value index, allowing a result that copied the bare code to miss it.
+  The closed connector grammar now includes bounded `include` and `contain`
+  forms. Collection extraction retains the exact normalized value and also
+  emits a nonempty sentence-punctuation-stripped privacy alias, preserving
+  punctuated credential protection while covering ordinary prose punctuation.
+  Positive and safe-prose connector cases plus bare-final-code overlap cases
+  cover both findings. Results/episodes passes 105/105 in 15.263 seconds,
+  result-contract audit passes 25/25 in 4.879 seconds, and module boundaries
+  pass 20/20 in 2.547 seconds with exact branch inventory 10,084.
+- Final80 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `84187542f219262c628422cf8759d7b7d731bad66b16c6791b87b90d45b22d3c`.
+  Shards 0 through 3 pass 471/471 in 2,138.100 seconds, 531/531 in
+  1,894.883 seconds, 535/535 in 1,788.740 seconds, and 444/444 in
+  1,840.309 seconds, for exact aggregate coverage of 1,981/1,981. Each shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The host wall clock
+  stepped during this run, so the shell status files' `date +%s` elapsed fields
+  are non-comparable and are not used as timing evidence. The independent
+  Darwin security inventory passes 16/16 in 71.412 seconds.
+- On the Final80 tree, repository-wide Ruff 0.13.2 lint, affected-file
+  formatting, both workflows under `actionlint` 1.7.12, Skill contracts 6/6,
+  Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, and the official OpenAI Skill validator are clean.
 
 ## Follow-up Work
 
