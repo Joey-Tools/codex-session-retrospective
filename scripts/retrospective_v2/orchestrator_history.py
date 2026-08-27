@@ -777,7 +777,11 @@ class ResultHistoryOperations(OrchestratorComponent):
             {item.value: 0 for item in catalog.AccountingClass},
         )
         source_expected = sum(accounting.values())
-        coverage_complete = not state["gaps"] and accounting["explicit_gap"] == 0
+        coverage_complete = (
+            not state["gaps"]
+            and accounting["explicit_gap"] == 0
+            and meaningfulness_gap_count == 0
+        )
         configuration_ref = self._ref(
             RefType.CONFIGURATION,
             state["provenance"]["configuration_root"],

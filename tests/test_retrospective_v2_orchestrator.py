@@ -8563,6 +8563,57 @@ class OrchestratorTests(unittest.TestCase):
         self.assertEqual([], plan["high_impact_screen_gap_turn_refs"])
         self.assertIn("high_impact_screen", plan["second_review_reason_codes"])
 
+    def test_meaningfulness_gap_exports_as_incomplete_coverage(self) -> None:
+        coordinator = self.activity_run("meaningfulness-gap-export")
+        extractor = coordinator.status()["runnable_jobs"][0]
+        result = self.extractor_result(extractor)
+        result["turns"][0]["meaningfulness_hint"] = "uncertain"
+        coordinator.accept_agent_result(
+            extractor["job_ref"],
+            extractor["active_attempt_ref"],
+            result,
+        )
+
+        for _ in range(20):
+            status = coordinator.status()
+            if status["stage"] == RunStage.EXPORT.value:
+                break
+            runnable = status["runnable_jobs"]
+            if not runnable:
+                coordinator.advance()
+                continue
+            for job in runnable:
+                self.assertEqual(JobKind.GLOBAL_SYNTHESIS.value, job["job_kind"])
+                payload = synthesis_result()
+                payload["signal_commitments"] = job["input_payload"][
+                    "signal_commitments"
+                ]
+                payload["topic_result_commitment"] = job["input_payload"][
+                    "topic_result_commitment"
+                ]
+                payload["prompt_rewrite_commitment"] = job["input_payload"][
+                    "prompt_rewrite_commitment"
+                ]
+                payload["prompt_rewrites"] = job["input_payload"][
+                    "prompt_rewrite_exemplars"
+                ]
+                payload.update(job["input_payload"]["signal_exemplars"])
+                coordinator.accept_agent_result(
+                    job["job_ref"],
+                    job["active_attempt_ref"],
+                    payload,
+                )
+        else:
+            self.fail("meaningfulness-gap run did not reach export")
+
+        run_state, review_data = coordinator.retained_export_inputs()
+        self.assertFalse(run_state["coverage"]["coverage_complete"])
+        self.assertEqual(1, run_state["coverage"]["meaningfulness_gap_count"])
+        artifacts = reporting.assemble_retained_artifacts(run_state, review_data)
+        parsed = reporting.validate_retained_artifacts(artifacts)
+        self.assertFalse(parsed["coverage"]["coverage_complete"])
+        self.assertEqual(1, parsed["coverage"]["turns"]["meaningfulness_gap"])
+
     def test_primary_review_gap_retries_then_blocks_without_resolution(self) -> None:
         coordinator = self.activity_run("primary-review-gap")
         extractor = coordinator.status()["runnable_jobs"][0]

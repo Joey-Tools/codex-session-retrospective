@@ -5602,6 +5602,55 @@ superseded_by:
   and source/test-tree bytecode exclusion, and `git diff --check` are clean.
   A separate repository-wide format probe remains non-counting because it
   identified four pre-existing unformatted files outside this change.
+- Final91 reviewed signed head `99f42170ebc8fa63aa9c3b00bb825c1ca1010840`
+  with the same trusted release, control digest, guard digest, and Python
+  3.13.12 interpreter. Matching materialization and validation receipts for
+  exact range `a3836660..99f42170` bind 155 commits, 154 parent edges, graph
+  digest
+  `168c16baa351f4053b8c5f66aa229894851ddd1309a1f423db100377ec8d17d6`,
+  and the unchanged local-config digest. The first Codex CLI invocation failed
+  before model start because the outer Desktop sandbox denied in-process
+  app-server initialization; its zero-byte event stream is retained as a
+  non-counting launch failure. The authorized host-level retry used the same
+  validated workspace and completed in 761.668 seconds with one P1 finding.
+  Its 139 commands contained no mutation, network, test execution,
+  outside-path, or Git-prefix violation. Six read-only commands returned
+  nonzero because of one malformed quoting attempt and five absent-match or
+  absent-file queries. Postvalidation and trusted-control revalidation were
+  exact, and identity-bound task-root cleanup completed.
+- The Final91 finding showed that retained-export construction declared
+  `coverage_complete=true` whenever structured run gaps and explicit source
+  gaps were absent, even when an accepted extractor result produced a
+  nonzero meaningfulness gap. Reporting independently recomputed that state as
+  incomplete and rejected the contradictory inventory, preventing a legal
+  uncertainty-preserving run from exporting. Final92 includes
+  `meaningfulness_gap_count == 0` in the orchestrator's completion predicate.
+  A new end-to-end regression drives an `uncertain` extractor result through
+  orchestration and synthesis, then proves the retained run exports with one
+  explicit meaningfulness gap and incomplete coverage. The exact regression
+  passes 1/1 in 8.300 seconds, the full orchestrator module passes 150/150 in
+  641.088 seconds, and the full retained export/reporting module passes 86/86
+  in 247.205 seconds. One package-style isolated-mode invocation discovered no
+  target tests and remains non-counting; the file-based invocations above are
+  authoritative.
+- Final92 freezes 1,985 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `71418a4deec2dae715bacbe963bad0829f31a20a8ac951b9fb6780f69fcfc84f`.
+  Four bounded parallel shards pass 472/472 in 1,881.500 seconds, 533/533 in
+  1,647.280 seconds, 535/535 in 1,551.606 seconds, and 445/445 in 1,601.012
+  seconds, for exact aggregate coverage of 1,985/1,985. Every shard returned
+  zero under a 45-minute process-group deadline and 1 MiB retained-log ceiling;
+  aggregate supervisor wall time was 1,882.899 seconds. The independent Darwin
+  security inventory passes 16/16 in 69.131 seconds. An earlier invocation
+  supplied the unsupported `--help` argument and actually started the runner;
+  its plain-pipe session handle was not retained, so that run was allowed to
+  finish without interference and remains explicitly non-counting. The later
+  pollable TTY run is the authoritative Darwin result.
+- On the Final92 implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint`, project-journal
+  validation, and `git diff --check` are clean. The full test inventory above
+  also includes the Skill, Bootstrap, CI, generated-manifest, module-boundary,
+  and retained-output contract suites on this exact code and test tree.
 
 ## Follow-up Work
 
