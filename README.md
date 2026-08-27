@@ -1,98 +1,90 @@
-# Codex-Gated Repository Template
+# Codex Session Retrospective
 
-This template starts a repository with the Codex review gate workflow already on
-the default branch. It also includes a modular CI generator for adding
-project-specific formatter, linter, test, and benchmark entrypoints after a
-repository is created from the template.
+`codex-session-retrospective` is the canonical source repository for Joey's
+read-only, cross-host Codex collaboration retrospective skill.
 
-## Included
+The repository owns:
 
-- `.github/workflows/codex-review-gate.yml`
-- `.gitignore`
-- `scripts/setup-ci.mjs`
-- this README
+- the explicit-invocation Codex skill and agent metadata;
+- the deterministic v2 coordinator and its closed CLI/schema contracts;
+- bounded local and remote source transport adapters;
+- extractor, episode, topic, and global map-reduce job contracts;
+- redacted reporting, append-only history export, and publication recovery;
+- the migration-only v1 helper used for shadow comparison until cutover.
 
-The workflow writes the `codex/review-gate` status check and requests a controlled
-Codex review marker for each ready pull request head. Its privileged
-`pull_request_target` run uses `JoeyTeng/codex-review-gate-action@v1`.
-This floating major-version reference is intentional: the action and template
-share the same trusted maintainer, and automatic compatible v1 updates are
-preferred over per-release SHA updates.
+Retained reports are published separately to
+`Joey-Tools/codex-session-retrospective-history`. Remote source collection is
+provided by the installed `remote-host-context` transport; this repository does
+not own SSH host registry or private overlay installation.
 
-## Generate Project CI
+## Installed Entry Point
 
-Run the setup script from a new repository created from this template:
-
-```bash
-node scripts/setup-ci.mjs
-```
-
-With no arguments, the script opens an interactive selector. For repeatable setup,
-pass modules explicitly:
+After a future private sync integration, the installer and cutover record will
+resolve the account home through the account database and supply literal
+canonical absolute paths. The placeholders below illustrate that contract; do
+not derive production paths from ambient `HOME`, shell `~`, or `expanduser`:
 
 ```bash
-node scripts/setup-ci.mjs --tool js-ts --tool python --tool docker --tool markdown
-node scripts/setup-ci.mjs --all --benchmark --dry-run
+RETROSPECTIVE_PYTHON="/absolute/canonical/account-home/.codex/session-retrospective/runtime/bin/python3"
+V2_CLI="/absolute/canonical/account-home/.codex/skills/codex-session-retrospective/scripts/session_retrospective_v2.py"
+"$RETROSPECTIVE_PYTHON" -I -B -S "$V2_CLI" --help
 ```
 
-The script writes `.github/workflows/ci.yml` plus the selected tool configs. It is
-idempotent when generated files have not changed. If a target file already exists
-with different content, the script refuses to overwrite it unless `--force` is
-provided. Use `--dry-run` to inspect planned writes first.
+The replacement sync must create the runtime with Python 3.13 or newer using
+`venv --copies` beneath owner-only ancestors. `doctor` authenticates that exact
+runtime before source scheduling, and ambient `python3` or a Homebrew Cellar
+interpreter is not accepted as the production entry point. See
+[`references/v2-cli.md`](references/v2-cli.md) for the machine-readable loop and
+[`references/v2-engine-architecture.md`](references/v2-engine-architecture.md)
+for ownership boundaries.
 
-Supported modules:
+Production and shadow readiness require one explicit absolute
+`--publisher-gpg-program`. Its executable identity, bytes, and ancestor access
+policy are committed into each run and reused without a `finalize` override.
 
-- `js-ts`: pnpm, ESLint, Prettier, Vite, and Vitest.
-- `python`: uv, Ruff, Pyright, and pytest.
-- `swift`: swift-format, SwiftLint, and `swift test`.
-- `go`: `gofmt`, `go vet`, and `go test`.
-- `rust`: `cargo fmt`, `cargo clippy`, and `cargo test`.
-- `github-actions`: actionlint.
-- `bash`: shfmt, shellcheck, and `bash -n`.
-- `markdown`: Prettier and markdownlint-cli2.
-- `docker`: hadolint and `docker buildx build --check`.
+## Development
 
-`--benchmark` creates `scripts/benchmark.sh` only. It does not create or enable a
-benchmark workflow, and benchmark commands are not part of the default PR gate.
-The script includes benchmark entries for JavaScript/TypeScript, Python, Go, and
-Rust when those modules are selected.
-
-## After Creating a Repository
-
-1. Add the project source, tests, and license.
-2. Run `node scripts/setup-ci.mjs` and commit the generated CI/tooling files.
-3. Install or lock generated dependencies where applicable, such as `pnpm install`
-   for JavaScript/TypeScript or Markdown modules.
-4. Confirm `.github/workflows/codex-review-gate.yml` is present on the default
-   branch before requiring the status check.
-5. Enable the required status check with the bootstrap helper from
-   `JoeyTeng/codex-review-gate`:
+Run the repository contract first, then the complete Python 3.13 suite:
 
 ```bash
-node scripts/bootstrap-codex-review-gate.mjs --repo OWNER/REPO
-node scripts/bootstrap-codex-review-gate.mjs --repo OWNER/REPO --apply
+set -e
+python3.13 -I -B -S -m venv --copies .codex-tmp/python
+chmod 0755 .codex-tmp/python/bin/python3
+.codex-tmp/python/bin/python3 -I -B -S tests/test_ci_contract.py
+mkdir -p .codex-tmp/test-inventory
+rm -f .codex-tmp/test-inventory/test-manifest.json \
+  .codex-tmp/test-inventory/test-manifest.sha256
+.codex-tmp/python/bin/python3 -I -B -S scripts/test_inventory.py \
+  --manifest .codex-tmp/test-inventory/test-manifest.json \
+  --digest .codex-tmp/test-inventory/test-manifest.sha256
+shard_failed=0
+for shard in 0 1 2 3; do
+  .codex-tmp/python/bin/python3 -I -B -S scripts/run_test_shard.py \
+    --shard-index "$shard" --shard-count 4 \
+    --manifest .codex-tmp/test-inventory/test-manifest.json \
+    --digest .codex-tmp/test-inventory/test-manifest.sha256 || shard_failed=1
+done
+test "$shard_failed" -eq 0
 ```
 
-The helper defaults to dry-run. It refuses to require `codex/review-gate` until
-the workflow exists on the repository default branch.
+The tests are intentionally standard-library-only. CI creates owner-controlled
+Python 3.13 virtual environments, disables bytecode writes, and discovers one
+bounded canonical test manifest in the contract job. The manifest binds both
+test IDs and an independent `tests/**/test_*.py` path, module, and SHA-256
+content inventory. Discovery rejects dynamic hooks, unsupported async or
+generator methods hidden behind wrapper chains, `runTest` fallback, imported
+external test cases, and any source change across module import. Runtime
+instrumentation rejects any non-`None` test-method result; both ordinary shards
+and the separate Darwin security runner use that same closed loader. Each of the
+four stable, disjoint test-ID shards independently rediscovers and exactly
+verifies both inventories before selecting tests, then rejects partial or
+skipped execution, all under explicit job timeouts.
 
-## Optional Repository Variables
+## Migration State
 
-- `CODEX_REVIEW_GATE_RUNNER_LABELS`: JSON runner label array. Defaults to
-  `["ubuntu-slim"]`; use `["ubuntu-latest"]` when `ubuntu-slim` is unavailable.
-- `CODEX_REVIEW_GATE_AUTO_RETRY=false`: disables scheduled retry jobs before a
-  runner is allocated.
-- `CODEX_REVIEW_GATE_EVENT_MODE`: `standard`, `comment-only`, or `full`.
-- `CODEX_REVIEW_GATE_BOT_LOGINS`: comma-separated additional Codex bot logins.
-- `CODEX_REVIEW_GATE_COMPLETION_SIGNAL_BUFFER_SECONDS`: clean completion buffer.
-- `CODEX_REVIEW_GATE_FAILED_FINDINGS_RECOVERY`: set to `false` to disable
-  same-head recovery after resolved Codex findings.
-- `CODEX_REVIEW_GATE_FAILED_FINDINGS_RECOVERY_MODE`: `head` or `fresh`.
-
-## Template Maintenance
-
-Run the generator tests with Node's built-in test runner:
-
-```bash
-node --test test/setup-ci.node-test.mjs
-```
+The implementation was extracted from the closed
+`Joey-Tools/codex-workflow-hygiene` PRs #67 and #69. The superseded source was
+removed from that repository after extraction, and the prior installed and
+scheduled copy was retired. This repository is now the only canonical source;
+a new private sync and installed entry point remain a separate future phase. See
+[`docs/migration-provenance.md`](docs/migration-provenance.md).

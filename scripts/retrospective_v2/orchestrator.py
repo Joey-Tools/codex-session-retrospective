@@ -1,0 +1,799 @@
+"""Deterministic coordinator facade for Session Retrospective v2."""
+
+# ruff: noqa: F401
+
+from __future__ import annotations
+import datetime as dt
+import os
+from pathlib import Path
+import sys
+from typing import Any, Callable, Iterable, Mapping, Sequence
+from . import (
+    authority,
+    executable_authority,
+    finalize,
+    history_paths,
+    safe_io,
+    sharding,
+    temporary_paths as temp_paths,
+    transport as source_transport,
+)
+from .checkpoints import AtomicCheckpointStore, canonical_json_bytes
+from .contracts import (
+    MIN_SESSION_RECORD_PROCESSING_BUDGET_BYTES,
+    SESSION_SHARDS_SCHEMA,
+    ControlledGapReason,
+    RefType,
+    SessionShardsRequest,
+    SourceKind,
+)
+from .identity import IdentityKey, IdentityKeyMismatchError
+
+from .orchestrator_support import (
+    DEFAULT_AGENT_CLAIM_TTL_SECONDS,
+    ENGINE_VERSION,
+    EXECUTION_CONTRACT_SCHEMA,
+    EXECUTION_VERSION_CONTRACT,
+    EXTRACTOR_SHARD_MAX_BYTES,
+    InvalidInputError,
+    InvalidTransitionError,
+    MAX_SESSION_SHARDS_RECORD_DATA_FRAMES,
+    MAX_AGENT_ENVELOPE_BYTES,
+    MIN_AGENT_CLAIM_TTL_SECONDS,
+    OrchestratorError,
+    PROMPT_DIGEST,
+    PROMPT_VERSION,
+    PUBLISHER_FINGERPRINT,
+    PUBLISHER_UID,
+    RAW_INPUT_DIRECTORY,
+    REQUIRED_SOURCE_KINDS,
+    RunConflictError,
+    RunNotStartedError,
+    SESSION_SHARDS_FIXED_MEMORY_ENVELOPE_BYTES,
+    SESSION_SHARDS_MAX_FRAME_CHARS,
+    SESSION_SHARDS_MAX_JSON_NESTING_DEPTH,
+    SESSION_SHARDS_PROTOCOL_FEATURES,
+    SESSION_SHARDS_RECORD_FRAGMENT_BYTES,
+    SHADOW_CLEANUP_ROOTS,
+    SOURCE_TRANSPORT_MAX_FRAME_BYTES,
+    SOURCE_TRANSPORT_MAX_SOURCE_BYTES,
+    STATE_SCHEMA_VERSION,
+    SessionShardConsumption,
+    SourcePreparation,
+    _build_provenance,
+    _checkpoint_key_id,
+    _normalize_hosts,
+    _normalize_source_kinds,
+    _require_current_execution_contract,
+    _transport_accounting_bytes,
+    consume_session_shard_frames,
+    publisher_readiness,
+    publisher_sign_verify_canary,
+)
+
+from .orchestrator_components import (
+    build_orchestrator_components,
+    install_orchestrator_delegates,
+)
+from .orchestrator_context import Clock, OrchestratorContext
+from .orchestrator_projection import StateProjectionOperations
+from .orchestrator_startup_authority import (
+    load_identity,
+    load_production_marker_for_publisher,
+    publisher_readiness_report,
+    require_boolean,
+    require_canonical_production_binding_paths,
+)
+from .transport_host_inventory import AuthenticatedHostInventory
+
+
+def doctor(
+    *,
+    hosts: Sequence[str] | None = None,
+    source_kinds: Sequence[str | SourceKind] | None = None,
+    provenance: Mapping[str, Any] | None = None,
+    checks: Mapping[str, bool] | None = None,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+    identity: IdentityKey | None = None,
+    publisher_probe: Callable[[], Mapping[str, Any]] | None = None,
+    publisher_canary: Callable[[], bool] | None = None,
+    shadow: bool = False,
+    history_repo: str | os.PathLike[str] | None = None,
+    history_target_ref: str | None = None,
+    provider_state: str | os.PathLike[str] | None = None,
+    production_marker: str | os.PathLike[str] | None = None,
+    publisher_fingerprint: str = authority.DEFAULT_PUBLISHER_FINGERPRINT,
+    publisher_gnupg_home: str
+    | os.PathLike[str] = authority.DEFAULT_PUBLISHER_GNUPG_HOME,
+    publisher_gpg_program: str | os.PathLike[str] | None = None,
+    host_inventory_provider: Callable[[], AuthenticatedHostInventory] | None = None,
+) -> dict[str, Any]:
+    """Run actual capability probes and return a safe readiness report."""
+
+    shadow = require_boolean(shadow, label="shadow")
+    require_canonical_production_binding_paths(
+        shadow=shadow,
+        provider_state=provider_state,
+        production_marker=production_marker,
+    )
+    results: dict[str, dict[str, Any]] = {}
+
+    def record(name: str, ok: bool, detail: str) -> None:
+        results[name] = {"detail": detail, "ok": bool(ok)}
+
+    history_path, history_detail = history_paths.readiness(history_repo)
+    record("history_source_separation", history_path is not None, history_detail)
+    try:
+        python_runtime = source_transport.source_transport_python_runtime_readiness(
+            expected_executable=authority.installed_runtime_python_path()
+        )
+        version = python_runtime["version"]
+        record(
+            "python_runtime",
+            True,
+            "python "
+            + ".".join(str(part) for part in version)
+            + f"; authority {python_runtime['authority_sha256']}",
+        )
+    except (OSError, source_transport.TransportValidationError) as error:
+        record("python_runtime", False, type(error).__name__)
+    io_issues = safe_io.secure_io_capability_issues()
+    record(
+        "safe_io_capabilities",
+        not io_issues,
+        "available" if not io_issues else ",".join(io_issues),
+    )
+    resolved_identity = identity
+    try:
+        if resolved_identity is None:
+            resolved_identity = load_identity(
+                identity_path,
+                require_existing=True if require_existing_identity else False,
+                expected_key_id=None,
+            )
+        record("fixed_identity", True, resolved_identity.key_id)
+    except (IdentityKeyMismatchError, OSError, ValueError) as error:
+        record("fixed_identity", False, type(error).__name__)
+    publisher_program: str | None = None
+    publisher_authority_sha256: str | None = None
+    gpg_authority: executable_authority.ExecutableAuthority | None = None
+    try:
+        if publisher_gpg_program is None:
+            raise executable_authority.ExecutableAuthorityError(
+                "publisher GPG executable is not configured"
+            )
+        gpg_authority = executable_authority.resolve_executable(
+            publisher_gpg_program,
+            label="GPG",
+        )
+        publisher_program = gpg_authority.path
+        publisher_authority_sha256 = executable_authority.authority_digest(
+            gpg_authority
+        )
+    except (
+        OSError,
+        TypeError,
+        ValueError,
+        executable_authority.ExecutableAuthorityError,
+    ):
+        pass
+    normalized_hosts: tuple[str, ...] | None = None
+    canonical_hosts: tuple[str, ...] | None = None
+    authenticated_inventory: AuthenticatedHostInventory | None = None
+    try:
+        inventory_provider = (
+            source_transport.remote_host_context_host_inventory
+            if host_inventory_provider is None
+            else host_inventory_provider
+        )
+        authenticated_inventory = inventory_provider()
+        canonical_hosts = authenticated_inventory.inventory.canonical_hosts
+        normalized_hosts = _normalize_hosts(hosts, canonical_hosts=canonical_hosts)
+        host_policy_ok = set(normalized_hosts) == set(canonical_hosts)
+        record(
+            "canonical_host_policy",
+            host_policy_ok,
+            (
+                f"{len(normalized_hosts)} canonical hosts"
+                if host_policy_ok
+                else "configured hosts differ from the canonical role set"
+            ),
+        )
+    except (OSError, ValueError, InvalidInputError) as error:
+        record("canonical_host_policy", False, str(error))
+    try:
+        normalized_kinds = _normalize_source_kinds(source_kinds)
+        record("source_matrix", True, f"{len(normalized_kinds)} required source kinds")
+    except InvalidInputError as error:
+        record("source_matrix", False, str(error))
+    normalized_provenance: dict[str, Any] | None = None
+    try:
+        if authenticated_inventory is None:
+            raise InvalidInputError(
+                "authenticated remote-host-context inventory is unavailable"
+            )
+        normalized_provenance = _build_provenance(
+            provenance=provenance,
+            policy=None,
+            model=None,
+            versions=None,
+            authenticated_host_inventory=authenticated_inventory,
+        )
+        record(
+            "execution_contract",
+            True,
+            f"configuration root {normalized_provenance['configuration_root']}",
+        )
+    except InvalidInputError as error:
+        record("execution_contract", False, str(error))
+    helper_ok = False
+    try:
+        if authenticated_inventory is None:
+            raise source_transport.TransportValidationError(
+                "remote-host-context inventory is unavailable"
+            )
+        helper_commitment = authenticated_inventory.helper_commitment
+        provenance_transport = (
+            provenance.get("transport") if isinstance(provenance, Mapping) else None
+        )
+        expected_helper = (
+            normalized_provenance.get("transport", {}).get(
+                "remote_host_context_helper_commitment"
+            )
+            if normalized_provenance is not None
+            else provenance_transport.get("remote_host_context_helper_commitment")
+            if isinstance(provenance_transport, Mapping)
+            else None
+        )
+        helper_ok = helper_commitment == expected_helper
+        commands_ok = (
+            source_transport.REMOTE_HOST_CONTEXT_RETROSPECTIVE_COMMANDS.issubset(
+                authenticated_inventory.helper_commands
+            )
+        )
+        helper_ok = helper_ok and commands_ok
+        record(
+            "remote_host_context_transport",
+            helper_ok,
+            (
+                helper_commitment
+                if helper_ok
+                else "helper command capability mismatch"
+                if helper_commitment == expected_helper
+                else "helper commitment mismatch"
+            ),
+        )
+    except (OSError, source_transport.TransportValidationError) as error:
+        record("remote_host_context_transport", False, type(error).__name__)
+
+    production_marker_ready = shadow
+    if shadow:
+        record("production_marker_binding", True, "not_applicable_for_shadow")
+    elif (
+        resolved_identity is None
+        or normalized_provenance is None
+        or history_path is None
+        or not isinstance(history_target_ref, str)
+        or not history_target_ref
+        or production_marker is None
+        or canonical_hosts is None
+    ):
+        record(
+            "production_marker_binding",
+            False,
+            "production marker and complete configuration are required",
+        )
+    else:
+        marker_state = {"provenance": normalized_provenance}
+        configuration_ref = str(
+            resolved_identity.derive_ref(
+                RefType.CONFIGURATION,
+                {"parts": [normalized_provenance["configuration_root"]]},
+            )
+        )
+        try:
+            load_production_marker_for_publisher(
+                production_marker,
+                identity=resolved_identity,
+                canonical_hosts=canonical_hosts,
+                history_repo=history_path,
+                target_ref=history_target_ref,
+                configuration_root=normalized_provenance["configuration_root"],
+                configuration_ref=configuration_ref,
+                model_era=StateProjectionOperations._model_era(marker_state),
+                policy_era=StateProjectionOperations._policy_token(
+                    marker_state,
+                    "policy",
+                    "source_policy_v2",
+                ),
+                gpg_authority=gpg_authority,
+            )
+            production_marker_ready = True
+            record("production_marker_binding", True, "matches configuration")
+        except (OSError, authority.AuthorityError) as error:
+            record("production_marker_binding", False, type(error).__name__)
+
+    publisher_safe = publisher_readiness_report(
+        gpg_authority=gpg_authority if production_marker_ready else None,
+        authority_sha256=publisher_authority_sha256,
+        fingerprint=publisher_fingerprint,
+        gnupg_home=publisher_gnupg_home,
+        publisher_probe=publisher_probe,
+        publisher_canary=publisher_canary,
+    )
+    record(
+        "publisher_identity",
+        publisher_safe["ready"],
+        publisher_fingerprint,
+    )
+
+    durable_history: authority.DurableHistoryState | None = None
+    history_binding: str | None = None
+    if (
+        resolved_identity is None
+        or history_path is None
+        or not isinstance(history_target_ref, str)
+        or not history_target_ref
+        or publisher_program is None
+        or publisher_authority_sha256 is None
+        or not production_marker_ready
+    ):
+        record(
+            "durable_history_contract",
+            False,
+            "history repository, ref, and bound identity are required",
+        )
+    else:
+        try:
+            durable_history = authority.load_durable_history(
+                history_path,
+                history_target_ref,
+                identity=resolved_identity,
+                expected_fingerprint=publisher_fingerprint,
+                gnupg_home=publisher_gnupg_home,
+                gpg_program=publisher_program,
+                expected_gpg_authority_sha256=publisher_authority_sha256,
+            )
+            history_binding = authority.history_repository_binding(
+                history_path,
+                history_target_ref,
+                identity=resolved_identity,
+            )
+            record("durable_history_contract", True, history_binding)
+        except (OSError, authority.AuthorityError) as error:
+            record("durable_history_contract", False, type(error).__name__)
+
+    if provider_state is None:
+        detail = (
+            "production provider state is required",
+            "not_applicable_for_shadow",
+        )[shadow]
+        record("provider_binding", shadow, detail)
+    elif durable_history is None or resolved_identity is None:
+        record("provider_binding", False, "durable history binding is required")
+    else:
+        try:
+            authority.assert_provider_cache_matches(
+                provider_state,
+                durable_history,
+                identity=resolved_identity,
+            )
+            record("provider_binding", True, "matches durable history")
+        except (OSError, authority.AuthorityError) as error:
+            record("provider_binding", False, type(error).__name__)
+
+    record("checkpoint_contract", True, f"checkpoint format {STATE_SCHEMA_VERSION}")
+    if checks:
+        raise InvalidInputError(
+            "doctor does not accept caller-asserted readiness checks"
+        )
+    errors = [name for name, result in results.items() if not result["ok"]]
+    return {
+        "checks": results,
+        "errors": errors,
+        "ok": not errors,
+        "publisher": publisher_safe,
+        "required_source_kinds": list(REQUIRED_SOURCE_KINDS),
+        "runtime_coverage_gaps": [
+            "remote_host_authentication",
+            "remote_host_reachability",
+        ],
+        "schema_version": STATE_SCHEMA_VERSION,
+    }
+
+
+@install_orchestrator_delegates
+class RetrospectiveOrchestrator:
+    """Identity-bound, checkpointed coordinator for Session Retrospective v2."""
+
+    UNKNOWN_MODEL_ERA = StateProjectionOperations.UNKNOWN_MODEL_ERA
+    MIXED_MODEL_ERA = StateProjectionOperations.MIXED_MODEL_ERA
+
+    def __init__(
+        self,
+        run_dir: str | os.PathLike[str],
+        *,
+        clock: Callable[[], dt.datetime | str] | None = None,
+        store: AtomicCheckpointStore | None = None,
+        identity_path: str | os.PathLike[str] | None = None,
+        identity: IdentityKey | None = None,
+        require_existing_identity: bool = False,
+        shard_limits: sharding.ShardLimits | None = None,
+        host_inventory_provider: Callable[[], AuthenticatedHostInventory] | None = None,
+    ) -> None:
+        resolved_run_dir = temp_paths.require_run_directory_outside_sources(run_dir)
+        expected_key_id = (
+            store.key_id if store is not None else _checkpoint_key_id(resolved_run_dir)
+        )
+        if identity is None:
+            resolved_identity = load_identity(
+                identity_path,
+                require_existing=require_existing_identity,
+                expected_key_id=expected_key_id,
+            )
+        else:
+            if expected_key_id is not None and identity.key_id != expected_key_id:
+                raise IdentityKeyMismatchError(
+                    "supplied identity does not match the checkpoint store"
+                )
+            resolved_identity = identity
+        if resolved_identity.path is None:
+            raise InvalidInputError("orchestrator identity must use a persistent path")
+        if store is not None:
+            if store.run_dir != resolved_run_dir:
+                raise InvalidInputError("checkpoint store run_dir does not match")
+            if store.key_id != resolved_identity.key_id:
+                raise IdentityKeyMismatchError(
+                    "checkpoint store is not bound to the loaded identity"
+                )
+            resolved_store = store
+        else:
+            resolved_store = AtomicCheckpointStore(
+                resolved_run_dir,
+                identity=resolved_identity,
+            )
+        resolved_shard_limits = shard_limits or sharding.ShardLimits(
+            max_bytes=EXTRACTOR_SHARD_MAX_BYTES
+        )
+        if resolved_shard_limits.max_bytes > EXTRACTOR_SHARD_MAX_BYTES:
+            raise InvalidInputError(
+                "raw shard byte limit exceeds the complete agent envelope budget"
+            )
+        if (
+            resolved_shard_limits.record_processing_budget
+            < MIN_SESSION_RECORD_PROCESSING_BUDGET_BYTES
+        ):
+            raise InvalidInputError("record processing budget must be at least 4 MiB")
+        self._context = OrchestratorContext(
+            run_dir=resolved_run_dir,
+            identity=resolved_identity,
+            store=resolved_store,
+            shard_limits=resolved_shard_limits,
+            clock=clock or (lambda: dt.datetime.now(dt.timezone.utc)),
+            host_inventory_provider=(
+                source_transport.remote_host_context_host_inventory
+                if host_inventory_provider is None
+                else host_inventory_provider
+            ),
+            agent_envelope_limit_provider=lambda: MAX_AGENT_ENVELOPE_BYTES,
+            source_transport_max_source_bytes_provider=(
+                lambda: SOURCE_TRANSPORT_MAX_SOURCE_BYTES
+            ),
+            execution_contract_validator=_require_current_execution_contract,
+        )
+        self._components = build_orchestrator_components(self._context)
+
+    @property
+    def run_dir(self) -> Path:
+        return self._context.run_dir
+
+    @property
+    def identity(self) -> IdentityKey:
+        return self._context.identity
+
+    @property
+    def store(self) -> AtomicCheckpointStore:
+        return self._context.store
+
+    @property
+    def shard_limits(self) -> sharding.ShardLimits:
+        return self._context.shard_limits
+
+    @property
+    def _clock(self) -> Clock:
+        return self._context.clock
+
+    def doctor(self, **kwargs: Any) -> dict[str, Any]:
+        kwargs.setdefault("identity", self.identity)
+        kwargs.setdefault("require_existing_identity", True)
+        return doctor(**kwargs)
+
+    def _ref(self, kind: RefType, *parts: Any) -> str:
+        return self._context.ref(kind, *parts)
+
+    def _agent_envelope_limit(self) -> int:
+        return self._context.agent_envelope_limit()
+
+    def _current_host_inventory(self) -> AuthenticatedHostInventory:
+        return self._context.current_host_inventory()
+
+    def _source_transport_max_source_bytes(self) -> int:
+        return self._context.source_transport_max_source_bytes()
+
+
+Orchestrator = RetrospectiveOrchestrator
+RunOrchestrator = RetrospectiveOrchestrator
+
+
+def start_run(
+    run_dir: str | os.PathLike[str],
+    *,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    kwargs["shadow"] = require_boolean(kwargs.get("shadow", False), label="shadow")
+    require_canonical_production_binding_paths(
+        shadow=kwargs["shadow"],
+        provider_state=kwargs.get("provider_state"),
+        production_marker=kwargs.get("production_marker"),
+    )
+    if (history_repo := kwargs.get("history_repo")) is not None:
+        kwargs["history_repo"] = history_paths.require_repository(history_repo)
+    try:
+        source_transport.source_transport_python_runtime_readiness(
+            expected_executable=authority.installed_runtime_python_path()
+        )
+    except (OSError, source_transport.TransportValidationError) as error:
+        raise InvalidInputError(
+            "coordinator Python runtime does not match the fixed install"
+        ) from error
+    return RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    ).start(**kwargs)
+
+
+start = start_run
+
+
+def status(
+    run_dir: str | os.PathLike[str],
+    *,
+    claim_job_ref: str | None = None,
+    claim_attempt_ref: str | None = None,
+    dispatcher_ref: str | None = None,
+    claim_ref: str | None = None,
+    claim_ttl_seconds: int = DEFAULT_AGENT_CLAIM_TTL_SECONDS,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+) -> dict[str, Any]:
+    coordinator = RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    )
+    claim_values = (claim_job_ref, claim_attempt_ref, dispatcher_ref)
+    if any(value is not None for value in (*claim_values, claim_ref)):
+        if any(value is None for value in claim_values):
+            raise InvalidInputError(
+                "status claim requires job, attempt, and dispatcher references"
+            )
+        return coordinator.claim_agent_job(
+            claim_job_ref,
+            claim_attempt_ref,
+            dispatcher_ref,
+            claim_ref=claim_ref,
+            ttl_seconds=claim_ttl_seconds,
+        )
+    if claim_ttl_seconds != DEFAULT_AGENT_CLAIM_TTL_SECONDS:
+        raise InvalidInputError("claim TTL is valid only for a status claim")
+    return coordinator.status()
+
+
+def accept_source(
+    run_dir: str | os.PathLike[str],
+    lease_ref: str,
+    manifest: Mapping[str, Any],
+    *,
+    transport_receipt: Mapping[str, Any],
+    raw_records: Mapping[str, bytes] | None = None,
+    transport_streams: Mapping[str, Iterable[Mapping[str, Any]]] | None = None,
+    transport_requests: Mapping[str, SessionShardsRequest | Mapping[str, Any]]
+    | None = None,
+    transport_segments: Mapping[
+        str,
+        Iterable[
+            tuple[
+                Iterable[Mapping[str, Any]],
+                SessionShardsRequest | Mapping[str, Any],
+            ]
+        ],
+    ]
+    | None = None,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+) -> dict[str, Any]:
+    return RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    ).accept_source(
+        lease_ref,
+        manifest,
+        transport_receipt=transport_receipt,
+        raw_records=raw_records,
+        transport_streams=transport_streams,
+        transport_requests=transport_requests,
+        transport_segments=transport_segments,
+    )
+
+
+def prepare_source(
+    run_dir: str | os.PathLike[str],
+    lease_ref: str,
+    lines: Iterable[bytes | str],
+    *,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+) -> SourcePreparation:
+    return RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    ).prepare_source(lease_ref, lines)
+
+
+def holdout_host(
+    run_dir: str | os.PathLike[str],
+    host: str,
+    *,
+    reason: ControlledGapReason | str,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+) -> dict[str, Any]:
+    return RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    ).holdout_host(host, reason=reason)
+
+
+def accept_agent_result(
+    run_dir: str | os.PathLike[str],
+    job_ref: str,
+    attempt_ref: str,
+    result: Mapping[str, Any],
+    *,
+    claim_ref: str,
+    result_ref: str,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+) -> dict[str, Any]:
+    return RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    ).accept_agent_result(
+        job_ref,
+        attempt_ref,
+        result,
+        claim_ref=claim_ref,
+        result_ref=result_ref,
+    )
+
+
+def claim_agent_job(
+    run_dir: str | os.PathLike[str],
+    job_ref: str,
+    attempt_ref: str,
+    dispatcher_ref: str,
+    *,
+    claim_ref: str | None = None,
+    ttl_seconds: int = DEFAULT_AGENT_CLAIM_TTL_SECONDS,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+) -> dict[str, Any]:
+    return RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    ).claim_agent_job(
+        job_ref,
+        attempt_ref,
+        dispatcher_ref,
+        claim_ref=claim_ref,
+        ttl_seconds=ttl_seconds,
+    )
+
+
+def reject_agent_result_payload(
+    run_dir: str | os.PathLike[str],
+    job_ref: str,
+    attempt_ref: str,
+    *,
+    claim_ref: str,
+    result_ref: str,
+    payload_digest: str,
+    payload_digest_exact: bool = True,
+    reason: str,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+) -> dict[str, Any]:
+    return RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    ).reject_agent_result_payload(
+        job_ref,
+        attempt_ref,
+        claim_ref=claim_ref,
+        result_ref=result_ref,
+        payload_digest=payload_digest,
+        payload_digest_exact=payload_digest_exact,
+        reason=reason,
+    )
+
+
+def resolve_agent_result_sink(
+    run_dir: str | os.PathLike[str],
+    job_ref: str,
+    attempt_ref: str,
+    *,
+    claim_ref: str,
+    result_ref: str,
+    requested_path: str | os.PathLike[str],
+    **kwargs: Any,
+) -> dict[str, str]:
+    return RetrospectiveOrchestrator(run_dir, **kwargs).resolve_agent_result_sink(
+        job_ref,
+        attempt_ref,
+        claim_ref=claim_ref,
+        result_ref=result_ref,
+        requested_path=requested_path,
+    )
+
+
+def advance(
+    run_dir: str | os.PathLike[str],
+    *,
+    identity_path: str | os.PathLike[str] | None = None,
+    require_existing_identity: bool = False,
+) -> dict[str, Any]:
+    return RetrospectiveOrchestrator(
+        run_dir,
+        identity_path=identity_path,
+        require_existing_identity=require_existing_identity,
+    ).advance()
+
+
+__all__ = [
+    "ENGINE_VERSION",
+    "InvalidInputError",
+    "InvalidTransitionError",
+    "Orchestrator",
+    "OrchestratorError",
+    "REQUIRED_SOURCE_KINDS",
+    "RetrospectiveOrchestrator",
+    "RunConflictError",
+    "RunNotStartedError",
+    "RunOrchestrator",
+    "SessionShardConsumption",
+    "SourcePreparation",
+    "accept_agent_result",
+    "accept_source",
+    "advance",
+    "claim_agent_job",
+    "consume_session_shard_frames",
+    "doctor",
+    "holdout_host",
+    "publisher_readiness",
+    "prepare_source",
+    "reject_agent_result_payload",
+    "resolve_agent_result_sink",
+    "start",
+    "start_run",
+    "status",
+]

@@ -1,0 +1,5725 @@
+---
+id: 20260814-srstandalone01
+title: Standalone Session Retrospective Repository
+status: completed
+created: 2026-08-14
+updated: 2026-08-27
+branch: wip/standalone-retrospective
+pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
+supersedes:
+  - 20260716-srv2e01
+superseded_by:
+---
+
+# Standalone Session Retrospective Repository
+
+## Summary
+
+- Created `Joey-Tools/codex-session-retrospective` as the canonical source
+  repository for the complete Retrospective skill.
+- Migrated the v1 comparison helper, modular v2 engine, closed CLI and schemas,
+  references, agent metadata, fixtures, and Retrospective-specific tests from
+  the closed `codex-workflow-hygiene` PRs #67 and #69.
+- Adopted a singleton-skill layout with `SKILL.md`, `agents/`, `references/`,
+  and `scripts/` at the repository root.
+
+## Current State
+
+- The standalone repository and task-scoped `wip/standalone-retrospective`
+  branch exist.
+- Signed migration commit `fad88a480f40061424191fafea7d4b0b1f932da0`
+  preserves the standalone source snapshot before the first local review.
+- Catalog schema v3 and transport manifest v2 bind a closed
+  `session_identity` witness independently of the mutable source label.
+- Session identity now derives from the same domain-separated selector
+  commitment in Session, Daily, Weekly, and Baseline modes. Session acceptance
+  re-derives that source reference from the authenticated witness and rejects
+  relabeling of non-target, unresolved, or exact-target evidence into another
+  accounting class.
+- The superseded old-repository implementation and prior installed/scheduled
+  copy are retired. This repository is the only canonical source.
+- Workspace registration follows this source merge. A replacement private sync
+  and installed release are intentionally deferred to a separate workstream.
+
+## Validation
+
+- Python 3.13 v2 engine tests: 632 passed.
+- Python 3.13 v1, CLI, skill, and CI contract tests: 937 passed.
+- Focused source-identity and module-boundary tests: 22 passed after formatting.
+- Ruff 0.13.2 lint passed for `scripts/` and `tests/`; edited Python files pass
+  the formatter check without mechanically rewriting inherited migration-only
+  sources.
+- Both GitHub Actions workflows pass `actionlint`.
+- The installed OpenAI skill validator passes through an isolated Python 3.13
+  environment with PyYAML.
+- Python 3.13 full repository discovery: 1,569 passed in 2,605.189 seconds.
+- Exact-secret admission for `a3836660..fad88a48` was clean with complete
+  temporary cleanup.
+- A fresh-context Codex review of `a3836660..fad88a48` found three issues: a
+  cross-mode Session identity split, an ambiguous-witness state-table hole,
+  and exact-tuple matching that could miss target gap variants. The follow-up
+  centralizes commitment-derived Session references, uses an explicit closed
+  three-state policy, and rejects forbidden target reasons independently of
+  stage metadata.
+- Reviewer-fix focused tests pass 8/8; identity, CLI, and module-boundary tests
+  pass 104/104; full source-transport and orchestrator tests pass 207/207.
+- The first reviewer-fix Python 3.13 full repository discovery passes
+  1,572/1,572 in 2,686.649
+  seconds. Ruff 0.13.2, both workflow files under `actionlint`, the OpenAI
+  skill validator, the project-journal validator, and `git diff --check` also
+  pass on the reviewer-fix tree.
+- A second fresh-context Codex review of `a3836660..e50d6466` found two
+  retained-history Git gaps: post-admission commands could rediscover mutable
+  `.git` control files, and a later shallow boundary was not revalidated.
+- The follow-up binds `.git`, `commondir`, and `gitdir` identity and content,
+  enters the held common-dir descriptor before every post-admission Git
+  command, verifies the relative git-dir and object store, and runs the closed
+  object/ref command set with explicit bare metadata paths and a fixed
+  discovery ceiling. Shallow history is an exact forbidden-metadata absence
+  checked before and after every command.
+- Six focused discovery, linked-worktree, shallow-drift, path-replacement, and
+  ABA regressions pass. The complete publication transaction module passes
+  91/91 in 2,470.280 seconds; the engine boundary suite passes 19/19 after its
+  exact branch-proxy fixture is updated from 8,520 to 8,568.
+- Final Python 3.13 full repository discovery passes 1,575/1,575 in 2,675.201
+  seconds on the Git discovery and shallow-revalidation implementation tree.
+- The next fresh-context Codex review of `a3836660..322fe97b` found that the
+  publisher sign/verify canary inherited the complete host environment even
+  though its GPG executable bytes were bound. That exposed the production
+  `GNUPGHOME` to dynamic-loader, Python, shell, Git, and agent injection
+  variables outside the executable-authority contract.
+- The canary now reuses the publication layer's strict subprocess environment,
+  adds only the dedicated `GNUPGHOME`, and keeps the fixed locale, `PATH`, and
+  timezone contract. A real fake-GPG regression captures both sign and verify
+  process environments and proves that poisoned host variables are absent.
+- The canary-focused suite passes 5/5, the affected orchestrator suite passes
+  111/111 in 194.853 seconds, and the module-boundary suite passes 19/19.
+  Final Python 3.13 repository discovery passes 1,576/1,576 in 2,839.720
+  seconds on the closed-environment implementation tree.
+- A direct default-host canary probe is non-counting: executable authority
+  rejected the ambient Homebrew GPG before keyring access because its `Cellar`
+  ancestor is group-writable. This is the intended deployment boundary; the
+  publication caller must supply a GPG executable under an admitted private
+  path. The authorized disposable-GPG publication fixture is covered by the
+  successful full discovery.
+- The next fresh-context Codex review of `a3836660..add6f4a` found two further
+  launch-boundary gaps: the public coordinator documentation and native action
+  used Python without the complete isolation flags, and canary cleanup could
+  reap its leader while leaving a same-group descendant alive.
+- The public coordinator now requires `python3 -I -B -S` in the skill,
+  operator reference, README, automation cutover records, native coordinator
+  actions, and its direct-entry startup guard. Runtime regressions prove that
+  missing flags fail closed and that poisoned `PYTHONPATH`, `sitecustomize`,
+  and current-directory modules do not execute.
+- Canary supervision retains the launch PGID before leader reaping, kills the
+  complete group on every terminal path, reaps the leader, and waits for exact
+  group absence. Darwin `EPERM` from a killed orphan zombie remains unproven
+  and is polled until `ESRCH`; persistent `EPERM` still fails closed. Real
+  closed-pipe success and inherited-pipe timeout descendants are both covered.
+- Canary-focused tests pass 7/7; focused CLI/skill tests pass 11/11; module
+  boundaries pass 19/19 with the CLI's 1,950-line cap unchanged and the exact
+  branch proxy updated from 8,568 to 8,591. The complete affected authority,
+  projection, CLI, transport, orchestrator, and skill matrix passes 292/292 in
+  294.832 seconds.
+- Final Python 3.13 repository discovery passes 1,582/1,582 in 2,833.264
+  seconds on the isolated-launch and complete process-group cleanup tree.
+- The next fresh-context Codex review of `a3836660..43a79368` found two release
+  blockers: production finalize did not bind a persisted trusted GPG
+  executable, and the single 1,582-test CI job had no deterministic sharding or
+  job timeout.
+- `doctor` and `start` now require an absolute `--publisher-gpg-program`.
+  Start persists the executable's canonical path plus a digest over its
+  identity, bytes, and ancestor access policy; every authenticated history read
+  and final publication revalidates that exact authority. Finalize has no
+  ambient or caller override. Real publication regressions prove that a
+  stripped `PATH` still uses the persisted executable and that same-path
+  content mutation fails before the publication adapter starts.
+- CI now assigns every discovered test ID to one of four stable SHA-256 shards,
+  runs each shard under Python 3.13 with a 40-minute timeout, preserves the
+  aggregate `test` check, and cancels superseded workflow runs. The isolated
+  sharder entrypoint and partition contract have dedicated regressions.
+- The complete affected authority, publication, CLI, transport, skill, and CI
+  module group passes 384/384 in 2,862.198 seconds. Ruff lint, edited-file
+  formatting, `actionlint`, the OpenAI skill validator, and the module/skill/CI
+  contract group also pass.
+- A first local four-shard attempt is non-counting because its task wrapper
+  accidentally propagated `RLIMIT_FSIZE` into five oversized-file fixtures.
+  The corrected wrapper bounds only the retained output pipe. The clean rerun
+  covers all 1,589 tests exactly once: shard counts 374, 427, 435, and 353 all
+  pass in 1,146.277, 917.407, 914.556, and 830.574 seconds respectively. The
+  slowest shard remains below half of the CI timeout.
+- A final read-only GPG authority audit found two related release-boundary
+  gaps: the formal publication request did not compare its persisted GPG
+  program and authority digest with the adapter's exact admitted executable,
+  and the keyring probe re-resolved the path without first requiring the
+  adapter's captured authority digest. The adapter now captures that digest at
+  construction, the keyring probe rejects any replacement before keyring or
+  home access, and formal publication requires an exact fingerprint,
+  `GNUPGHOME`, executable path, and authority-digest match before side effects.
+- The three new authority regressions plus the complete CI, module-boundary,
+  and publication-focused group pass 28/28 in 62.706 seconds. The final
+  post-fix Python 3.13 run covers all 1,592 tests exactly once across the
+  deterministic shards: 375, 427, 437, and 353 tests pass in 1,494.843,
+  1,231.485, 1,305.869, and 1,137.495 seconds respectively. The slowest shard
+  remains below the 40-minute CI timeout, and the combined error scan is empty.
+- The first hosted sharded run exposed a platform-specific fixture boundary:
+  Ubuntu's default `/tmp` is world-writable, so the changed-GPG regression's
+  copied executable was correctly rejected by the production authority before
+  the test reached its intended same-path mutation. A global private `TMPDIR`
+  attempt is non-counting: it made two deliberate writable-ancestor negative
+  tests invalid and both corresponding shards failed.
+- The final fixture fix scopes only the trusted mutable GPG copy to a private
+  temporary directory below the repository root. The two negative fixtures
+  continue to exercise the real world-writable temporary ancestor. All three
+  exact regressions pass in 27.310 seconds; the CI contract passes 6/6, module
+  boundaries pass 19/19, and the skill contract passes 5/5. `actionlint`, Ruff
+  lint and formatting, and `git diff --check` remain clean.
+- A fresh-context Codex review of `a3836660..1ac8498e` found three remaining
+  access-policy and raw-evidence gaps: transport executable and snapshot
+  authentication omitted Darwin extended ACLs, local `.git/config` admission
+  omitted the same ACL check, and the remote raw-output temporary file was not
+  descriptor-hardened before its first raw byte.
+- Transport program components, committed source snapshots, remote helper
+  snapshots, and the Python runtime now reject any extended ACL at both
+  authenticated observations. Local Git config admission applies the same
+  owner-controlled, no-ACL policy before and after its exact read. The remote
+  relay hardens its anonymous spool through the held descriptor before any
+  filtered or unfiltered raw output can be written; hardening failure enters
+  the existing process-group cleanup path.
+- Six exact ACL/spool regressions pass in 44.114 seconds. The complete source
+  transport module passes 100/100 in 24.509 seconds, module boundaries pass
+  19/19 in 1.870 seconds, and the canary support module passes 7/7 in 2.427
+  seconds. CI and skill contracts pass 6/6 and 5/5; the installed OpenAI skill
+  validator, Ruff 0.13.2 lint, changed-file formatting, `actionlint`, and
+  `git diff --check` are clean.
+- One redundant full publication-module run was interrupted at its declared
+  45-minute cutoff and is non-counting. During that extra fifth heavy producer,
+  the first four-shard attempt had one 15-second publisher-canary timeout in
+  shard 2; the other 438 tests passed, but that shard is not counted. After the
+  extra producer was quiescent, the complete canary support module passed and
+  the exact canary case passed inside a clean shard-2 rerun.
+- Final Python 3.13 evidence covers all 1,598 tests exactly once with no error
+  scan matches: shard 0 passes 377/377 in 1,616.905 seconds, shard 1 passes
+  427/427 in 1,290.111 seconds, the clean shard-2 rerun passes 439/439 in
+  822.881 seconds, and shard 3 passes 355/355 in 1,299.679 seconds.
+- A fresh-context Codex review of `a3836660..bb62131` found one final
+  publication-durability gap: transaction creation could persist a journal
+  before the run claim and retained sidecar protected the bundle, allowing
+  expiry GC to remove the only publication input after a crash.
+- Transaction creation now requires a callback that first binds the exact
+  sidecar attempt and persists the identity-authenticated checkpoint claim;
+  creation revalidates that claim before its journal write. The initial
+  heartbeat is immutable across preclaim recovery, and a post-deadline retry is
+  admitted only when the sidecar deadline matches the run and the heartbeat
+  precedes the earliest raw, working, and export deadline. Concurrent GC
+  continues to serialize on the same bundle lock and retains every bound pair.
+- The three new crash-boundary regressions cover binding-before-claim,
+  claim-before-journal, and journal-before-prepare recovery. Together with the
+  existing phased-finalize, missing-sidecar, copied-journal, and symlinked-state
+  regressions, the focused implementation checks pass. One test command used a
+  nonexistent method selector and produced a loader-only error; its five real
+  tests passed, and the corrected exact symlink test passed separately.
+- Recovery also distinguishes an already authenticated same-attempt claim from
+  an unclaimed bootstrap. The former can reopen committed or aborted journals
+  without attempting to mutate the terminal retention sidecar; the latter must
+  still prove the sidecar binding before any claim or journal is persisted.
+- One complete publication-module attempt is non-counting: APFS had only about
+  113 MiB available and the run ended with 51 `ENOSPC` errors after 1,642.900
+  seconds. It nevertheless exposed the terminal-sidecar recovery regression,
+  which was fixed before any final gate was accepted. After disk capacity was
+  restored, the complete publication module passed 101/101 in 2,534.780
+  seconds and the CLI/orchestrator modules passed 161/161 in 240.997 seconds.
+- Final Python 3.13 evidence covers all 1,601 tests exactly once with no error
+  scan matches: shards 0 through 3 pass 378/378 in 955.991 seconds, 428/428 in
+  766.543 seconds, 439/439 in 806.293 seconds, and 356/356 in 771.432 seconds.
+  The exact architecture checks pass 2/2; Ruff lint, changed-file formatting,
+  `actionlint`, the installed skill validator, project-journal validation, and
+  `git diff --check` are clean.
+- A fresh-context Codex review of `a3836660..5ad3c8c2` found three retained
+  publication recovery gaps: a sidecar could bind before its checkpoint claim
+  and then lose raw input to expiry GC, an expired preclaim could become
+  permanently unrecoverable, and the public checkpoint API could persist a
+  claim without first binding an exact retained bundle.
+- The follow-up persists the canonical staging locator, requires every new
+  publication claim to bind that bundle, and serializes binding and expiry GC
+  on the same bundle lock. Stale recovery is non-renewing and must revalidate
+  either the authenticated checkpoint transition or the terminal publication
+  plan while that exact lock remains held. Receipt validation is closed and
+  split into narrow binding and orchestrator-coordination owners to keep the
+  publication dependency graph acyclic.
+- The first final publication-module attempt exposed one migrated test fixture
+  that copied a checkpoint and then created a different unbound bundle. That
+  run was interrupted and is non-counting. The fixture now forks before export
+  binding and drives both copies through `mark_exported`; its exact same-root,
+  different-attempt regression passes in 50.313 seconds without weakening the
+  production locator contract.
+- Final Python 3.13 affected-module evidence passes: retained export 62/62 in
+  3.703 seconds, orchestrator 112/112 in 180.084 seconds, v2 CLI 43/43 in
+  55.975 seconds, publication transaction 103/103 in 2,329.355 seconds, and
+  architecture/CI/skill contracts 30/30 in 2.500 seconds. Final discovery
+  contains 1,604 unique tests partitioned exactly once as 378, 429, 439, and
+  358 tests across the four deterministic shards.
+- Ruff 0.13.2 lint and changed-file formatting, both workflows under
+  `actionlint`, the installed OpenAI skill validator, and `git diff --check`
+  pass on the frozen implementation tree.
+- A fresh-context Codex review of `a3836660..c490b096` found two terminal
+  recovery gaps: authenticated aborted publications retained raw inputs
+  forever, and the aborted checkpoint discarded its claim before a lost CLI
+  response could retry.
+- The follow-up retains the exact publication claim through aborted finalize
+  acknowledgement, validates the durable abort journal and attempt-bound
+  terminal sidecar before claiming raw cleanup, and records a distinct
+  identity-authenticated `expired_aborted` cleanup disposition. Completed raw
+  cleanup removes the nonformal durable candidate while preserving an
+  authenticated cleanup claim and receipt for idempotent replay.
+- The new integration regression covers lost aborted-checkpoint responses with
+  both a present and already-collected retained bundle, then proves raw input
+  removal after the seven-day deadline. The exact integration passes 1/1 in
+  40.629 seconds; the terminal-binding and unauthenticated-abort fail-closed
+  regressions pass 2/2, and six adjacent publication, preclaim, committed-GC,
+  and ordinary expired-cleanup regressions pass 6/6 in 123.740 seconds.
+- The first full follow-up attempt is non-counting. Shards 1 and 3 passed
+  430/430 and 359/359, while shard 0 exposed one migrated assertion that still
+  expected an aborted acknowledgement to discard its retry claim and shard 2
+  exposed the lifecycle line budget plus the exact branch proxy. The behavior
+  assertion now requires same-claim idempotent replay. Abort/GC coordination
+  moved into bounded `publication_claims.py` and `raw_cleanup_state.py` owners;
+  `orchestrator_lifecycle.py` is 3,321 lines under its 3,325-line ceiling, and
+  the exact branch proxy is 8,669 with four branches of slack.
+- The final reviewer-fix focused matrix passes 6/6 in 75.339 seconds, covering
+  the attempt-bound terminal sidecar, lost abort response replay, pre-reservation
+  abort recovery, unauthenticated abort retention, and both architecture gates.
+  Final Python 3.13 discovery covers all 1,606 tests exactly once: shards 0
+  through 3 pass 378/378 in 863.602 seconds, 430/430 in 693.663 seconds,
+  439/439 in 724.989 seconds, and 359/359 in 755.340 seconds.
+
+## Final Separation State
+
+- The implementation is logically separated: this repository is the canonical
+  source and its v1 and v2 CLIs start directly from the repository root under
+  Python 3.13 without importing or reading implementation files from
+  `codex-workflow-hygiene`.
+- The repository has its own public GitHub remote, standalone root layout,
+  tests, workflows, guidance, and project journal. It has no tracked symlink,
+  submodule, or runtime path dependency back to the old repository.
+- Remaining `codex-workflow-hygiene` references are migration provenance or
+  synthetic redaction fixtures. They are not runtime dependencies.
+- Original implementation PRs
+  [`codex-workflow-hygiene#67`](https://github.com/Joey-Tools/codex-workflow-hygiene/pull/67)
+  and
+  [`codex-workflow-hygiene#69`](https://github.com/Joey-Tools/codex-workflow-hygiene/pull/69)
+  are closed without merge. Their signed history remains available.
+- The legacy implementation was removed from `codex-workflow-hygiene` through
+  its dedicated removal PR after extraction. The prior installed and scheduled
+  copy was retired independently; no replacement sync is part of this source
+  PR.
+- Terminal retry preserves the original machine-classified exception when its
+  terminal replay also fails. Aborted and expired checkpoints cannot authorize
+  reconstruction of an active publication journal, while a matching durable
+  aborted journal remains recoverable.
+- Persistent checkpoint-claim validation is owned by bounded
+  `publication_claims.py`; the core publication aggregate and per-module line
+  budgets remain below their existing ceilings.
+- The first exact-head delivery review found that source transport committed
+  only the Python interpreter leaf while leaving writable ancestor replacement
+  outside the receipt. The superseding implementation reuses the shared
+  executable authority to persist and revalidate every ancestor plus the leaf
+  identity, content, owner, mode, and ACL policy before a command can be
+  projected. Benign timestamp churn remains accepted; a writable ancestor or
+  `argv[0]` replacement fails closed.
+- Worker-only component reads now live in bounded
+  `transport_program_components.py`, keeping the remote worker manifest at 13
+  reachable modules instead of importing the parent-side executable authority.
+  The affected source-transport suite passes 101/101 and the module-boundary
+  suite passes 19/19 under Python 3.13.
+- The superseding Python 3.13 shard run discovers 1,618 tests exactly once.
+  Shards 0, 1, and 3 pass 383/383 in 1,170.614 seconds, 431/431 in 902.009
+  seconds, and 360/360 in 967.676 seconds. Shard 2 passes 443/444 in 1,011.715
+  seconds; its only failure is the unrelated 15-second publisher-canary
+  deadline while four long shards contend on one host. The exact failed test
+  then passes serially 1/1 in 0.741 seconds on the same frozen code tree, so the
+  composite evidence executes and passes all 1,618 discovered tests without
+  treating the original shard as a clean run.
+- The final implementation-focused matrix passes 1/1 for aborted journal
+  reconstruction and 2/2 for the exact architecture budgets. Complete Python
+  3.13 discovery covers all 1,617 tests exactly once: shards 0 through 3 pass
+  382/382 in 1,055.667 seconds, 431/431 in 815.379 seconds, 444/444 in 910.517
+  seconds, and 360/360 in 873.137 seconds.
+- Two final read-only pre-commit explorer attempts produced no terminal
+  artifact within their 15- and 10-minute bounds and were stopped as
+  inconclusive. They supply no review result; the exact frozen-head Codex
+  review remains an independent delivery gate.
+- Ruff lint, changed-file formatting, both workflows under `actionlint`, the
+  installed skill validator, project-journal validation, CI/skill contracts
+  11/11, and `git diff --check` are clean on the final source tree.
+- The first PR-head delivery cycle for `6814250e` exposed one CI fixture error
+  and two fresh-review gaps. The source-transport adversarial fixture placed its
+  copied Python under a sticky world-writable temporary ancestor; migration-only
+  history reads inherited repository Git controls; and migration provenance
+  still described legacy retirement as future work after retirement had already
+  completed. The CI failure and all review evidence for that head are superseded
+  by the following signed fix head.
+- The source-transport fixture now creates its copied interpreter below an
+  owner-controlled ignored repository directory. History reads now route through
+  bounded `legacy_history_git.py`, which uses the shared executable authority,
+  closed Git environment and command controls, complete local-repository
+  admission, and pre/post object and config revalidation. Regressions prove that
+  a configured `core.fsmonitor` is not executed, repository-local includes are
+  rejected, and a Darwin extended ACL fails closed. Migration provenance now
+  records the actual paused interval: the old source and installation are gone,
+  while replacement private sync remains future work.
+- A host-level source-transport run through `/opt/homebrew/bin/python3.13` is
+  non-counting because that executable's group-writable ancestor correctly
+  fails the transport authority contract. Re-running through the repository's
+  owner-controlled Python 3.13.12 copy passes the source-transport suite
+  101/101; the affected history subset passes 62/62; the exact focused security
+  regressions pass 4/4; and the module-boundary suite passes 19/19.
+- Final Python 3.13 discovery covers all 1,621 tests exactly once. Shards 0
+  through 3 pass 385/385 in 1,285.612 seconds, 432/432 in 985.168 seconds,
+  444/444 in 1,098.940 seconds, and 360/360 in 1,058.989 seconds. Ruff lint,
+  changed-file formatting, both workflows under `actionlint`, the official
+  OpenAI skill validator, CI/skill contracts 11/11, and `git diff --check` are
+  clean on the same working tree.
+- The fresh-context review of signed PR head `30cd6e40` found two history-read
+  gaps: commands reopened the admitted repository by its mutable absolute path,
+  and ordinary Git stdout/stderr capture had no aggregate byte ceiling. The
+  superseding implementation runs every post-admission Git command through the
+  held repository descriptors and the shared bounded process runner. Clean-tree
+  proof now compares exact HEAD/index snapshots with two descriptor-relative
+  physical worktree commitments, including root and child identity, content,
+  ownership, group, mode, and ACL policy. It accepts benign timestamp churn but
+  rejects object replacement, content drift, unsafe policy, ignored/untracked
+  files, symlinks, unsupported objects, torn snapshots, and owner-execute drift.
+- History blob reads first bind the declared object size and then use a
+  size-derived output ceiling. The physical scanner shares one absolute
+  30-second deadline across Git and filesystem phases, bounds entries, paths,
+  depth, per-file bytes, and aggregate bytes, and derives its 256 MiB per-file
+  ceiling from the retained-artifact authority rather than the retired 64 MiB
+  implementation limit.
+- The final history-security matrix passes 21/21 in 22.909 seconds; the module
+  boundary suite passes 19/19 with exact branch inventory 8,805; CI contracts
+  pass 6/6; and Ruff 0.13.2 lint/format, `actionlint`, the installed skill
+  validator, project-journal validation, and `git diff --check` pass. Current
+  discovery is 1,639 tests. Local four-way and two-way full-suite attempts are
+  non-counting because the host volume reached `ENOSPC`; no assertion failure
+  was observed, every interrupted process group was drained, and no repository
+  worktree was deleted to manufacture capacity. The exact committed head must
+  therefore obtain its complete four-shard result from hosted CI before merge.
+- Hosted CI passed all four shards for signed head `69918828`, but that evidence
+  became stale when its fresh-context Codex review found that automation
+  cutover authenticated each `automation.toml` through one unbound pathname
+  read. The old head is not mergeable evidence.
+- Automation file authentication now has one bounded descriptor owner in
+  `automation_cutover_files.py`. It retains the physical automation root, each
+  stable-ID directory, and both records through cutover publication; checks
+  owner, mode, link count, and absence of extended ACLs; performs two bounded
+  content reads; and revalidates both stable IDs immediately before writing the
+  authenticated cutover record. Same-inode same-length mutation, truncation,
+  file replacement, directory replacement, and Darwin extended ACLs fail
+  closed, while timestamp-only churn remains benign.
+- The superseding local matrix passes the complete v2 CLI/cutover class 49/49
+  in 64.308 seconds, module boundaries 19/19 with exact branch inventory 8,843,
+  CI contracts 6/6, and two production-marker integration tests 2/2 in 41.282
+  seconds. Ruff lint and formatting plus `git diff --check` are clean on the
+  implementation files. Current discovery is 1,645 tests, partitioned exactly
+  once as 390, 440, 448, and 367; complete final-head execution remains a
+  hosted-CI prerequisite before merge.
+- A fresh-context review of signed head `da7fc8e` found three additional
+  cutover-contract defects: mode and RRULE checks were not closed, descriptor
+  cleanup inferred a primary failure from the ambient exception context, and
+  Darwin/BSD write-delete restriction flags were absent from the automation
+  access-policy binding. Its otherwise-green admission and hosted CI are stale
+  after the required fixes and do not count toward merge readiness.
+- The review fix parses the one canonical isolated launch into exact tokens,
+  rejects duplicate, conflicting, or equals-form mode arguments, and admits
+  only a closed daily/weekly RRULE component set with unit interval, no
+  termination condition, and at most one bounded time/day selector. Descriptor
+  owners now receive the current operation's primary exception explicitly, so
+  an outer `except` block cannot suppress a successful-path close failure while
+  a local primary still retains cleanup failure as secondary evidence.
+- Automation root, stable-ID directory, and record identities now include the
+  BSD write/delete restriction mask and reject any nonzero restricted state on
+  initial validation or revalidation. Tests cover initial directory and file
+  flags, final descriptor flag drift, ambiguous modes, low-frequency or
+  terminating RRULEs, ambient-exception close failure, and local-primary close
+  precedence.
+- The review-fix implementation passes its focused regressions 3/3, the full
+  v2 CLI/cutover class 52/52 in 64.407 seconds, module boundaries 19/19 with
+  exact branch inventory 8,860, CI contracts 6/6, and production-marker
+  integration 2/2 in 42.271 seconds. Ruff 0.13.2 lint/format and `git diff
+  --check` pass. Current discovery is 1,648 tests, partitioned exactly once as
+  390, 440, 450, and 368; complete final-head execution remains a hosted-CI
+  prerequisite before merge.
+- The fresh-context review of signed head `9be24f25` found two remaining
+  production-boundary gaps. An equals-form `--publisher-gpg-program` could
+  override the authenticated standalone argument, and relative publisher paths
+  were resolved from ambient working-directory state. Three shared cleanup
+  owners also inferred their primary failure through `sys.exception()`, so an
+  unrelated outer `except` could suppress a successful-path close failure.
+- Production prompt validation now recognizes both publisher-argument forms,
+  rejects duplicates and equals-form overrides, and requires the one canonical
+  standalone value to be an absolute normalized path. Executable, repository,
+  history-worktree, ACL, atomic-create, and rollback cleanup chains capture and
+  pass only their local operation primary; all cleanup attempts still run, a
+  local primary receives bounded secondary evidence, and a close-only failure
+  remains actionable even inside an unrelated outer exception handler.
+- The current implementation passes focused regressions 5/5, the complete CLI
+  class 52/52 in 62.964 seconds, safe I/O 45/45, publication invariants 30/30,
+  durable publication 86/86 in 2,836.580 seconds, legacy history worktree 4/4,
+  module boundaries 19/19 with exact branch inventory and cap 8,861, and CI
+  contracts 6/6. Ruff 0.13.2 lint/format, both workflow files under
+  `actionlint`, the official OpenAI skill validator, project-journal
+  validation, and `git diff --check` pass. Complete final-head execution and
+  both Codex processors remain required before merge.
+- Signed head `b97a2781` passed exact-secret admission and hosted CI, including
+  all 1,648 tests partitioned exactly once as 390, 440, 450, and 368. Its
+  fresh-context Codex review found one remaining public-CLI ambiguity:
+  `argparse` accepted repeated `--publisher-gpg-program` values with
+  last-value-wins behavior and allowed later working-directory normalization of
+  a relative raw value. Those otherwise-clean head-bound results became stale
+  when the finding required a new commit.
+- The parser boundary now owns publisher executable admission through one
+  reusable action for both `doctor` and `start`. It rejects split-form and
+  equals-form duplicates and requires the raw argument to be one canonical
+  absolute path before any normalization or filesystem lookup. Regressions
+  cover both commands and relative, non-normal, double-root, and duplicate
+  inputs. The focused regression passes 1/1, the complete CLI class passes
+  52/52 in 62.944 seconds, module boundaries pass 19/19 with exact branch
+  inventory and cap 8,864, CI contracts pass 6/6, and Ruff 0.13.2 lint and
+  formatting plus `git diff --check` pass.
+- Signed head `fdfc4520` passed exact-secret admission and hosted CI, then its
+  fresh-context Codex review found four remaining issues. The review gate used
+  a mutable major-version Action reference; retained-output privacy checks did
+  not share the complete extractor credential policy; cutover prompt parsing
+  accepted a double-root publisher path that the CLI rejected; and export
+  destination claims could persist before rejecting the active run or an
+  incompatible existing target. That head's admission, CI, and review evidence
+  became stale when these findings required a new commit.
+- The review gate now pins audited Action commit
+  `2a7f9d8cd98f90cb56dc1540bf54d9dc7484afc6`. Extractor redaction, retained
+  safe-string validation, reviewed prose, report reread, and final retained
+  validation share one complete credential detector covering service tokens,
+  bearer values, JWTs, and generic token/secret assignments. CLI and cutover
+  prompt admission share one raw canonical-absolute executable-path predicate.
+- Export assembles one exact artifact map and stages or recovers it under the
+  destination lock. Missing-sidecar recovery first reconciles the candidate
+  with any full retained descriptor and persists that exact descriptor before
+  strict claim recovery. Malformed, oversized, or conflicting targets cannot
+  leave a claim, and callback failures cannot be misclassified as invalid
+  targets. Legacy path-only claim behavior is physically isolated in a
+  compatibility-only helper that the production export command cannot reach.
+  Run ancestors and cleanup roots remain rejected before staging.
+- Retained credential handling now shares one detector and one private-key
+  boundary across extractor redaction, post-redaction, reviewed prose, report
+  reread, and final retained validation. Complete and truncated private-key
+  blocks, complete Authorization lines, GitHub token families, JWT-shaped
+  service tokens, and other credential forms are consumed without retaining
+  tail fragments. Independent credential and export-transaction audits both
+  reached `No findings.` after the fixes.
+- The main CLI remains at 1,998 lines; the four export helpers are 224, 244,
+  210, and 67 lines; executable authority remains at its 350-line cap. Module
+  boundaries pass 19/19 with exact branch inventory 8,874. The affected
+  export, CLI, result, and publication modules pass 210/210 in 94.699 seconds;
+  the final private-key audit module passes 17/17 and publisher-canary support
+  passes 7/7.
+- Final Python 3.13 discovery contains 1,662 unique tests partitioned as 395,
+  444, 450, and 373. Shard 0 passes 395/395 in 1,360.653 seconds and shard 1's
+  original 443 tests pass in 1,056.997 seconds. The only shard-2 failure was the
+  superseded private-key expectation; after its test identifier moved to shard
+  1, all 450 final shard-2 members had already passed, and the replacement test
+  passes in the complete 17-test audit module. The only shard-3 failure was a
+  15-second publisher canary under four-way host contention; the other 372
+  members passed and the exact canary passes without contention in 0.624
+  seconds, followed by the complete 7-test module. This disjoint composite
+  covers every final test identifier exactly once. Earlier import-only and
+  owner-runtime-rejected attempts remain explicitly non-counting. Ruff lint
+  and formatting, both workflows under `actionlint`, CI contracts 7/7, skill
+  contracts 5/5, the official OpenAI skill validator, project-journal
+  validation, and `git diff --check` also pass on this tree.
+- Signed head `1db57a45` passed exact-secret admission and all hosted CI shards,
+  then its fresh-context Codex processor found one remaining retained-history
+  privacy gap. The shared v2 detector did not recognize several credential
+  assignment forms already handled by source extraction, including
+  `client_secret`, `pwd`, `credential`, compact `refreshToken`, space-form
+  `--token`, `rk-*` service tokens, and private-key labels such as DSA. That
+  head's admission, CI, and review evidence became stale when the finding
+  required a new commit.
+- `privacy_locators.py` remains the sole v2 credential-policy owner, but now
+  covers delimited and compact credential fields, assignment and narrative
+  forms, space-form CLI arguments, `sk-*` and `rk-*` service tokens, and a
+  bounded generic private-key label. Safe redaction placeholders and status
+  values such as `missing`, `required`, and token-budget prose remain exempt.
+  The same patterns drive extractor post-redaction, leak scanning, retained
+  artifact assembly, artifact reread, and `report.md` validation.
+- The exact credential regressions pass 2/2. Complete affected modules pass
+  result validation 65/65 and export/reporting 66/66; the retained-result audit
+  passes 17/17, module boundaries pass 19/19 with unchanged branch inventory,
+  CI contracts pass 7/7, and skill contracts pass 5/5. Ruff lint and formatting
+  plus `git diff --check` pass on the fix tree.
+- The fresh-context review of signed head `6dc57b29` found one additional
+  credential-boundary issue. A safe placeholder's closing delimiter was
+  accepted as the terminal boundary without proving that the retained value
+  ended there, so a suffix appended to `[REDACTED_CREDENTIAL]` could bypass all
+  consumers of the shared detector. That head's review and other head-bound
+  evidence became stale when the finding required a new commit.
+- Safe credential states now parse either one bare reviewed status or one
+  complete matching `[]`, `<>`, `()`, or `{}` envelope, then require a true
+  outer value terminator. Placeholder-plus-suffix and unmatched-closer forms
+  fail closed. Five adversarial suffix forms pass through extractor
+  post-redaction with no retained tail and are rejected independently at
+  artifact assembly, retained reread, and `report.md` validation. Complete
+  affected modules remain green at 65/65, 66/66, 17/17, 19/19, 7/7, and 5/5.
+- The fresh-context review of signed head `9f5ca96e` found one further variant:
+  a safe placeholder or status followed by whitespace and credential material
+  could still exempt the prefix while leaving the trailing value unredacted.
+  That head's review and other head-bound evidence became stale when the
+  finding required a new commit.
+- Safe-value exemption now requires the complete remaining value to contain
+  only its matching envelope, reviewed punctuation, and whitespace. Atomic
+  separator and quote parsing prevents regex backtracking from moving the
+  value boundary. A separate bounded suffix branch crosses ordinary, Unicode,
+  vertical, and newline whitespace plus arbitrary punctuation to consume the
+  first trailing material token; ordinary unsafe values still consume one
+  token so later URL and path signals remain independently redacted.
+- Adversarial regressions cover concatenated, quoted, spaced, vertical-tab,
+  non-breaking-space, newline, and multi-punctuation suffixes across assignment,
+  Authorization, Bearer, CLI, and narrative forms. Safe complete values with
+  repeated or Unicode spacing and ordinary token prose remain exempt. The
+  result and export modules each pass 66/66, retained-result audit passes
+  17/17, module boundaries pass 19/19, CI contracts pass 7/7, and skill
+  contracts pass 5/5. Ruff lint and formatting, `bash -n`, ShellCheck, and
+  `git diff --check` pass.
+- The first four-shard attempt was interrupted and is explicitly non-counting
+  after static review found the Unicode-whitespace variant; all four deadline
+  supervisors and test runners were then proved absent. The final frozen tree
+  contains 1,663 unique tests partitioned exactly once. Shards 0 through 3 pass
+  395/395 in 1,378.018 seconds, 445/445 in 1,086.661 seconds, 450/450 in
+  1,200.665 seconds, and 373/373 in 1,178.999 seconds. All four runners exit
+  zero and the retained log failure scan is empty.
+- Signed head `d52c78fd` passed exact-secret admission and all four hosted and
+  local test shards, then its fresh-context Codex processor found two remaining
+  shared-detector issues. Quoted structured values stopped after the first
+  whitespace-delimited word, while narrative status prose inherited the
+  complete-value boundary used by assignments and headers. Those head-bound
+  admission, CI, and review results became stale when the findings required a
+  new commit.
+- Structured assignment, header, and CLI values now parse matching single or
+  double quotes as one value and consume the complete quoted content. A safe
+  placeholder inside a quote is exempt only when the complete retained value
+  ends safely; material inside or after the quote remains credential-shaped.
+  Narrative `is`, `was`, and `set to` forms use a separate reviewed status
+  grammar with explicit prose connectors, so ordinary statements such as a
+  credential being required before deployment or missing during a dry run
+  remain prose rather than secrets. A reviewed status followed directly by an
+  unrecognized value remains credential-shaped and preserves the prior
+  fail-closed regression.
+- Focused adversarial coverage includes multiword and punctuation-only quoted
+  passwords, safe-placeholder prefixes with those suffixes, outside-quote
+  suffixes, and safe narrative continuations. Complete affected modules pass
+  result validation 66/66, export/reporting 66/66, and retained-result audit
+  17/17. Module boundaries pass 19/19, CI contracts pass 7/7, and skill
+  contracts pass 5/5.
+- Two intentionally retained concurrent full-suite attempts each completed
+  1,662 of 1,663 test identifiers but exposed separate publisher-canary timing
+  failures. The first real canary exceeded its 15-second budget under four-way
+  host contention; its exact retry and complete seven-test support module then
+  passed without contention. The second attempt showed that the synthetic
+  inherited-pipe test's 0.5-second budget could expire before the fake Python
+  GPG process created its child-PID receipt. Neither partial shard is counted
+  as an all-green partition.
+- The synthetic timeout test now allows five seconds for interpreter startup
+  while its 60-second inherited child still forces the same deadline and
+  process-group cleanup path; no production canary limit changed. The exact
+  regression passes 1/1 in 5.028 seconds and the support module passes 7/7 in
+  6.995 seconds. On the final production tree, shards 0, 1, and 3 pass 395/395
+  in 1,169.001 seconds, 445/445 in 877.733 seconds, and 373/373 in 950.457
+  seconds. The only test modified after those partitions belongs to shard 2;
+  its complete final-tree partition passes 450/450 in 890.352 seconds. This
+  disjoint composite covers all 1,663 stable test identifiers exactly once;
+  hosted CI must still rerun all four partitions on the signed commit.
+
+- Signed head `4050e02c` passed exact-secret admission and all four hosted CI
+  partitions, then its fresh-context Codex processor found three remaining
+  shared-privacy-detector issues. An unsafe quoted value stopped at its first
+  closing quote and could leave a same-shell-word suffix, any supported private
+  key `END` label could close a different `BEGIN` label, and reviewed compound
+  narrative states such as `not required` were rejected as credential
+  material. The lane's postvalidation repeated the exact 25-commit graph and
+  local-config receipts, the trusted manifest, skill, and guard digests stayed
+  unchanged, and the identity-bound private review workspace was removed.
+- Quoted assignment, header, CLI, and narrative values now consume adjacent
+  quoted and unquoted shell fragments, including escaped whitespace and
+  multiline quoted content. Private-key redaction walks normalized boundary
+  labels, tracks same-label nesting, accepts only the corresponding `END`, and
+  redacts through end of input when no matching boundary exists. The narrative
+  grammar explicitly permits only the reviewed `not required`, `not present`,
+  and `not available` compounds at a true terminator or before a reviewed prose
+  connector; an unknown following value remains credential-shaped.
+- Exact adversarial coverage includes every value context, adjacent quoted and
+  bare fragments, escaped and multiline shell values, mismatched, missing,
+  different-label nested, and same-label nested private-key blocks, safe
+  compound prose, and compound-status credential suffixes. Complete affected
+  modules pass result validation 68/68, export/reporting 66/66, retained-result
+  audit 17/17, and module boundaries 19/19 with exact branch inventory 8,881.
+  Ruff lint and formatting pass on every edited Python file.
+- One four-shard run was deliberately interrupted and is non-counting because
+  the same-label nesting regression was added after those runners started; all
+  four obsolete runners were proved absent before retry. The frozen code tree
+  contains 1,665 unique tests partitioned exactly once. Shards 0 through 3 pass
+  397/397 in 1,121.424 seconds, 445/445 in 841.169 seconds, 450/450 in 940.666
+  seconds, and 373/373 in 904.847 seconds. Every runner exits zero and the
+  retained logs contain no failure summary.
+- Signed follow-up `a9124829` implements the three findings, and signed
+  fixture-only follow-up `da8a2346` constructs private-key-shaped adversarial
+  test values from non-secret fragments so exact-secret admission remains an
+  independent production-tree gate. Exact-secret admission for
+  `a3836660..da8a2346` is clean with complete temporary cleanup.
+- The fresh-context Codex processor for `a3836660..da8a2346` found one final
+  retained-privacy gap: an exact credential value ending in punctuation-only
+  material after a safe redaction marker could evade the trailing-material
+  detector once its field context was removed. Postvalidation reproduced the
+  exact 27-commit, 26-edge graph and local-config receipts, trusted control
+  digests remained unchanged, and the identity-bound reviewer workspace was
+  removed.
+- The detector now treats a nonempty pure non-word suffix extending to the
+  absolute end of the retained value as credential material while preserving
+  the existing complete-placeholder and reviewed punctuation terminators.
+  Exact assignment, Authorization, CLI, and narrative regressions cover both
+  extractor redaction and retained-artifact assembly/reread. The result module
+  passes 69/69, export/reporting passes 66/66, retained-result audit passes
+  17/17, and module boundaries pass 19/19 with unchanged exact branch inventory
+  8,881. Ruff lint and formatting pass for all three edited Python files.
+- Full-suite attempts started on the superseded `da8a2346` tree were
+  deliberately interrupted after this finding and are non-counting; their
+  runner processes were proved absent. The superseding signed head must rerun
+  the four exact partitions before final delivery.
+- Signed head `f424d646` closes the punctuation-only suffix gap. Its local
+  Python 3.13 partitions pass 397/397 in 1,066.093 seconds, 446/446 in 807.337
+  seconds, 450/450 in 900.799 seconds, and 373/373 in 870.166 seconds. Hosted CI
+  passed the same four partitions and aggregate gate, and exact-secret
+  admission was clean with complete temporary cleanup. The fresh-context Codex
+  processor then found two control-plane issues, so that head's otherwise-green
+  evidence is stale for delivery: resumed runs could retain their old prompt
+  digest while consuming new in-memory agent instructions, and the documented
+  ambient/Homebrew Python entrypoint could fail the transport executable
+  ancestor authority contract.
+- The executable prompt, version, and resume validator now have one dedicated
+  deterministic foundation module. Every checkpoint load and direct retained
+  export validates the persisted self-digest plus the current prompt and policy
+  contract; remote helper commitments remain governed by their separate
+  run-owned snapshot and lease revalidation contract. The low-level state
+  component receives the validator through its runtime context and does not
+  import high-level orchestration services.
+- Production coordination now uses the fixed owner-controlled copied runtime
+  at `~/.codex/session-retrospective/runtime/bin/python3`, created by replacement
+  sync with Python 3.13-or-newer `venv --copies`. `doctor` and `start`
+  authenticate the exact isolated interpreter and its ancestor access policy;
+  source transport, descriptor-bound Git, and remote-helper launches inherit
+  that same `sys.executable`. Automation cutover records require the exact
+  installed runtime path and reject ambient or non-isolated launch forms.
+- Focused final-tree evidence passes the 11 new and adjacent regressions, CLI
+  60/60, source transport 102/102, result-contract audit 17/17, publication
+  marker transaction 1/1, and module boundaries 19/19. Ruff lint and formatting
+  plus `git diff --check` pass. The final four disjoint repository partitions,
+  signed replacement head, exact-secret admission, and fresh review processors
+  remain the delivery gates.
+- An intermediate four-shard attempt was deliberately interrupted and is
+  non-counting after final review of the production runtime contract found that
+  the coordinator still needed to compare `sys.executable` with the exact fixed
+  installed path. All four deadline supervisors and test runners exited 130 and
+  were proved absent before the final-tree checks resumed.
+- The final runtime-path implementation authenticates that exact installed
+  executable rather than only its Python flags and ancestry. On this frozen
+  tree, the complete CLI module passes 60/60 in 87.306 seconds, source transport
+  passes 102/102 in 24.655 seconds, and orchestration passes 114/114 in 212.957
+  seconds. These focused results supersede the pre-tightening module runs.
+- The final frozen tree contains 1,669 unique test identifiers partitioned
+  exactly once as 397, 446, 451, and 375 tests. Shards 0 through 3 pass 397/397
+  in 1,041.627 seconds, 446/446 in 787.938 seconds, 451/451 in 881.784 seconds,
+  and 375/375 in 850.763 seconds. Every bounded runner exits zero, every shard
+  reports `OK`, and the retained-log failure scans are empty.
+- Signed head `4562670f` persisted the executable prompt digest and fixed
+  copied-runtime launch contract. Its exact-secret admission was clean and its
+  hosted/local test evidence began green, but the next fresh-context Codex
+  processor found two remaining control-plane gaps; all head-bound evidence is
+  stale. Resume validation did not bind every command to the same persisted
+  coordinator-runtime authority, and the six executable prompts still omitted
+  normative behavior that existed only in the operator reference. The topic
+  reference also named the obsolete `topic_review_result_v2` schema.
+- The follow-up stores a non-sensitive canonical-path binding digest and a
+  separate executable identity/content/access-policy authority digest in the
+  execution provenance and `configuration_root`. Every checkpoint read or
+  transition reauthenticates the current runtime before consuming model work.
+  Retained-history validation admits only the closed runtime receipt and never
+  retains its local path.
+- All six executable agent instructions now contain the normative redaction,
+  review, adjudication, topic, and synthesis behavior and are byte-equal to six
+  independently delimited reference blocks. Topic reduction names the actual
+  `topic_reduction_result_v2` schema. Complete-envelope fit checks share the
+  exact immutable-task builder with task creation and include the final job
+  metadata; the hierarchy regression retains a 128 KiB artificial cap, well
+  below the 512 KiB production cap while remaining above one indivisible topic
+  result.
+- Focused prompt/runtime regressions pass 4/4, source transport passes 102/102,
+  export/reporting passes 66/66, and the exact hierarchy-cap regression passes
+  after the shared envelope builder fix. The final affected modules, static
+  gates, repository partitions, signed replacement head, admission, hosted CI,
+  and both Codex processors remain required.
+- The first final four-shard attempt after those fixes was deliberately
+  interrupted and is non-counting when protected-property review found that the
+  runtime path digest performed a second `realpath` observation after the
+  executable authority receipt. The digest now consumes the already
+  authenticated `authority.path`, preventing an authority/path receipt from
+  combining two different filesystem observations. All four obsolete runners
+  exited 130 and were proved absent before the final-tree rerun.
+- A subsequent pre-final shard attempt was also interrupted and is non-counting
+  after a test-only assertion was added to prove the same runtime mismatch
+  blocks the direct retained-export path as well as ordinary checkpoint reads.
+  Its four runners also exited 130 with no residual test process. Two optional
+  dirty-tree read-only audits did not return a terminal artifact after bounded
+  waiting and one conclude request; they were closed as transport-inconclusive
+  and do not count toward the required signed-head Codex gate.
+- The final Python 3.13 implementation/test tree contains 1,671 unique test
+  identifiers partitioned exactly once. Shards 0 through 3 pass 397/397 in
+  1,344.062 seconds, 447/447 in 1,025.943 seconds, 452/452 in 1,144.609
+  seconds, and 375/375 in 1,098.442 seconds. All four deadline supervisors exit
+  zero and every retained log contains an explicit `OK` terminal summary.
+- The next fresh-context Codex processor found five related contract gaps: the
+  native envelope exposed only a result-schema name, topic reduction copied
+  deterministic inputs instead of validating semantic output, claim-size
+  projection omitted final claim metadata, run provenance did not bind the
+  coordinator source implementation, and the migration helper retained a
+  second SSH/host implementation.
+- Native jobs now receive complete closed JSON Schemas and exact worst-case
+  claim projections. Topic reductions preserve validated recurrence, guidance,
+  prompt-rewrite, skill-candidate, and open-work records through hierarchical
+  reduction and retained history. Every resumed command reauthenticates the
+  closed coordinator Python inventory, source bytes, and access policy.
+  Production remote verbs delegate to the canonical `remote-host-context` CLI;
+  the old probe remains only as a test fixture for migration compatibility.
+- Focused final-tree evidence passes orchestrator 120/120, export/reporting and
+  architecture contracts 93/93, and the six publication calendar-drift
+  regressions 6/6. One four-way local shard attempt covered all 1,678 tests but
+  exposed six publication test methods whose fixed July retention clock had
+  become expired relative to the real August wall clock. The tests now bind
+  CLI calls to their fixture clock while explicit expiry and GC use their
+  separate later clocks; the exact serial rerun passes 6/6. A final all-green
+  repository partition remains required before the replacement head is signed.
+- The final implementation/test tree contains 1,678 unique test identifiers,
+  partitioned exactly once as 398, 450, 448, and 382 tests. In the first
+  four-process execution, shards 0 and 2 passed 398/398 in 3,016.097 seconds and
+  448/448 in 2,418.716 seconds. Shard 3 encountered one bounded-signing canary
+  failure under contention; its complete serial rerun passed 382/382 in
+  2,372.443 seconds. Shard 1 encountered one attempt-lock scheduling timeout
+  under the same contention; its complete serial rerun passed 450/450 in
+  1,861.131 seconds and crossed the previously failing lock case. The two
+  contended shard attempts are non-counting. The unchanged-tree composite
+  evidence is therefore 1,678/1,678 with every selected partition terminating
+  `OK`. Final skill, CI, and module-boundary contracts pass 31/31; Ruff lint,
+  exact changed-file formatting, `git diff --check`, and the OpenAI skill
+  validator also pass. Signing, admission, and review gates remain.
+- Signed and pushed head `dc89489b` closed the executable agent-result
+  contracts. Exact-secret admission and hosted CI were clean. A fresh-context
+  Codex processor in a prior-trusted, independently materialized workspace then
+  returned four actionable findings, so all head-bound readiness evidence became
+  stale: legal child unions could exceed episode/topic parent result bounds;
+  verbose per-item adjudication rows could make a legal result unrepresentable;
+  recurrence claims were not bound to selected revision-level signals; and topic
+  hierarchy task sidecars stored complete child results in both payload and
+  metadata. Postvalidation was clean and the reviewer task root was removed.
+- Hierarchical episode and topic parents now copy a compact recursive commitment
+  containing immediate child hashes, leaf-result count, per-field item counts,
+  and a canonical source-tree hash. Visible parent records are bounded verbatim
+  multisets of child data; multiplicity cannot exceed source multiplicity. Topic
+  outputs retain non-empty revision/episode/session lineage, exact risk union,
+  recursive decisions, and confidence floors while the commitment makes every
+  compacted source item explicit.
+- Adjudication now uses exactly twelve candidate/field rows. Each row binds the
+  candidate hash and reviewer slot and carries one closed decision code per item
+  in source order. The compact shape remains representable for two candidates at
+  every declared field maximum. Leaf recurrence validation now proves that every
+  selected revision carries the named signal type and kind, intersects cited
+  evidence, and maps to exactly the listed sessions. Hierarchical recurrences
+  can only reuse a validated child record.
+- Topic hierarchy task inputs now store child results only in
+  `input_payload.child_topic_results`; metadata retains hashes and scheduling
+  identities. A near-limit regression proves that the single representation
+  fits while the retired duplicate representation exceeds the authenticated
+  640 KiB sidecar bound. The result/episode, schema-audit, hierarchy-cap,
+  sidecar, and module-boundary focused set passes 113/113. The complete
+  orchestration module ran 121 tests in 555.879 seconds; 120 passed and one
+  generic schema-example fixture rejected the new closed decision-code pattern.
+  Its exact repaired test and the complete affected focused set pass. Final
+  repository partitions, signed replacement head, admission, hosted CI, and the
+  two required Codex processors remain required.
+- The final dirty-tree inventory contains 1,682 unique Python 3.13 tests,
+  partitioned exactly once as 401, 451, 449, and 381 tests. An initial
+  four-process attempt lost every supervisor with no terminal summary when its
+  tool sessions were closed; shard 3 had also reported one contended signing
+  canary failure. That entire attempt is non-counting. A replacement durable
+  four-process run wrote owner-only atomic status records and completed every
+  partition with exit zero: shard 0 passed 401/401 in 2,060.454 seconds, shard 1
+  passed 451/451 in 1,605.167 seconds, shard 2 passed 449/449 in 1,772.683
+  seconds, and shard 3 passed 381/381 in 1,672.423 seconds. Every retained log
+  contains an explicit `OK` terminal summary, including the signing canary that
+  failed only in the discarded attempt.
+- Signed head `5990f182` passed the then-current local and hosted gates, but its
+  fresh-context Codex processor found five actionable contract gaps. Synthesis
+  leaf validation compared a subset against the complete topic inventory;
+  automation cutover admitted commands by substring instead of exact document
+  equality; hierarchical parents could not derive complete signal commitments
+  after compaction; the 128-item topic-hash array made larger valid runs
+  unrepresentable; and rejected-result idempotency omitted the legal rejection
+  reason. All head-bound delivery evidence is stale.
+- Synthesis now uses an authenticated recursive lineage owner. Every leaf and
+  parent carries a compact count-and-SHA-256 topic-result commitment, exact
+  per-signal commitments, and bounded deterministic exemplars derived from its
+  subtree. Only the final hierarchy root is compared with the complete accepted
+  topic inventory, so legal leaf subsets and more than 128 topic roots remain
+  representable without losing complete-union proof.
+- Automation cutover now accepts only the exact seven-field TOML document and a
+  byte-equal canonical production prompt. Prefixes, suffixes, leading
+  whitespace, control characters, unknown fields or tables, and alternate
+  command shapes fail closed. Rejected-result actions now use a versioned
+  binding that commits the allowlisted reason; changing only that reason is an
+  idempotency conflict.
+- Focused post-fix evidence passes result/schema validation 91/91, automation
+  cutover 15/15, the publication fixture 1/1, real hierarchical synthesis and
+  rejection replay 4/4, and module boundaries 19/19. The module aggregate
+  remains within its prior 3,050-line cap, and the new lineage owner has a
+  separate 225-line ceiling. Final static checks, complete repository
+  partitions, signed replacement head, admission, hosted CI, and both required
+  Codex processors remain delivery gates.
+- Two bounded read-only audits then found four additional edge cases before the
+  replacement head was frozen. Ordinary accepted-result and failure replays
+  incorrectly compared an absent rejection reason; canonical Unicode
+  executable paths reached an ASCII-only constant-time string comparison;
+  high-severity independent reviews in a sibling synthesis leaf were checked
+  against an incomplete local topic subset; and Python numeric equality allowed
+  Boolean or floating-point commitment counts to compare equal to integers.
+  Replay validation now scopes reason equality to rejected payloads, prompt
+  equality compares canonical UTF-8 bytes, review/topic union enforcement runs
+  only after sibling synthesis subtrees rejoin at the final root, and commitment
+  equality uses canonical type-preserving JSON.
+- The first 1,684-test durable partition attempt after those audits was stopped
+  deliberately and is non-counting because the additional findings changed the
+  tree. All four supervisors and their remaining test process groups were
+  terminated once, proved absent, and their owner-only logs and status files
+  remain only as discarded-run evidence. The repaired real hierarchy test also
+  exposed a test-fixture ordering bug: adjudication candidates must be rebuilt
+  in manifest hash order rather than global review completion order. The exact
+  path now passes five consecutive executions. Current-tree focused evidence
+  passes 25/25 targeted contracts, 110/110 complete result/schema/module tests,
+  and 63/63 CLI plus production-marker tests; changed-file and repository-wide
+  Ruff lint, exact changed-file formatting, and `git diff --check` are clean.
+- The final Python 3.13 tree contains 1,685 unique test identifiers partitioned
+  exactly once as 403, 451, 448, and 383 tests. A new owner-only durable run
+  completed every partition with exit zero: shard 0 passed 403/403 in 1,749.522
+  seconds, shard 1 passed 451/451 in 1,370.213 seconds, shard 2 passed 448/448
+  in 1,507.873 seconds, and shard 3 passed 383/383 in 1,443.955 seconds. Every
+  retained log contains an explicit `OK` terminal summary. Signing, exact-secret
+  admission, hosted CI, and the two required Codex processors remain delivery
+  gates.
+- Signed and pushed head `f015d6d4` closed the topic-lineage, cutover-document,
+  typed-commitment, and replay gaps. Its fresh-context Codex processor found two
+  further representability defects: global synthesis could emit at most twenty
+  rewrites while retained export required one synthesis row for every
+  high-impact turn, and hierarchy fit probes omitted the real synthesis turn-ref
+  sidecar while task creation authenticated it under the 640 KiB bound.
+  Postvalidation retained the exact range and trusted-control digests, and the
+  independent reviewer workspace was removed after the terminal findings were
+  accepted.
+- Synthesis now derives every rewrite from accepted resolved episode reviews,
+  commits the complete canonical rewrite set by count and SHA-256, and supplies
+  at most twenty deterministic exemplars to each leaf and parent. Result
+  validation rejects either a changed commitment or a changed exemplar set
+  before acceptance. Retained export rebuilds the complete evidence from
+  high-impact turn findings, verifies the same commitment, and treats synthesis
+  rows as bounded exemplars rather than an impossible complete enumeration.
+- Hierarchy sizing now serializes the exact immutable task sidecar, including
+  the real partition reference, metadata, and complete allowed-turn set, before
+  task creation. Synthesis leaf and parent turn refs are restricted to their
+  authenticated topic/review subtree, so oversized legal runs partition instead
+  of passing a trimmed probe and failing during materialization.
+- Current-tree focused evidence passes result/export/schema/module checks
+  179/179 in 13.775 seconds, the exact rewrite and sidecar regressions 5/5 in
+  1.218 seconds, capacity and module checks 21/21 in 4.870 seconds, the two
+  previously failing orchestration cases 2/2 in 3.028 seconds, and the complete
+  orchestration module 123/123 in 451.942 seconds. The combined contract, CLI,
+  Skill, result, and retained-history suite passes 1,164/1,164 in 405.078
+  seconds. Ruff 0.13.2 lint and formatting, Python 3.13 byte compilation, and
+  `git diff --check` are clean. Final repository partitions, signed replacement
+  head, admission, hosted CI, and both required Codex processors remain the
+  delivery gates.
+- The final Python 3.13 implementation and documentation tree contains 1,688
+  unique test identifiers partitioned exactly once as 404, 452, 449, and 383
+  tests. A new owner-only durable run completed every partition with supervisor
+  exit zero: shard 0 passed 404/404 in 1,754.507 seconds, shard 1 passed 452/452
+  in 1,344.398 seconds, shard 2 passed 449/449 in 1,508.714 seconds, and shard 3
+  passed 383/383 in 1,425.396 seconds. Every retained log contains its exact
+  `Selected`, `Ran`, and `OK` terminal lines, and the combined failure/traceback
+  scan is empty.
+- Signed and pushed head `c5e9a472` passed exact-secret admission and all six
+  hosted CI jobs. Its metadata-correct fresh Codex processor found one remaining
+  capacity mismatch: review/topic merge grouping measured only the non-final
+  run-input reference and metadata, while a one-group result is created with
+  the longer root reference and final metadata. A boundary input could therefore
+  pass grouping and fail only during authenticated task creation. The reviewer
+  workspace passed postvalidation, the trusted control manifest remained
+  unchanged, and the task root was removed.
+- Review and topic reduction now build every candidate task from one exact
+  domain-specific input builder. Greedy grouping requires both the intermediate
+  and final serialized forms to fit, and creation repeats the exact selected-form
+  check before staging. Separate episode and topic regressions simulate the
+  boundary where only the non-final form fits; both split into non-final groups,
+  and the existing complete hierarchy-cap test still converges. The two boundary
+  regressions pass 2/2 and the combined focused set passes 3/3. Final full-tree
+  tests, signing, admission, fresh review, hosted CI, and GitHub Codex evidence
+  remain required for the replacement head.
+- The replacement Python 3.13 tree contains 1,690 unique test identifiers
+  partitioned exactly once as 404, 452, 450, and 384 tests. The final bounded
+  run completed every partition with supervisor exit zero: shard 0 passed
+  404/404 in 1,721.829 seconds, shard 1 passed 452/452 in 1,348.571 seconds,
+  shard 2 passed 450/450 in 1,499.767 seconds, and shard 3 passed 384/384 in
+  1,420.932 seconds. Every log contains exact `Selected`, `Ran`, and `OK`
+  terminal lines, and the combined traceback/failure scan is empty. Signing,
+  admission, fresh review, hosted CI, and GitHub Codex evidence remain.
+- Signed and pushed head `59e05774` closed the final-vs-intermediate reduction
+  sizing gap and passed exact-secret admission. Its fresh-context Codex
+  processor found two remaining P1 representability defects: complete turn and
+  episode-revision arrays were copied through every reduction level, so a legal
+  large run could never converge to a bounded final sidecar; and adjudication
+  plus initial topic leaves did not probe the exact sidecar later supplied to
+  task creation. That head's review and CI evidence is stale.
+- Complete reduction lineage is now represented by type-preserving canonical
+  count-and-SHA-256 commitments, while task-visible turn and episode references
+  are bounded projections of already accepted child results. Review, topic,
+  adjudication, and synthesis task construction use shared exact input builders
+  for both capacity probing and creation. A hierarchy may perform one bounded
+  compaction when only the non-final shape fits, but an unchanged task count or
+  a still-oversized final shape fails explicitly instead of looping.
+- Current-tree regressions cover 3,000-member turn and episode lineages,
+  near-boundary adjudication and topic-leaf sidecars, exact probe/create
+  identity, bounded synthesis turn authorization, and hierarchy no-progress.
+  Result and episode validation passes 76/76 in 1.427 seconds, module boundaries
+  pass 19/19 in 1.979 seconds, and the complete orchestrator module passes
+  129/129 in 490.965 seconds. Ruff lint and changed-file formatting plus
+  `git diff --check` are clean.
+- The final Python 3.13 tree contains 1,695 unique test identifiers partitioned
+  exactly once as 405, 455, 449, and 386 tests. One durable four-process run
+  completed every partition with supervisor exit zero: shard 0 passed 405/405
+  in 1,639.689 seconds, shard 1 passed 455/455 in 1,274.751 seconds, shard 2
+  passed 449/449 in 1,413.625 seconds, and shard 3 passed 386/386 in 1,340.130
+  seconds. Every retained log contains exact `Selected`, `Ran`, and `OK`
+  terminal lines, and the combined traceback/failure scan is empty. Signing,
+  admission, fresh review, hosted CI, and GitHub Codex evidence remain delivery
+  gates.
+- Signed and pushed head `a6102a80` closed the recursive reduction-lineage and
+  sidecar-capacity defects, passed exact-secret admission, and passed all
+  hosted CI producers. Its fresh-context Codex processor then found two
+  release blockers: the publication canary searched only the signing-key
+  position in `VALIDSIG` and therefore rejected a valid signing subkey, while
+  Ubuntu-only CI skipped the real Darwin ACL security contracts. The lane
+  postvalidation reproduced its exact 36-commit graph and local-config
+  receipts, the trusted control manifest remained unchanged, and the private
+  reviewer workspace was removed. All head-bound evidence became stale.
+- GPG status parsing now has one strict shared owner. Complete nine-field rows
+  bind a primary signature directly; complete ten-field rows validate both the
+  signing-subkey and primary fingerprints and return only the primary. The
+  canary requires one exact primary match and fails closed on malformed or
+  multiple rows. A realistic ten-field signing-subkey regression passes, and
+  an independent read-only GPG audit returned `No findings.`
+- CI now has a required `macos-15` producer under an owner-controlled copied
+  Python 3.13 runtime. Ten ACL and Darwin access-policy tests carry one shared
+  marker, are discovered from the complete unittest inventory, and must match
+  one canonical policy tuple. Direct platform skips are forbidden by contract;
+  skipped, expected-failure, partial, duplicate, missing, or extra inventory
+  cannot pass the producer or aggregate job. The producer also verifies the
+  active Python leaf's canonical path, regular-file type, owner, mode, and link
+  count before test discovery.
+- The first post-review full attempt is non-counting. A bounded read-only audit
+  found that its initial Darwin runner admitted skipped tests, maintained only
+  hand-copied inventories, and relied on Ubuntu to validate the macOS runtime.
+  All four task-owned supervisors and their four orphaned test process groups
+  were terminated once and proved absent before the fixes. A later optional
+  final-tree audit returned no terminal artifact within ten minutes and was
+  closed as transport-inconclusive; it supplies no review result.
+- Final focused evidence passes CI contracts 11/11, the dynamically selected
+  Darwin security inventory 10/10 in 60.655 seconds, and the combined GPG,
+  CI, and module-boundary group 38/38 in 11.581 seconds. Ruff lint and changed
+  file formatting, `actionlint`, the official OpenAI skill validator,
+  project-journal validation, and `git diff --check` pass on the same tree.
+- The final Python 3.13 tree contains 1,700 unique test identifiers partitioned
+  exactly once as 405, 456, 452, and 387 tests. One owner-only durable run
+  completed every partition with supervisor exit zero: shard 0 passed 405/405
+  in 1,785.877 seconds, shard 1 passed 456/456 in 1,436.994 seconds, shard 2
+  passed 452/452 in 1,574.257 seconds, and shard 3 passed 387/387 in 1,500.523
+  seconds. Every retained log contains exact `Selected`, `Ran`, and `OK`
+  terminal lines, and the combined traceback/failure scan is empty.
+- A fresh-context Codex processor of signed head `5e030ff2` found four final
+  control-boundary gaps. Source leases accepted caller-projected roots and host
+  labels without binding the actual worker command; the public entrypoint put
+  the repository `scripts/` directory on import resolution before source
+  authentication; compact CamelCase credential fields could bypass retained
+  privacy checks; and Retrospective duplicated the five-host registry instead
+  of deriving it from `remote-host-context`. That head's review and prior
+  head-bound evidence became stale.
+- The authenticated `remote-host-context` helper is now the sole host-registry
+  source. A bounded AST parser reads exactly one static `HOSTS` literal without
+  executing helper code, normalizes canonical hosts and aliases, and freezes
+  the inventory plus its helper commitment in every run. Resume, scheduling,
+  publication, and remote execution reject inventory or helper drift. Local
+  roots derive from the account database rather than ambient `HOME`; remote
+  roots derive from the run-owned authenticated helper snapshot.
+- Source transport lease v3 commits the exact execution argv prefix and lexical
+  source root. The worker validates the actual OS argv, authenticated Python,
+  route, host, and root before scanning. The remote relay revalidates legacy
+  helper output and publishes only a locally rebound header; subagents still
+  receive no SSH authority. The public v2 entrypoint is now an authenticated
+  source-only bootstrap with a generated closed module manifest, while the CLI
+  implementation lives inside that authenticated package. Retained credential
+  assignment detection also covers bounded CamelCase secret/token suffixes.
+- The first 1,721-test four-shard attempt is non-counting. Child subprocesses
+  created bytecode in the authenticated source tree and two migrated fixtures
+  still relied on ambient `HOME` to select a local Codex root. The shard runner
+  now exports `PYTHONDONTWRITEBYTECODE=1` before discovery, with a real child
+  import regression. Test-only scans use an explicit private root context;
+  production continues to ignore ambient `HOME`. One later shard-0 attempt
+  exposed the same stale assumption in the descriptor-to-accept CLI fixture;
+  its failed 412/413 result is also non-counting. The complete adapter/CLI
+  module then passed 11/11 in 50.903 seconds, including the exact repaired case.
+- Final Python 3.13.12 evidence covers all 1,721 unique tests exactly once on
+  the final tree: shard 0 passes 413/413 in 1,512.907 seconds, shard 1 passes
+  459/459 in 1,271.819 seconds, shard 2 passes 456/456 in 1,415.460 seconds,
+  and shard 3 passes 393/393 in 1,332.137 seconds. Every runner exits zero and
+  reports `OK`. Ruff lint passes repository-wide; all 47 changed Python files
+  pass formatting; the generated bootstrap manifest, both workflows under
+  `actionlint`, the official OpenAI Skill validator, project-journal validator,
+  `git diff --check`, and the no-bytecode source-tree check are clean.
+- Signed head `44cda16f` passed exact-secret admission and started one fresh
+  Codex processor, but hosted shard 0 exposed two bootstrap fixture failures.
+  The fixture used ambient `tempfile` placement: Linux selected sticky
+  world-writable `/tmp`, which the production implementation-authority chain
+  correctly rejects, while the local Darwin temporary root was private. The
+  processor was stopped without consuming partial output, its independent
+  workspace postvalidated clean, and the task root was removed. Valid bootstrap
+  fixtures now live under the owner-controlled repository root, and an explicit
+  writable-ancestor regression preserves the fail-closed production property.
+  The bootstrap module passes 7/7, CI contracts pass 12/12 under the exact real
+  Python 3.13.12 executable, Ruff checks pass, and the new complete inventory
+  contains 1,722 unique tests partitioned as 413, 460, 456, and 393.
+- The next fresh-context Codex processor found two transport-authority gaps in
+  the authenticated helper inventory. A helper could declare an alternate
+  local label or root that the local scheduler would ignore, and executable
+  code after the static `HOSTS` literal could mutate or alias that registry
+  before the authenticated snapshot ran. The inventory now admits only the
+  scheduler's exact `local` / `~/.codex` binding. Static helper use is closed
+  to membership checks and two-level string-field reads; method mutation,
+  unbound mutators, and container or row aliases fail before a run freezes the
+  helper commitment.
+- The inventory regressions pass 7/7, module boundaries pass 19/19, and CI
+  contracts pass 12/12. The final Python 3.13.12 inventory contains 1,724
+  unique tests partitioned exactly once: shard 0 passes 414/414 in 1,460.457
+  seconds, shard 1 passes 461/461 in 1,128.260 seconds, shard 2 passes 455/455
+  in 1,258.546 seconds, and shard 3 passes 394/394 in 1,177.375 seconds. Every
+  runner exits zero with `OK`, and the combined failure and traceback scan is
+  empty.
+- Signed and pushed head `60f753a1` closed the static helper-registry mutation
+  gap, but its fresh Codex processor found that the static projection was not
+  rebound to the actual helper invocation. A follow-up read-only audit also
+  identified three related boundaries: the in-process helper bootstrap must not
+  be described as an arbitrary-Python sandbox, the backward-compatible relay
+  supplied a component commitment and live `0755` path where its bootstrap
+  required raw bytes and mode `0600`, and the installed helper does not yet
+  declare the retrospective-specific commands. All evidence for that head is
+  stale.
+- The complete authenticated helper snapshot is now explicitly the semantic
+  code trust root. Its static `HOSTS` data and top-level immutable
+  `SESSION_RETROSPECTIVE_COMMANDS` capability manifest are derived without
+  execution, runtime `HOSTS` is checked against
+  a domain-separated commitment and replaced by immutable copies, and the
+  binding is rechecked on ordinary return and `SystemExit`. This protects
+  declared registry data from ordinary drift without claiming to sandbox
+  arbitrary trusted Python reflection.
+- Required `session-shards` and `source-transport` declarations are preflighted
+  by `doctor`, `start`, and again before launch. A version-skewed run-owned
+  helper produces the explicit `remote_host_context_transport_incompatible`
+  source gap, distinct from remote unreachability and no activity. Snapshot
+  authentication and ordinary helper execution failures remain hard failures.
+  The legacy relay now copies exact helper
+  bytes into a temporary owner-private `0600` snapshot, executes that raw
+  digest, retains the component commitment only as provenance, and removes the
+  snapshot after the bounded relay. This parent-only transaction no longer
+  lives in a worker-reachable module.
+- One final precommit read-only audit found five actionable classification and
+  ownership gaps: authentication errors could be downgraded to compatibility,
+  dead `add_parser` calls could pose as capabilities, `start` could bypass the
+  doctor-only check, ordinary helper failures were mislabeled as registry
+  authentication, and the legacy materializer remained worker-visible. The
+  in-progress four-shard run was stopped as non-counting; all four verified
+  supervisors and their four exact child process groups were terminated once
+  and proved absent before edits. The fixes use one dedicated capability error,
+  an immutable top-level manifest, start-time validation, distinct execution
+  failure classification, and a parent-only relay owner.
+- Current-tree focused evidence passes host inventory 9/9, source transport
+  122/122 in 46.199 seconds, module boundaries 19/19, CI contracts 12/12,
+  bootstrap 7/7, and Skill contracts 5/5. Ruff lint and changed-file formatting,
+  both workflows under `actionlint`, the official OpenAI Skill validator,
+  project-journal validation, generated bootstrap manifest check, and
+  `git diff --check` are clean.
+  The exact 16-module transport inventory is 8,681/8,690 lines and the branch
+  proxy is 9,474/9,475.
+- A final closure audit then found that the real relay discarded bootstrap
+  failure classes and treated a missing `main` as HOSTS authentication failure.
+  The four active 1,732-test supervisors were interrupted once; the bounded
+  runners closed their process groups, and exact process queries found no
+  matching survivor. That run is non-counting. The bootstrap now normalizes
+  authenticated nonzero results, snapshot/runtime authentication failures, and
+  helper entrypoint/execution failures to a closed status set. The relay raises
+  separate typed errors, while the source worker catches only genuine
+  unavailability. Six exact failure-class regressions pass in 1.598 seconds,
+  including real relay authentication and execution paths; the complete source
+  transport suite first passed 120/120 in 47.443 seconds and the updated module
+  boundaries passed 19/19 in 2.328 seconds.
+- Final diff inspection found that terminal stream-filter completion still ran
+  before child status classification, so an execution failure after a valid
+  prefix could be mislabeled as a protocol failure. The first 1,735-test shard
+  run was stopped as non-counting, and exact process queries again found no
+  surviving shard runner. Terminal filter completion now follows the closed
+  child-status classification, and fixed bootstrap status survives diagnostic
+  sink failure. Two exact regressions pass 2/2 in 0.035 seconds; complete source
+  transport passes 122/122 in 46.199 seconds and module boundaries pass 19/19
+  in 2.489 seconds on the resulting tree.
+- The first complete 1,737-test partition run exposed one stale test fixture.
+  The remote output-limit test still supplied the migration-only probe as the
+  installed transport helper, so the new capability and inventory preflight
+  correctly rejected it. Shards 0, 2, and 3 passed 416/416, 456/456, and
+  399/399; shard 1 passed 465 tests and failed only that fixture assertion.
+  The test now uses the dedicated current-contract remote-host-context helper
+  fixture while the migration probe keeps its separate static-contract tests.
+  The exact repaired test passes 1/1.
+- The final frozen-tree Python 3.13.12 run passes all 1,737 tests with no
+  failure or traceback markers: shard 0 passes 416/416 in 1,834.318 seconds,
+  shard 1 passes 466/466 in 1,399.425 seconds, shard 2 passes 456/456 in
+  1,572.511 seconds, and shard 3 passes 399/399 in 1,466.617 seconds. Signing,
+  exact-secret admission, fresh local Codex processing, hosted CI, and
+  current-head GitHub Codex remain.
+- Signed head `b64a9e88` passed exact-secret admission, the fresh local Codex
+  processor with `No findings.`, and complete hosted CI. The first GitHub Codex
+  requests failed before review because the JoeyTeng GitHub identity was not
+  connected to Codex. After that connection and an explicitly authorized
+  same-head request, current-head GitHub Codex returned two actionable privacy
+  findings and one branch-name finding. All clean evidence for that head is
+  stale.
+- Personal-identifier policy is now shared by the agent-output redactor and the
+  independent retained validator. The retained scalar, reviewed prose, and
+  rendered-report reread paths reject labeled names and IDs; grouped and
+  compact `+` international phone numbers are detected only when they contain
+  7 through 15 digits. Dates, Python versions, short numeric labels, and
+  overlong grouped labels remain negative cases. The default-branch finding is
+  not actionable: GitHub repository metadata, `origin/HEAD`, and PR base all
+  identify `master`; `refs/heads/main` appears only as the separately owned
+  retained-history target example.
+- A pre-review negative probe then proved that a multi-token labeled value such
+  as `employee name: Alice Smith` left the second token after redaction. The
+  stale reviewer and hosted run were cancelled without accepting results. A
+  labeled personal-data match now consumes the complete single-line field
+  remainder, so the post-redactor cannot orphan later name tokens; focused
+  agent-result and retained-boundary regressions cover the multi-token case.
+  The exact three-case regression passes 3/3, the complete affected
+  result-contract, retained-export, and episode suites pass 165/165 in 17.857
+  seconds, and module boundaries remain 19/19 with the exact branch ceiling
+  unchanged.
+- The immediately preceding and current-head GitHub Codex reviews then exposed
+  five more agent-output/retained-policy mismatches: UNC paths, the complete
+  raw-ID label taxonomy, inline code fences, labeled internal hosts, and long
+  hexadecimal identifiers outside the retained validator's old 32-64 range.
+  The stale local reviewer and hosted run were stopped and cleaned without
+  accepting results. Those exact regex policies now live only in
+  `privacy_locators.py`; agent scanning/redaction and retained validation remain
+  independent execution points over the shared closed policy. The complete
+  closed-taxonomy scanner/redactor and retained-validator matrices pass,
+  including 24-digit and over-64-digit identifiers; the complete affected
+  suites pass 167/167 in 15.482 seconds, module boundaries pass 19/19 with an
+  exact 9,474/9,475 branch inventory, and the CI, Skill, and bootstrap contract
+  suites pass 24/24 under the real owner-controlled Python 3.13.12 executable.
+  One earlier symlink-path invocation is non-counting because the CI contract
+  correctly rejected `/opt/homebrew/bin/python3.13` before the exact rerun.
+- The focused privacy and retained suites pass 164/164. The complete stable
+  four-way partition executed all 1,739 test IDs: shard 0 passed 417/417 in
+  2,063.272 seconds, shard 1 passed 467/467 in 1,617.616 seconds, shard 3 passed
+  399/399 in 1,678.082 seconds, and shard 2 passed 455 tests before the exact
+  branch-inventory assertion reported the intentional 9,465 to 9,472 policy
+  increase. No production code changed after that run; the exact inventory was
+  updated without relaxing its 9,475 ceiling, and the complete module-boundary
+  suite then passed 19/19 in 2.125 seconds, closing the sole failed test ID.
+- GitHub Codex then identified three remaining shared-policy gaps on signed
+  head `3ff3eaca`: international numbers with a domestic trunk marker such as
+  `+44 (0)...`, an unmatched opening code fence, and UUID forms outside
+  versions 1 through 5. That head's local processor and hosted run were stopped
+  as stale; the independent workspace postvalidated clean before removal. The
+  shared policy now treats a bounded leading-plus candidate with 7 through 15
+  digits as a phone number, consumes an opening code fence through its closing
+  fence or end of text, and rejects every canonical hexadecimal UUID shape.
+  Exact scanner/redactor and retained-validator regressions cover all three
+  findings without changing the independent enforcement points. Four focused
+  regressions pass 4/4 in 0.401 seconds; the complete affected result-contract,
+  retained-export, and episode suites pass 167/167 in 13.939 seconds; module
+  boundaries pass 19/19 in 2.183 seconds; and the CI, Skill, and bootstrap
+  contracts pass 24/24 in 5.235 seconds. Ruff lint and formatting, project
+  journal validation, and `git diff --check` are clean.
+- The fresh whole-range Codex processor on signed head `1e696697` found one
+  further P1: common UK domestic forms such as `020 7946 0958`,
+  `(020) 7946 0958`, and `02079460958` still bypassed both enforcement points.
+  That head's hosted run was cancelled and its reviewer workspace postvalidated
+  clean before removal. The shared candidate policy now accepts bounded local
+  formatting but requires 10 through 15 digits without a leading plus; the
+  international branch retains its 7 through 15 digit bound. Dates, short
+  numeric labels, and overlong numeric labels remain explicit negative cases.
+  The first affected-suite run also proved that a domestic candidate could
+  consume the numeric tail of a UUID; independent domestic boundaries now
+  reject adjacency to identifier hyphens or underscores, preserving the raw-ID
+  category. The exact corrected regressions pass 3/3 in 0.638 seconds and the
+  complete affected suites pass 167/167 in 14.630 seconds. Module boundaries
+  pass 19/19 in 1.867 seconds with the exact branch inventory at the unchanged
+  9,475 ceiling; CI, Skill, and bootstrap contracts pass 24/24 in 5.339 seconds.
+  Ruff lint/format and project-journal validation are clean.
+- The fresh whole-range Codex processor on signed head `94e59f48` found two
+  further P1 gaps. Durable-history graph reads did not disable repository
+  commit-graph and multi-pack-index caches, and source-overlap validation did
+  not treat values extracted from closed credential and personal-data labels
+  as standalone sensitive tokens. The head's hosted CI and GitHub Codex
+  request were cancelled and remain stale; the independent reviewer workspace
+  postvalidated clean before removal.
+- History authority, publisher, admission, and migration reads now consume one
+  shared cache-disable argument contract, so repository-local cache settings
+  cannot decide signature topology or retained publication ancestry. The
+  result validator now expands source candidates with only the existing closed
+  credential and personal-label taxonomies, preserves credential-redaction
+  precedence, and applies the same expansion to leak scanning and deterministic
+  post-redaction. Expansion is lazy and fails closed at a separate 512-item,
+  1-MiB derived-candidate ceiling. Bare, quoted, prompt, and tool-output cases
+  are covered while ordinary labels and safe credential statuses remain
+  negative cases.
+  Current-tree evidence passes the complete affected privacy/result set
+  168/168, history Git cache/credential controls 2/2, authority correctness
+  6/6, legacy descriptor-bound history checks 2/2, module boundaries 19/19,
+  and CI, Skill, and bootstrap contracts 24/24. The exact engine branch
+  inventory remains 9,475/9,475 without raising the ceiling; Ruff lint and
+  formatting, the official Skill validator, project-journal validation, the
+  generated bootstrap manifest check, and `git diff --check` are clean.
+- Signed head `dfd83c2e` became stale when GitHub Codex rebound two unresolved
+  current-range P1 findings: valid 7-9 digit domestic phone numbers could pass
+  both privacy defenses, and a malformed explicit source timestamp could fall
+  back to the rollout filename. Its fresh local processor was stopped without
+  accepting partial output, the workspace postvalidated clean before removal,
+  and the hosted run was cancelled as non-counting.
+- Short domestic numbers are now recognized only under a closed phone-context
+  label with bounded flexible horizontal whitespace; bare short numbers, dates,
+  versions, and overlong labels remain negative cases. Credential, personal,
+  and source-overlap redaction now preserve their priorities across label-only,
+  separator-only, complete-source, and credential-context substitutions for
+  both original prompts and tool output. A malformed present source-time field
+  blocks stable locator fallback and produces `source_event_time_unavailable`;
+  a genuinely missing field may still use the stable rollout filename. One
+  four-shard run was stopped as non-counting after a precommit audit found the
+  composition gaps; all exact shard processes were interrupted once and proved
+  absent before edits. The final bounded read-only re-audit reports
+  `No findings.` Focused evidence across the fix sequence passes result privacy 21/21,
+  result/episode behavior 79/79, retained export 70/70, catalog 30/30, source
+  transport 123/123, module boundaries 19/19 with the unchanged 9,475/9,475
+  branch inventory, and CI/Skill/bootstrap contracts 24/24. Ruff lint and
+  formatting are clean. The final frozen code-and-test tree passes all 1,747
+  tests: shard 0 passes 418/418 in 1,576.025 seconds, shard 1 passes 470/470 in
+  1,253.496 seconds, shard 2 passes 459/459 in 1,361.142 seconds, and shard 3
+  passes 400/400 in 1,271.926 seconds.
+- Signed head `6d5013a8` became stale when current-head GitHub Codex found that
+  three-character values from closed sensitive labels were not retained as
+  standalone source-overlap tokens. An explicitly authorized same-head review
+  then found that the short-phone context omitted `Phone number` and
+  `Telephone number`, while the personal-label taxonomy omitted closed address
+  qualifiers such as customer, home, mailing, postal, residential, and
+  shipping. The local Codex processor was stopped without accepting output;
+  its independent workspace postvalidated clean, the trusted bundle digests
+  remained unchanged, and the exact task root was removed.
+- Source-overlap expansion now records provenance for normalized
+  three-character values extracted from a sensitive label and applies the
+  same Unicode token boundaries to leak scanning and deterministic
+  post-redaction. Normalization maps every case-folded character back to its
+  exact original source span, so expansions such as `\u00df` to `ss` redact
+  the correct bytes without making `Bob` match `Bobby`. A bounded 96-character
+  overlap preserves the complete closed label context across source windows.
+  Short phone values are extracted only under the closed context and only with
+  7 through 15 digits; dates, five-digit values, overlong numbers, and
+  unlabeled three-character text remain negative cases.
+- Precommit audits found and closed four composition gaps: source-window label
+  splits, case folding after the minimum-length decision, missing short-token
+  boundaries, and scan/redaction Unicode-semantic drift. A separate
+  phone/address audit found that contextual phone evidence was lost once only
+  its value reached agent output; the source index now retains that extracted
+  value. Its exact re-audit reports `No findings.` One broader mapping audit
+  ended transport-inconclusive and supplied no accepted finding or clean
+  evidence. Three four-shard attempts were stopped as non-counting when newer
+  findings invalidated their frozen trees; every exact runner was allowed to
+  terminate or was interrupted once, and no stale test or reviewer process
+  remained before edits resumed.
+- Current-tree affected evidence passes result/episode behavior 80/80,
+  result-contract audit 21/21, retained export/reporting 70/70, and orchestrator
+  source-overlap behavior 7/7. Module boundaries pass 19/19 with the exact
+  branch inventory reduced from 9,475 to 9,468 without raising its 9,475
+  ceiling; CI, Skill, and bootstrap contracts pass 24/24. Ruff 0.13.2 lint and
+  formatting, the official OpenAI Skill validator, the generated bootstrap
+  manifest check, and `git diff --check` are clean.
+- The final frozen code-and-test tree executes all 1,748 Python 3.13 tests
+  exactly once across four deterministic shards: shard 0 passes 419/419 in
+  1,576.422 seconds, shard 1 passes 470/470 in 1,249.070 seconds, shard 2 passes
+  459/459 in 1,356.344 seconds, and shard 3 passes 400/400 in 1,268.206 seconds.
+- Signed head `05419453` became stale when current-head GitHub Codex found three
+  remaining retained-privacy gaps: personal-name labels omitted `full`, `first`,
+  and `last` modifiers; the shared credential taxonomy omitted `passphrase`,
+  `passcode`, and `PIN`; and reviewed prose did not reject explicit terminal,
+  console, or shell output labels. Its local Codex processor was stopped without
+  accepting partial output, the independent workspace postvalidated clean, and
+  the exact task root was removed before implementation resumed.
+- Personal labels now accept the closed spaced, underscored, hyphenated, and
+  camel-case forms for account, customer, employee, person, and user names.
+  Credential labels accept passphrases and passcodes, exact uppercase `PIN`, and
+  prefixed camel-case `Passphrase`, `Passcode`, and `Pin` suffixes. Lowercase
+  dependency or hardware uses such as `pin=GPIO17`, `--pin requests==2.32.5`,
+  and `The pin is bent.` remain explicit negative cases. Retained reviewed prose
+  rejects terminal, console, and shell output only when the phrase is used as an
+  explicit `:` or `=` label, preserving ordinary summaries about output quality
+  or formatting. Scanner/redactor, source-overlap, retained assembly, retained
+  reread, and report validation share the closed implementation.
+- A bounded precommit audit first found four camel-case and false-positive gaps;
+  the corrected re-audit reports `No findings.` The affected result/episode,
+  result-contract audit, and retained export/reporting suites pass 171/171.
+  Module boundaries pass 19/19; CI, Skill, and bootstrap contracts pass 24/24;
+  Ruff lint and formatting plus `git diff --check` are clean.
+- Several early full-shard invocations are non-counting because they selected
+  the physical Homebrew Framework Python below the other-user-writable
+  `/opt/homebrew` ancestor. A single isolated failing history test exposed the
+  exact `ExecutableAuthorityError`; no production change was made. Re-running
+  through the repository's owner-controlled Python 3.13.12 copy created by
+  `venv --copies` restored the executable-authority contract. The final frozen
+  tree passes all 1,748 tests: shard 0 passes 419/419 in 1,633.108 seconds,
+  shard 1 passes 470/470 in 1,300.820 seconds, shard 2 passes 459/459 in
+  1,410.850 seconds, and shard 3 passes 400/400 in 1,322.127 seconds.
+- Signed head `a3b3651d` became stale when current-head GitHub Codex found two
+  remaining retained-privacy gaps: bare `Full name`, `First name`, and
+  `Last name` labels without a subject prefix could pass both privacy defenses,
+  and split `pass phrase` and `pass code` labels were absent from the shared
+  credential taxonomy. The old hosted run was cancelled. One local processor
+  attempt failed before review because its supplied Git prefix omitted required
+  isolation metadata; a corrected attempt was stopped without accepting partial
+  output after the GitHub findings invalidated the head. Both independent task
+  roots postvalidated clean before removal.
+- Bare personal-name labels now use a separate closed pattern with line-start,
+  Markdown-marker, punctuation, and quoted structured boundaries, including
+  escaped double- and single-quoted values. Split passphrase and passcode forms
+  accept only horizontal space, hyphen, or underscore separators, so labels
+  cannot join across lines. Scanner/redactor, source-overlap extraction,
+  retained validation, and report validation share the implementation.
+- Bounded precommit audits found and closed four composition gaps: ordinary
+  whitespace false positives, cross-line credential matching, weak redaction
+  assertions, and incomplete source-overlap coverage. Follow-up audits then
+  closed structured-prefix, quoted-value, and escaped-quote truncation gaps;
+  the final exact re-audit reports `No findings.` One earlier four-shard run was
+  stopped as non-counting when those audits invalidated its tree. Its exact
+  processes were interrupted once, proved absent, and the bounded temporary
+  residue was removed before the final run.
+- Final current-tree evidence passes the complete affected suites 172/172,
+  module boundaries 19/19 with the exact branch inventory restored to the
+  historical 9,475 ceiling, and CI, Skill, and bootstrap contracts 24/24.
+  Ruff 0.13.2 lint and formatting, the official OpenAI Skill validator, the
+  generated bootstrap manifest check, and `git diff --check` are clean. The
+  final frozen Python 3.13 tree passes all 1,749 tests: shard 0 passes 419/419
+  in 1,649.349 seconds, shard 1 passes 471/471 in 1,321.413 seconds, shard 2
+  passes 459/459 in 1,429.073 seconds, and shard 3 passes 400/400 in 1,332.867
+  seconds.
+- Signed checkpoint `5c57a90c` became stale when its fresh whole-range Codex
+  processor found three release blockers: the shared personal-data taxonomy
+  omitted client, tenant, and organization names plus possessive name labels
+  and common government/payment/account identifiers; shadow mode bypassed the
+  fixed installed coordinator Python; and oversized rejected-result identity
+  sampled only the first and last 64 KiB of a payload.
+- The shared scanner/redactor, source-overlap extraction, retained validator,
+  and report validator now use one closed expanded personal-data taxonomy,
+  including quoted structured values. Shadow and production `doctor`/`start`
+  both authenticate the fixed installed Python. Rejected payloads up to 1 MiB
+  use the complete verified SHA-256 and the replayable v2 action; larger
+  payloads use an explicit content-free v3 observation with
+  `result_digest_exact: false` and cannot replay as an identity match.
+- The exact reviewer-fix regressions pass 8/8. Complete affected modules pass
+  102/102, 116/116, and 212/212; Darwin security contracts pass 10/10; CI and
+  Skill contracts pass 17/17. The engine branch inventory decreases from 9,475
+  to the new exact 9,472 ceiling. Ruff 0.13.2 lint and changed-file formatting,
+  the generated bootstrap manifest, official Skill validator, project-journal
+  validator, and `git diff --check` are clean. The final Python 3.13 tree passes
+  all 1,752 tests exactly once: shard 0 passes 421/421 in 1,710.706 seconds,
+  shard 1 passes 471/471 in 1,366.345 seconds, shard 2 passes 460/460 in
+  1,485.831 seconds, and shard 3 passes 400/400 in 1,391.701 seconds.
+- Signed head `77f37b13` became stale when its fresh whole-range Codex processor
+  found three release blockers: the personal-data grammar omitted date of birth,
+  possessive address, and Markdown label forms; oversized result classification
+  closed and reopened the result between classification and hashing; and each CI
+  shard independently discovered its own test inventory without a shared proof
+  that every source and test ID was represented.
+- The shared privacy grammar now recognizes closed DOB/date-of-birth, possessive
+  address, and paired Markdown label forms across scanner/redactor,
+  source-overlap, retained validation, and report validation. Canonical
+  placeholders from the exact known set remain accepted only when no additional
+  value follows. JSON-escaped quoted values, unquoted narrative prefixes, and
+  trailing ASCII or Unicode data after a placeholder are independently decoded
+  and extracted for source-overlap checks. Punctuation, quote, backtick,
+  Markdown, escaped quote, structural, and smart-quote wrappers normalize to the
+  same value without making ordinary address-book, status, policy, or
+  pure-placeholder prose sensitive. The prior redacted-prefix lookahead was
+  removed rather than retained as an unbounded backtracking path.
+- Agent-result classification now binds one owner-only no-follow descriptor.
+  Payload-sized and digest-sized files are read twice and compared on that
+  descriptor while identity, size, stat access policy, and descriptor ACL policy
+  are revalidated against the bound name. Files above the digest ceiling are not
+  content-read and receive an explicit nonexact, nonreplayable observation after
+  the same structural revalidation. Close failures preserve a prior safety error
+  as primary evidence and fail independently only after an otherwise successful
+  observation. The exact engine branch inventory is 9,473 under the unchanged
+  historical ceiling of 9,475.
+- CI now generates one bounded canonical manifest containing the complete sorted
+  test-ID inventory and an independent `tests/**/test_*.py` path/module/SHA-256
+  content inventory, transports it to every shard, and requires exact equality
+  before selection. A closed loader enumerates real module and class
+  dictionaries, rejects `load_tests`, module `__getattr__`/`__dir__`, custom
+  module types, custom test metaclasses, wrapped async/generator methods,
+  `runTest` fallback, and imported external test cases, and never delegates
+  discovery to those hooks. Runtime instrumentation rejects non-`None` method
+  results in ordinary shards and the separate Darwin security runner. One
+  captured `(test_id, test)` ordering governs both verification and sharding;
+  skipped, expected-failure, unexpected-success, partial, missing-source,
+  changed-source, or replaced-ID execution cannot pass. The documented local
+  loop clears stale manifests, fails immediately before shard execution, and
+  still aggregates every shard result once execution begins.
+- Final precommit privacy audits additionally closed embedded noncanonical
+  placeholders, no-separator ASCII and CJK personal-value suffixes, eager
+  overlap-source expansion, and a retained-validator parity gap. The agent
+  result scanner and retained artifact assembly/reread validator now consume the
+  same closed placeholder vocabulary. Final test-inventory audits closed
+  wrapper-chain, `runTest`, non-`None` result, and Darwin-runner bypasses without
+  broadening accepted test semantics.
+- The final canonical Python 3.13 inventory contains 1,782 test IDs and 22
+  authenticated source modules under manifest digest
+  `78d630e684d7eafa44f10b8cea7db732d71844b7f4cd10e4eb7ae1c9d1856e80`.
+  On the frozen implementation tree, shard 0 passes 426/426 in 1,949.531
+  seconds, shard 1 passes 481/481 in 1,200.589 seconds, shard 2 passes 467/467
+  in 1,695.955 seconds, and shard 3 passes 408/408 in 1,606.716 seconds. The
+  separate Darwin security runner passes 10/10 in 99.030 seconds; affected
+  module groups pass 134/134 and 176/176; final privacy and test-inventory
+  precommit audits both report `No findings.`
+- One earlier parallel execution of the same final manifest reported an
+  isolated `INVALID_INPUT` instead of the expected interrupted-export
+  `INVALID_STATE` in
+  `test_export_retry_rejects_a_different_destination_before_staging`. It is
+  retained as non-counting transient evidence rather than silently treated as
+  success. The exact test passed in isolation, its eight-test adjacent order
+  passed, the complete 481-test shard order passed, and 12 additional fresh
+  random-fixture executions all returned the exact expected
+  `invalid_state/run_transition_invalid` machine result. No production or test
+  expectation was weakened.
+- Signed head `5cbe2a6e` became stale when current-head GitHub Codex found three
+  retained-privacy blockers: a field-boundary bare `Address` value, an
+  unlabeled standard SSN, and an unlabeled payment-card number could bypass the
+  shared personal-data locator. The in-flight local Codex processor was
+  interrupted without accepting partial output, its independent workspace
+  postvalidated clean, and its exact task root was removed. The obsolete hosted
+  run was cancelled before further testing.
+- The shared scanner, post-redactor, source-overlap index, retained assembly,
+  retained reread, and report validator now recognize field-boundary physical
+  addresses, bounded standard SSNs, and 13-19 digit Luhn-valid payment-card
+  numbers. Address handling preserves ordinary postal commas and known
+  `City`, `Postal Code`, `Apt`, and `Unit` continuations, stops before unrelated
+  `, field:` boundaries, extracts complete and component overlap values, and
+  excludes single or multi-component `0x` memory addresses. Explicit phone
+  fields cover quoted, Markdown, JSON, camel-case, `no`, and compound contact
+  aliases while unlabeled phone candidates remain independently bounded.
+- The bounded precommit privacy audit found and closed comma truncation,
+  memory-address false positives, phone/card substring overlap, missing
+  left/right boundaries, explicit phone aliases, address continuation fields,
+  quoted component normalization, and one- or two-character apartment/unit
+  overlap. The final closure-only re-audit reports `No findings.` The final
+  affected Python 3.13 modules pass 23/23, 83/83, 71/71, and 19/19; the exact
+  engine branch inventory is 9,473 under the unchanged 9,475 ceiling.
+- The final canonical Python 3.13 inventory contains 1,783 test IDs from 22
+  authenticated source modules under manifest digest
+  `cf72ad014462d540a3788d1de50ab00bb7f502ed1299ab7e519b7a913f4a1444`.
+  Two shard tasks accidentally started against the pre-final manifest were
+  cancelled once and are explicitly non-counting. The sequential final run
+  passes every current-tree test exactly once: shard 0 passes 426/426 in
+  1,577.065 seconds (task `01a0189c-11b8-78d1-ab62-a51038a5904c`), shard 1
+  passes 481/481 in 1,225.093 seconds (task
+  `01a018b6-0b70-7703-96fc-6f6816ceb719`), shard 2 passes 467/467 in
+  1,344.018 seconds (task `01a018ca-f7ec-7763-9403-fa4bf837f005`), and shard
+  3 passes 409/409 in 1,224.751 seconds (task
+  `01a018e0-08f3-7f72-b36f-6b830fa22f39`). Every task exits zero with an
+  explicit `OK` terminal summary. The independent Darwin security inventory
+  passes 10/10 in 65.332 seconds.
+- Signed head `d547cd53` became stale after the fresh local Codex processor found
+  that narrative field assignments such as `customer's name is ...` bypassed
+  the shared privacy locator and that one filesystem-flags test could skip in
+  an ordinary shard. Current-head GitHub Codex independently found that valid
+  unlabeled compact IBANs also bypassed the scanner, redactor, and retained
+  validator. The replacement implementation adds closed `is`, `was`, and
+  `set to` narrative connectors, compact and canonically grouped IBAN matching
+  with mod-97 validation, and shared coverage across scanning, overlap
+  extraction, post-redaction, retained assembly, and retained reread.
+- The flags case is now an explicit Darwin security test. The canonical Darwin
+  inventory contains 11 exact IDs, and the CI contract rejects ordinary
+  `self.skipTest` calls or platform decorators outside that marked inventory.
+  Two older chmod-dependent v1 assertions now fail closed instead of silently
+  skipping. The final Darwin run passes 11/11 in 66.290 seconds; privacy and
+  retained-result modules pass 23/23, 83/83, and 71/71; CI contracts pass
+  33/33; module boundaries pass 19/19 with an exact branch inventory of 9,475;
+  and the public skill contract passes 5/5.
+- The final Python 3.13 test inventory remains 1,783 exact IDs from 22 source
+  modules under manifest digest
+  `b51cd66848c5172fe4487b003582aca5337055936bd222b4f60e88b953152119`.
+  Source-only shard 0 passes 426/426 in 1,759.406 seconds (task
+  `01a0194d-8506-7013-8e51-de8e9c0a7c1c`), shard 1 passes 481/481 in
+  1,371.744 seconds (task `01a0194b-bbb3-7a31-a051-bd4078d4bcd6`), shard 2
+  passes 467/467 in 1,475.423 seconds (task
+  `01a0194b-cbce-7112-9699-aa78d6092b01`), and shard 3 passes 409/409 in
+  1,657.454 seconds (task `01a0192c-b166-74e0-b211-3a9eb63cc1f1`). Every
+  counted shard exits zero with a complete, untruncated `OK` summary.
+- The first final-manifest shard 0-2 executions are retained as non-counting
+  environment evidence: ignored bytecode caches created by earlier focused
+  commands predated those tasks, so the source-authority and bootstrap tests
+  correctly rejected import substitutes. The exact caches were removed, the
+  source-only invariant remained stable, and the three complete shard reruns
+  above passed without expectation changes. Four still-earlier pre-final
+  tasks (`01a01916-0e3d-7d91-9b4c-247d37d8c9c8`,
+  `01a01916-0e3d-7d91-9b4c-24890d21a939`,
+  `01a01915-fc1a-7710-9fb6-233eaa89e89e`, and
+  `01a01916-0629-7f71-a36b-3cb84b16f9b1`) were cancelled once the IBAN
+  blocker made their tree stale. The Darwin/skip precommit audit reports
+  `No findings.`; two bounded privacy-audit transports ended inconclusive, and
+  no partial output from either was accepted as review evidence.
+- Signed head `de95998a` became stale when its fresh whole-range Codex processor
+  found three retained-privacy blockers: closed credential-field matching did
+  not cover PascalCase forms, bare `Full`/`First`/`Last name` and `Address`
+  narratives could bypass field detection, and grouped IBAN recognition was
+  uppercase-only. The independent workspace postvalidated clean and was safely
+  removed after the terminal findings were recorded.
+- The shared scanner, redactor, source-overlap index, retained assembly, retained
+  reread, and report validator now use one closed PascalCase credential taxonomy;
+  bounded narrative value derivation; bare name/address assignment and narrative
+  forms; and compact or canonically grouped, case-insensitive, country-length and
+  mod-97-valid IBAN recognition. The country-length table was independently
+  compared with all 89 records in the official SWIFT IBAN Registry Release 102
+  (June 2026), rather than inferred from examples.
+- Two bounded precommit privacy audits closed status-plus-value, punctuation,
+  wrapper, comma-separated name, Markdown, malformed-Markdown, metadata, and
+  source-overlap edge cases. Complete and malformed Markdown preserve distinct
+  span semantics; unbalanced tails participate in sensitivity decisions; pure
+  `required`/`missing`/`unavailable` status metadata remains nonsensitive; and
+  single- or double-marker emphasis cannot hide a labeled value. The final
+  closure-only audit reports `No findings.` Focused Python 3.13 contracts pass
+  24/24, 83/83, 71/71, 19/19, 33/33, and 5/5; the exact engine branch inventory
+  is 9,488.
+- Exact-secret admission on signed heads `edcc5f03` and `3437dcb4` was
+  inconclusive. Replacing newly added non-catalog credential-shaped values with
+  role-specific synthetic-token catalog values removed the raw fixture
+  ambiguity but did not complete admission. A read-only stage diagnostic then
+  localized the remaining `generic-secret-assignment` opaque container to the
+  new PascalCase audit fixture: dynamic f-strings could not supply stable raw
+  assignment bytes, and one safe `missing` control could not prove its nested
+  source-string boundary. The sensitive fixtures now use literal catalog values,
+  while the safe control splits its field and status source fragments. Runtime
+  test values are unchanged and production logic was not modified.
+- The preceding complete runs under manifest digests
+  `baf89b8dfba1e2924bb8d59bf1b344cc2d28e4de8fb9caaa68890f8aa530bc6c`
+  and `f6832853b38ee92e817198cd3b93a1a95cf365914f9e0197d35d007084745c15`
+  remain prior-tree evidence.
+- The final canonical Python 3.13 inventory contains 1,784 exact test IDs from
+  22 authenticated source modules under manifest digest
+  `ec3779702e260c06a80680379cd4183955698bda184df6de52bb7e30a9970035`.
+  Shard 0 passes 427/427 in 1,680.973 seconds, shard 1 passes 481/481 in
+  1,303.504 seconds, shard 2 passes 467/467 in 1,397.660 seconds, and shard 3
+  passes 409/409 in 1,332.653 seconds. Every bounded wrapper exits zero with an
+  explicit `OK` summary. Four earlier pre-closure shard tasks were cancelled and
+  remain non-counting. A mistaken Darwin `--help` probe ran tests without a
+  pollable terminal receipt and is also non-counting; the formal bounded Darwin
+  gate separately passes 11/11 in 77.519 seconds with exit zero.
+- Signed head `54b4dca3` became stale when current-head GitHub Codex found three
+  release blockers: middle-name labels were absent from the shared personal-data
+  taxonomy, publication Git calls inherited repository FSMonitor hooks, and an
+  attacker-controlled `gpg.conf` could redirect GnuPG writes before publication
+  or verification. The shared scanner, redactor, source-overlap index, retained
+  assembly, retained reread, and report validator now recognize closed
+  middle-name field forms. Every publication Git topology call forces
+  `core.fsmonitor=false`. GnuPG listing, canary, signing, and verification now
+  use a fixed source-authenticated launcher that inserts `--no-options`, while
+  binding and revalidating both the launcher and selected real GnuPG executable.
+- The new adversarial regressions prove a malicious repository FSMonitor cannot
+  execute, malicious GnuPG configuration cannot create its redirected marker,
+  repository-local GPG program overrides cannot replace the bound launcher, and
+  middle-name values are rejected across scan, overlap, redaction, retained, and
+  report layers while ordinary status prose remains safe. One exact five-test
+  publication run ended without a recoverable terminal receipt after its parent
+  response stream disconnected and is non-counting; the same pollable argv then
+  passed 5/5 in 279.504 seconds. Focused module/skill/publication contracts pass
+  63/63, CI contracts pass 33/33, and the generated bootstrap manifest,
+  `actionlint`, Ruff 0.13.2 lint/format, shell syntax and ShellCheck, the official
+  OpenAI Skill validator, project-journal validation, and `git diff --check`
+  pass. Validation used an owner-only copied Python 3.13.12 runtime because the
+  ambient Homebrew Cellar ancestor was group-writable and therefore correctly
+  rejected by executable-authority checks.
+- The final current-tree Python 3.13 inventory contains 1,787 exact test IDs
+  from 22 authenticated source modules under manifest digest
+  `438fff1a0e4adaec52138122f0a7369e35b461af3fedbf6c0cbad672f62719cb`.
+  The sequential closed run passes every test exactly once: shard 0 passes
+  427/427 in 1,606.764 seconds, shard 1 passes 484/484 in 1,375.495 seconds,
+  shard 2 passes 467/467 in 1,330.983 seconds, and shard 3 passes 409/409 in
+  1,281.917 seconds. Every shard exits zero with an explicit `OK` terminal
+  summary. The independent Darwin security inventory passes 11/11 in 75.705
+  seconds.
+- Signed head `b65cea58` became stale when its fresh whole-range Codex processor
+  found that invisible control and Unicode default-ignorable characters could
+  be inserted into model prose to evade source-overlap matching and could then
+  survive into retained prose. The reviewer workspace was independently
+  materialized and validated from trusted private release `f9e596f4`; its
+  manifest, skill, and guard digests remained unchanged after review, the
+  workspace postvalidated clean, and its task root was safely removed.
+- The shared privacy owner now defines a closed C0, DEL/C1, and Unicode
+  default-ignorable policy. Model-result keys reject every listed character;
+  string values canonicalize whitespace controls before redaction and reject
+  all remaining hidden characters. Source-overlap comparison applies the same
+  whitespace canonicalization and removes the remaining hidden characters on
+  both source and result sides, while retained safe strings, reviewed prose,
+  bundle assembly, and bundle reread validation fail closed if any such
+  character remains. The data and architecture contracts document the same
+  boundary.
+- The first 181-test affected-module run is non-counting: rejecting all control
+  characters before redaction broke canonical multiline model output and ended
+  with 12 errors and 2 failures. The corrected design normalizes whitespace
+  controls before redaction while rejecting non-whitespace controls and
+  default-ignorables. Exact old/new regressions then pass 9/9 in 21.096 seconds;
+  affected result, export, and audit modules pass 181/181 in 81.902 seconds;
+  module boundaries pass 19/19 in 1.866 seconds with an exact branch inventory
+  of 9,498 under the unchanged 9,500 ceiling; CI contracts pass 33/33; and the
+  public skill contract passes 5/5.
+- The final Python 3.13 inventory contains 1,790 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `2a958ce89869327bd60b6a7ca44730f13f11153a2afa6abf1639977c7f25cec7`.
+  Shard 0 passes 428/428 in 1,719.827 seconds, shard 1 passes 484/484 in
+  1,481.349 seconds, shard 2 passes 468/468 in 1,454.321 seconds, and shard 3
+  passes 410/410 in 1,376.131 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary, for exact aggregate coverage of 1,790/1,790. The
+  independent Darwin security inventory passes 11/11 in 68.430 seconds.
+- The generated bootstrap manifest, Ruff 0.13.2 lint and changed-file format
+  checks, both real workflows under `actionlint`, shell syntax and ShellCheck,
+  the isolated official OpenAI Skill validator, and `git diff --check` pass.
+  One actionlint invocation named a nonexistent workflow and one validator
+  invocation used a local environment without PyYAML; both are recorded as
+  non-counting command errors, and neither is substituted for the successful
+  authoritative rerun.
+- Signed head `dfa49fc5` became stale when its fresh whole-range Codex processor
+  found that four bounded subprocess owners treated stdout/stderr EOF as process
+  exit. A child could close both output streams, continue a required side
+  effect, and be killed before that side effect completed. The affected owners
+  were publication Git/GPG commands, retained-history authority commands, the
+  publisher canary, and remote-host-context relay. The reviewer workspace was
+  independently materialized and validated, postvalidated clean after the
+  terminal finding, and safely removed.
+- The four owners now share one unreaped-leader lifecycle contract. After output
+  EOF they wait for terminal leader state under the original deadline while the
+  unreaped PID still fences PID/PGID reuse; only then do they terminate the
+  task-owned process group and reap the leader. The group-signal capability is
+  retired before reaping, so exception cleanup cannot signal or probe a reused
+  group identifier. Deterministic regressions cover post-EOF side effects,
+  deadline expiry, descendant cleanup, and interruption after reap. Canary
+  contracts pass 11/11 in 8.708 seconds, exact publication/authority regressions
+  pass 2/2, exact remote regressions pass 3/3, the complete source-transport
+  module passes 126/126 in 41.487 seconds, and module boundaries pass 19/19 with
+  an exact branch inventory of 9,491 under the 9,500 ceiling.
+- One earlier four-shard run and one sequential publication-module run were
+  intentionally interrupted after later lifecycle audits changed or superseded
+  their covered tree; both are non-counting. Focused invocations that bypassed
+  the isolated repository runner, plus one prior response-stream-disconnected
+  canary run without a recoverable terminal summary, are also non-counting and
+  are not substituted for the successful isolated reruns above.
+- The final Python 3.13 inventory contains 1,798 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `41f15e21f70ae9f83db186d23f8ecac5f3505baed50deec2ae22948c75fdf824`.
+  Shard 0 passes 430/430 in 1,650.747 seconds, shard 1 passes 485/485 in
+  1,409.432 seconds, shard 2 passes 472/472 in 1,382.241 seconds, and shard 3
+  passes 411/411 in 1,304.038 seconds. Every official shard exits zero with an
+  explicit `OK` terminal summary, for exact aggregate coverage of 1,798/1,798.
+  The independent Darwin security inventory passes 11/11 in 66.878 seconds.
+  CI and public-skill contracts pass 38/38; the generated bootstrap manifest,
+  Ruff lint and changed-file format checks, both workflows under `actionlint`,
+  the isolated official OpenAI Skill validator, project-journal validation,
+  and `git diff --check` pass.
+- Signed head `e4029bf6` became stale when its fresh whole-range Codex processor
+  found three remaining access-policy and cleanup gaps: source candidate and
+  scan proofs omitted Darwin ACL policy, writable ACLs on otherwise admitted
+  data-path ancestors could redirect creation, and the remote relay swallowed
+  every process-group signal failure. The reviewer workspace was materialized
+  and postvalidated at the exact 62-commit, 61-parent-edge range with graph
+  digest `6598888e48a8cffc280b9679190bbd6b12cd61e29df97a130eb64a35dc067d93`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`;
+  the trusted release manifest, Skill, and guard digests remained unchanged,
+  and the task root was safely removed.
+- Source candidate schema v5 and every scan proof sample now bind the normalized
+  descriptor ACL digest in addition to identity and selected BSD flags.
+  Existing data-path ancestors are checked and revalidated through held
+  descriptors: read-only and inheritance-only ACEs remain valid, while any
+  allow ACE granting mutation authority fails closed. Remote cleanup preserves
+  the unreaped leader fence, surfaces every non-`ESRCH` signal failure, and
+  accepts Darwin's zombie-only `EPERM` case only after reap plus a non-signaling
+  group-absence proof; a surviving or unverifiable group remains an explicit
+  closure failure.
+- The exact source-transport module passes 128/128 in 42.995 seconds, identity
+  and safe-I/O tests pass 51/51, six exact remote lifecycle regressions pass
+  6/6, module boundaries pass 19/19, CI contracts pass 33/33, and the public
+  Skill contract passes 5/5. The independent Darwin security inventory expands
+  to 14 exact tests and passes 14/14 in 78.501 seconds. One initial full-shard
+  launch had unrecoverable terminal output after a task-context transition and
+  is non-counting. Its replacement exposed the stale CI expectation of 11
+  Darwin tests; that four-shard tree was intentionally interrupted and is also
+  non-counting. The corrected closed inventory expectation is 14. Two optional
+  read-only precommit explorer audits produced no terminal artifact within
+  their bounded window and were shut down; no partial output was accepted and
+  neither audit counts as review evidence.
+- The final Python 3.13 inventory contains 1,802 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `8677372f2c4d20c9e704d1960683f24b3793360f66a08babe3a352a37904f7af`.
+  Shard 0 passes 430/430 in 1,679.632 seconds, shard 1 passes 485/485 in
+  1,441.753 seconds, shard 2 passes 474/474 in 1,409.367 seconds, and shard 3
+  passes 413/413 in 1,332.657 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary, for exact aggregate coverage of 1,802/1,802. Ruff
+  0.13.2 lint and changed-file formatting, both workflows under `actionlint`,
+  the generated bootstrap manifest, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check` pass on the same implementation tree.
+- Signed head `a795c781` became stale when its fresh whole-range Codex processor
+  found that publication and retained-history subprocess owners swallowed
+  process-group signal and reap failures. That could report a successful
+  operation while task-owned descendants remained alive. The exact 63-commit,
+  62-parent-edge reviewer workspace used graph digest
+  `b7eebd56861d0430b5406be1eb14540c26258b2215ee46b40f3f31df310bcda7`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`;
+  it postvalidated clean, retained unchanged trusted-bundle digests, and was
+  safely removed after the terminal finding.
+- Remote relay, publication, and retained-history commands now use the same
+  strict process-group closure owner. Only `ESRCH` proves ordinary absence;
+  every other signal or reap failure is explicit. On Darwin, a zombie-only
+  `EPERM` result is accepted only after the leader is reaped and a
+  non-signaling group-absence probe succeeds. Signal authority retires before
+  any potentially reaping operation, so cleanup cannot target a reused PGID.
+  Four exact closure regressions pass 4/4 in 0.201 seconds, the complete source
+  transport module passes 128/128 in 42.760 seconds, module boundaries pass
+  19/19, and the Darwin security inventory passes 14/14 in 78.609 seconds.
+  Direct non-isolated unittest invocations and one intentionally stopped
+  publication-only probe are non-counting invocation-shape diagnostics.
+- The superseding Python 3.13 inventory contains 1,804 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `5923d8ba54aa14b32ff1de980f1c9ac1f0350e8de5dbc1de5e219cdd73c3cdf6`.
+  Shard 0 passes 431/431 in 1,709.522 seconds, shard 1 passes 486/486 in
+  1,474.314 seconds, shard 2 passes 474/474 in 1,446.785 seconds, and shard 3
+  passes 413/413 in 1,367.375 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary. CI contracts pass 33/33 and the public Skill contract
+  passes 5/5; Ruff 0.13.2 lint and formatting, both workflows under
+  `actionlint`, the generated bootstrap manifest, the official OpenAI Skill
+  validator, and `git diff --check` pass on the same implementation tree.
+- Signed head `17460d36` became stale when its fresh whole-range Codex processor
+  found two remaining process-closure reporting gaps. The publisher canary
+  treated terminal-leader `EPERM` as sufficient without proving that the
+  process group was absent, and an active primary error could hide a later
+  process-group cleanup failure because the machine-facing CLI ignored
+  exception notes. The exact 64-commit, 63-parent-edge reviewer workspace used
+  graph digest
+  `bd52b75567da9feb598b488078b1dce05335ebfbf7a75df4769558df20787adc`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`;
+  it postvalidated clean, retained unchanged trusted-bundle digests, and was
+  safely removed after the terminal findings.
+- The canary now delegates to the shared strict process-group closure owner.
+  A terminal-leader `EPERM` retires signal authority and reaps the leader, but
+  succeeds only when a subsequent non-signaling group probe proves `ESRCH`.
+  Persistent cleanup failure marks the exception chain with bounded structured
+  evidence. The CLI scans at most 16 cause/context links and emits the closed
+  `process_group_cleanup_incomplete` security result without exposing raw
+  exception details. Exact new regressions pass 3/3, the canary module passes
+  12/12 in 7.975 seconds, focused publication lifecycle tests pass 4/4 in
+  0.227 seconds, the CLI module passes 66/66 in 200.730 seconds, source
+  transport passes 128/128 in 41.387 seconds, module boundaries pass 19/19,
+  CI contracts pass 33/33, and the Darwin security inventory passes 14/14 in
+  83.524 seconds.
+- The final Python 3.13 inventory contains 1,807 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `699e55f6ab69eb097fb41cc5fe328abf93cd5f37089d675e9a32f37a6d735e00`.
+  Shard 0 passes 431/431 in 1,733.618 seconds, shard 1 passes 488/488 in
+  1,492.735 seconds, shard 2 passes 475/475 in 1,469.669 seconds, and shard 3
+  passes 413/413 in 1,370.200 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary, for exact aggregate coverage of 1,807/1,807. One
+  direct focused invocation used a non-isolated module-loading shape and is
+  non-counting; the isolated exact rerun supplied the counting evidence above.
+  Ruff 0.13.2 lint and changed-file formatting, both workflows under
+  `actionlint`, the generated bootstrap manifest, the isolated official OpenAI
+  Skill validator, project-journal validation, source-tree bytecode exclusion,
+  and `git diff --check` pass on the same implementation tree. One preceding
+  `actionlint` invocation named a nonexistent stale workflow path and is
+  non-counting; the exact current workflow invocation supplied the passing
+  evidence.
+- Signed head `c659738d` became stale when its fresh whole-range Codex
+  processor found four remaining trust-boundary gaps. A successful `SIGKILL`
+  path reaped only the leader without proving process-group absence; readiness,
+  canary, and remote-gap fallbacks could downgrade a marked cleanup failure;
+  selector construction or teardown after `Popen` could bypass process cleanup;
+  and bounded single-label `account@host` identifiers could enter retained
+  history. The first reviewer launch stopped before any Git read because its
+  prompt omitted the complete sanitized Git prefix. That metadata-only attempt
+  postvalidated clean and was safely removed. Its one permitted fresh retry
+  used the exact 65-commit, 64-parent-edge range, returned the four findings,
+  postvalidated clean, retained unchanged trusted-bundle digests, and was also
+  safely removed.
+- The shared process owner now retains one cleanup deadline across signal,
+  leader reap, and non-signaling group-absence polling. `EPERM` after reap is
+  never accepted as absence; only a later `ESRCH` proves closure. Every direct
+  or secondary process-cleanup failure receives bounded structured evidence,
+  and cleanup-only wrappers preserve the outer command primary classification.
+  Resource owners construct selectors inside the process-owned boundary,
+  attempt every selector/stream close, and always finish group cleanup.
+  Readiness, canary, and remote availability fallbacks rethrow unproven cleanup
+  as a dedicated security failure. Working-zone and retained privacy validation
+  now classify RFC-shaped and bounded single-label `account@host` values as
+  personal identifiers while preserving complete SCP-style locator precedence.
+- The superseding Python 3.13 inventory contains 1,818 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `355d7e1df66a099a868f197be6facfb9d9ef6aa59084667ea2c854f2ed53df09`.
+  Shard 0 passes 433/433 in 1,633.951 seconds, shard 1 passes 492/492 in
+  1,401.182 seconds, shard 2 passes 479/479 in 1,376.005 seconds, and shard 3
+  passes 414/414 in 1,296.878 seconds. Every shard exits zero with an explicit
+  `OK` terminal summary, for exact aggregate coverage of 1,818/1,818. One
+  redundant affected-class run was intentionally interrupted before completion
+  and is non-counting; the canonical four-shard inventory supersedes it.
+  Darwin security contracts pass 14/14 in 66.297 seconds, CI contracts pass
+  33/33, and public Skill contracts pass 5/5. Ruff 0.13.2 lint and changed-file
+  formatting, both workflows under `actionlint`, the generated bootstrap
+  manifest, the official OpenAI Skill validator, project-journal validation,
+  source-tree bytecode exclusion, and `git diff --check` pass on the same tree.
+  A repository-wide formatter diagnostic still identifies six unchanged
+  inherited migration files; it is non-counting and did not trigger unrelated
+  mechanical rewrites.
+- Signed head `c73c7887` became stale when its fresh whole-range Codex
+  processor found four release-control gaps. The installed production
+  automation prompt stopped after an incomplete `start` command; the startup
+  receipt omitted the executed entrypoint bytes; process cleanup treated signal
+  retirement as proof of process-group absence; and retained-history Git
+  admission did not reject pack-level `objects/pack/*.promisor` markers. The
+  exact reviewer workspace was independently materialized from trusted release
+  `f9e596f4`, postvalidated clean, retained unchanged trusted-bundle digests,
+  and was safely removed after the terminal findings.
+- That follow-up required one canonical seven-line production coordinator
+  prompt that binds the Python, CLI, and GPG executables, supplies
+  every production window/history/run input, and drives `doctor`, the complete
+  status/accept/advance loop, `export`, and `finalize`. At that checkpoint,
+  startup authority committed the executed `session_retrospective_v2.py` bytes
+  and access policy without exposing that entrypoint as an importable module.
+  Shared process cleanup separates irreversible signal retirement from a later
+  non-signaling
+  `ESRCH` absence proof, so an interrupted signal attempt can never signal a
+  reused group identifier. Local history admission and every bound-command
+  revalidation perform a bounded, stable, descriptor-relative pack-directory
+  scan, reject non-ASCII pack names, and compare ASCII `.promisor` suffixes
+  case-insensitively without approximating native Unicode filesystem aliases.
+- Exact reviewer-fix checks pass: the two final lifecycle/promisor regressions
+  pass 2/2, the complete publication invariant class passes 41/41, module
+  boundaries pass 19/19, CI/Skill/Bootstrap contracts pass 46/46, and Darwin
+  security contracts pass 14/14. Ruff 0.13.2 lint and formatting, both
+  workflows under bounded `actionlint`, the official OpenAI Skill validator,
+  and `git diff --check` are clean. A final read-only audit found one
+  filesystem-alias gap in the first promisor implementation; the uppercase
+  `.PROMISOR` and default-ignorable Unicode regressions close it before the
+  full gate. The four shards already running on the superseded normalization
+  approximation were interrupted, fully quiesced, and are non-counting. The
+  same independent auditor re-read the portable-ASCII fix and returned
+  `No findings.`
+- The final Python 3.13 inventory contains 1,822 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `aa7f2596594301058fb466ce1e5a307b42ea396f9e71aada14a3471dcdcfb456`.
+  Shard 0 passes 435/435 in 1,658.325 seconds, shard 1 passes 493/493 in
+  1,457.583 seconds, shard 2 passes 479/479 in 1,391.880 seconds, and shard 3
+  passes 415/415 in 1,328.226 seconds. Every bounded shard exits zero with an
+  explicit `OK` terminal summary and no failure, error, traceback, or skip, for
+  exact aggregate coverage of 1,822/1,822. The final tree also passes Darwin
+  security 14/14, the final promisor integration regression 1/1, publication
+  invariants 41/41, module/CI/Skill/Bootstrap contracts 65/65, Ruff 0.13.2
+  lint and changed-file formatting, bounded `actionlint` for both workflows,
+  the official OpenAI Skill validator, project-journal validation, source-tree
+  bytecode exclusion, branch inventory caps, and `git diff --check`.
+- Signed head `ce394511` became stale when its fresh whole-range Codex
+  processor found three remaining coordinator-control gaps: the installed
+  prompt omitted exact provider-state and production-marker bindings, startup
+  could execute old entrypoint bytes while later attesting a replacement path,
+  and the prompt over-applied `$remote-host-context` to native local actions.
+  Its detached reviewer workspace postvalidated clean and was removed.
+- The public `session_retrospective_v2.py` is now a minimal installed
+  descriptor launcher and explicit outer trust root. It captures and
+  double-reads the separate `session_retrospective_v2_runtime.py`, transfers
+  descriptor custody only after the runtime binds exact content, identity, and
+  access policy into the startup receipt, and rejects direct runtime execution.
+  A successful CLI response cannot precede an unreported runtime-descriptor
+  close failure. The receipt requires exactly one runtime row and rejects any
+  claim that the outer launcher was captured by that receipt.
+- Production cutover now validates an eight-line byte-exact prompt. Both
+  `doctor` and `start` bind the independently supplied canonical GPG program,
+  default provider state, and default production marker. The authenticated
+  cutover record and each automation-record reference HMAC-bind the same GPG
+  path, so prompt text cannot select its own signer. Native source commands are
+  executed exactly once and verbatim; `$remote-host-context session-shards` is
+  used only when the exact run-owned action names it.
+- Two bounded read-only precommit audits found five actionable omissions: the
+  prompt-derived GPG expectation, remote-helper substitution in the CLI
+  reference, insufficient canonical stage-binding tests, successful-exit
+  descriptor-close handling, and an overbroad startup-receipt module grammar.
+  All five were fixed before the final inventory. Three earlier four-shard
+  starts were intentionally interrupted and fully quiesced after discovering
+  launcher mode, fixture inventory, or precommit-audit defects; they are
+  non-counting. A later non-isolated 68-test CLI probe produced only the
+  expected runtime-authority errors and is also non-counting.
+- The final Python 3.13 inventory contains 1,827 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `1959ee1c66186e4b03fd2a983987af1ddea619f9b58ad39faf2b9736cf9fc3e6`.
+  Shard 0 passes 436/436 in 1,652.268 seconds, shard 1 passes 494/494 in
+  1,453.825 seconds, shard 2 passes 482/482 in 1,386.621 seconds, and shard 3
+  passes 415/415 in 1,323.896 seconds. Every bounded runner exits zero with an
+  explicit `OK` terminal, for exact aggregate coverage of 1,827/1,827. Ruff
+  0.13.2 lint and changed-file formatting, both workflows under `actionlint`,
+  the generated bootstrap manifest, the official OpenAI Skill validator,
+  branch and module budgets, and `git diff --check` pass. The validator's first
+  host-Python attempt lacked PyYAML and is non-counting; the official validator
+  passed under `uv run --with pyyaml`.
+- Signed head `5e3023ae` became stale after two independent review processors
+  exposed three remaining contract gaps. The fresh local Codex processor found
+  that non-shadow startup accepted copied provider-state and production-marker
+  paths instead of the fixed production bindings, and that the canonical
+  cutover example omitted the required `publisher_gpg_program`. Current-head
+  GitHub Codex then found that the shared personal-data grammar omitted
+  `Birthday`, `Birth date`, and `Birthdate` labels. The local reviewer workspace
+  postvalidated clean, retained unchanged trusted-release digests, and was
+  safely removed after its terminal findings.
+- Non-shadow CLI, public engine, and direct lifecycle startup now reject every
+  alternative provider-state or production-marker path before the engine can
+  create a run. Shadow startup retains its explicitly isolated path contract,
+  and malformed shadow-successor inputs retain their own closed validation
+  precedence before production binding. The cutover reference supplies every
+  required keyword in the live authority signature. The shared personal-data
+  grammar now recognizes `birthday` plus controlled space, underscore, hyphen,
+  compact, and camel-case `birth date` forms across source-overlap redaction,
+  audit redaction, retained assembly, retained reread, and rendered-report
+  validation, while policy/status prose remains accepted.
+- The first 1,830-test production-binding shard group under manifest digest
+  `ed580319df893bf5eed77b2e08078256ed94b741213e390a2d27e42278eafa97`
+  was intentionally interrupted and is non-counting after the new GitHub P1
+  invalidated its source tree. The next group exposed the deterministic
+  shadow-successor error-precedence regression: shard 1 failed 1 of 495 tests,
+  shards 2 and 3 passed on the stale tree, and shard 0 was interrupted. Direct
+  non-isolated focused invocations that stopped at runtime authority are also
+  non-counting; exact isolated reruns supplied the passing evidence.
+- The final Python 3.13 inventory contains 1,830 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `f1ab5f7af11db5504b3786c73e4bb200ab2f06f49f9bb2e68f5af21ed05d4261`.
+  Shard 0 passes 436/436 in 1,631.108 seconds, shard 1 passes 495/495 in
+  1,431.228 seconds, shard 2 passes 483/483 in 1,367.274 seconds, and shard 3
+  passes 416/416 in 1,308.112 seconds. Every runner exits zero with an explicit
+  `OK` terminal, for exact aggregate coverage of 1,830/1,830. The final tree
+  also passes the three privacy-boundary focused regressions, the three
+  isolated CLI ordering/binding regressions, module boundaries 19/19, CI
+  contracts 33/33, Ruff lint and changed-file formatting, both current
+  workflows under `actionlint`, the generated bootstrap manifest, the official
+  OpenAI Skill validator, project-journal validation, and `git diff --check`.
+  One earlier `actionlint` invocation named a nonexistent stale workflow path
+  and is non-counting; the exact current workflow checks passed.
+- Signed head `4d7442e0` became stale when the next fresh local Codex processor
+  found one production authority defect: `doctor` and `start` authenticated the
+  cutover marker only after resolving and potentially executing the
+  caller-selected GPG program, and neither path compared that actual executable
+  target with the marker's authenticated `publisher_gpg_program`. The review
+  workspace postvalidated clean, all trusted bundle digests stayed unchanged,
+  and the task root was removed after the terminal finding.
+- Production startup now loads and authenticates the complete marker before
+  publisher readiness, durable-history verification, or any GPG invocation.
+  The new `orchestrator_startup_authority.py` owner compares canonical actual
+  executable targets, permits only harmless aliases to the same target, and
+  rejects a different target before creating run or history state. Publication
+  fixtures now model an authenticated update on the fixed automation paths when
+  a test intentionally selects a different GPG executable.
+- The first 1,831-test attempt under manifest digest
+  `e9a155b650693b0664ef9f73afcbcb0a1a3c73cf6a8a71c22f932b6ff4739944`
+  exposed the stale publication fixture and was interrupted after all four
+  shards reported the same marker-authority error. After that fixture fix, the
+  next attempt under digest
+  `f1f8ae72d9645c22c8edaa636afc80f30d04d28b4999994d22d9b7da30c8a523`
+  exposed two expected `implementation_authority_invalid` failures in shard 3
+  because the generated runtime source manifest did not yet include the new
+  module; the other shards were interrupted. Both groups, a non-PTY focused
+  run without a delivered terminal, and a focused invocation with an incorrect
+  unittest class name are explicitly non-counting.
+- The final Python 3.13 inventory contains 1,831 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `f1f8ae72d9645c22c8edaa636afc80f30d04d28b4999994d22d9b7da30c8a523`.
+  Shard 0 passes 436/436 in 1,630.139 seconds, shard 1 passes 495/495 in
+  1,429.418 seconds, shard 2 passes 483/483 in 1,362.516 seconds, and shard 3
+  passes 417/417 in 1,299.089 seconds. Every runner exits zero with an explicit
+  `OK` terminal, for exact aggregate coverage of 1,831/1,831.
+- The final tree also passes the production GPG authority regressions 10/10,
+  module boundaries 19/19, CI contracts 33/33, bootstrap contracts 12/12,
+  Ruff 0.13.2 lint and formatting, both current workflows under `actionlint`,
+  the generated bootstrap manifest check, the official OpenAI Skill validator,
+  source-tree bytecode exclusion, and `git diff --check`.
+- Signed head `a71acca9` passed all hosted CI checks and a fresh local Codex
+  processor returned `No findings.` from an independently materialized
+  workspace. That evidence became stale when current-head GitHub Codex review
+  `4981201468` found two remaining personal-data detector gaps: controlled
+  surname, family-name, and given-name fields were not recognized, while date,
+  time, and long dotted-version text could be misclassified as bare phone
+  numbers. The local reviewer workspace postvalidated clean, retained unchanged
+  trusted-release digests, and was safely removed.
+- The shared personal-data grammar now recognizes controlled `surname`,
+  `family name`, and `given name` labels across source-overlap scanning,
+  post-redaction, retained assembly and reread, and rendered-report validation.
+  Bare-phone filtering now excludes bounded 19xx/20xx date prefixes and
+  four-or-more-component dotted numeric versions without weakening ordinary
+  international, parenthesized, or compact phone detection. The exact four
+  finding regressions pass 4/4 in 45.331 seconds, the three affected modules
+  pass 182/182 in 95.263 seconds, and module boundaries pass 19/19 in 2.167
+  seconds.
+- The first current-fix 1,831-test group under manifest digest
+  `5a100214c9afcd3d335f185e710feade8a524212da4e777b418b9ff775b37fec`
+  is non-counting: shard 2 exposed the expected branch-total update, shard 3
+  passed on the stale tree, and shards 0 and 1 were interrupted and proved
+  quiescent. The final Python 3.13 inventory contains the same 1,831 exact test
+  IDs from 22 authenticated source modules under manifest digest
+  `5e5df32ccc896d59d96b8945b2c8c3626b369d831bb4553a86919d887740aede`.
+  Shard 0 passes 436/436 in 1,703.799 seconds, shard 1 passes 495/495 in
+  1,475.653 seconds, shard 2 passes 483/483 in 1,408.538 seconds, and shard 3
+  passes 417/417 in 1,343.336 seconds, for exact aggregate coverage of
+  1,831/1,831. Darwin security tests pass 14/14 in 70.362 seconds.
+- The final current-fix tree also passes Ruff 0.13.2 lint and changed-file
+  formatting, both current workflows under `actionlint`, the generated
+  bootstrap manifest check, the official OpenAI Skill validator, source-tree
+  bytecode exclusion, and `git diff --check`. A full-repository Ruff formatting
+  probe identified six unchanged baseline files and is non-gating; no unrelated
+  formatting changes were made.
+- Signed head `70a75621` had clean exact-secret admission but became stale when
+  its fresh local Codex processor found one P1 privacy gap: controlled `legal
+  name`, `preferred name`, and `maiden name` fields were not recognized. The
+  independent workspace postvalidated with the exact original graph and config
+  receipts, the 30-file trusted bundle and Python digests remained unchanged,
+  the reviewer closed, and the task root was removed through the bounded cleanup
+  helper before source changes resumed.
+- The shared closed name-field grammar now includes `legal`, `preferred`, and
+  `maiden` modifiers for controlled space, underscore, hyphen, camel-case,
+  Markdown, and narrative forms. Source-overlap extraction, scanner/redactor,
+  retained artifact reread, audit, and rendered report validation all consume
+  the same policy. The first three-test focused invocation exposed four
+  misplaced bare-field expectations and is non-counting; after preserving the
+  existing field-boundary semantics, the exact focused set passes 3/3 in 47.632
+  seconds, the affected modules pass 182/182 in 96.824 seconds, and module
+  boundaries pass 19/19 in 1.911 seconds.
+- The final Python 3.13 inventory contains 1,831 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `9e110ee8eb5e819e2b5a258e81d0fff3f30180ba5b8bf15a0c86ce89aebb34f6`.
+  Shard 0 passes 436/436 in 1,692.399 seconds, shard 1 passes 495/495 in
+  1,482.433 seconds, shard 2 passes 483/483 in 1,419.951 seconds, and shard 3
+  passes 417/417 in 1,343.546 seconds, for exact aggregate coverage of
+  1,831/1,831. Darwin security tests pass 14/14 in 68.027 seconds.
+- The final tree also passes Ruff 0.13.2 lint and changed-file formatting, both
+  current workflows under `actionlint`, the generated bootstrap manifest
+  check, the official OpenAI Skill validator, and `git diff --check`.
+- Signed head `61958060` became stale when current-head GitHub Codex found two
+  remaining gaps. The shared personal-data grammar omitted controlled
+  `nickname` and `display name` labels, and the publisher sign/verify canary
+  allowed ambient temporary-directory selection to place its disposable files
+  inside a retrospective source tree.
+- The final privacy grammar separates subject-qualified and direct personal
+  labels from ambiguous product prose. Direct `Nickname:` and `Display name:`
+  assignments, controlled narrative boundaries, camel-case fields, Markdown,
+  and comma-form names remain protected, while ordinary service display names
+  and release nicknames remain ordinary product text. Name-component overlap
+  extraction removes closed trailing metadata before splitting components, so
+  status text is never promoted into the sensitive-value set.
+- The publisher canary now uses a fixed owner-only root beneath `/tmp`, rejects
+  both lexical and resolved overlap with the canonical local source before and
+  after creation, and gives GPG a closed environment whose three temporary
+  variables bind the exact disposable child. The secure-I/O cold capability
+  probe also selects `/tmp` explicitly instead of consulting ambient temporary
+  variables. Darwin's process-runtime-only `__CF_USER_TEXT_ENCODING` addition
+  is the sole tested child-environment exception and cannot inherit its ambient
+  value.
+- Two bounded read-only precommit audits found and drove the final ambiguity,
+  trailing-metadata, cold-probe, production-root, lexical-overlap, and actual
+  child-environment regressions. The resulting affected modules pass 241/241
+  in 119.463 seconds; CI contracts pass 33/33, module/bootstrap/skill contracts
+  pass 36/36, and Darwin security contracts pass 14/14 in 68.661 seconds.
+  The four-shard 1,833-test attempt under manifest digest
+  `53b25db3ffad09d56ffcc2f22b79dc760f7d787d3c0547563d774a3ea73e7b9e`
+  was intentionally interrupted after the audits invalidated its tree and is
+  non-counting. A direct CI-contract invocation through the symlinked Homebrew
+  launcher is likewise non-counting; the required owner-controlled copied
+  Python 3.13 runtime supplied the passing 33/33 evidence.
+- The bounded audit cutoff then produced five additional actionable findings,
+  so the preceding 1,836-test result is stale for the superseding tree. Bare
+  ambiguous name fields could still match dotted product qualifiers or a
+  colon-delimited product narrative, quoted trailing status metadata could be
+  split into a name component, and the canary root had a check-to-child-create
+  replacement window. The same audit identified two remaining ambient
+  temporary-root consumers in the legacy remote-helper snapshot and publication
+  Git index.
+- Ambiguous direct labels now exclude dotted qualification, ambiguous narrative
+  labels require a line/list boundary or an explicit `observed`, `recorded`, or
+  `reported` introducer, and the closed metadata suffix accepts quoted keys and
+  assignment forms before name-component splitting. The exact reviewer examples
+  remain protected or ordinary product text as intended.
+- A shared descriptor-bound temporary-directory authority now owns fixed,
+  purpose-specific canary, remote-helper, and publication-index roots. It creates
+  each random child through a held root descriptor; binds root and child identity
+  and access policy; verifies the actual resolved location before publication,
+  around path consumers, and before cleanup; and removes only an inventoried
+  matching object. Ambient `TEMP`, `TMP`, `TMPDIR`, and Python's cached temp root
+  cannot select these locations. The adversarial parent-replacement regression
+  fails before yielding a path and leaves the retrospective source unchanged.
+- The first expanded affected run passes 126 of 128 tests and reports only the
+  two deliberately exact static inventories changed by the new authority. After
+  updating those measured contracts, the four exact boundary regressions pass
+  4/4; the initial focused behavioral set passes 8/8 in 2.507 seconds. Full
+  superseding-tree evidence follows below.
+- On the pre-follow-up superseding tree, the affected orchestrator,
+  result, and boundary modules pass 128/128 in 18.867 seconds; bootstrap and
+  skill contracts pass 17/17 in 4.674 seconds; isolated source transport passes
+  129/129 in 61.007 seconds; publication transactions pass 132/132 in
+  5,252.573 seconds; export passes 72/72 in 105.082 seconds; result-contract
+  audit passes 24/24 in 2.594 seconds; and CI contracts pass 33/33 in 2.166
+  seconds. Darwin security contracts pass 14/14 in 71.210 seconds.
+- That pre-follow-up Python 3.13 inventory contains 1,838 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `252092f073fd3581786e3bd1742a9d1417e53f29301ad118b54c331ab55602c0`.
+  Shard 0 passes 438/438 in 1,806.130 seconds, shard 1 passes 496/496 in
+  1,592.075 seconds, shard 2 passes 486/486 in 1,523.450 seconds, and shard 3
+  passes 418/418 in 1,461.025 seconds, for exact aggregate coverage of
+  1,838/1,838. A final bounded privacy audit then made this result stale.
+- That audit found five remaining composition and evidence gaps. Contextual
+  personal fields did not accept dotted subject paths or a spaced subject plus
+  camel-case field; ambiguous direct assignments did not accept explicit
+  observation or sentence boundaries; structural product qualifiers could be
+  lost after punctuation; quoted and escaped trailing metadata used different
+  match-span and overlap grammars; and one canary regression fixture could write
+  arbitrary inherited environment values while demonstrating a failure.
+- The contextual name grammar now accepts subject-qualified dot, underscore,
+  space, and camel-case combinations. Ambiguous direct and narrative labels
+  share explicit observation and sentence-boundary rules while retaining parent
+  product qualifiers, and one shared quoted or escaped metadata grammar governs
+  both redaction spans and overlap extraction. The canary fixture persists only
+  environment keys, fixed safe values, and a boolean synthetic-canary result.
+  The first two-test focused invocation exposed four incorrect expected outputs
+  and is non-counting; after correcting those expectations, the exact tests pass
+  2/2 in 2.135 seconds. The affected modules pass 23/23, 86/86, 72/72, and
+  24/24, module boundaries pass 19/19, and the follow-up read-only audit reports
+  `No findings.`
+- The final Python 3.13 inventory contains 1,838 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `5262f57c841f882d8e3360d42cb77bda34b55be49ca111f7734d83b5a435adb7`.
+  Shard 0 passes 438/438 in 1,728.045 seconds, shard 1 passes 496/496 in
+  1,496.264 seconds, shard 2 passes 486/486 in 1,428.447 seconds, and shard 3
+  passes 418/418 in 1,380.751 seconds, for exact aggregate coverage of
+  1,838/1,838.
+- The final tree passes Ruff 0.13.2 lint and changed-file formatting, both
+  current workflows under bounded `actionlint`, the generated bootstrap
+  manifest check, the official OpenAI Skill validator, project-journal
+  validation, source-tree bytecode exclusion, and `git diff --check`.
+- Signed head `2b09e19e` had clean exact-secret admission but became stale when
+  its fresh local Codex processor found one P1 raw-evidence gap: the remote
+  transport output spool and both session-shards spools still delegated their
+  placement to ambient `TEMP`, `TMP`, `TMPDIR`, or Python's cached temp root.
+  The independent workspace postvalidated with its original graph and config
+  receipts, the trusted bundle and Python digests remained unchanged, and the
+  reviewer task root was removed through the bounded cleanup helper.
+- The three spools now use separate fixed roots under the shared
+  descriptor-bound temporary-directory authority. Every file receives an
+  explicit admitted directory, is descriptor-hardened before raw bytes are
+  written, and remains enclosed by directory revalidation and inventoried
+  cleanup. Real poisoned-environment regressions spy on the real temporary-file
+  factories and bind every explicit `dir` to an owner-`0700` random child of the
+  purpose-specific root; they also prove that source trees remain byte-identical
+  and the roots are empty after success. The source worker's closed module
+  manifest includes the new authority dependency; its reachability contract and
+  the four isolated snapshot regressions pass 5/5.
+- The first 1,840-test P1-fix shard group is non-counting: a bounded precommit
+  audit found that the initial poisoned-environment regressions observed only
+  post-cleanup trees, which could not prove the placement of immediately
+  unlinked anonymous files. All four process-group-bounded shard sessions were
+  interrupted once, reached terminal exit 130, and were quiescent before the
+  real factory-binding assertions were added. The corrected exact regressions
+  pass 2/2. One affected-suite session then became unavailable before its
+  terminal result could be collected and is non-counting. A replacement harness
+  incorrectly applied a 4 MiB process-wide file-size limit, causing three
+  fixture writes to fail with `EFBIG`; that harness result is also non-counting.
+  Without that inherited limit, the complete affected source and session-shards
+  transport modules pass 172/172 in 57.700 seconds.
+- The final Python 3.13 inventory contains 1,840 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `744f59832de0e0374bf5ab8feb358c81d2b12685200487613b4ebf6a945e747b`.
+  Shard 0 passes 438/438 in 1,810.306 seconds, shard 1 passes 498/498 in
+  1,580.265 seconds, shard 2 passes 486/486 in 1,514.090 seconds, and shard 3
+  passes 418/418 in 1,450.248 seconds, for exact aggregate coverage of
+  1,840/1,840. Darwin security tests pass 14/14 in 70.579 seconds. An earlier
+  accidental Darwin invocation with an unretained session handle was terminated
+  once and is non-counting; the counted run used a pollable process-group
+  deadline and reached a complete terminal result.
+- The final tree passes module boundaries 19/19 in 2.047 seconds, Ruff 0.13.2
+  lint and changed-file formatting, both current workflows under bounded
+  `actionlint`, the generated bootstrap manifest check, the official OpenAI
+  Skill validator, project-journal validation, source-tree bytecode exclusion,
+  and `git diff --check`. One direct isolated `python -m unittest` boundary
+  invocation lacked the repository loader and produced only `_FailedTest`; it
+  is non-counting, and the required closed loader supplied the passing 19/19
+  result.
+- Signed head `7250e302` had clean exact-secret admission but became stale when
+  its fresh local Codex processor found one P1 helper-selection gap: the legacy
+  relay derived the installed `remote_codex_probe.py` path through
+  environment-sensitive `Path.home()` before launching the authenticated
+  snapshot with the real account and SSH agent environment. The independent
+  reviewer workspace postvalidated with its original 74-commit, 73-edge graph
+  and config receipts; trusted bundle, Skill, guard, and Python digests remained
+  unchanged; the agent closed; and the exact task root was removed.
+- Remote helper selection and the sanitized relay child environment now share
+  one POSIX account-database authority. It validates the account name, resolves
+  the declared absolute home to an existing canonical directory, and derives
+  both the helper path and child `HOME` from that result. A real legacy-relay
+  regression places executable account and poisoned-home helpers side by side,
+  proves only the account helper executes, and requires both snapshot and output
+  spool roots to be empty afterward. Additional fail-closed cases cover invalid
+  names, relative or malformed homes, and missing homes. Focused tests pass 3/3,
+  the complete source-transport module passes 132/132 in 52.570 seconds, module
+  boundaries pass 19/19 in 1.876 seconds, and Ruff lint/format plus
+  `git diff --check` are clean. Full superseding-tree evidence follows below.
+- The superseding Python 3.13 inventory contains 1,842 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `883518f7535f66d1530215c2f13ce8b6e7fc3a51e8a6bbe660b06c5f029c398b`.
+  Shard 0 passes 438/438 in 1,795.699 seconds, shard 1 passes 498/498 in
+  1,573.032 seconds, shard 2 passes 488/488 in 1,505.547 seconds, and shard 3
+  passes 418/418 in 1,438.351 seconds, for exact aggregate coverage of
+  1,842/1,842. Darwin security tests pass 14/14 in 71.126 seconds.
+- The superseding tree also passes module boundaries 19/19 in 2.055 seconds,
+  Ruff 0.13.2 lint and changed-file formatting, both current workflows under
+  bounded `actionlint`, the generated bootstrap manifest check, the official
+  OpenAI Skill validator, project-journal validation, source-tree bytecode
+  exclusion, and `git diff --check`.
+- Current-head GitHub review then identified five independent gaps. Retained
+  privacy validation missed a labeled street address, a bare private-style
+  host and port, and a six-octet MAC address. Publication's temporary index did
+  not override repository `core.splitIndex=true`. GPG's `--no-options` excluded
+  `gpg.conf` but did not prevent `gpg-agent.conf` from redirecting agent logs.
+  All five findings block the `7250e302` evidence and are fixed in the
+  superseding tree.
+- Shared privacy locators now recognize and redact labeled street addresses,
+  strict six-octet MAC addresses with one consistent delimiter, and bounded
+  hyphenated or private-prefix bare host/port tokens without treating ordinary
+  timestamps, status codes, or versions as hosts. Report, agent-result, and
+  retained-history validators consume the same detectors. Publication Git now
+  forces `core.splitIndex=false`; its end-to-end regression proves no new
+  `sharedindex.*` object appears even when the repository enables split index.
+- Every publisher inventory, canary, sign, and verify operation now uses a
+  config-free keyring snapshot. The source directory is held and revalidated by
+  descriptor, and only `pubring.kbx`, optional `trustdb.gpg`, and bounded strict
+  40-hex private-key files are copied. GPG configuration, sockets, and unrelated
+  entries are excluded. Agent shutdown uses one bounded Assuan `KILLAGENT`
+  exchange, and cleanup accepts only fully bound GPG lock files whose complete
+  link inventory remains inside the snapshot. External hard links fail closed.
+  A process-local readiness cache is bounded to eight entries and keyed by the
+  exact selected-key commitment plus executable authority; configuration-only
+  changes may reuse a successful readiness result, while selected keyring or
+  GPG executable changes force revalidation. Actual sign and verify operations
+  remain uncached.
+- One deliberately interrupted redundant publication-module invocation exposed
+  a retained GPG lock snapshot. It is non-counting. The exact retained object
+  was recovered through descriptor-bound lock validation and cleanup, and the
+  fixed `/tmp/csr501` snapshot parent was verified empty afterward. Host-level
+  Python probes that failed executable-authority or isolation admission are also
+  non-counting; all counted tests use the owner-controlled Python 3.13.12
+  runtime with `-I -B -S`.
+- The first complete 1,850-test run found six stale fixture assumptions rather
+  than product failures. Shard 0 ran 441 tests with one failure in 1,767.253
+  seconds, shard 1 passed 500/500 in 1,612.229 seconds, shard 2 ran 489 tests
+  with four failures in 1,473.081 seconds, and shard 3 ran 420 tests with one
+  error in 1,423.025 seconds. The six publisher fixtures had empty keyring
+  homes, an ambient unsafe temporary ancestor, or a nonexistent GPG substitute,
+  so the new snapshot admission correctly preempted their intended downstream
+  assertions. That aggregate is non-counting.
+- The fixtures now construct the smallest admitted keyring, use the fixed
+  trusted GPG substitute, clear the readiness cache between distinct mocked
+  outcomes, and assert that GPG reads the isolated snapshot rather than the
+  source home during an ABA exercise. The exact six regressions pass 6/6 in
+  0.748 seconds. The complete publication-invariant and orchestrator classes
+  pass 177/177 in 526.951 seconds. The complete source-transport module passes
+  132/132 in 56.221 seconds, including poisoned ambient `HOME` coverage.
+- The final Python 3.13 inventory contains 1,850 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `5d7a48f46008e0bb968a910ce6585d0dda9e61d1a61512aeecaa5675e4b4629a`.
+  Shard 0 passes 441/441 in 1,697.732 seconds, shard 1 passes 500/500 in
+  1,547.084 seconds, shard 2 passes 489/489 in 1,420.324 seconds, and shard 3
+  passes 420/420 in 1,376.397 seconds, for exact aggregate coverage of
+  1,850/1,850. The independent Darwin security inventory passes 14/14 in
+  60.241 seconds.
+- The final tree passes module boundaries 19/19 in 1.961 seconds, CI contracts
+  33/33 in 2.279 seconds, Ruff 0.13.2 lint and changed-file formatting, both
+  current workflows under `actionlint`, the generated bootstrap manifest check,
+  and `git diff --check`. One repository-wide formatting probe reported six
+  unchanged baseline files and is non-counting; changed-file formatting is
+  clean. One `actionlint` invocation named a nonexistent stale workflow path
+  and is also non-counting; the two current workflow files pass together.
+- Two final bounded precommit audits found eight additional issues before the
+  delivery head was frozen. The transport/privacy audit found an unredacted
+  camel-case `streetAddress` label, an account-snapshot split between helper
+  selection and launch, prefix-only MAC matches, ambiguous `Node:20` and
+  `Server:2025` host/port matches, and a source-snapshot regression that did not
+  prove which helper file executed. The GPG audit found a readiness-cache ABA
+  between two independent keyring snapshots, a per-byte Assuan timeout that
+  multiplied the intended bound, and a private-key inventory copied without a
+  closing enumeration and byte reread. All eight issues were fixed before the
+  final manifest was generated.
+- The relay now captures one validated account tuple and uses it for helper
+  selection, snapshot materialization, launch environment, and execution. The
+  privacy grammar consumes camel-case street-address labels, bounds six-octet
+  MAC tokens against embedded or extra-octet identifiers, and requires a real
+  host signal before treating a labeled host/port value as sensitive. The
+  source regression proves the content-addressed helper snapshot, rather than
+  the live installed helper, executed without changing the installed helper's
+  identity, bytes, or mode.
+- Publisher readiness now opens one descriptor-held configuration-free keyring
+  snapshot and binds both its cache commitment and validation to that same
+  receipt. Assuan shutdown uses one monotonic deadline across the complete
+  exchange and socket disappearance, and private-key copying closes its
+  inventory with a second enumeration plus a second exact read of every
+  selected object. The direct new regressions pass, publication invariants pass
+  49/49 in 2.453 seconds, source transport passes 132/132 in 56.810 seconds,
+  and module boundaries pass 19/19 in 1.949 seconds.
+- Two intermediate invocations are explicitly non-counting. One used an
+  incorrect isolated-import module shape and produced eight import errors. A
+  later 225-test affected-module run exposed six stale compatibility-export
+  fixtures; the exact compatibility tests and the complete source-transport
+  module passed after those exports were repaired.
+- The superseding Python 3.13.12 inventory contains 1,853 exact test IDs from
+  22 authenticated source modules under manifest digest
+  `a1da7d4f23d067ffe550845b0b09cb50781866030b4042932beb8359e325aed6`.
+  Shard 0 passes 442/442 in 1,708.395 seconds, shard 1 passes 501/501 in
+  1,557.650 seconds, shard 2 passes 490/490 in 1,440.213 seconds, and shard 3
+  passes 420/420 in 1,392.431 seconds, for exact aggregate coverage of
+  1,853/1,853 on one frozen code-and-test tree.
+- The superseding documentation tree passes the independent Darwin security
+  inventory 14/14 in 62.954 seconds, CI contracts 33/33, skill contracts 5/5,
+  Ruff 0.13.2 lint and changed/new-file formatting, both current workflows
+  under `actionlint`, the generated bootstrap manifest check, the isolated
+  official OpenAI Skill validator, project-journal validation, source-tree
+  bytecode exclusion, and `git diff --check`.
+- The fresh local Codex processor over signed head `0f9fdc45` found two
+  actionable gaps. Remote source leases froze helper bytes but did not carry
+  the scheduler-time account/home authority into the independent worker, and
+  the shared privacy grammar did not recognize strict dotted hardware
+  addresses such as `0011.2233.4455`. That review workspace postvalidated with
+  its original 75-commit, 74-edge graph and config receipts; the trusted bundle
+  digests remained unchanged, the agent closed, and the exact task root was
+  removed. The head's clean exact-secret admission and prior test evidence are
+  stale for delivery because the findings require a substantive successor.
+- `transport_remote_account.py` now owns a closed canonical account binding.
+  Scheduling commits account name and UID/GID plus the canonical home object's
+  device/inode/generation, mode/owner/group, masked mutation-policy flags, and
+  exact bounded ACL digest in the authenticated command and lease. The worker
+  re-resolves and compares the
+  binding immediately before launch and passes that same snapshot explicitly
+  to the relay environment. Account-record changes, same-path home replacement,
+  and access-policy changes stop before `Popen`; timestamp-only home churn is a
+  tested benign transition. The installed helper remains a separate run-owned
+  content snapshot.
+- The shared MAC grammar now covers strict colon/hyphen octets and strict
+  three-by-four dotted groups while rejecting embedded, short, mixed, and
+  extended shapes. MAC substitution precedes generic personal-number
+  substitution, and extraction scan, deterministic redaction, retained-value,
+  and complete `report.md` validation use the same owner. Nine exact focused
+  regressions pass 9/9. A 249-test affected-module run exposed only two stale
+  test-contract assertions; after those were repaired, their exact regressions
+  plus timestamp churn pass 4/4. Full successor-tree evidence follows below.
+- The first four-shard attempt after these fixes was stopped once per shard and
+  is non-counting: shard 0 immediately proved that the generated startup
+  manifest did not yet include the new worker module, while the other shards
+  were still running. The generated manifest was refreshed through its
+  canonical writer and its three exact bootstrap regressions pass 3/3 before
+  the counted run began.
+- An intermediate counted Python 3.13.12 inventory contains 1,855 exact test
+  IDs from 22
+  authenticated test modules under manifest digest
+  `0586747e7012683e3b167237c5e9a1c4a6eb8259609a041fb32c0d93f7bbbb56`.
+  Shard 0 passes 443/443 in 1,751.808 seconds, shard 1 passes 502/502 in
+  1,602.268 seconds, shard 2 passes 490/490 in 1,481.212 seconds, and shard 3
+  passes 420/420 in 1,424.039 seconds, for exact aggregate coverage of
+  1,855/1,855 on one frozen code-and-test tree. A subsequent final-diff audit
+  narrowed home flags to the existing mutation-policy mask and explicitly
+  rejected relative account-database homes, so this complete result is valid
+  for its intermediate tree but stale for final delivery.
+- That intermediate tree passes the independent Darwin security inventory
+  14/14 in 62.226 seconds, CI contracts 33/33, skill contracts 5/5, Ruff lint
+  and changed-file formatting, the canonical bootstrap-manifest check, both
+  current workflows under `actionlint`, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check`.
+- The final Python 3.13.12 inventory contains 1,855 exact test IDs from 22
+  authenticated test modules under manifest digest
+  `f0a41401235b1c00aa5e1061fba2d041f33cf8c2a0e38e979ec6253145298a59`.
+  Shard 0 passes 443/443 in 1,602.272 seconds, shard 1 passes 502/502 in
+  1,461.888 seconds, shard 2 passes 490/490 in 1,347.049 seconds, and shard 3
+  passes 420/420 in 1,296.144 seconds. The aggregate is 1,855/1,855 on the
+  final frozen code-and-test tree; no interrupted or intermediate run is
+  counted toward this result.
+- The final tree also passes the independent Darwin security inventory 14/14
+  in 59.404 seconds, CI contracts 33/33 in 2.258 seconds, Skill contracts 5/5,
+  and Bootstrap contracts 12/12. Ruff 0.13.2 lint and changed/new-file
+  formatting, both current workflows under `actionlint`, the generated
+  bootstrap manifest check, the isolated official OpenAI Skill validator,
+  project-journal validation, source-tree bytecode exclusion, and `git diff
+  --check` are clean.
+- The fresh local Codex processor over signed head `3b6f2749` found one P2
+  documentation-contract mismatch: the normative architecture guide still
+  described the pre-account-binding transport module count and line budgets.
+  The lane postvalidated with its original 76-commit, 75-edge graph and config
+  receipts; the trusted control bundle remained at digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  the reviewer closed, and the exact task root was removed. The guide now
+  mirrors the enforced 17-module, 9,124/9,150 aggregate and affected
+  single-file baselines. Admission and review evidence for `3b6f2749` are stale
+  for delivery because this correction creates a successor head.
+- Signed head `67dacf78` passed its local full suite, exact-secret admission,
+  fresh local Codex processor, and hosted CI, but current-head GitHub Codex
+  found three retained-privacy precision gaps. Quoted RFC-style email local
+  parts such as `"john doe"@example.com` bypassed the shared detector, ordinary
+  slash compounds such as `input/output` were treated as relative paths, and
+  dotted code or filename text such as `json.loads`, `config.toml`, and
+  `foo.bar` was treated as a bare FQDN. Those head-bound results are stale.
+- The shared privacy owner now accepts bounded quoted email local parts,
+  including escaped quotes. Relative paths require an explicit dot prefix, a
+  file extension, or a controlled repository/path root. Bare FQDNs require a
+  controlled public suffix unless an explicit port or path supplies host
+  syntax; closed host labels preserve fail-closed handling for internal names
+  with unknown suffixes. Scanner, redactor, retained assembly and reread, and
+  rendered-report validation consume the same grammar. The complete affected
+  result and export modules pass 159/159 in 116.488 seconds.
+- Two four-shard attempts were deliberately stopped and are non-counting after
+  review showed that their intermediate path and FQDN grammars remained too
+  broad. Every exact runner was interrupted once and proved absent before the
+  final tree was frozen. The final canonical Python 3.13 inventory contains
+  1,856 exact test IDs from 22 authenticated source modules under manifest
+  digest `ad3f2d97af1adbebad47c36064614dce605824d94ee10cdbe85ce09c30573d65`.
+  Shard 0 passes 443/443 in 1,602.341 seconds, shard 1 passes 503/503 in
+  1,459.892 seconds, shard 2 passes 490/490 in 1,348.476 seconds, and shard 3
+  passes 420/420 in 1,301.493 seconds, for exact aggregate coverage of
+  1,856/1,856 on one frozen code-and-test tree.
+- The same tree passes the independent Darwin security inventory 14/14 in
+  68.466 seconds, CI contracts 33/33, and module, Skill, and Bootstrap
+  contracts 36/36. Ruff 0.13.2 lint and changed-file formatting, both current
+  workflows under `actionlint`, and the isolated official OpenAI Skill
+  validator are clean. The final signed head, exact-secret admission, fresh
+  local Codex processor, hosted CI, and current-head GitHub Codex evidence
+  remain required before merge.
+- Signed head `f82edf1a` had clean exact-secret admission, then its fresh local
+  Codex processor found one P1 retained-privacy gap: the email grammar admitted
+  alphabetic domain suffixes but not an IDNA A-label such as `xn--p1ai`.
+  Ordinary and quoted-local punycode email addresses could therefore bypass
+  scanning, deterministic post-redaction, and retained validation. The exact
+  78-commit, 77-edge workspace postvalidated with graph digest
+  `18bda83a7538290b21e94791eaa01832b80ecc7cea568f634d0b0451c48c9673`;
+  trusted bundle digests remained unchanged, the reviewer closed, and the task
+  root was removed through the bounded cleanup helper.
+- Email domains now reuse the shared closed FQDN suffix grammar, including
+  bounded IDNA A-labels. Ordinary and quoted-local punycode cases are covered
+  across scanner, post-redaction, retained assembly and reread, and rendered
+  report validation. The result module passes 87/87, export/reporting passes
+  72/72, and module boundaries pass 19/19.
+- The superseding Python 3.13 inventory contains 1,856 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `aba584ef02578ca84d423d6431e52a395e3996186e34555651beca50e26912c6`.
+  Shard 0 passes 443/443 in 1,598.527 seconds, shard 1 passes 503/503 in
+  1,453.245 seconds, shard 2 passes 490/490 in 1,341.446 seconds, and shard 3
+  passes 420/420 in 1,290.600 seconds, for exact aggregate coverage of
+  1,856/1,856. Signing, exact-secret admission, the replacement fresh local
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain
+  delivery gates.
+- The superseding tree also passes the independent Darwin security inventory
+  14/14 in 83.515 seconds, CI contracts 33/33, and module, Skill, and Bootstrap
+  contracts 36/36. Ruff 0.13.2 lint and changed-file formatting, both current
+  workflows under `actionlint`, the generated bootstrap manifest, the official
+  OpenAI Skill validator, and project-journal validation are clean. A direct
+  invocation of the Darwin marker module selected zero tests and is explicitly
+  non-counting; the canonical Darwin runner supplied the result above.
+- The fresh local Codex processor over signed head `ea906546` found one P1
+  retained-privacy gap: bare FQDN recognition still depended on a manually
+  enumerated suffix subset, so an assigned root-zone name such as
+  `api.customer.technology` could bypass scanning, post-redaction, retained
+  assembly/reread, and report validation. The exact 79-commit, 78-edge
+  workspace postvalidated with graph digest
+  `54dd5bb1e3c2c107f0cb9a48a7d46086630bd8139e3077c545f5591363a31192`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Trusted bundle digests remained unchanged, the reviewer closed, and the task
+  root was removed through the bounded cleanup helper.
+- Bare FQDN classification now consumes the embedded IANA Root Zone TLD
+  snapshot version 2026082000. Its 1,438 unique sorted suffixes are bound to
+  canonical digest
+  `aa0a75a9860b2cba07d7fe8172f4546d981be3674bf6764fb0d5f39a45940d25`
+  and fail closed at import if the count, ordering, uniqueness, or digest
+  drifts. Explicit port/path forms and closed reserved/private suffixes remain
+  covered. An assigned-suffix token is exempted only when every label belongs
+  to the closed metasyntactic identifier set and an immediate code-usage
+  context is present, preserving `foo.bar attribute` without allowing
+  `customer.technology method` to escape. Focused cross-layer tests pass 4/4
+  in 65.400 seconds, the full result/reporting modules pass 160/160 in 118.001
+  seconds, the privacy contract audit passes 25/25, and module boundaries pass
+  19/19.
+- The final Python 3.13.12 inventory contains 1,857 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `6b6b4f5d740e7565a1c4b429199d9bed6153d5cb3143e514386909fc0159040c`.
+  Shard 0 passes 444/444 in 1,608.435 seconds, shard 1 passes 503/503 in
+  1,462.892 seconds, shard 2 passes 490/490 in 1,342.134 seconds, and shard 3
+  passes 420/420 in 1,298.136 seconds, for exact aggregate coverage of
+  1,857/1,857 with an empty combined error scan.
+- The same tree passes the independent Darwin security inventory 14/14 in
+  59.321 seconds and the CI, Skill, and Bootstrap contract matrix 50/50. Ruff
+  0.13.2 lint and changed-file formatting, both workflows under
+  `actionlint`, the generated bootstrap manifest check, the isolated official
+  OpenAI Skill validator, project-journal validation, source-tree bytecode
+  exclusion, and `git diff --check` are clean. One temporary focused runner
+  used a removed private test-inventory helper and failed before selecting a
+  test; the canonical isolated focused runner supplied the counted 4/4 result.
+  One bootstrap probe passed an unsupported `--check` flag and is likewise
+  non-counting; the supported no-argument check passed.
+- The fresh local Codex processor over signed head `413c7bc4` found two
+  temporary-lifecycle gaps. Abnormal exit could retain publisher key snapshots
+  and live GPG processes indefinitely because startup had no stale recovery;
+  separately, an operation error plus temporary cleanup failure remained only
+  an exception note and could be reported as retryable. The exact reviewer
+  workspace postvalidated and was removed; all head-bound evidence is stale.
+- The follow-up adds one persistent owner-only recovery lock, bounded N+1 root
+  and snapshot inventories, exact `g-<64 lowercase hex>` names, descriptor-bound
+  stale-child recovery, strict known-socket policy, and bounded
+  `SCD KILLSCD` followed by `KILLAGENT`. Unknown entries, replacements, policy
+  drift, or cleanup uncertainty retain the object and block a new snapshot.
+  The root lock now covers only inventory, child creation, and final deletion;
+  each in-use child holds a separate owner-only `.active.lock` lease. Recovery
+  skips a proved busy lease and reclaims an unlocked crash-retained child, so
+  independent publisher operations can overlap without losing stale-recovery
+  authority.
+  Sensitive cleanup failures now produce a content-free, non-retryable
+  `temporary_cleanup_incomplete` CLI result while preserving only allowlisted
+  primary metadata.
+- Focused recovery tests pass 10/10 in 0.344 seconds, including two real
+  overlapping snapshot processes and a symlinked-lease rejection. The three
+  exact tests that previously collided under the lifecycle-wide root lock pass
+  3/3 in 94.512 seconds. Module-boundary tests pass 19/19. The
+  production recovery path also reclaimed the exact crash-retained
+  `/tmp/csr501/g-*` snapshot exposed by the interrupted canonical run: its bound
+  GPG-agent and scdaemon terminated, the stale child disappeared, and the fixed
+  root retained only `.recovery.lock`. Earlier direct-import and pycache-drift
+  attempts selected no valid canonical suite or changed their source authority
+  and are explicitly non-counting. Final canonical shard and review evidence
+  follows on the frozen successor tree.
+- The first four-shard run after stale recovery is also non-counting: shards 0
+  and 1 passed 447/447 and 505/505, while shards 2 and 3 reported three exact
+  config-free keyring failures caused by holding the recovery root lock across
+  the complete snapshot lifetime. Sequential reruns passed because they did not
+  exercise that concurrency. The active-lease design above closes the root
+  cause.
+- The first complete durable-publication run after the active-lease change is
+  non-counting: 89/91 tests passed and two tests exposed a shutdown race where
+  the bound GPG agent removed an optional socket between inventory and
+  revalidation. Recovery now accepts disappearance only for a socket whose
+  identity was already bound during that shutdown attempt; an unknown socket
+  or an observed replacement remains blocking. Both exact failed tests pass
+  2/2 in 150.136 seconds after the correction.
+- The final Python 3.13.12 inventory contains 1,869 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `f7865302894620aa7c149f1ae9b2667f24350c134ef32e67ec5713b2b6ba53e4`.
+  Shard 0 passes 447/447 in 1,729.066 seconds, shard 1 passes 506/506 in
+  1,585.872 seconds, shard 2 passes 495/495 in 1,461.386 seconds, and shard 3
+  passes 421/421 in 1,412.890 seconds, for exact aggregate coverage of
+  1,869/1,869. All four bounded supervisors reached terminal exit zero.
+- The same tree passes the independent Darwin security inventory 14/14 in
+  62.297 seconds, module boundaries 19/19, CI contracts 33/33, Skill contracts
+  5/5, and Bootstrap contracts 12/12. Ruff 0.13.2 lint and formatting for all
+  13 changed or new Python files, both workflows under `actionlint`, the
+  generated bootstrap manifest check, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check` are clean. A whole-repository format probe identified six
+  unchanged baseline files and is non-counting; none is modified by this
+  workstream. Signing, exact-secret admission, the replacement fresh local
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain
+  delivery gates.
+- The fresh local Codex processor over signed head `34f094c0` found one P1
+  recovery gap: when specialized publisher-snapshot finalization could not
+  reacquire root coordination or prove publisher-agent cleanup, it marked the
+  primary error but the outer generic temporary-directory context still
+  removed the sensitive snapshot tree. The exact 81-commit, 80-parent-edge
+  workspace used graph digest
+  `a7791180954fe013a79284bbe568596d4ca0302540f7a08e23d9ce1c44a13781`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and the task root was removed through the bounded cleanup
+  helper. All head-bound evidence for `34f094c0` is stale.
+- A bound temporary directory now has one explicit, mutable recovery-retention
+  decision. Publisher-snapshot finalization sets that decision before returning
+  to the generic context. The generic owner closes held descriptors but skips
+  recursive removal, preserving the exact child and active lease for a later
+  root-lock holder's bounded stale recovery. A retention request without an
+  active primary fails closed rather than returning success. Exact regressions
+  cover both root-coordination and publisher-agent failures, prove the key
+  directory and active lease survive the failed operation, and prove the next
+  startup recovers the same retained tree. The focused retention set passes
+  4/4 in 0.231 seconds, the publisher-canary path contracts pass 4/4, and module
+  boundaries pass 19/19.
+- The final Python 3.13.12 inventory contains 1,870 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `de3f825d6789c0a6ab9ec1487d9467b7637a30a058df0f791d2805c7fc6c0f1b`.
+  Shard 0 passes 448/448 in 1,724.884 seconds, shard 1 passes 506/506 in
+  1,578.021 seconds, shard 2 passes 495/495 in 1,460.118 seconds, and shard 3
+  passes 421/421 in 1,412.093 seconds, for exact aggregate coverage of
+  1,870/1,870. Every bounded supervisor reached terminal exit zero.
+- The same frozen tree passes the independent Darwin security inventory 14/14
+  in 59.399 seconds, module boundaries 19/19, CI contracts 33/33, Skill
+  contracts 5/5, and Bootstrap contracts 12/12. Ruff 0.13.2 lint and
+  changed-file formatting, both current workflows under `actionlint`, the
+  generated bootstrap manifest check, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check` are clean. Two malformed focused selectors failed before
+  selecting the intended tests, and one unquoted bytecode glob failed before
+  scanning; each is explicitly non-counting. Signing, exact-secret admission,
+  the replacement fresh local Codex processor, hosted CI, and current-head
+  GitHub Codex evidence remain delivery gates.
+- Signed head `48e90fd8` passed exact-secret admission, then its fresh local
+  Codex processor found one P1 recovery gap. When the primary `S.gpg-agent`
+  socket refused a connection but an independently listening `S.scdaemon`
+  socket remained, stale recovery treated the snapshot as listener-free,
+  unlinked every socket, and could delete the tree while leaving the auxiliary
+  process and smart-card session alive. The exact 82-commit, 81-parent-edge
+  workspace used graph digest
+  `ba097f72c26fc09d39d697e9dc78dcffabe4371fc3174ec950a075516dda4e7d`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and the task root was removed through the bounded cleanup
+  helper. All head-bound evidence for `48e90fd8` is stale.
+- Stale recovery now connection-probes every identity-bound known agent socket
+  under one monotonic deadline when the primary refuses a connection. A live,
+  timed-out, unreadable, replaced, or otherwise unprovable auxiliary listener
+  retains the complete snapshot and blocks the new operation. The socket
+  removal owner repeats the complete listener-absence proof before unlinking
+  any member, then revalidates each identity immediately before removal. Real
+  Unix-socket regressions prove that a live `S.scdaemon` survives both startup
+  recovery and direct pre-unlink cleanup while an ordinary stale primary remains
+  recoverable. The focused recovery set passes 4/4 in 0.176 seconds, the full
+  publication invariant class passes 62/62 in 3.031 seconds, and module
+  boundaries pass 19/19.
+- The final Python 3.13.12 inventory contains 1,872 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `6be0958f1237e20580a63488130aab324cbb3d2bc05536d342282f71b74a7f45`.
+  Shard 0 passes 448/448 in 1,623.840 seconds, shard 1 passes 507/507 in
+  1,480.513 seconds, shard 2 passes 496/496 in 1,365.717 seconds, and shard 3
+  passes 421/421 in 1,321.138 seconds, for exact aggregate coverage of
+  1,872/1,872. Every bounded supervisor reached terminal exit zero.
+- The same frozen tree passes the independent Darwin security inventory 14/14
+  in 59.488 seconds, module boundaries 19/19, CI contracts 33/33, Skill
+  contracts 5/5, and Bootstrap contracts 12/12. Ruff 0.13.2 lint and
+  changed-file formatting, both current workflows under `actionlint`, the
+  generated bootstrap manifest check, the isolated official OpenAI Skill
+  validator, project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check` are clean. One direct isolated unittest selector failed
+  before import because it bypassed the repository loader, and the first direct
+  pre-unlink fixture exceeded Darwin's AF_UNIX path limit before exercising
+  production code; both are explicitly non-counting. Signing, exact-secret
+  admission, the replacement fresh local Codex processor, hosted CI, and
+  current-head GitHub Codex evidence remain delivery gates.
+- The replacement fresh local Codex processor over signed head `3c10105e`
+  found a deeper P1 in the listener-probe correction. `ECONNREFUSED` proves
+  only one instant: the same bound Unix socket can begin listening without an
+  inode, mode, or owner change after the final probe and before unlink. The
+  exact workspace contained 83 commits and 82 parent edges under graph digest
+  `c087f2915ddb6ad80e7be38852fa98ca4b76f3e708e058cdbe22efd5c6ceafcd`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed. All head-bound
+  evidence for `3c10105e` is stale.
+- Recovery no longer converts a refused or absent socket into deletion
+  authority. Without prior proof, a stale snapshot must complete the real
+  bounded Assuan shutdown and observe every bound socket disappear. Normal
+  cleanup and successful recovery remove GPG locks, confirm the empty socket
+  inventory, then create exact owner-only `.agent-cleanup.proved` bytes through
+  the held child descriptor and durably re-read them. A valid marker permits a
+  later root-lock holder to remove a cleanup-complete retained tree. Missing,
+  malformed, symlinked, replaced, unreadable, or access-policy-drifted proof
+  blocks recovery, as does a pre-agent crash with neither a marker nor a socket
+  that can complete Assuan shutdown. A publisher-agent cleanup failure never
+  emits the marker. Real regressions prove that a refused bound socket can
+  begin listening after recovery fails without being unlinked, while a live
+  scdaemon and every unproved snapshot remain retained.
+- The final Python 3.13.12 inventory remains 1,872 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `bbdd0cffe527ea884b2857ce70104d17eb1a6dca47a3d083c1010a6395ca20fe`.
+  Shard 0 passes 448/448 in 1,643.871 seconds, shard 1 passes 507/507 in
+  1,492.648 seconds, shard 2 passes 496/496 in 1,374.246 seconds, and shard 3
+  passes 421/421 in 1,327.314 seconds, for exact aggregate coverage of
+  1,872/1,872. Every bounded supervisor reached terminal exit zero. The
+  focused publication invariant class passes 62/62, including five cleanup
+  proof variants, and module boundaries pass 19/19.
+- The same tree passes the independent Darwin security inventory 14/14 in
+  60.427 seconds, CI contracts 33/33, Skill contracts 5/5, and Bootstrap
+  contracts 12/12. Ruff 0.13.2 lint for `scripts/` and `tests/`, changed-file
+  formatting, both current workflows under bounded `actionlint`, the generated
+  bootstrap manifest check, the isolated official OpenAI Skill validator,
+  source-tree bytecode exclusion, and `git diff --check` are clean. One direct
+  CI-contract invocation omitted `-I` and exercised only the entrance guard;
+  one initial Darwin run lost its caller session ID and was allowed to terminate
+  before the bounded replacement started. Both are explicitly non-counting.
+  Project-journal validation, signing, exact-secret admission, the replacement
+  fresh local Codex processor, hosted CI, and current-head GitHub Codex evidence
+  remain delivery gates.
+- The replacement local Codex processor over signed head `82e03e4d` found one
+  P2 readiness mismatch. Shadow `doctor` reported an explicitly supplied
+  provider cache as not applicable, while shadow `start` validated the same
+  cache against durable history and failed when it was missing, stale, or
+  malformed. The exact 84-commit, 83-parent-edge workspace used graph digest
+  `92c2764b9fae9b1df0fdba782542a5488c8ab7674b23ed16151e24b7c732c0d0`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed through the bounded
+  cleanup helper. All head-bound review evidence for `82e03e4d` is stale.
+- Shadow provider state remains optional, but `doctor` now validates every
+  explicitly supplied provider cache with the same durable-history binding as
+  `start`. An omitted shadow provider retains the established not-applicable
+  result; production still requires one. The paired stale-provider regression
+  proves both entry points fail closed through the same validator. The focused
+  pair passes 2/2 in 0.740 seconds, and the complete 133-test orchestrator
+  module passes in 548.788 seconds. Canonical discovery now contains 1,873
+  exact test IDs from 22 sources under manifest digest
+  `79de0299d076fb3d98d69aa4a4d1a1bd036f909ee78c1cd6d98b2a2887134ee3`.
+  The final tree also passes module boundaries 19/19, CI contracts 33/33,
+  Skill contracts 5/5, Bootstrap contracts 12/12, Ruff lint and formatting for
+  both changed Python files, the generated bootstrap-manifest check,
+  project-journal validation, source-tree bytecode exclusion, and
+  `git diff --check`. One bootstrap-manifest invocation incorrectly supplied
+  an unsupported `--check` option and is non-counting; the documented default
+  check then passed. Signing, exact-secret admission, the final local Codex
+  processor, hosted CI, and current-head GitHub Codex evidence remain delivery
+  gates.
+- The final-head local Codex processor over signed head `96c8b6e9` found one
+  further P2 input-validation gap. `start` rejected non-boolean shadow values,
+  but `doctor` accepted truthy integers or strings and could skip production
+  marker validation; the provider-detail tuple could also raise `TypeError`
+  for those inputs. The exact 85-commit, 84-parent-edge workspace used graph
+  digest
+  `55dc3c60a8aa1722004e3d02f0166020b1590262178cae9d7b9c8a987a2d70f6`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed through the bounded
+  cleanup helper. All head-bound review evidence for `96c8b6e9` is stale.
+- Startup authority now owns one strict boolean validator shared by `doctor`
+  and `start`. Both entry points reject integer and string shadow values before
+  any readiness or production-path branch. Moving the existing `start` check
+  into that helper keeps the engine's exact 9,858-branch budget unchanged. The
+  focused doctor/start/provider set passes 3/3 in 0.729 seconds, the complete
+  134-test orchestrator module passes in 544.808 seconds, and module boundaries
+  pass 19/19. Canonical discovery now contains 1,874 exact test IDs from 22
+  sources under manifest digest
+  `005f7cf54f96beb4a2bb629aebba29919c544ad71993e8a2d73d01fa8ae1c5b5`.
+  Signing, exact-secret admission, the replacement local Codex processor,
+  hosted CI, and current-head GitHub Codex evidence remain delivery gates.
+- The replacement local Codex processor over signed head `2f5537e8` found two
+  additional cleanup and startup-boundary issues. First, segmented source
+  acceptance could preserve only an exception note when exact spool removal or
+  staged-file rollback failed, so the CLI could return an ordinary input or
+  transition error while sensitive raw bytes remained outside the checkpoint.
+  Second, the public `start_run` wrapper reached production-path and Python
+  runtime probes before validating `shadow`, and its default identity behavior
+  could create identity state before the lifecycle layer rejected a non-boolean
+  value. The exact 86-commit, 85-parent-edge workspace used graph digest
+  `9311b23e9fd2c4f100631908be7f5bc28ff347d6a50e303742bd5e7aad3fb6a7`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed. All head-bound review
+  evidence for `2f5537e8` is stale.
+- The public wrapper now applies the shared strict boolean validator as its
+  first executable operation and forwards only that normalized value. Direct
+  wrapper regressions prove invalid integer and string values do not probe the
+  runtime or create an identity key or run directory. Segmented source
+  acceptance now protects missing-unit completion, transcript validation,
+  metadata derivation, acceptance staging, and checkpoint publication with
+  cleanup handling. Spool construction, descriptor release, materialization,
+  source rollback, checkpoint disposition failure, and checkpoint rollback all
+  attach the existing content-free sensitive-cleanup marker when removal cannot
+  be proved. The CLI therefore emits the non-retryable
+  `temporary_cleanup_incomplete` security result while preserving the original
+  input or transition error as bounded machine metadata. Adversarial tests
+  leave a real spool or staged file behind, prove the marker and machine
+  result, and then remove only the test-owned residual.
+- The complete Python 3.13.12 orchestrator module passes 136/136 in 545.833
+  seconds. Canonical discovery contains 1,877 exact test IDs from 22
+  authenticated source modules under manifest digest
+  `2b973390e9fc799a89514622ae41a7c1f0370f8b632aa6bf7c0b4a3d406c25d7`.
+  Shard 0 passes 448/448 in 1,513.121 seconds, shard 1 passes 508/508 in
+  1,884.717 seconds, shard 2 passes 498/498 in 1,795.941 seconds, and shard 3
+  passes 423/423 in 1,742.978 seconds, for exact aggregate coverage of
+  1,877/1,877. Every bounded shard runner reached terminal exit zero.
+- The same tree passes module boundaries 19/19 with the exact branch inventory
+  reduced from 9,858 to 9,848 and `orchestrator_source.py` remaining below its
+  unchanged 2,150-line cap. It also passes checkpoint security 14/14, Darwin
+  security 14/14 in 59.042 seconds, CI contracts 33/33, Bootstrap contracts
+  12/12, and Skill contracts 5/5. Ruff 0.13.2 lint is clean for all `scripts/`
+  and `tests/`; all 10 changed Python files pass formatting, workflow syntax
+  passes `actionlint` 1.7.12, the generated bootstrap manifest is current, and
+  `git diff --check` is clean. Whole-tree formatting still reports five
+  inherited migration files that this correction does not modify. Two initial
+  focused commands used wrong unittest class names, one omitted the required
+  isolated runtime shape, and one direct isolated CLI file invocation bypassed
+  the repository package loader; all failed before exercising the intended
+  test and are explicitly non-counting. Signing, exact-secret admission, the
+  replacement local Codex processor, hosted CI, and current-head GitHub Codex
+  evidence remain delivery gates.
+- A final owner-side diff audit found one narrower form of the cleanup finding:
+  when exact spool removal itself was the first error, `discard()` closed its
+  custody state before the outer handler retried it, so no earlier primary
+  existed to receive the sensitive-cleanup marker. The terminal
+  `InvalidTransitionError` now carries that marker directly while preserving
+  its exact removal failure as the cause. A real retained-spool regression
+  proves the CLI emits `temporary_cleanup_incomplete` even without an earlier
+  input or transition error. The direct and composed cleanup regressions pass
+  3/3, and the complete orchestrator module passed 137/137 in 546.575 seconds
+  before a formatting-only source-line compression.
+- The first 1,878-test candidate attempt used canonical manifest digest
+  `341261bbe48d71d053ba90503d89169a15a4078cd9c1201d08fdc583747bd4fb`.
+  Its shard 0 and shard 1 passed, but shard 2 exposed that the three source
+  staging modules had grown to 778 lines against the unchanged 775-line gate.
+  The shard was interrupted once after that deterministic failure and is
+  non-counting. The implementation was compressed without changing the error
+  type, message, cleanup stage, cause, or the 775-line limit; focused module
+  boundary tests pass 2/2 and the three cleanup regressions pass 3/3.
+- The final Python 3.13.12 candidate retains 1,878 exact test IDs from 22
+  authenticated test sources under the same canonical manifest digest. Shard
+  0 passes 448/448 in 1,528.621 seconds, shard 1 passes 508/508 in 1,374.930
+  seconds, shard 2 passes 498/498 in 1,255.840 seconds, and shard 3 passes
+  424/424 in 1,215.219 seconds, for exact aggregate coverage of 1,878/1,878 in
+  5,374.610 seconds. Every final shard reached terminal exit zero without
+  skips. The independent Darwin security inventory passes 14/14 in 59.475
+  seconds. Final Ruff lint, changed-file formatting, `actionlint`, generated
+  bootstrap-manifest validation, project-journal validation, source-tree
+  bytecode exclusion, and `git diff --check` are clean. One project-journal
+  helper invocation omitted its required `--repo` argument and stopped at
+  usage output; the exact worktree-scoped validation then passed, so the first
+  invocation is non-counting. Signing, exact-secret admission, the final local
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain
+  delivery gates.
+- Signed head `b83704a1` had clean exact-secret admission, but its fresh local
+  Codex processor found one P2 classification defect. Snapshot-lease
+  acquisition marked every hardening, directory-fsync, locking, or
+  revalidation failure as `temporary_cleanup_incomplete` before the bound
+  temporary-directory owner had attempted removal. A later proved removal
+  could therefore still be reported as a non-retryable sensitive-cleanup
+  failure. The exact 87-commit, 86-parent-edge workspace used graph digest
+  `fc50094cee0d35c33dabdfbd02393b5538a0f90a627560ed8ba9d1b390412e3e`
+  and config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted bundle digests remained unchanged, the
+  reviewer closed, and its exact task root was removed through the bounded
+  cleanup helper. All head-bound evidence for `b83704a1` is stale.
+- Lease acquisition now preserves its original setup error while descriptor
+  close and bound-directory removal remain the only owners that attach a
+  sensitive-cleanup marker when cleanup cannot be proved. The regression
+  injects both file-hardening and directory-fsync failures, proves the exact
+  bound child is gone and its root is empty, and proves the resulting error
+  chain has no cleanup-incomplete classification. The exact regression passes
+  1/1, the complete publication invariant class passes 63/63, and the two
+  affected module-boundary tests pass 2/2. One direct isolated test-file launch
+  failed before import because it bypassed the repository loader, and one
+  focused invocation used a nonexistent class name; both are non-counting.
+- The final Python 3.13.12 inventory contains 1,879 exact test IDs from 22
+  authenticated sources under manifest digest
+  `2ab83fa0150490634b47c3ddaa7cd15b256d118ac69a8e3b8f45dd436d05471d`.
+  Shard 0 passes 448/448 in 1,862.309 seconds, shard 1 passes 509/509 in
+  1,679.577 seconds, shard 2 passes 498/498 in 1,552.913 seconds, and shard 3
+  passes 424/424 in 1,498.512 seconds, for exact aggregate coverage of
+  1,879/1,879 without skips. The independent Darwin security inventory passes
+  14/14 in 67.240 seconds. Ruff 0.13.2 lint for all `scripts/` and `tests/`,
+  changed-file formatting, both current workflows under `actionlint`, the
+  generated bootstrap manifest, and `git diff --check` are clean. Signing,
+  exact-secret admission, the replacement local Codex processor, hosted CI,
+  and current-head GitHub Codex evidence remain delivery gates.
+
+- Current-head GitHub Codex review of signed head `b4a9b69c` found three
+  additional boundary defects: labeled MRN values were not classified as
+  personal identifiers; single-label package release forms such as
+  `react@latest` were misclassified as e-mail addresses; and a caller could
+  select a run directory inside, above, or aliased to the local active or
+  archived session source roots. The shared privacy grammar now covers
+  controlled MRN labels, package release tags remain reviewable only outside
+  explicit e-mail/contact context, and every CLI run-directory consumer uses
+  one lexical/resolved bidirectional source-overlap guard before state access
+  or creation. Adversarial tests preserve source sentinels across direct,
+  parent, resolved-alias, and lexical-symlink overlap attempts while accepting
+  the canonical sibling run cache.
+- The first 1,880-test shard attempt exposed the unchanged module-boundary
+  budgets before reaching terminal coverage: branch inventory rose from 9,848
+  to 9,854, `cli.py` reached 2,004 lines, and `temporary_paths.py` reached 365
+  lines. All four shard processes were interrupted once and that attempt is
+  non-counting. The implementation now reuses and strengthens the existing
+  temporary/source-root guard, performs the package-tag decision without new
+  AST branches, and validates `start`'s run directory once at command entry.
+  No budget was relaxed: module boundaries pass 19/19 with exact 9,848 branch
+  inventory, `cli.py` at 2,000 lines, and `temporary_paths.py` at 350 lines.
+- The final Python 3.13.12 inventory contains 1,880 exact test IDs from 22
+  authenticated sources under manifest digest
+  `640e0c5d10e37112f7afd33e14d9caaaadb0779eb8a314328b0b5cb77a3ea9cc`.
+  Shard 0 passes 448/448 in 1,785.828 seconds, shard 1 passes 509/509 in
+  1,645.230 seconds, shard 2 passes 498/498 in 1,519.957 seconds, and shard 3
+  passes 425/425 in 1,465.264 seconds, for exact aggregate coverage of
+  1,880/1,880 without skips. The independent Darwin security inventory passes
+  14/14 in 83.826 seconds; focused finding regressions pass 5/5; CI contracts
+  pass 33/33; Ruff 0.13.2 lint, changed-file formatting, both workflows under
+  `actionlint`, the generated bootstrap manifest, and `git diff --check` are
+  clean. One direct CI-contract run used the Homebrew symlink instead of the
+  required owner-controlled copied interpreter and one isolated unittest
+  command could not import the repository package; both stopped before valid
+  gate execution and are non-counting.
+- A clean-context Codex CLI processor of signed head `717c258b` found one P1
+  retained-privacy defect: the package release-tag exception accepted ambiguous
+  single-label addresses such as `alice@dev`, `alice@latest`, and `alice@123`
+  without positive package-coordinate syntax. The independently materialized
+  89-commit, 88-parent-edge workspace used graph digest
+  `c36e136f2d8bb23108018769015ab0687f2bc0b92c26c39d65f5b27f69661d39`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It postvalidated clean, the trusted control digests remained unchanged, and
+  the exact reviewer task root was removed. All head-bound review evidence for
+  `717c258b` is stale.
+- Current-head GitHub Codex review of `717c258b` found four additional input
+  boundaries: `Patient ID` and `Patient identifier` were not treated as
+  personal identifiers; a package tag followed by punctuation-only `:` could
+  be consumed as an empty SCP-style path; all seven `--run-dir` consumers had
+  lost the established empty/NUL/tilde path normalization; and source transport
+  selected its bootstrap cache from ambient temporary-directory state during
+  import. The follow-up detects the patient labels in spaced, separated, and
+  camel-case forms, requires an actual SCP path character, applies package-tag
+  exemption only with positive package syntax, and routes every run-directory
+  argument through the shared absolute-path parser. The transport cache is a
+  fixed per-UID path beneath `/tmp/codex-session-retrospective-<uid>` and no
+  longer imports or consults `tempfile`.
+- Focused end-to-end privacy, path, and import regressions pass 7/7 in 65.486
+  seconds. Module boundaries pass 19/19 with the exact 9,848 branch inventory
+  unchanged, and CI contracts pass 33/33. Ruff 0.13.2 lint for all `scripts/`
+  and `tests/`, formatting for all eight changed Python files, both workflows
+  under `actionlint`, the generated bootstrap manifest, and `git diff --check`
+  are clean. One intermediate scoped-package test failed before the positive
+  context grammar was completed, and one already-running four-shard attempt
+  was interrupted after that source change; both are explicitly non-counting.
+- The first final four-shard environment placed `TMPDIR` inside this linked
+  worktree. Because the worktree itself is below `codex-workspace/.codex-local`,
+  the export-location negative fixture no longer represented an outside path;
+  its one failed shard and the other three successful shards are non-counting.
+  A diagnostic rerun with an external temporary root but the ambient Homebrew
+  Python was also non-counting: executable authority correctly rejected that
+  interpreter's writable ancestry. The exact failed export test then passed
+  with both required properties: an external owner-only temporary root and the
+  owner-controlled copied Python.
+- The final Python 3.13.12 inventory contains 1,881 exact test IDs from 22
+  authenticated sources under manifest digest
+  `67f64560c9d2f825467012025e5c93f0fbfffff8d54497fdcfe13fcf23316b22`.
+  Shard 0 passes 448/448 in 1,600.022 seconds, shard 1 passes 509/509 in
+  1,455.100 seconds, shard 2 passes 499/499 in 1,335.697 seconds, and shard 3
+  passes 425/425 in 1,293.586 seconds, for exact aggregate coverage of
+  1,881/1,881 without skips. Every bounded shard runner reached terminal exit
+  zero. The independent Darwin security inventory passes 14/14 in 58.748
+  seconds. Signing, exact-secret admission, the replacement clean-context
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain
+  delivery gates.
+- The clean-context Codex processor for signed head `c52c6883` found two
+  retained-boundary defects. The v2 export guard authenticated the requested
+  output but did not apply the same local-session source exclusion to every
+  replayed destination claim or descriptor, and natural-language package
+  heuristics allowed syntactically ambiguous single-label `name@tag` values to
+  bypass personal-identifier redaction. Current-head GitHub Codex review found
+  four additional defects: `Tool response:` escaped the raw tool-payload
+  marker; OTP, MFA, 2FA, recovery-code, and backup-code labels were not all
+  classified as credential material; dotted release versions could be confused
+  with IPv4 addresses while an actual release-server address still needed
+  redaction; and the migration-only v1 transient output guard did not exclude
+  active or archived session source roots. All head-bound evidence for
+  `c52c6883` is stale.
+- The shared locator policy now treats every syntactic single-label
+  `name@tag` form in retained prose as a personal identifier, including
+  package-looking values, while structured package coordinates must use
+  schema-constrained fields or placeholders. Credential labels cover the
+  spaced, snake-case, lower-camel, Pascal-case, and acronym forms for one-time,
+  multifactor, recovery, and backup codes. An immediate explicit `release` or
+  `version` context preserves a valid four-or-more-component dotted version;
+  unrelated IPv4 text, including `release server 1.2.3.4`, remains redacted.
+  Raw-payload screening recognizes tool and command responses. Both the v1
+  transient output path and every v2 export destination claim, including
+  persisted descriptor replay, apply the same lexical and resolved
+  bidirectional exclusion against local active and archived session roots
+  before creating or mutating output state.
+- Focused privacy/reporting tests pass 4/4 in 101.101 seconds, result-validation
+  tests pass 3/3 in 0.268 seconds, and v1/v2 output-guard tests pass 3/3 in
+  11.511 seconds. The complete affected export, result/episode, and v2 CLI
+  modules pass 236/236 in 358.390 seconds; the exact v1 output regression plus
+  module-boundary and CI contracts pass 53/53 in 3.687 seconds. Module
+  boundaries retain the exact 9,848-branch inventory. One first shard attempt
+  was interrupted after an accidental whole-file formatter touched the legacy
+  v1 monolith; those unrelated formatting changes were restored before the
+  narrow import and guard were reapplied, so that interrupted attempt is
+  non-counting.
+- The final Python 3.13.12 inventory contains 1,886 exact test IDs from 22
+  authenticated sources under manifest digest
+  `4d28cae5155b89bbfeac63042c6dd0443160161e0f49626eda19d7fbfb08a61d`.
+  Shard 0 passes 448/448 in 1,488.461 seconds, shard 1 passes 510/510 in
+  1,354.165 seconds, shard 2 passes 502/502 in 1,242.319 seconds, and shard 3
+  passes 426/426 in 1,194.575 seconds, for exact aggregate coverage of
+  1,886/1,886 in 5,279.520 seconds without skips. The independent Darwin
+  security inventory passes 14/14 in 58.805 seconds. Ruff 0.13.2 lint for all
+  `scripts/` and `tests/`, formatting for the seven applicable changed Python
+  files, both workflows under actionlint 1.7.12, the generated bootstrap
+  manifest, the official OpenAI Skill validator, source-tree bytecode
+  exclusion, and `git diff --check` are clean. Signing, exact-secret admission,
+  the final clean-context Codex processor, hosted CI, and current-head GitHub
+  Codex evidence remain delivery gates.
+- Current-head GitHub Codex review of signed head `2bb47cb5` found five retained
+  privacy gaps: natural-language `version` or `release` context could exempt a
+  real IPv4 address; tool-response markers rejected harmless meta prose while
+  bare `Prompt:` and `User prompt:` payload labels escaped; absolute paths with
+  a spaced intermediate component retained their suffix; and labeled raw IDs
+  using `identifier` escaped the shared detector. A clean-context Codex CLI
+  review had already started in an independently materialized and validated
+  workspace when those current-head findings arrived. It was interrupted once,
+  produced no terminal review artifact, postvalidated clean, left the trusted
+  bundle unchanged, and had its exact task root removed. The lane is stale and
+  non-counting; no partial output was reused.
+- The shared locator policy now treats every syntactically valid IPv4-shaped
+  four-part token as an address regardless of nearby natural-language context;
+  retained dotted versions use an unambiguous `v1.2.3.4` form or structured
+  data. Tool and command output/response/result markers require `:` or `=`, so
+  meta descriptions remain valid, while bare `Prompt:` and `User prompt:`
+  labels fail the final retained-content policy. POSIX, home-relative, Windows,
+  and UNC locators consume horizontally spaced intermediate components through
+  their following path separator and prefer the home-path grammar before the
+  generic Unix grammar. Session, thread, and tool-call `identifier` labels now
+  use the same raw-ID redaction and retained-validation policy as `id` and
+  `ref`. This supersedes the earlier natural-language dotted-version exception.
+- Focused finding regressions pass 6/6 in 10.594 seconds. The complete affected
+  result/episode and export modules pass 164/164 in 131.452 seconds, the
+  independent result-contract audit passes 25/25 in 2.841 seconds, and module
+  boundaries plus CI contracts pass 52/52 in 3.636 seconds with the exact
+  9,848-branch inventory unchanged. The first focused run passed 5/6 but exposed
+  the more-specific home-path ordering defect; that run is non-counting and the
+  corrected six-test rerun is the accepted evidence.
+- The final Python 3.13.12 inventory contains 1,888 exact test IDs from 22
+  authenticated sources under manifest digest
+  `a43e3c1794b623d8511f2705ddd69b45f77acb9894e5c2e98c44366d7c6ac7e9`.
+  Shard 0 passes 449/449 in 1,622.277 seconds, shard 1 passes 511/511 in
+  1,481.704 seconds, shard 2 passes 502/502 in 1,362.351 seconds, and shard 3
+  passes 426/426 in 1,321.045 seconds, for exact aggregate coverage of
+  1,888/1,888 in 5,787.377 seconds without skips. The independent Darwin
+  security inventory passes 14/14 in 68.694 seconds. Ruff 0.13.2 lint for all
+  `scripts/` and `tests/`, formatting for all four changed Python files,
+  actionlint 1.7.12 for both workflows, the generated bootstrap manifest, and
+  the official OpenAI Skill validator are clean. Journal validation,
+  `git diff --check`, signing, exact-secret admission, the final clean-context
+  Codex processor, hosted CI, and current-head GitHub Codex evidence remain the
+  delivery gates.
+
+- Current-head GitHub Codex review of signed head `a3e37cca` found four more
+  retained-boundary gaps: `Input:`, `Request:`, and their user-qualified forms
+  escaped source-payload screening; subject-qualified `identifier` fields
+  escaped personal-identifier policy; apostrophes and commas could leave path
+  suffixes after redaction; and the durable history repository could overlap
+  or alias active or archived session source roots. A local clean-context Codex
+  processor had started against the independently materialized exact range
+  when those findings arrived. It was interrupted once without an accepted
+  terminal artifact, postvalidated clean with unchanged trusted-control
+  digests, and left no task root or reviewer process. That lane is stale and
+  non-counting.
+- The follow-up recognizes the complete controlled input/request label family,
+  applies the shared personal policy to snake, spaced, and camel-case subject
+  identifiers, and consumes legal apostrophe and comma punctuation in POSIX,
+  home, Windows, and UNC path locators. The new `history_paths` policy is the
+  single deterministic owner for bidirectional lexical/resolved separation and
+  canonical-account-home expansion. CLI `start`, `doctor`, and public
+  `start_run` all apply it before readiness can pass or run state can be
+  created. The generated implementation-authority manifest includes that new
+  production module, while CLI, orchestrator, and temporary-path modules remain
+  at their existing 2,000, 800, and 350-line ceilings. The exact engine branch
+  inventory is 9,851 and the 9,858 cap is unchanged.
+- Focused finding and architecture regressions pass 26/26 in 83.954 seconds;
+  bootstrap startup and generated-manifest regressions pass 3/3; module
+  boundaries pass 19/19. The final Python 3.13.0 inventory contains 1,890 exact
+  test IDs from 22 authenticated sources under manifest digest
+  `396f7f1c90c01994a0f5298e99893c52886be8aa7356d91f84ebb4d1d69e0748`.
+  Shard 0 passes 450/450 in 1,695.192 seconds, shard 1 passes 512/512 in
+  1,535.212 seconds, shard 2 passes 502/502 in 1,415.022 seconds, and shard 3
+  passes 426/426 in 1,376.930 seconds, for exact aggregate coverage of
+  1,890/1,890 with an empty error scan. The independent Darwin security
+  inventory passes 14/14 in 56.808 seconds. Ruff lint and changed-file
+  formatting, both workflows under `actionlint`, and the generated bootstrap
+  manifest are clean.
+- Three harness attempts are explicitly non-counting: the first propagated a
+  4 MiB log limit into one deliberate oversized-file fixture; a later frozen
+  shard exposed the missing implementation-authority manifest entry; and one
+  affected-module aggregation omitted `-I` and was rejected by the fixed
+  runtime-isolation gate. The accepted final shard runner bounds only its log
+  sink, enforces `-I -B -S`, and contains the complete updated source manifest.
+- A clean-context Codex CLI review of signed head `9dd0cb95` found three final
+  public-boundary defects: direct orchestrator construction and lifecycle start
+  could bypass source/history separation, terminal path components containing
+  spaces could leak a suffix after redaction, and leader reap retry could spend
+  the full timeout twice. The review used an independently materialized and
+  postvalidated workspace under the trusted installed review bundle; its task
+  root was removed after terminal findings were captured.
+- The public orchestrator constructor now rejects run directories overlapping
+  local session sources, and lifecycle start validates the history repository
+  before state access. POSIX, home-relative, Windows, and UNC privacy grammars
+  consume complete spaced terminal components. Process reaping now shares one
+  absolute deadline across the initial wait and post-kill wait. Focused
+  regressions pass 2/2, the result/episode module passes 93/93, orchestrator
+  support passes 27/27, orchestrator passes 140/140, export passes 72/72,
+  module boundaries pass 19/19, CI contracts pass 33/33, and bootstrap tests
+  pass 12/12. The exact engine branch inventory is 9,853 under the unchanged
+  9,858 cap, and `orchestrator.py` remains below its 800-line ceiling at 798.
+- Two final-gate attempts are explicitly non-counting. One frozen four-shard
+  run was interrupted after a style-only source edit invalidated its tree; the
+  bounded interruption left one exact owner-private GPG fixture root, which
+  was proved process- and socket-free and removed without deleting its shared
+  parent. The next 1,894-test run reached three clean shard terminals but found
+  one deterministic mock-clock fixture error in the fourth shard after the
+  shared reap deadline added two explicit clock observations. The corrected
+  five-sample clock sequence preserves the intended group-absence timeout and
+  passes both exact deadline regressions. An extra direct unittest aggregation
+  that omitted `-I -S` was rejected by runtime self-checks and is also
+  non-counting; the same CI and boundary modules pass through their required
+  isolated entrypoints.
+- The final Python 3.13.0 inventory contains 1,894 exact test IDs from 22
+  authenticated sources under manifest digest
+  `66d467561ff2b4d61a088b9ebf42578d8bfa47729a6d8726e52958080014468d`.
+  Shard 0 passes 450/450 in 1,697.110 seconds, shard 1 passes 513/513 in
+  1,548.860 seconds, shard 2 passes 503/503 in 1,423.227 seconds, and shard 3
+  passes 428/428 in 1,393.377 seconds, for exact aggregate coverage of
+  1,894/1,894 without skips. The independent Darwin security inventory passes
+  14/14 in 58.666 seconds. Ruff 0.13.2 lint and changed-file formatting, both
+  workflows under `actionlint`, the generated bootstrap manifest, the official
+  OpenAI Skill validator, source-tree bytecode exclusion, and `git diff
+  --check` are clean.
+- A fresh-context Codex CLI review of signed head `1890f451` found two P1
+  retained-path gaps: sentence punctuation after an absolute path with a
+  spaced terminal component caused fallback redaction to retain the remaining
+  component, and relative file paths with spaces retained everything after the
+  first atom. The independently materialized workspace bound 94 commits and 93
+  parent edges under graph digest
+  `cf12214ccdc749d2ee63a9698bcf4d0d64695d6d4c9ca09991275a4ea2476a5d`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Postvalidation reproduced those exact receipts. The trusted 30-file control
+  manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  the playbook, guard, and Python digests remained unchanged, and the exact
+  reviewer task root was removed after process absence was proved.
+- The shared privacy grammar now treats punctuation as an outside terminal
+  boundary, recognizes relative file components containing spaces, and gives
+  structurally complete file paths and paths with a spaced intermediate
+  component priority over the inherently ambiguous spaced-terminal form. The
+  priority rules cover POSIX, home-relative, Windows, and UNC syntax, stop at a
+  complete final file or unspaced component, and preserve following reviewable
+  prose. Detector and post-redactor continue to consume the same ordered
+  pattern set. Accepted focused evidence is 5/5 result/path methods in 0.517
+  seconds, 1/1 retained assembly and reread method in 9.503 seconds, module
+  boundaries 19/19 in 1.671 seconds with the exact 9,853-branch inventory, CI
+  contracts 33/33 in 2.116 seconds, and Darwin security 14/14 in 68.130
+  seconds.
+- Two correction attempts are explicitly non-counting. The first focused
+  relative-path grammar allowed a leading prose token to become a spaced path
+  component and failed eight subcases before the first component was restored
+  to an unspaced form. The next frozen 1,894-test run under digest
+  `fdb36137ce7ddd4c77e94c9b9d6d7d8fce5186c7fdd74c3e307b4ac1aef48129`
+  found three over-redaction failures for ordinary absolute file paths followed
+  by prose; shard 3 reached a clean terminal while shards 0 and 1 were
+  interrupted once after that deterministic failure. No matching runner or
+  worktree process remained. The next Python 3.13.0 inventory contained the
+  same 1,894 test IDs from 22 authenticated sources under digest
+  `a81ff31dbf9af4bb2a7a36b9a4694159f3056bc5d79cf57166c85f4f5b6e4fc8`.
+  Shard 0 passes 450/450 in 1,544.143 seconds, shard 1 passes 513/513 in
+  1,397.682 seconds, shard 2 passes 503/503 in 1,281.021 seconds, and shard 3
+  passes 428/428 in 1,250.569 seconds, for exact aggregate coverage of
+  1,894/1,894 in 5,473.415 seconds without skips. That run became stale and is
+  non-counting after an exact dotted relative-file regression showed that
+  `src/Release.v1 Private Notes.txt` could stop at the first valid extension
+  and retain the spaced suffix. The complete-file component is now greedy, so
+  it selects the rightmost valid extension while still stopping before prose
+  after an ordinary file path.
+- The final Python 3.13.0 inventory contains the same 1,894 test IDs from 22
+  authenticated sources under digest
+  `756109f3ae89baf640289ccb8c807ff623172ef1d6359ee23cc0273b46157b01`.
+  Shard 0 passes 450/450 in 1,616.747 seconds, shard 1 passes 513/513 in
+  1,450.876 seconds, shard 2 passes 503/503 in 1,342.782 seconds, and shard 3
+  passes 428/428 in 1,301.652 seconds, for exact aggregate coverage of
+  1,894/1,894 in 5,712.057 seconds without skips. Signing, head-bound
+  exact-secret admission, replacement local Codex review, hosted CI, and
+  current-head GitHub Codex evidence remain delivery gates. Ruff 0.13.2 lint
+  for all `scripts/` and `tests/`, formatting for the three changed Python
+  files, both workflows under `actionlint`, the generated bootstrap manifest,
+  the official OpenAI Skill validator, project-journal validation, tracked
+  bytecode exclusion, and `git diff --check` are clean. Two validator launch
+  attempts stopped before reading the skill because the script was not
+  executable and the selected host Python lacked PyYAML; the accepted offline
+  Python 3.13 validator run used the existing task-local cache and reported
+  `Skill is valid!`.
+- A clean-context Codex CLI review of signed head `0c1ca287` found one P1
+  retained-path defect. Path patterns were applied sequentially to already
+  modified text, so a relative spaced-file suffix could be replaced before the
+  complete absolute POSIX match. A path such as
+  `/Users/alice/Jane Smith Folder/Customer Notes.txt` consequently retained the
+  middle token `Smith`; the leak scanner accepted the fragment and final
+  `turn_findings.jsonl` validation did not reject it. The independent review
+  workspace bound 95 commits and 94 parent edges under graph digest
+  `d358aa361f63500ed611d61b014fb2f5daa00a830a4b50855b8e99da8f13f49a`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Postvalidation reproduced those exact receipts, the trusted 30-file control
+  manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  and the reviewer and preflight task roots were removed after process absence
+  was proved.
+- Path redaction now evaluates every locator pattern against the unchanged
+  input, clips ambiguous spaced-terminal matches to a structurally proved file
+  extension or later separator endpoint, merges overlapping spans, and then
+  replaces the merged spans from right to left. Detector findings use the same
+  merged spans. This closes the reviewer's combined spaced-directory and
+  spaced-filename case for POSIX, home-relative, Windows, and UNC paths while
+  preserving prose after a structurally complete filename. Focused final-tree
+  redaction and retained-artifact regressions pass 4/4. Module boundaries pass
+  19/19 with an exact 9,856-branch inventory under the unchanged 9,858 cap, CI
+  contracts pass 33/33, and the independent Darwin security inventory passes
+  14/14 in 59.094 seconds under an owner-controlled copied Python 3.13.12.
+- The final Python 3.13.12 inventory contains 1,895 exact test IDs from 22
+  authenticated sources under manifest digest
+  `624df069729e3b9fb1b8c3eea8edf4869fd4fdcf6b34aacb02a3f9fe0190d432`.
+  Shard 0 passes 450/450 in 1,677.706 seconds, shard 1 passes 513/513 in
+  1,527.170 seconds, shard 2 passes 504/504 in 1,402.397 seconds, and shard 3
+  passes 428/428 in 1,369.454 seconds, for exact aggregate coverage of
+  1,895/1,895 in 5,976.727 seconds without skips. An earlier direct unittest
+  selector stopped before test loading because isolated mode cannot import the
+  un-packaged `tests` directory, and initial CI/Darwin probes correctly rejected
+  a symlinked Python and a copied Python beneath world-writable `/private/tmp`;
+  those environment-shape attempts are non-counting. The accepted runs use the
+  owner-controlled worktree runtime and the canonical shard entrypoint.
+- A clean-context Codex CLI review of signed head `5d0adf77` found one P1
+  retained-path defect. The POSIX path atom excluded parentheses and square
+  brackets, so `/Users/alice/Jane (Smith) Folder/Customer Notes.txt` became
+  `[REDACTED_PATH] (Smith) [REDACTED_PATH]`; the shared leak scanner and final
+  retained validator both accepted the exposed middle component. The
+  independent workspace bound 96 commits and 95 parent edges under graph
+  digest `19ee9fd7970576d9deee417748826bc55031ca2c0f570dd7c1e7a1beda9f7fc4`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Postvalidation reproduced those receipts, the trusted 30-file control
+  manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  and the exact reviewer task root was removed after process absence was
+  proved.
+- Structurally bounded POSIX, home-relative, and relative components now admit
+  every printable non-separator character while ambiguous terminal forms keep
+  a closed punctuation set. Slash separators, known relative roots, or a
+  complete file extension therefore prove the broader component endpoint
+  without allowing URI query syntax or following prose to expand an ambiguous
+  path. Regressions cover parentheses, square brackets, ampersands, quotes,
+  braces, shell punctuation, the shared leak scan, and final retained artifact
+  assembly and reread. An initial unrestricted terminal-atom attempt caused
+  two deterministic URI/raw-ID false positives and is non-counting. The
+  corrected tree passes result/episode tests 93/93, export tests 73/73, module
+  boundaries 19/19, CI contracts 33/33, and Ruff lint and format checks for the
+  changed Python files.
+- The final Python 3.13.12 inventory remains 1,895 exact test IDs from 22
+  authenticated sources under manifest digest
+  `00a685cb464baa2bf59f03d9b0c53b96306621308f15451fc163b72c9de8f9de`.
+  Shard 0 passes 450/450 in 1,686.200 seconds, shard 1 passes 513/513 in
+  1,537.580 seconds, shard 2 passes 504/504 in 1,419.455 seconds, and shard 3
+  passes 428/428 in 1,376.940 seconds, for exact aggregate coverage of
+  1,895/1,895 in 6,020.175 seconds without skips. The final-tree Darwin
+  security inventory passes 14/14 in 59.125 seconds. Repository-wide Ruff
+  lint, changed-file formatting, both workflows under `actionlint`, the
+  generated bootstrap manifest, the official OpenAI Skill validator, project
+  journal validation, tracked bytecode exclusion, and `git diff --check` are
+  clean.
+- A clean-context Codex CLI review of signed head `1f7bca71` found two
+  remaining retained-evidence defects. Extensionless terminal path components
+  containing unsupported punctuation could retain a suffix, and rollout
+  inventory equality treated benign `mtime`/`ctime` drift as content mutation.
+  The independent workspace bound 97 commits and 96 parent edges under graph
+  digest `d5a4582434817359d26b831efdfdbfefef32655d827a8cfccd068e7bea361a62`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The trusted 30-file control manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  and postvalidation and task-root cleanup completed.
+- Rooted POSIX and home-relative terminal components now admit printable
+  non-separator punctuation while preserving URI and following-prose
+  boundaries. Rollout validation separately binds device/inode object
+  identity, mode/owner/group access policy, the permitted size relation, and
+  the exact bounded prefix consumed by session-meta parsing. Timestamp-only
+  drift triggers descriptor/path content revalidation and is accepted when
+  those protected properties remain stable; same-inode content mutation,
+  replacement, and access-policy drift fail closed. A shared checkpoint owner
+  removes duplicate immutable/append validation while keeping the migration
+  probe at 3,993 lines under its unchanged 4,000-line architecture cap.
+- Focused final-tree evidence passes the architecture and rollout matrix 9/9,
+  path and retained validation 2/2, module boundaries 19/19, and CI contracts
+  33/33. Three attempts are explicitly non-counting: an initial terminal atom
+  consumed following `Prompt:` prose; a broad run inherited stale source-tree
+  bytecode from an older focused runner; and the next full run correctly found
+  the migration probe at 4,040 lines before the shared checkpoint refactor.
+  Stale shard process groups were terminated once and proved absent before the
+  implementation changed.
+- The final Python 3.13.12 inventory contains 1,897 exact test IDs from 22
+  authenticated sources under manifest digest
+  `fbd637787e635a8e73af16ed0ee6926dd9e40ed44eb2be7f3702831cd9877639`.
+  Shard 0 passes 450/450 in 1,611.285 seconds, shard 1 passes 515/515 in
+  1,458.164 seconds, shard 2 passes 504/504 in 1,344.799 seconds, and shard 3
+  passes 428/428 in 1,311.214 seconds, for exact aggregate coverage of
+  1,897/1,897 without skips. The independent Darwin security inventory passes
+  14/14 in 59.010 seconds. Repository-wide Ruff, changed-file formatting, both
+  workflows under `actionlint`, the generated bootstrap manifest, and the
+  official OpenAI Skill validator are clean.
+- The PR review gate later exposed 17 unresolved historical findings against
+  the complete branch: four already-fixed source-path and identifier findings
+  plus gaps for explicit source-payload labels, retained technical prose,
+  mother's maiden name, insurance identifiers, exact coordinates, recovery
+  answers, card verification values, contextual short internal hosts, empty
+  history paths, identity-key source overlap, and path/prose boundaries. The
+  implementation now shares one closed source-payload policy between leak
+  scanning, deterministic redaction, and retained validation; adds the exact
+  personal and credential field families; validates coordinate ranges; and
+  keeps ordinary stdout/stderr/transcript and source-file prose retainable.
+  Identity loading proves the selected explicit or default path is outside
+  active and archived session trees before creating a key, and an empty
+  history repository argument fails before current-directory normalization.
+- Path redaction now stops a final component at proved sentence and narrative
+  boundaries or an existing canonical redaction marker. Raw IDs are redacted
+  before path replacement so a broad path candidate cannot erase independent
+  audit placeholders. Explicit Prompt and Output payloads on the same line are
+  independently bounded and retain both source-category placeholders.
+- The first 1,902-test inventory under digest
+  `3ac081225f435ad81d59d75bab1714f28652e715635f78e52cbda294c1cef935`
+  is non-counting. Two shards passed 429/429 and 517/517; one shard reported
+  only the existing architecture budgets after the new logic raised the branch
+  inventory and two module sizes; the remaining shard found that source-label
+  and path ordering could erase raw-ID and tool-output placeholders. The
+  follow-up moved startup identity selection to its existing authority owner,
+  made the privacy extensions data-driven, preserved the unchanged 9,858
+  branch ceiling, and added the mixed-placeholder regression.
+- The final Python 3.13.12 inventory contains 1,902 exact test IDs from 22
+  authenticated sources under manifest digest
+  `e9693c28cdce3cf311b3ef5333c15c746e898127b463053975d89ebff8de2634`.
+  Shards 0 through 3 pass 451/451 in 1,755.025 seconds, 517/517 in 1,596.470
+  seconds, 505/505 in 1,471.615 seconds, and 429/429 in 1,433.975 seconds,
+  for exact aggregate coverage of 1,902/1,902 without skips. The independent
+  Darwin security inventory passes 14/14 in 63.230 seconds. CI contracts pass
+  33/33; Ruff lint and changed-file formatting, both workflows under
+  `actionlint`, and `git diff --check` are clean. The architecture inventory is
+  exactly 9,858 branches under the unchanged 9,858 ceiling; `orchestrator.py`
+  is 798 lines, `orchestrator_startup_authority.py` is 164 lines, and
+  `temporary_paths.py` remains at its unchanged 350-line cap.
+- The provider then reported two additional P1 findings from the preceding
+  signed head. POSIX path detection excluded a rooted path immediately after a
+  label colon, and the public publication-transaction constructor could create
+  its journal outside the authenticated run directory. Rooted path matching
+  now admits `Path:/...` and `Source path:/...` while the double-slash boundary
+  still excludes URI paths. Publication creation proves the authoritative run
+  directory is outside active and archived session roots, then applies one
+  closed startup gate that requires the journal parent to equal that run
+  directory before bundle inspection, claim acquisition, lock creation, or
+  journal persistence. The gate preserves the exact 9,858 branch ceiling.
+- The first 1,903-test follow-up inventory under digest
+  `ccb8c5da973aa7536aa20ef596cc65e98173237ebf68402f667ec7500243708f`
+  is non-counting. Shards 0, 1, and 3 passed 451/451 in 1,759.956 seconds,
+  517/517 in 1,614.934 seconds, and 430/430 in 1,478.853 seconds. Shard 2
+  ran all 505 tests in 1,475.515 seconds and found one obsolete error
+  expectation: the new journal/run binding rejected a symlink-parent probe
+  earlier as `AttemptMismatchError`, before the anchored state-directory layer.
+  The test now preserves the provider and adapter symlink checks while
+  asserting the stronger publication binding result.
+- The final Python 3.13.12 inventory contains 1,903 exact test IDs from 22
+  authenticated sources under manifest digest
+  `eb91ac393bf72ff2ef163b825bef2cbefd497f1a9e88a8ee84304e32b54d1b0b`.
+  Shards 0 through 3 pass 451/451 in 1,792.893 seconds, 517/517 in 1,639.394
+  seconds, 505/505 in 1,506.497 seconds, and 430/430 in 1,512.789 seconds,
+  for exact aggregate coverage of 1,903/1,903 without skips. The five focused
+  review and architecture regressions also pass in 76.706 seconds; CI
+  contracts pass 33/33 in 2.469 seconds, and the independent Darwin security
+  inventory passes 14/14 in 62.442 seconds. Repository-wide Ruff and
+  changed-file formatting, both workflows under `actionlint`, the project
+  journal validator, and `git diff --check` are clean.
+- The provider then reported five source-boundary and retained-privacy gaps,
+  followed by one publication-recovery gap. Direct `doctor` identity loading,
+  retained export staging, and publication journal open/inspection now prove
+  their selected directories are outside active and archived session roots
+  before any key, lock, journal, or output artifact is created. Retained
+  privacy classification now recognizes `Prompt text`, employee or customer
+  `number`/`no`, and lower- or mixed-case card PIN assignments while retaining
+  explicitly safe GPIO assignments. Regressions assert both rejection and
+  absence of pre-validation filesystem artifacts.
+- Three pre-final coverage attempts are explicitly non-counting. The first
+  exposed a false positive for safe `pin=GPIO17`; the second lost one shard's
+  terminal summary; and the third became stale when the publication
+  open/inspection finding arrived. On the final 1,906-test tree, the first
+  parallel shard-1 run reported one failure and one error after severe host
+  subprocess contention and repeated malloc-stack-logging warnings; its exact
+  isolated rerun passed 517/517 and is the accepted shard-1 evidence. The
+  initial parallel shard-1 failure remains recorded rather than being treated
+  as a pass.
+- The final Python 3.13.12 inventory contains 1,906 exact test IDs from 22
+  authenticated sources under manifest digest
+  `c056517123fbc796c5cfa8a01760289465cd8fbe56f7eb193d8988b80159d86e`.
+  Shard 0 passes 452/452 in 3,021.239 seconds, the isolated shard-1 rerun passes
+  517/517 in 1,430.776 seconds, shard 2 passes 507/507 in 2,769.692 seconds,
+  and shard 3 passes 430/430 in 2,712.220 seconds, for exact aggregate coverage
+  of 1,906/1,906 without skips. Seven finding-focused tests pass in 77.224
+  seconds; module boundaries pass 19/19 with the unchanged 9,858 branch
+  inventory; CI contracts pass 33/33; and the independent Darwin security
+  inventory passes 14/14 in 58.963 seconds. Ruff lint and format checks,
+  both workflows under `actionlint`, tracked bytecode exclusion, and
+  `git diff --check` are clean.
+- A clean-context Codex CLI review of signed head `bf016083` found two source
+  identity P1 defects. Hard-linked active or archived rollout paths could
+  share a source occurrence reference and later be collapsed or corrupt the
+  cross-manifest projection. The source candidate token also omitted selected
+  BSD access-policy flags, so a flag change after discovery could escape the
+  terminal token comparison. The independent workspace bound 101 commits and
+  100 parent edges under graph digest
+  `4aa671e5e0792c87e58966f4e50346f07ba747bf144462e374a1a19dca94c0b5`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Materialization and postvalidation receipts matched, the trusted 30-file
+  control manifest remained
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  the Python 3.13.12 digest remained
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`,
+  and the reviewer process and exact task root were proved absent after safe
+  cleanup.
+- Source discovery now accepts only single-link regular source candidates and
+  emits the explicit `source_hardlink_not_supported` gap before assigning an
+  occurrence identity. Per-capture and continuation assembly reject every
+  duplicate unit reference, including byte-identical records, and reduction
+  validates the complete multi-manifest catalog before projecting records by
+  reference. Candidate-token schema v6 binds the masked BSD policy flags in
+  addition to object identity and normalized ACL policy. Regressions cover
+  active/active and active/archived hard links, direct cross-manifest unit-ref
+  collisions, synthetic policy-token drift, and a real Darwin `chflags`
+  mutation in the terminal revalidation window.
+- Finding-focused source and orchestration regressions pass 4/4. Module
+  boundaries pass 19/19 with the exact 9,858-branch inventory, transport
+  aggregate 9,130 under the unchanged 9,150 limit, and `transport_source.py`
+  at 1,958 lines under its 1,960 limit. CI contracts pass 33/33, and the
+  independent Darwin security inventory passes 14/14 in 58.762 seconds.
+  One direct CI-contract invocation omitted the required `-I -S` launcher
+  flags and is explicitly non-counting; the canonical isolated invocation is
+  the accepted evidence.
+- The final Python 3.13.12 inventory contains 1,908 exact test IDs from 22
+  authenticated sources under manifest digest
+  `7ad48adc81bf3969e609a162de6ba2512c7b87fa92e001ae7ab35e0696936732`.
+  Shards 0 through 3 pass 453/453 in 1,463.511 seconds, 517/517 in 1,322.549
+  seconds, 508/508 in 1,272.180 seconds, and 430/430 in 1,221.590 seconds,
+  for exact aggregate coverage of 1,908/1,908 in 5,279.830 seconds without
+  skips. Repository-wide Ruff 0.13.2 lint, changed-file formatting, both
+  workflows under `actionlint` 1.7.12, the generated bootstrap manifest, and
+  the official OpenAI Skill validator are clean on the same source tree.
+- The next clean-context Codex CLI review covered signed head
+  `a7410f4e00d399c7c689a4a03c6fc1d8090968ff` from base `a3836660`. The first
+  CLI launch was zero-start and non-counting after the Desktop sandbox denied
+  its state-database access. Fresh thread
+  `01a02ef3-83d6-7390-bf0d-84d354cc14ed` then reported two P1 findings: the
+  discovery candidate token did not bind link count, so a hard link created
+  after discovery could escape the single-link admission property; and an
+  active rollout renamed into the archive between source-cell captures could
+  produce colliding pre-deduplication unit references. The independent
+  workspace bound 102 commits and 101 parent edges under graph digest
+  `eb436bd26e347704715884011e878cb810e614cdd06982b6025309a57b1fc6cc`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Postvalidation, trusted-control digest revalidation, process quiescence, and
+  exact task-root cleanup were complete.
+- Candidate-token schema v7 now binds `st_nlink`, and every initial and
+  terminal source observation must remain single-link. Catalog unit identity
+  separately binds the observation source kind while physical and canonical
+  rollout identity remains archive-location independent. Reduction retains a
+  complete pre-deduplication duplicate-unit check, then deduplicates admitted
+  active and archived observations before catalog freeze. Regressions cover a
+  real post-discovery hard link, active-to-archive movement between source
+  cells, ordinary archive equivalence, and malicious cross-manifest unit-ref
+  collisions. The focused source and module-boundary group passes 24/24; the
+  exact branch inventory is 9,857 and the transport aggregate is 9,132 under
+  its unchanged 9,150 ceiling.
+- Earlier Final5 shard evidence is explicitly non-counting because one shard
+  exposed the missing cross-manifest duplicate-unit check; its partial passes
+  were not reused. The final Python 3.13.12 inventory contains 1,910 exact
+  test IDs from 22 authenticated sources under manifest digest
+  `b14f3183db9206ccf1f2c402ca70fd4bff3cf728f48c0b5672d9b70302275914`.
+  Shards 0 through 3 pass 452/452 in 1,697.855 seconds, 517/517 in 1,313.808
+  seconds, 510/510 in 1,293.882 seconds, and 431/431 in 1,183.256 seconds,
+  for exact aggregate coverage of 1,910/1,910 in 5,488.801 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 57.380
+  seconds, and CI contracts pass 33/33 in 2.219 seconds.
+- Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint`, the generated bootstrap manifest, the official OpenAI
+  Skill validator, tracked-bytecode exclusion, and `git diff --check` are clean
+  on the same implementation tree.
+- A clean-context Codex CLI review of signed head `366f9921` covered
+  `a3836660..366f9921` from an independently materialized and validated
+  owner-private workspace. The paired receipts bound 103 commits and 102
+  parent edges under graph digest
+  `ab213e1eb065dd433d124459e70fde4e0500e4a07346cd3d365bda7b2dd4f29d`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  A first sandboxed CLI attempt was zero-start and non-counting because its
+  state database was unavailable. Fresh ephemeral thread
+  `01a02f9a-fb51-7fb0-8700-70d8d4515b57` then reported one P1: the retained
+  locator policy omitted POSIX roots with multiple leading separators and
+  Windows device or extended namespace roots. Postvalidation, the trusted
+  30-file control-manifest digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  process quiescence, and exact task-root cleanup were all revalidated.
+- Locator classification now covers `//` and longer rooted POSIX forms while
+  keeping URI authority paths in the URI policy. It also covers Windows
+  `\\?\\` and `\\.\\` drive, UNC, volume, named-pipe, and generic namespace
+  roots. Result-level regressions prove each raw locator is replaced and the
+  retained scanner is clean. Full-bundle regressions prove raw assembly is
+  rejected, post-redacted eight-artifact assembly validates, no raw value is
+  retained, and digest-recomputed tampering is rejected. Focused privacy tests
+  pass 9/9, affected result/export modules pass 173/173, and module boundaries
+  pass 19/19.
+- The final Python 3.13.12 inventory contains 1,912 exact test IDs from 22
+  authenticated sources under manifest digest
+  `843787416b2456562f5764292c170b16f7c4e861ec6464f245dd02e573eb2a5b`.
+  Shards 0 through 3 pass 452/452 in 1,418.360 seconds, 519/519 in 1,298.761
+  seconds, 510/510 in 1,274.304 seconds, and 431/431 in 1,222.873 seconds,
+  for exact aggregate coverage of 1,912/1,912 in 5,214.298 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 56.829
+  seconds, and CI contracts pass 33/33 in 2.250 seconds. One package-style CI
+  contract invocation and two Skill-validator invocations without PyYAML are
+  pre-discovery launcher errors and explicitly non-counting; the canonical
+  direct-file CI entrypoint and isolated PyYAML validator are the accepted
+  results.
+- Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the official
+  OpenAI Skill validator, tracked-bytecode exclusion, and `git diff --check`
+  are clean on the same Final7 implementation tree.
+- Current-head GitHub Codex review of signed head `90f178b4` reported three P1
+  findings. Provider-cache initialization and verification could touch state
+  below active or archived session roots before the source-overlap proof. The
+  shared retained-privacy policy also omitted wallet seed, mnemonic, and
+  recovery phrase labels, plus operational trace, span, correlation, event,
+  response, and task identifier labels. Provider-cache public entry points now
+  apply the existing run-directory source-exclusion gate before any open,
+  lock, read, or write. The shared credential and raw-identifier locators cover
+  the omitted label families in scan, post-redaction, and retained validation,
+  while preserving canonical placeholders and safe prose negatives.
+- The finding-focused tests pass 2/2; the affected authority module passes
+  7/7, result and privacy validation passes 98/98, export validation passes
+  76/76 in 157.526 seconds, and the audited result contract passes 25/25.
+  Module boundaries pass 19/19 with the exact 9,857-branch inventory, and CI
+  contracts pass 33/33. Two earlier combined focused invocations are explicitly
+  non-counting: a direct Homebrew Python launch failed the owner-controlled
+  executable-authority precondition, and an owner-controlled virtual
+  environment launched without the required isolated flags failed the runtime
+  isolation precondition. Package-style isolated probes that discovered zero
+  tests are also non-counting.
+- The final Python 3.13.12 inventory contains 1,914 exact test IDs from 22
+  authenticated sources under manifest digest
+  `63c197cbc5207c9902a1da84d6d3f3c582598e3ccba1413f6d192db1042d2d9d`.
+  Shards 0 through 3 pass 453/453 in 1,552.123 seconds, 519/519 in 1,335.990
+  seconds, 511/511 in 1,203.794 seconds, and 431/431 in 1,188.767 seconds,
+  for exact aggregate coverage of 1,914/1,914 in 5,280.674 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 57.906
+  seconds. Repository-wide Ruff 0.13.2 lint, changed-file formatting, both
+  workflows under `actionlint` 1.7.12, the generated bootstrap manifest, the
+  official OpenAI Skill validator, project-journal validation, tracked-bytecode
+  exclusion, and `git diff --check` are clean on the same Final8 implementation
+  tree.
+- A clean-context Codex CLI review of signed head `c7d075c5` covered
+  `a3836660..c7d075c5` from an independently materialized and validated
+  owner-private workspace. The paired receipts bound 105 commits and 104
+  parent edges and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The reviewer reported one P2: temporary, history, and retained-output roots
+  excluded the `sessions/` and `archived_sessions/` trees but not canonical
+  root-level `history.jsonl`, `session_index.jsonl`, or `rollout-*.jsonl`
+  sources. An absent source pathname could therefore be created as a directory
+  before any source artifact existed. Postvalidation, trusted-control digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  Python digest
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`,
+  process quiescence, and exact task-root cleanup were revalidated.
+- The shared temporary-root gate now excludes all canonical local source names
+  in lexical and resolved path views before any create, open, or lock. It
+  reuses the transport layer's exact root-rollout grammar, while history
+  repository validation delegates to the same owner and retains its public
+  error contract. Regressions cover absent root files, rollout paths reached
+  through a resolved Codex-root alias, absence of premature filesystem
+  creation, and the non-source `rollout-summary-*` negative. The architecture
+  inventory passes 19/19 with exactly 9,857 branches and
+  `temporary_paths.py` at its unchanged 350-line cap. The affected CLI class
+  passes 75/75 in 221.275 seconds; an earlier launch without the required `-I`
+  flag failed runtime authority before test execution and is explicitly
+  non-counting.
+- The Final9 Python 3.13.12 inventory contains 1,914 exact test IDs from 22
+  authenticated sources under manifest digest
+  `66ab5afb4367d31485d4af0696df9a90174c7205eb90bb7d2f7cb4671ba5d02e`.
+  Shards 0 through 3 pass 453/453 in 1,479.294 seconds, 519/519 in 1,304.619
+  seconds, 511/511 in 1,208.778 seconds, and 431/431 in 1,233.088 seconds,
+  for exact aggregate coverage of 1,914/1,914 in 5,225.779 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 57.159
+  seconds, and CI contracts pass 33/33 in 2.284 seconds. Repository-wide Ruff
+  0.13.2 lint, changed-file formatting, both workflows under `actionlint`
+  1.7.12, the generated bootstrap manifest, the official OpenAI Skill
+  validator, project-journal validation, tracked-bytecode exclusion, and
+  `git diff --check` are clean on the same implementation tree.
+- A clean-context Codex CLI review of signed head `f55950d4` covered
+  `a3836660..f55950d4` from an independently materialized and validated
+  owner-private workspace. The paired receipts bound 106 commits and 105
+  parent edges under graph digest
+  `d75e992a39bdcef7e72182c6a36dc0f999306b2e8cc525760efe36f1958fa733`
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Codex CLI 0.149.0 thread
+  `01a0312d-2709-7fb1-b323-648671cc24da` reported one P2: the legacy
+  `export-retained` command could create or replace an output below a local
+  session source before proving source-path isolation. Postvalidation, trusted
+  control digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  Python digest
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`,
+  process quiescence, and exact task-root cleanup were all revalidated.
+- Legacy transient and retained outputs now share one adapter around the v2
+  source-overlap authority. `export-retained` applies it to the expanded output
+  before symlink inspection, ancestor inspection, directory creation, or
+  replacement. Regressions reject active, archived, absent `history.jsonl`,
+  absent `session_index.jsonl`, root rollout, and resolved Codex-root alias
+  destinations before creation while retaining the safe
+  `rollout-summary-retained.jsonl` negative. The finding-focused output group
+  passes 5/5 without skips.
+- The Final10 Python 3.13.12 inventory contains 1,915 exact test IDs from 22
+  authenticated sources under manifest digest
+  `9f1d83b18b3b23e5c48c482f7a0bbbc306811f81e1461b435bf99b2475229c18`.
+  Shards 0 through 3 pass 453/453 in 1,512.864 seconds, 519/519 in 1,371.290
+  seconds, 512/512 in 1,279.930 seconds, and 431/431 in 1,254.681 seconds,
+  for exact aggregate coverage of 1,915/1,915 in 5,418.765 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 62.647
+  seconds, and CI contracts pass 33/33 in 2.665 seconds. Ruff 0.13.2 lint and
+  changed-test formatting, both workflows under `actionlint` 1.7.12, the
+  generated bootstrap manifest, the official OpenAI Skill validator,
+  project-journal validation, tracked-bytecode exclusion, and
+  `git diff --check` are clean on the same Final10 implementation tree. Two
+  attempted Ruff invocations through the absent `.codex-tmp/python/bin/ruff`
+  path were pre-execution launcher errors and are explicitly non-counting; the
+  fixed `/Users/hoteng/.pyenv/shims/ruff` entrypoint supplied the accepted
+  results.
+- The exact-head Codex Review Gate for `b7abe298` created its sole controlled
+  `@codex review` marker as issue comment `5390178455`, then classified all 33
+  unresolved historical review threads as applicable. A complete 90-thread
+  GraphQL snapshot showed 57 resolved threads, 14 unresolved outdated threads,
+  and 19 unresolved current-line threads. Current-tree and regression evidence
+  classified 29 of the 33 as already fixed by later signed commits. The v1
+  three-host comparison thread is non-applicable because preserving the legacy
+  zero-difference baseline is an explicit migration property; formal v2 runs
+  use the authenticated canonical five-host inventory. The CI `main` branch
+  thread is also non-applicable because the repository default branch, remote
+  HEAD, workflow push target, and PR base are all `master`.
+- Two current findings remained valid: labeled encryption or recovery keys and
+  labeled vehicle identifiers could pass the retained privacy validator. The
+  shared credential grammar now covers controlled `encryption key` and
+  `recovery key` assignments. The shared personal-identifier grammar now covers
+  VIN, vehicle-identification-number, license-plate, and registration-plate
+  labels, including bounded camel-case forms. Result-level regressions prove
+  scan and post-redaction agreement, retained-value rejection, and safe-prose
+  negatives; export regressions exercise the same detector through complete
+  retained validation.
+- The exact finding-focused isolated run passes 5/5 in 193.339 seconds. The
+  affected result suite passes 99/99 in 10.689 seconds, export validation passes
+  76/76 in 174.629 seconds, the audited result contract passes 25/25 in 3.735
+  seconds, and module boundaries pass 19/19 in 1.936 seconds. An earlier
+  nine-test probe passed seven tests but its two publication tests were rejected
+  before setup because that launcher omitted required `-I`; it is explicitly
+  non-counting and the isolated 5/5 rerun supplies the accepted evidence.
+- The resulting Python 3.13 inventory contains 1,916 exact test IDs from 22
+  authenticated sources under manifest digest
+  `3a63fcea3f73d24aac56c9b69f98a7cef58aaadbf97328f84e037ad4e32a792a`;
+  its four closed shard selections contain 453, 519, 513, and 431 tests. CI
+  contracts pass 33/33 in 2.321 seconds and the independent Darwin security
+  inventory passes 14/14 in 57.665 seconds. The direct import-only invocation
+  of `tests/darwin_security.py` executed no tests and is non-counting; the
+  canonical closed runner supplies the accepted Darwin result.
+- Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the official
+  OpenAI Skill validator, project-journal validation, tracked-bytecode
+  exclusion, and `git diff --check` are clean on the same implementation tree.
+  The first direct validator environment lacked PyYAML and failed before skill
+  validation; it is non-counting, while the isolated offline PyYAML environment
+  returned `Skill is valid!`.
+- The next current-head GitHub Codex snapshot reported three additional P1
+  findings. The legacy opaque-reference key path and the public v2 streaming
+  spool constructor could create state below an active or archived session
+  source before proving source-path separation. The shared personal-data
+  detector also omitted labeled account handles and login or screen names.
+  Both filesystem entry points now invoke the canonical lexical-and-resolved
+  source-overlap authority before existence checks or directory creation. The
+  retained privacy policy now covers subject-qualified and standalone handle,
+  login-name, and screen-name labels plus bounded camel-case forms while
+  retaining safe prose negatives.
+- The exact isolated finding group passes 5/5 in 87.448 seconds. The affected
+  result suite passes 100/100 in 10.521 seconds, export validation passes 76/76
+  in 166.102 seconds, and the audited result plus module-boundary suites pass
+  44/44 in 5.489 seconds. Regressions cover active, archived, root-history, and
+  resolved-alias key destinations; active, archived, and alias spool roots;
+  no pre-rejection filesystem creation; and scan, post-redaction, and retained
+  rejection for the new personal-data labels.
+- The Final12 Python 3.13.12 inventory contains 1,919 exact test IDs from 22
+  authenticated sources under manifest digest
+  `9ce492dfd961eaf71da9acc79884c765347112b9235f93c13245ad6aee1fc966`.
+  Shards 0 through 3 pass 453/453 in 1,650.406 seconds, 520/520 in 1,491.290
+  seconds, 515/515 in 1,400.998 seconds, and 431/431 in 1,375.412 seconds,
+  for exact aggregate coverage of 1,919/1,919 in 5,918.106 seconds without
+  skips. The independent Darwin security inventory passes 14/14 in 72.648
+  seconds, and CI contracts pass 33/33 in 2.658 seconds.
+- Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the isolated
+  official OpenAI Skill validator, project-journal validation, tracked-bytecode
+  exclusion, and `git diff --check` are clean on the same implementation tree.
+  One direct `uv` validator invocation combined `-S` with a site-installed
+  PyYAML dependency and failed before validation; it is non-counting, while the
+  canonical Joey validation wrapper returned `Skill is valid!`.
+- The next exact-head GitHub Codex snapshot reported eight additional valid
+  findings. The shared retained-privacy grammar omitted controlled diagnosis,
+  medication, blood-type, biometric-template, voiceprint, emergency-contact,
+  next-of-kin, and cookie credential labels. Three public write owners could
+  also accept state or marker paths below active or archived session sources,
+  and an explicitly supplied in-memory identity could not be reconstructed by
+  projected child CLI commands. The closed privacy grammar now covers those
+  labels without admitting assignment-free safe prose. Checkpoint,
+  local-publication, and production-marker entry points apply the canonical
+  lexical-and-resolved source-overlap authority before any lock, state, or
+  marker write. The orchestrator rejects pathless identities before run-state
+  creation.
+- The exact isolated finding group passes 4/4 in 28.621 seconds. The five
+  affected result, export, checkpoint, orchestrator, and publication modules
+  pass 494/494 in 5,131.404 seconds without skips. Result-contract,
+  module-boundary, and CI-contract suites pass 77/77 in 7.245 seconds, with the
+  deliberate fail-closed branch reflected in the exact 9,858-branch inventory.
+  One direct Homebrew Python publication setup failed executable-authority
+  validation, and one non-isolated copied-Python setup failed runtime-isolation
+  validation; both are pre-test environment failures and explicitly
+  non-counting. The accepted runs use the owner-private Python 3.13.12 copy
+  under `-I -B -S`.
+- The Final13 Python 3.13.12 inventory contains 1,923 exact test IDs from 22
+  authenticated sources under manifest digest
+  `a6188513f2aa8d1290b9b0456abd09ffb8904e4f1bac57a7e022dee96f209189`.
+  Shards 0 through 3 pass 454/454 in 1,563.829 seconds, 520/520 in
+  1,615.354 seconds, 516/516 in 1,287.094 seconds, and 433/433 in
+  1,296.651 seconds, for exact aggregate coverage of 1,923/1,923 in
+  5,762.928 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 60.292 seconds.
+- The first Final13 attempts for shards 0, 2, and 3 are non-counting because a
+  direct `py_compile` probe had created five ignored bytecode files before
+  launch; their exact cache-sensitive regressions pass after those known
+  artifacts are removed. A later PTY-backed attempt for the same three shards
+  was terminated by a response-session transition without terminal status or
+  retained test output and is also non-counting. The accepted reruns use
+  durable, deadline-bounded cbth tasks, and the final source tree contains no
+  `__pycache__`, `.pyc`, or `.pyo` artifacts.
+- The next current-head GitHub Codex snapshot reported five valid P1 findings.
+  The retained privacy grammar omitted OTP-code labels, health-insurance
+  identifiers, execution/process/subprocess output labels, and string-literal
+  Windows paths with doubled separators. Local generated summaries declared by
+  the transient manifest could also disappear before `make-shards` and be
+  silently omitted. The shared privacy owner now covers the exact controlled
+  labels and atomically consumes ordinary or escaped drive, namespace, and UNC
+  separators. Manifest summary selection records disappeared local artifacts
+  as the existing `summary disappeared during shard discovery` stale gap.
+- Ten exact finding and safe-prose regressions pass 10/10 in 6.796 seconds.
+  Result-contract, module-boundary, and CI-contract suites pass 77/77 in 7.857
+  seconds. The Final14 Python 3.13.12 inventory contains 1,924 exact test IDs
+  from 22 authenticated sources under manifest digest
+  `6a6e6d8998c45ef4dc694d71d0fb398fa88ce0e8b30c1dbe0739a35166878403`.
+  Shards 0 through 3 pass 454/454 in 1,698.177 seconds, 520/520 in
+  1,523.990 seconds, 517/517 in 1,418.541 seconds, and 433/433 in
+  1,438.417 seconds, for exact aggregate coverage of 1,924/1,924 in
+  6,079.125 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 68.259 seconds.
+- Repository-wide Ruff 0.13.2 lint, formatting for the modular privacy and test
+  files, both workflows under `actionlint` 1.7.12, the generated bootstrap
+  manifest, the official OpenAI Skill validator, project-journal validation,
+  tracked-bytecode exclusion, and `git diff --check` are clean on the Final14
+  implementation tree. The inherited monolithic helper remains intentionally
+  outside whole-file Ruff formatting to avoid unrelated mechanical churn.
+- Initial Final14 long-test attempts are non-counting after the exact review
+  scope was expanded from the drive-path example to the complete Windows
+  drive, namespace, and UNC family. The running session suite and four shards
+  were each cancelled once through cbth and reached terminal `SIGTERM`; the
+  privacy/export affected run completed before cancellation but became stale.
+  A direct `py_compile` probe created five ignored bytecode files that were
+  removed before accepted testing. A mistaken `--help` invocation of the
+  argument-free Darwin runner executed without a collectable terminal result
+  and is also non-counting; the accepted cbth run supplies the 14/14 evidence.
+- A clean-context Codex CLI review of signed head `0a12152d` covered
+  `a3836660..0a12152d` from an independently materialized and validated
+  owner-private workspace. The equal receipt pair binds 111 commits, 110
+  parent edges, graph digest
+  `b0fd8e3bbc1918d578b18a67323451da626ba556bbe7943ce357788579a4826c`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Codex CLI thread `01a03373-15a8-7cd2-855f-930c5c15ee43` reported one P1:
+  lexical paths plus `Path.resolve()` could not prove source separation across
+  APFS firmlinks or case-insensitive aliases. Postvalidation, trusted-control
+  digest `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  Python digest
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`,
+  process quiescence, and exact task-root removal were all revalidated.
+- Run-directory source separation now binds every existing route component by
+  `(device, inode, file type)`, retains unresolved suffixes, and compares the
+  held run-directory descriptor's complete ancestor chain with canonical
+  session and history source objects. Lexical and resolver-visible overlap is
+  checked before open; named routes, held descriptors, source chains, and
+  missing components are revalidated after open and before checkpoint or spool
+  writes. Timestamp, link-count, and child-entry churn are intentionally not
+  treated as object replacement. The closed runtime and remote-worker source
+  manifests include the two bounded identity/separation modules. Ancestor
+  descriptors remain under one cleanup owner from acquisition through final
+  closure, so an uncertain `close(2)` result is recorded once and never retried
+  against a potentially reused descriptor number.
+- Complete orchestrator-support, checkpoint-security, checkpoint-store,
+  source-overlap/spool-focused, bootstrap, module-boundary, CI, and skill tests
+  pass 33/33, 15/15, 2/2, 4/4, 12/12, 19/19, 33/33, and 5/5 on the
+  implementation tree. Regressions cover resolver-hidden aliases, a held
+  descriptor below `sessions/` despite a safe displayed path, post-open alias
+  substitution with descriptor closure, preserved checkpoint descriptor
+  custody, uncertain-close single dispatch, and benign child-entry churn. On
+  this host, `/Users/hoteng` and `/System/Volumes/Data/Users/hoteng` have the
+  same device/inode/type; a read-only probe confirms the firmlink-form session
+  path is rejected without filesystem creation.
+- The Final17 Python 3.13.12 inventory contains 1,930 exact test IDs from 22
+  authenticated sources under manifest digest
+  `09962bafd269c78bf0f4a93594ecde039d93bcc1c03390babe39cf362c82bb09`.
+  Shards 0 through 3 pass 456/456 in 1,762.966 seconds, 522/522 in
+  1,580.568 seconds, 517/517 in 1,488.696 seconds, and 435/435 in
+  1,492.175 seconds, for exact aggregate coverage of 1,930/1,930 in
+  6,324.405 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 75.551 seconds.
+- Four earlier Final16 shard tasks were cancelled once with `SIGTERM` and are
+  explicitly non-counting after self-review found that the initial ancestor
+  implementation could retry an uncertain close against a reused descriptor
+  number. A Final16 Darwin run passed on that prior tree but became stale after
+  the descriptor-ownership fix. An earlier argument-free Darwin runner
+  invocation included a mistaken `--help`, exited without retained terminal
+  status, and is also non-counting; Final17 supplies the accepted evidence.
+- A fresh ephemeral Codex CLI review of signed head `e65ccd07` covered
+  `a3836660..e65ccd07` in cbth task
+  `01a033d8-1cd0-75f2-a56c-83ddfece66a6`. Equal materialize, validate, and
+  postvalidate receipts bind 112 commits, 111 parent edges, graph digest
+  `72b648161fffed483390ae68d0f4a60a572fb0f0fafc6ac2fdffb05713eb33c3`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The lane used installed private release
+  `284f0f54daba1e9e17e922e4fa87aa6b586e37a4`, sync-manifest digest
+  `158a80e941aba3f7b19322ccdcce529b3a15badbd5baac4fa884a25564279a36`,
+  guard digest
+  `2c8432731619e40cfae28a59e27d97be9cf58d48672d33a8b675141436a62cf8`,
+  and the unchanged owner-private Python digest. It returned one P1: a
+  missing source component such as `archived_sessions` could be reached by an
+  unresolved case-insensitive alias, and `create=True` would create that
+  directory before post-open rejection. The lane completed in 465 seconds;
+  postvalidation, digest revalidation, process quiescence, and exact reviewer
+  task-root removal all completed.
+- Unresolved path components now compare conservatively under Unicode NFC and
+  case folding whenever either aligned component is not yet bound to an object.
+  Two existing, resolved, identity-distinct objects remain distinct. The full
+  descriptor/object source-overlap check now runs before any owner-only
+  directory creation, while the held-descriptor check remains after open. The
+  missing uppercase `ARCHIVED_SESSIONS` regression proves the safe-I/O creator
+  is never called and no directory is created; a separate normalization test
+  proves the conservative comparison is limited to unresolved components.
+  A pre-open directory substitution now fails closed without writing either
+  the attacker or displaced directory, replacing the prior weaker expectation
+  that the displaced directory could still receive checkpoint state.
+- The Final18 Python 3.13.12 inventory contains 1,932 exact test IDs from 22
+  authenticated sources under manifest digest
+  `accdccf7b783cbd7f23581ef430a82cd2a5b8ad7078a529a3ebb73f4bd3baa70`.
+  Shards 0 through 3 pass 456/456 in 1,659.426 seconds, 523/523 in
+  1,478.146 seconds, 518/518 in 1,385.835 seconds, and 435/435 in
+  1,389.468 seconds, for exact aggregate coverage of 1,932/1,932 in
+  5,912.875 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 67.840 seconds. Final17 became stale when its reviewer
+  finding changed the source and test trees; it remains audit history rather
+  than final-head acceptance evidence.
+- The two exact alias findings pass 2/2; complete orchestrator-support,
+  checkpoint-security, checkpoint-store, source-overlap/spool-focused,
+  bootstrap, module-boundary, CI-contract, and Skill-contract suites pass
+  35/35, 15/15, 2/2, 4/4, 12/12, 19/19, 33/33, and 5/5 on the Final18 tree.
+  Repository-wide Ruff 0.13.2 lint, formatting for all ten changed Python
+  files, both workflows under `actionlint` 1.7.12, the generated bootstrap
+  manifest, official OpenAI Skill validation, project-journal validation,
+  tracked and working-tree bytecode exclusion, and `git diff --check` are
+  clean.
+- A fresh ephemeral Codex CLI review of signed head `7a01fdb6` covered
+  `a3836660..7a01fdb6` in cbth task
+  `01a03404-bd7b-7d52-8a0a-9c76861635cd`. Equal materialize, validate, and
+  postvalidate receipts bind 113 commits, 112 parent edges, graph digest
+  `3d9ca582a69ef66e8f0bdb51af54feaef17a1e11ef34049eb57c750d0e441ebf`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The lane returned two P1 findings: the held run-directory descriptor was not
+  proved to remain the current object at its final named path, and unresolved
+  root-rollout components did not use the same conservative Unicode/case
+  comparison as other unresolved source components. It completed in 862
+  seconds; postvalidation, trusted-bundle and Python digest revalidation,
+  process quiescence, and exact task-root removal all completed. Its result is
+  stale after the finding fixes and is retained only as audit history.
+- Bound run-directory validation now reopens and retains the complete final
+  named chain, requires its terminal `(device, inode, file type)` identity to
+  equal the already held directory descriptor, rejects unresolved suffixes,
+  and revalidates the named and ancestor chains before returning. This protects
+  the selected runtime-directory object identity while continuing to ignore
+  benign timestamp and child-entry churn. Unresolved root-rollout components
+  now use Unicode NFC plus case folding before the closed rollout-name matcher;
+  resolved object identities remain exact. Regressions move a held directory
+  into `.codex/rollout-moved.jsonl` and replace its safe original name, and
+  reject uppercase and long-s unresolved rollout aliases before any creator or
+  write can run.
+- The Final19 Python 3.13.12 inventory contains 1,934 exact test IDs from 22
+  authenticated sources under manifest digest
+  `3b9afc31e85eadf5e197efbae6c7a52ffec2a9aa5c20b37b093d1ac7e7686d77`.
+  Shards 0 through 3 pass 457/457 in 1,579.755 seconds, 523/523 in
+  1,413.904 seconds, 519/519 in 1,330.210 seconds, and 435/435 in
+  1,334.610 seconds, for exact aggregate coverage of 1,934/1,934 in
+  5,658.479 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 63.449 seconds.
+- The two exact Final18 P1 regressions pass 2/2; complete
+  orchestrator-support, checkpoint-security, checkpoint-store,
+  source-overlap/spool-focused, bootstrap, module-boundary, CI-contract, and
+  Skill-contract suites pass 37/37, 15/15, 2/2, 4/4, 12/12, 19/19, 33/33,
+  and 5/5 on the Final19 tree. Repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint` 1.7.12, the generated
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, tracked and working-tree bytecode exclusion, and
+  `git diff --check` are clean.
+- A fresh ephemeral Codex CLI review was started for signed head `fafe59a2`
+  over `a3836660..fafe59a2` in an independently materialized and validated
+  owner-private workspace. The equal receipt pair bound 114 commits, 113
+  parent edges, graph digest
+  `49fd9663761c4360a1d88d4905103335562dcc9a179bc9cbbb264dbed85b8bfc`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  GitHub findings made the head stale before the local reviewer completed, so
+  the process received one bounded cancellation; no partial output was read or
+  classified. Postvalidation, trusted-control and Python digest checks,
+  process quiescence, and exact reviewer task-root removal all completed.
+- The automated exact-head request comment `5396826816` was posted before the
+  local lane became terminal and is therefore recorded as
+  `early-request-observed`. Provider review `5009155839` returned two unique
+  P1 findings plus one duplicate privacy comment: arbitrary `PreparedFile`
+  targets could create or write below active or archived session sources, and
+  the shared retained-privacy grammar omitted labeled sexual orientation,
+  religion, and political affiliation values.
+- Accepted source publication now performs the canonical lexical, resolved,
+  and object-aware source-overlap check before parent creation. A dedicated
+  `source_publication.py` owner holds the parent descriptor across atomic
+  create or descriptor-relative existing-content validation and final source
+  revalidation. The atomic-create helper duplicates the held descriptor,
+  validates its owner-only access policy, and requires its object identity to
+  match the current named parent before creating a pending file. Benign
+  timestamp and child-entry churn remain outside the selected property. The
+  installed runtime manifest and architecture inventory include the new
+  module. The shared personal-data grammar independently detects, redacts, and
+  retained-blocks the three controlled demographic labels while preserving
+  assignment-free safe prose.
+- Four exact finding regressions and the module-boundary inventory pass 23/23.
+  The first combined affected-suite command used a non-isolated interpreter
+  shape, and a direct isolated single-file command could not import the closed
+  test package; both stopped before valid repository testing and are
+  non-counting. The first four-shard attempt was cancelled once per shard after
+  static dependency inspection found the new module missing from the installed
+  runtime manifest. Its 14/14 Darwin result became stale with that source
+  change. On the next tree, shards 1 through 3 passed but shard 0 found one
+  stale failure-injection adapter that rejected the new descriptor keyword;
+  the adapter now explicitly forwards that authority, and its exact regression
+  passes 1/1. All of those earlier shard results are stale after the test-source
+  correction.
+- The Final22 Python 3.13.12 inventory contains 1,937 exact test IDs from 22
+  authenticated sources under manifest digest
+  `b90fae98251e670694d748a23c7b180bd33e863881605a92cbca73498091a9f5`.
+  Shards 0 through 3 pass 458/458 in 1,777.382 seconds, 523/523 in
+  1,599.047 seconds, 521/521 in 1,504.370 seconds, and 435/435 in
+  1,501.461 seconds, for exact aggregate coverage of 1,937/1,937 in
+  6,382.260 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 70.431 seconds.
+- Repository-wide Ruff 0.13.2 lint, formatting for all nine changed Python
+  files, both workflows under `actionlint` 1.7.12, the generated bootstrap
+  manifest, CI contract 33/33, module boundaries 19/19, Skill contract 5/5,
+  the official Python 3.13 OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean on the Final22 tree.
+- The signed Final22 anchor is `24cbe0fa` with tree `a1b206cb`. Exact-secret
+  admission over `a3836660..24cbe0fa` returned `clean`, started no reviewer,
+  and completed temporary cleanup. The first Codex CLI invocation stopped
+  before model start because the outer workspace sandbox denied its state
+  database; it produced no session or terminal artifact and is a non-counting
+  launch failure. After an unchanged-workspace validation, the host invocation
+  started one fresh ephemeral `gpt-5.6-sol` reviewer at `xhigh` reasoning in
+  a read-only sandbox. Its equal receipts bound 115 commits, 114 parent edges,
+  graph digest
+  `a6fa5470d4312703dd4a84c3415fad7761afec8d864b42f5ed9c1e2757c0b95d`,
+  and the unchanged local-config digest.
+- That clean-context review returned one P1 finding: the demographic privacy
+  grammar still omitted labeled gender, gender identity, race, and ethnicity
+  values. Postvalidation reproduced the prelaunch receipt, trusted manifest,
+  guard, and Python digests were unchanged, the reviewer process was absent,
+  and the exact owner-private task root was removed. The controlled demographic
+  grammar now covers those four labels plus `genderIdentity` camel case.
+  Detector, post-redactor, and retained-validator regressions include ordinary,
+  camel-case, and Markdown assignments while preserving assignment-free
+  technical prose such as `Race condition handling is documented.`
+- The exact demographic regression passes 1/1 and Ruff 0.13.2 accepts the two
+  affected Python files. The first post-finding full invocation, Final23, is
+  non-counting because its per-log `RLIMIT_FSIZE` was inherited by test
+  children. Shard 3 consequently reported five `EFBIG` fixture errors; the
+  three remaining shards received one bounded cancellation, and their partial
+  or coincidentally successful results are not reused. Exact process checks
+  found no retained shard process.
+- Final24 instead uses a 2,700-second process-group deadline per shard and a
+  separate 8 MiB pipe sink per combined output stream, without changing child
+  file limits. Its Python 3.13.12 inventory contains 1,937 exact test IDs from
+  22 authenticated sources under manifest digest
+  `3f96584a4b6dbeab9f6675bda76fc6a23f105b03610af5916e27c1fb3b84efb1`.
+  Shards 0 through 3 pass 458/458 in 1,813.767 seconds, 523/523 in
+  1,639.187 seconds, 521/521 in 1,550.257 seconds, and 435/435 in
+  1,543.770 seconds, for exact aggregate coverage of 1,937/1,937 in
+  6,546.981 seconds without skips. The independent Darwin security inventory
+  passes 14/14 in 79.513 seconds under the same noninterfering supervisor
+  shape. All five retained logs total 471,738 bytes, below their 40 MiB
+  aggregate ceiling.
+- Repository-wide Ruff 0.13.2 lint, affected-file formatting, both workflows
+  under bounded actionlint 1.7.12, the generated bootstrap manifest, CI
+  contract 33/33, module boundaries 19/19, Skill contract 5/5, the official
+  Python 3.13 OpenAI Skill validator, project-journal validation, tracked and
+  source/test-tree bytecode exclusion, and `git diff --check` are clean on
+  the Final24 tree.
+- The signed Final24 anchor is `829f4477` with tree `684cba67`; its
+  exact-secret admission is clean with complete temporary cleanup and no
+  reviewer start. A second fresh ephemeral `gpt-5.6-sol` reviewer at `xhigh`
+  reasoning used a new independently materialized read-only workspace. Equal
+  receipts bound 116 commits, 115 parent edges, graph digest
+  `f4b848d31012f9e6dd973693fec465248e593782099e54a8009db09114984cfa`,
+  and the unchanged local-config digest.
+- The second clean-context review returned one P1 finding: `Sex: female`
+  remained outside the controlled demographic grammar and therefore crossed
+  the detector, post-redactor, and retained validator. Postvalidation and all
+  trusted-control digests remained exact, the reviewer process was absent, and
+  the exact task root was removed. The shared grammar and its three-layer
+  regression now include the labeled `sex` field.
+- Final25 uses Python 3.13.12 and an exact inventory of 1,937 test IDs from 22
+  authenticated sources under manifest digest
+  `6b55e7ed72ab6a622c12d175fde7397ae70ee8c6f8ce76a13019aa00fd4f69e6`.
+  Shards 0 through 3 pass 458/458 in 1,867.028 seconds, 523/523 in
+  1,669.124 seconds, 521/521 in 1,573.026 seconds, and 435/435 in
+  1,571.840 seconds. The independent Darwin security inventory passes 14/14
+  in 68.266 seconds. All five logs total 471,738 bytes below the 40 MiB
+  aggregate ceiling.
+- Repository-wide Ruff 0.13.2 lint, affected-file formatting, both workflows
+  under actionlint 1.7.12, the generated bootstrap manifest, CI contract
+  33/33, module boundaries 19/19, Skill contract 5/5, the official Python
+  3.13 OpenAI Skill validator, project-journal validation, tracked and
+  source/test-tree bytecode exclusion, and `git diff --check` are clean on the
+  Final25 tree.
+- The signed Final25 anchor is `e12f977e` with tree `c3c437af` and parent
+  `829f4477`; host verification accepted Joey's EDDSA signature. Exact-secret
+  admission over `a3836660..e12f977e` is clean with complete temporary cleanup
+  and no reviewer start. The first Codex CLI launch failed before model start
+  because the outer workspace sandbox denied its own state database; it
+  produced no result artifact, left no process, and the workspace revalidated
+  before the actual launch.
+- The fresh ephemeral `gpt-5.6-sol` reviewer at `xhigh` reasoning used one
+  independently materialized read-only workspace. Equal receipts bound 117
+  commits, 116 parent edges, graph digest
+  `619c4cc407199228355271735308625552548b9a1902c13e1e0d2efc2c75d4b3`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It returned one P1 finding: labeled nationality and citizenship remained
+  outside the controlled demographic grammar. Postvalidation and all trusted
+  digests remained exact, the reviewer process was absent, and the exact task
+  root was removed.
+- The demographic grammar and three-layer regression now cover nationality,
+  citizenship, nationality/citizenship status, and country of citizenship in
+  ordinary, snake-case, camel-case, and Markdown assignment forms while
+  preserving assignment-free technical prose.
+- Final26 uses Python 3.13.12 and 1,937 exact test IDs from 22 authenticated
+  sources under manifest digest
+  `d28a34914165e982b2bf795eecf9a348ff74e6053f035ada565de43ab66103bd`.
+  Shards 0 through 3 pass 458/458 in 1,828.826 seconds, 523/523 in
+  1,642.185 seconds, 521/521 in 1,556.677 seconds, and 435/435 in
+  1,545.513 seconds. The independent Darwin security inventory passes 14/14
+  in 66.467 seconds. All five logs total 471,738 bytes below the 40 MiB
+  aggregate ceiling.
+- Repository-wide Ruff 0.13.2 lint, affected-file formatting, both workflows
+  under actionlint 1.7.12, the generated bootstrap manifest, CI contract
+  33/33, module boundaries 19/19, Skill contract 5/5, and the official Python
+  3.13 OpenAI Skill validator are clean on the Final26 tree.
+- The signed Final26 anchor is `816290a6` with tree `057bbd77` and parent
+  `e12f977e`; host verification accepted Joey's EDDSA signature. Exact-secret
+  admission over `a3836660..816290a6` is clean with complete temporary cleanup
+  and no reviewer start. A fresh ephemeral `gpt-5.6-sol` reviewer at `xhigh`
+  reasoning used a new independently materialized read-only workspace. Equal
+  receipts bound 118 commits, 117 parent edges, graph digest
+  `cc528117b94058e2a95f391c4a6e10f7a36225a68880310a89fa547c72bed7ee`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+- That clean-context review returned two findings. The controlled demographic
+  grammar omitted age, marital and family status, disability, pregnancy,
+  veteran and military status, immigration and residency data, national
+  origin and ancestry, language, caste, sexual orientation, religion and
+  belief, political opinion, and union membership. Runtime defaults also used
+  ambient `HOME`, allowing a caller to redirect identity, provider, marker,
+  automation, runtime, installed CLI, and publication paths. Postvalidation
+  reproduced the prelaunch receipt, all trusted-control digests remained
+  exact, the reviewer process was absent, and the exact task root was removed.
+- The shared detector, post-redactor, and retained validator now use one closed
+  demographic-field taxonomy with ordinary, snake-case, camel-case, and
+  Markdown assignment regressions plus assignment-free safe prose. Runtime
+  authority derives the account home from `getpwuid(getuid()).pw_dir`, resolves
+  it fail-closed as an existing directory. Identity, provider, marker, history
+  Git, automation, runtime, installed CLI, cutover, and publisher-keyring
+  defaults consume that authority without consulting ambient `HOME`. An AST
+  boundary test rejects every v2 engine module `Path.home()` call.
+- Focused demographic, identity, module-boundary, orchestrator, and authority
+  regressions pass 13/13. One direct focused invocation used `-I -m unittest`
+  and stopped during test-package import; the corrected file/module entrypoints
+  pass and the failed invocation is non-counting. Final27 is also non-counting:
+  its shard 2 passed 519 ordinary tests but found the expected branch-inventory
+  snapshot still at 9,932 rather than the new exact 9,938, shard 3 completed,
+  and shards 0 and 1 received one bounded cancellation because the test source
+  had to change. The complete module-boundary suite passes 20/20 after both the
+  exact value and ceiling are synchronized.
+- Final28 uses Python 3.13.12 and 1,939 exact test IDs from 22 authenticated
+  sources under manifest digest
+  `dc6e4f8f0cc4e8ad998bf0eb6b83f9dbd68989bac071fdfd1e330e5224402f7d`.
+  Shards 0 through 3 pass 460/460 in 1,853.814 seconds, 523/523 in
+  1,644.874 seconds, 520/520 in 1,544.763 seconds, and 436/436 in
+  1,548.500 seconds. The independent Darwin security inventory passes 14/14
+  in 69.188 seconds. All five logs total 472,120 bytes below the 40 MiB
+  aggregate ceiling, and the bounded error scan is empty.
+- Repository-wide Ruff 0.13.2 lint, formatting for all nine changed Python
+  files, both workflows under bounded actionlint 1.7.12, the generated
+  bootstrap manifest, CI contract 33/33, module boundaries 20/20, Skill
+  contract 5/5, the official Python 3.13 OpenAI Skill validator, project-journal
+  validation, tracked and source/test-tree bytecode exclusion, and
+  `git diff --check` are clean on the Final28 tree. One combined contract
+  invocation omitted the required `-I` and failed closed before two fixture
+  bodies; the three authoritative isolated file entrypoints all pass and that
+  invocation is non-counting.
+- The signed Final28 implementation anchor is `673a19c1` with tree
+  `1b640c80` and parent `816290a6`; host verification accepted Joey's EDDSA
+  signature. Exact-secret admission over `a3836660..673a19c1` returned clean,
+  started no reviewer, and completed temporary cleanup.
+- One fresh Codex CLI 0.149.0 `gpt-5.6-sol` reviewer at `xhigh` reasoning used
+  an independently materialized and validated read-only workspace. Equal
+  receipts bound 119 commits, 118 parent edges, graph digest
+  `f128de3fe5e20db258c37d972a871c695c74618c31b903c531cc7c117bb21bac`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  It returned one P2 finding: the production documentation constructed the
+  provider-state and production-marker paths from ambient `HOME`, while the
+  runtime requires exact paths derived from the account database.
+  Postvalidation reproduced the prelaunch receipt, trusted control and Python
+  digests remained exact, no reviewer process remained, and the owner-private
+  task root was removed.
+- Production documentation now treats installer and cutover values as literal
+  canonical absolute paths derived from the account database. README, Skill,
+  and CLI examples use one explicit placeholder and prohibit reconstructing
+  production paths from `HOME`, shell `~`, or `expanduser`. The Skill contract
+  enforces those positive and negative properties without weakening runtime
+  exact-path comparison.
+- Final29 uses Python 3.13.12 and 1,939 exact test IDs from 22 authenticated
+  sources under manifest digest
+  `87dab77cc02a06864fc020d212409feb3a021b33d266df667b4daf4d76b1d121`.
+  Shards 0 through 3 pass 460/460 in 1,826.770 seconds, 523/523 in
+  1,633.971 seconds, 520/520 in 1,537.625 seconds, and 436/436 in
+  1,540.948 seconds. The independent Darwin security inventory passes 14/14
+  in 69.851 seconds. Focused Skill, module-boundary, and CI contracts pass
+  5/5, 20/20, and 33/33; Ruff lint/format, the official Python 3.13 OpenAI
+  Skill validator, project-journal validation, and `git diff --check` are
+  clean on the same tree.
+- The signed canonical-path documentation anchor is `4bdba35b` with tree
+  `dab015c0` and parent `673a19c1`; host verification accepted Joey's EDDSA
+  signature. Exact-secret admission over `a3836660..4bdba35b` returned clean,
+  started no reviewer, and completed temporary cleanup.
+- A new fresh Codex CLI 0.149.0 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  used one independently materialized and validated read-only workspace.
+  Equal receipts bound 120 commits, 119 parent edges, graph digest
+  `417a2f4f37b3418d6251f3f778e7bad3202eafb6723b18f75674cb26aa5173ef`,
+  and the unchanged local-config digest. Thread
+  `01a03636-aac1-7180-8e6d-c320fffc8387` returned one P2 finding: two
+  cutover references and one data-contract reference still used shell `~`
+  notation, while the test covered only three production documents.
+  Postvalidation reproduced the prelaunch receipt, trusted-control and Python
+  digests remained exact, no reviewer process remained, and the exact
+  owner-private task root was removed.
+- All normative Markdown now uses the canonical account-home placeholder for
+  production automation, cutover, and run-cache paths. The Skill contract
+  scans README, Skill, and every `references/*.md` file and rejects either
+  `$HOME/.codex` or `~/.codex`, while separately requiring the placeholder in
+  the three path-authority references.
+- Final30 uses Python 3.13.12 and 1,940 exact test IDs from 22 authenticated
+  sources under manifest digest
+  `72ac538bdffb0428fc949870228ce4a7baab4d68272991522a429bcf7a380577`.
+  Shards 0 through 3 pass 460/460 in 1,884.664 seconds, 523/523 in
+  1,680.751 seconds, 521/521 in 1,585.834 seconds, and 436/436 in
+  1,587.358 seconds. The independent Darwin security inventory passes 14/14
+  in 67.843 seconds without skips.
+- The final clean-context Codex processor for signed head `7a0760ff` used an
+  independently materialized and validated read-only workspace over
+  `a3836660..7a0760ff`. Equal pre/post receipts bound 121 commits, 120 parent
+  edges, graph digest
+  `4a556b668411c180882e6a126265accaf35e5e745a0b4a2130dd676129e542f2`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a0365e-48b0-7f11-b5bf-8800586eb8d5` returned one P1 finding:
+  demographic fields such as `Sex assigned at birth` and `Gender expression`
+  could bypass the shared leak scanner, post-redactor, and retained validator.
+  Trusted-control and Python digests remained exact, no reviewer process
+  remained, and the exact task root was removed after postvalidation.
+- The shared demographic field grammar now recognizes ordinary, snake-case,
+  camel-case, Markdown, and narrative forms for sex assigned at birth, sex at
+  birth, assigned sex, birth sex, and gender expression. The existing shared
+  privacy-policy regression proves all variants are detected, post-redacted,
+  and rejected from retained output while discussion-only prose remains safe.
+- One initial four-shard attempt used `/opt/homebrew/bin/python3.13`; the
+  executable-authority contract correctly rejected its group-writable Cellar
+  ancestor. That invocation and all of its shard output are non-counting. The
+  replacement Final32 run uses the owner-controlled Python 3.13.12 runtime
+  with SHA-256
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`.
+  Its 1,940 exact test IDs from 22 authenticated sources use manifest digest
+  `a94d7730ebdf4e09b6d1611275be9561cb3c9c59f2f2b874f62d42ef90604c16`.
+  Shards 0 through 3 pass 460/460 in 1,809.596 seconds, 523/523 in
+  1,609.343 seconds, 521/521 in 1,513.275 seconds, and 436/436 in
+  1,516.652 seconds. The independent Darwin security inventory passes 14/14
+  in 66.396 seconds without skips. Focused demographic, complete
+  results/episodes, result-contract-audit, and export tests pass 1/1, 102/102,
+  25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
+  and 33/33; Ruff lint/format, actionlint, the bootstrap manifest, the official
+  OpenAI Skill validator, project-journal validation, bytecode scans, and
+  `git diff --check` are clean.
+- The clean-context Codex CLI reviewer for signed head `a1cf707b` used an
+  independently materialized and validated read-only workspace over
+  `a3836660..a1cf707b`. Equal pre/post receipts bound 122 commits, 121 parent
+  edges, graph digest
+  `82c158819be6068b5b5581203981861570d104a651f0b1debc99c29259ab8264`,
+  and the unchanged local-config digest. Thread
+  `01a0369b-8309-74b1-afe0-0d93e09405e7` returned one P1 finding: equivalent
+  `gender assigned at birth` fields could still bypass the shared leak
+  scanner, post-redactor, and retained validator. Postvalidation reproduced
+  the prelaunch receipt, the trusted 30-file control manifest, Skill, guard,
+  and Python digests remained exact, no reviewer process remained, and the
+  exact task root was removed.
+- The demographic grammar now also recognizes ordinary, snake-case,
+  hyphenated, camel-case, Markdown, and narrative forms for gender assigned
+  at birth, gender at birth, assigned gender, and birth gender. The shared
+  privacy-policy regression proves those variants are detected, post-redacted,
+  and rejected from retained output while discussion-only prose remains safe.
+- Final33 uses the same owner-controlled Python 3.13.12 runtime and 1,940 exact
+  test IDs from 22 authenticated sources under manifest digest
+  `ea198987489a35a6ea2bd4b0585789201eeaed0d30bb892c63c4505aadaf5459`.
+  Shards 0 through 3 pass 460/460 in 1,941.594 seconds, 523/523 in
+  1,737.475 seconds, 521/521 in 1,644.424 seconds, and 436/436 in
+  1,645.212 seconds. The independent Darwin security inventory passes 14/14
+  in 95.857 seconds without skips. Focused demographic, complete
+  results/episodes, result-contract-audit, and export tests pass 1/1, 102/102,
+  25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
+  and 33/33. One initial CI-contract invocation omitted the required `-S` and
+  failed closed; it is invocation-invalid and non-counting. Ruff lint and
+  changed-file format checks, actionlint, the bootstrap manifest, and the
+  official OpenAI Skill validator are clean on the same tree.
+- The clean-context Codex CLI reviewer for signed head `7a38bd4e` used an
+  independently materialized and validated read-only workspace over
+  `a3836660..7a38bd4e`. Equal pre/post receipts bound 123 commits, 122 parent
+  edges, graph digest
+  `226836dcca563274adba1826b4552f3798c04845a94caf65f96f718fc3fb340a`,
+  and the unchanged local-config digest. Thread
+  `01a036d4-b24c-7913-9a0a-1f937cd7fd0e` returned two P1 findings: common
+  medical, health, and genetic fields, plus ethnic origin, racial origin, and
+  religious belief aliases, could still bypass all three retained privacy
+  layers. Postvalidation reproduced the prelaunch receipt, the trusted
+  30-file control and Python records were byte-identical, no reviewer process
+  remained, and the exact task root was removed.
+- The shared health grammar now covers medical and health conditions, health
+  status, medical and health information, medical history, and genetic data
+  or information. The demographic grammar now covers ethnic and racial origin
+  plus religious belief aliases. Ordinary, snake-case, hyphenated, camel-case,
+  Markdown, and narrative forms are detected, post-redacted, and rejected
+  from retained output; explicit discussion-only regression cases remain
+  accepted.
+- Final34 uses the owner-controlled Python 3.13.12 runtime and 1,940 exact test
+  IDs from 22 authenticated sources under manifest digest
+  `f283021b0765e57d24dac559a2d8aba40c44f55d929c5c2eb70e2d8b57a301f2`.
+  Shards 0 through 3 pass 460/460 in 1,848.971 seconds, 523/523 in
+  1,653.624 seconds, 521/521 in 1,557.389 seconds, and 436/436 in
+  1,563.077 seconds. The independent Darwin security inventory passes 14/14
+  in 73.182 seconds without skips. Focused health/demographic, complete
+  results/episodes, result-contract-audit, and export tests pass 2/2, 102/102,
+  25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
+  and 33/33.
+- The clean-context Codex CLI reviewer for signed head `ccb503f9` used an
+  independently materialized and validated read-only workspace over
+  `a3836660..ccb503f9`. Equal pre/post receipts bound 124 commits, 123 parent
+  edges, graph digest
+  `565909cae8d71ab0e22e7ace82dc5a86f9d393935b0102a48d455db2612e02c4`,
+  and the unchanged local-config digest. Thread
+  `01a03706-39f9-70c3-8727-94cbbb5667e8` returned two P1 findings: common
+  medical, health, and clinical data fields, plus ethnic or racial background
+  and religious affiliation fields, could still bypass all retained privacy
+  layers. Postvalidation reproduced the prelaunch receipt, the trusted
+  30-file control and Python records were byte-identical, no reviewer process
+  remained, and the exact task root was removed.
+- Health privacy matching is now compositional across medical, health, and
+  clinical domains plus condition, data, history, information, record, and
+  status attributes; genetic and protected-health-information families have
+  equivalent ordinary and camel-case coverage. Demographic matching is also
+  compositional across ethnic or racial background, group, identity, and
+  origin, plus religious affiliation, belief, denomination, and identity.
+  Representative assignment, snake-case, hyphenated, camel-case, Markdown,
+  narrative, and safe-discussion regressions exercise all three privacy layers.
+- Final35 uses the owner-controlled Python 3.13.12 runtime and 1,940 exact test
+  IDs from 22 authenticated sources under manifest digest
+  `bc763998d1e61d77bb7a2608f796828499bce985378887b3c551555718051b03`.
+  Shards 0 through 3 pass 460/460 in 1,956.769 seconds, 523/523 in
+  1,733.397 seconds, 521/521 in 1,631.312 seconds, and 436/436 in
+  1,630.969 seconds. The independent Darwin security inventory passes 14/14
+  in 76.949 seconds without skips. Focused health/demographic, complete
+  results/episodes, result-contract-audit, and export tests pass 2/2, 102/102,
+  25/25, and 76/76. Skill, module-boundary, and CI contracts pass 6/6, 20/20,
+  and 33/33. Ruff lint and changed-file format checks, actionlint, the
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, bytecode scanning, and the final diff check are clean.
+- The clean-context Codex CLI reviewer for signed head `37e8caba` used a fresh
+  independently materialized and validated read-only workspace over
+  `a3836660..37e8caba`. Equal prelaunch and postvalidation receipts bound 125
+  commits, 124 parent edges, graph digest
+  `d6d8f17a0cdbdafbc666b84fdb636ee596b53cc73a479421c8519f2588d4ae1d`,
+  and the unchanged local-config digest. Thread
+  `01a03738-6f0f-7d01-9e4d-f3c88ff8f994` returned two findings: allergy fields
+  could bypass all retained privacy layers, and orphan GC treated directory
+  `mtime` drift as direct mutation evidence instead of triggering an exact
+  object/content/access-policy proof. The trusted 30-file control and Python
+  records were byte-identical after the lane, no reviewer process remained,
+  and the exact task root was removed.
+- The shared health grammar now covers singular, plural, known, snake-case,
+  hyphenated, camel-case, Markdown, and narrative allergy fields. Orphan GC now
+  binds each file's object identity, owner/mode/link policy, exact inventory,
+  and SHA-256 content commitment, revalidates directory identity and access
+  policy while excluding timestamps from mutation evidence, and passes the
+  same authenticated inventory to descriptor-bound deletion. Benign temporary
+  and installed directory timestamp churn remains eligible, while a same-size
+  content mutation after proof is retained and rejected. Focused regressions
+  pass 4/4; complete export, results/episodes, and result-contract-audit suites
+  pass 79/79, 102/102, and 25/25.
+- Final36 uses the owner-controlled Python 3.13.12 runtime and 1,943 exact test
+  IDs from 22 authenticated sources under manifest digest
+  `a45b848df8465f2a2e627fc842b27892b5c33c20c374d9aa4ee7a9a669ce3184`.
+  Shards 0 through 3 pass 460/460 in 1,784.777 seconds, 525/525 in
+  1,595.079 seconds, 522/522 in 1,493.160 seconds, and 436/436 in
+  1,501.914 seconds. The independent Darwin security inventory passes 14/14
+  in 70.913 seconds without skips.
+- The clean-context Codex CLI reviewer for signed head `639e0673` used a fresh
+  independently materialized and validated read-only workspace over
+  `a3836660..639e0673`. Equal prelaunch and postvalidation receipts bound 126
+  commits, 125 parent edges, graph digest
+  `e93fde4aaa0d62177cecca9d9b5b10c6aebbe70ba4973e8f0eeed724528dcd1e`,
+  and the unchanged local-config digest. Thread
+  `01a0376f-ed3c-7102-8010-1121b14032e1` returned three P1 findings: a
+  multi-value allergy container exposed every item after the first, the
+  descriptor-based export reader checked its 256 MiB aggregate budget only
+  after reading all eight files, and singular camel-case `knownAllergy` was
+  absent from the closed health grammar. Postvalidation reproduced the
+  receipt, trusted controls remained byte-identical, no reviewer process
+  remained, and the exact task root was removed.
+- Shared personal-field matching now balances nested list and object values
+  across quoted and multiline content, fails closed over the remaining input
+  for malformed containers, and contributes individual scalar values to
+  source-overlap checks. Singular and plural camel-case known-allergy fields
+  use the same scanner, post-redactor, and retained validator. The export
+  reader now freezes every file's object identity, owner/group, mode, link
+  count, and size, rejects an oversized aggregate before the first content
+  read, and applies the remaining shared budget plus that exact metadata to
+  each descriptor read. Aggregate pre-read and pre-open mutation regressions
+  accompany multiline, nested, malformed, and scalar-overlap privacy cases.
+- Focused reviewer-fix tests pass 6/6. Complete results/episodes,
+  export/reporting, and result-contract-audit modules pass 102/102, 81/81,
+  and 25/25. The isolated module-boundary, CI-contract, and Skill-contract
+  entrypoints pass 20/20, 33/33, and 6/6 with the exact branch inventory
+  updated from 9,952 to 10,001. One combined contract invocation omitted the
+  required `-I` and selected a symlinked Homebrew interpreter; it failed
+  closed and is invocation-invalid/non-counting.
+- The first post-reviewer four-shard attempt is non-counting because a final
+  source-overlap refinement was made while its four processes were active.
+  Each process received one interrupt and terminated; no partial result is
+  used as final-tree evidence.
+- Final38 freezes 1,945 unique test IDs from 22 authenticated sources under
+  manifest digest
+  `2e7aa22ac7ef7cdb567b118b44c212a1d43c716c17ef410e1d2f0ebf6a8c348d`.
+  Shards 0 through 3 pass 461/461 in 1,796.669 seconds, 525/525 in
+  1,599.796 seconds, 523/523 in 1,505.780 seconds, and 436/436 in
+  1,513.088 seconds. The independent Darwin security inventory passes 14/14
+  in 63.432 seconds without skips.
+- On the same source tree, the isolated module-boundary, CI-contract, and
+  Skill-contract entrypoints pass 20/20, 33/33, and 6/6. Ruff lint and format,
+  actionlint, the official OpenAI Skill validator, project-journal validation,
+  and `git diff --check` pass; tracked and source-test bytecode inventories are
+  empty.
+- The platform reviewer role returned a zero-start
+  `agent type is currently not available` launch failure. The authorized
+  clean-context fallback used ephemeral Codex CLI thread
+  `01a037bd-a60b-7a30-8732-c435efead506` in an independently materialized
+  read-only workspace over signed head `681a7871`. Equal prelaunch and
+  postvalidation receipts bind 127 commits, 126 parent edges, graph digest
+  `a458151d1e345c2e4a25501e25c48d5c44f2adae091348a6c859c8406a515258`,
+  and the unchanged local-config digest. The trusted control manifest, Python,
+  and Skill digests remained unchanged; 149 terminal command events contain
+  no bare or mutating Git, networked Git, or filesystem mutation command, no
+  reviewer process remained, and the exact task root was removed.
+- That reviewer returned one high-severity finding: plural health and
+  demographic labels such as `Diagnoses`, `Medications`, `Nationalities`,
+  `politicalOpinions`, and `unionMemberships` bypassed direct privacy
+  matching and source-overlap redaction. The closed field grammar now admits
+  the corresponding plural plain, snake-case, kebab-case, and camel-case
+  labels while preserving singular labels. Focused privacy tests pass 3/3;
+  complete results/episodes, result-contract-audit, and module-boundary suites
+  pass 102/102, 25/25, and 20/20. An initial isolated module-selector command
+  imported no tests and is non-counting; the first valid focused run exposed a
+  `statuses?` singular-regression typo, which was corrected to
+  `status(?:es)?` before the passing runs.
+- Final39 freezes 1,945 unique test IDs from 22 authenticated sources under
+  manifest digest
+  `6557b0751d82f27e2f6642463af764ca7d789d9a8c6febc77c59d97c15921cb3`.
+  Shards 0 through 3 pass 461/461 in 1,883.555 seconds, 525/525 in
+  1,683.034 seconds, 523/523 in 1,591.647 seconds, and 436/436 in
+  1,598.085 seconds. The independent Darwin security inventory passes 14/14
+  in 63.895 seconds without skips.
+- On the same frozen tree, module-boundary, CI-contract, and Skill-contract
+  entrypoints pass 20/20, 33/33, and 6/6. Ruff 0.13.2 lint and formatting,
+  actionlint 1.7.12 for both workflows, the generated bootstrap manifest, the
+  official OpenAI Skill validator, project-journal validation, bytecode
+  inventories, and `git diff --check` are clean.
+- Signed head `c525d4f4` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.0 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..c525d4f4` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 128 commits, 127 parent edges, graph digest
+  `2e3faffe725403c4174f0293fe04336edaff6b7090433474c64f419465039ccc`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a03802-48f1-7cc2-8085-4a56df1fab5b` returned four findings:
+  plural camel-case demographic fields remained incomplete; publisher
+  readiness and canary fallbacks could downgrade a marked temporary-cleanup
+  failure; source transport and session-shards fallbacks had the same
+  downgrade; and retained-artifact open could block on a FIFO replacement
+  because it omitted `O_NONBLOCK`. Postvalidation reproduced the original
+  receipts, the trusted 30-file control manifest, Skill, guard, and Python
+  digests remained exact, no reviewer process remained, and the exact
+  owner-private task root was removed.
+- The shared demographic grammar now covers plural religious affiliation,
+  denomination, and identity plus marital and family status camel-case forms.
+  One centralized temporary-cleanup classifier is used by publisher readiness,
+  canary, source transport, and session-shards fallback paths, preserving
+  process-group cleanup precedence. Retained artifact opens now include
+  `O_NONBLOCK` before descriptor and content validation, so a regular-file to
+  FIFO replacement fails without hanging. Exact focused regressions pass 7/7;
+  complete results/episodes, orchestrator support, source transport,
+  session-shards, and export modules pass 102/102, 39/39, 138/138, 43/43, and
+  82/82. The combined affected set passes 404/404; result, module-boundary,
+  CI, and Skill contracts pass 25/25, 20/20, 33/33, and 6/6. Ruff lint and
+  formatting plus `git diff --check` are clean. Three diagnostic invocations
+  are explicitly non-counting: one isolated single-file launcher could not
+  import the repository test package, one privacy fixture independently
+  matched narrative privacy before its value was narrowed, and one GPG
+  content-drift fixture used a group-readable fake signature before its mode
+  was corrected to exercise the intended drift property.
+- Final40 freezes 1,949 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `5a20244561ae5cc6ed0d8ed15490ffe0d58ead39900133816b3dea2bf4e415f2`.
+  Shards 0 through 3 pass 462/462 in 2,381.431 seconds, 525/525 in
+  2,163.788 seconds, 525/525 in 2,049.853 seconds, and 437/437 in
+  2,050.889 seconds, for exact aggregate coverage of 1,949/1,949 without
+  skips. The independent Darwin security inventory passes 14/14 in 68.606
+  seconds. All five owner-only logs total 473,968 bytes under the 40 MiB
+  aggregate ceiling, and every process-group supervisor reached terminal exit
+  zero without hitting its time or output limit. Result-contract,
+  module-boundary, CI, Skill, and Bootstrap entrypoints pass 25/25, 20/20,
+  33/33, 6/6, and 12/12. Repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint` 1.7.12, the generated
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, source/test bytecode exclusion, and `git diff --check` are clean
+  on the same tree.
+- Signed head `6dd136d3` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..6dd136d3` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 129 commits, 128 parent edges, graph digest
+  `40e3503dec0cebb98074797acd06f4f5a8ed22b798629e3f4c2d031a660e02ef`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a03867-1d91-7fc0-a3c5-d501961db0cd` returned three P1 findings:
+  retained health-field labels omitted symptoms, treatments, procedures,
+  prescriptions, and laboratory/test results; source discovery and terminal
+  rereads could block after regular-file-to-FIFO replacement; and retained
+  publication inventory/privacy rereads had the same blocking-open gap.
+  Postvalidation reproduced the original receipts, the trusted 30-file
+  control manifest, Skill, guard, and Python digests remained exact, 95
+  reviewer command events stayed read-only, no reviewer process remained, and
+  the exact owner-private task root was removed. Two parent launch-shape
+  failures occurred before any model event and remain zero-start/non-counting.
+- The shared retained-health grammar now covers the omitted plain, snake-case,
+  kebab-case, camel-case, and PascalCase field labels while retaining negative
+  narrative prose. Source candidate opens and both retained publication read
+  paths use no-follow, nonblocking, close-on-exec descriptors before regular
+  file, identity, content, and access-policy validation. Discovery races become
+  explicit `source_enumeration_changed` gaps; publication races remain
+  `ArtifactValidationError`. Exact focused regressions pass 6/6 in 80.072
+  seconds. Complete results/episodes, source transport, and session-shards
+  modules pass 102/102, 140/140, and 44/44. Result-contract,
+  module-boundary, CI, Skill, and Bootstrap entrypoints pass 25/25, 20/20,
+  33/33, 6/6, and 12/12; the exact engine branch inventory decreases from
+  10,002 to 10,001 after conditional flag assembly moves to one shared
+  constant.
+- Final41 freezes 1,953 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `55c86e322501eb998a1f4a3a083c1fd723c79ff3d89f03588419c04e6eaf7e34`.
+  The owner-controlled Python digest remains
+  `adf39d061c306b4bd72ff4d96a8d475bccbcef12f432bcd2429fcfc5cef26284`.
+  Shards 0 through 3 pass 464/464 in 1,912.897 seconds, 525/525 in
+  1,717.330 seconds, 525/525 in 1,615.905 seconds, and 439/439 in
+  1,669.835 seconds, for exact aggregate coverage of 1,953/1,953 without
+  skips. Their four bounded logs total 472,221 bytes. The independent Darwin
+  security inventory passes 14/14 in 76.414 seconds. Repository-wide Ruff
+  0.13.2 lint, changed-file formatting, both workflows under `actionlint`
+  1.7.12, the generated bootstrap manifest, the official OpenAI Skill
+  validator under cached Python 3.13.0 and PyYAML 6.0.3, project-journal
+  validation, tracked bytecode exclusion, and `git diff --check` are clean.
+  A repository-wide formatting probe remains non-counting because it identifies
+  four unchanged pre-existing files; this change does not reformat them.
+- Three diagnostic test invocations are explicitly non-counting: the first
+  six-test command omitted `-I` and replaced `os.open` without preserving the
+  mocked `supports_dir_fd` capability; a combined affected-module run reached
+  publication tests but exceeded its 40-minute aggregate deadline; and a
+  publication-only supplement reached 74 completed cases before its 60-minute
+  deadline. The latter two supervisors reported post-TERM group cleanup as
+  unverified, but a later exact-argv process census found no surviving module
+  runner, publication test, or wrapper. These supplemental timeouts do not
+  create a coverage gap because the same frozen Final41 manifest completed all
+  1,953 tests exactly once across the four terminal shards.
+- Signed head `fde4d2ec` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..fde4d2ec` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 130 commits, 129 parent edges, graph digest
+  `a04be4f8a8bfbdb3d1afa8b6daf973f29e861b9cbcf72f7a98749c3ab92d9f1b`,
+  and the unchanged local-config digest. Thread
+  `01a038ea-4f20-7cb3-bc93-f65c105047e0` completed in 1,298 seconds and found
+  that the pre-update automation snapshot accepted TOML `version = true`
+  because Python boolean equality treated `True` as integer `1`; the existing
+  boolean regression covered only the post-update installed-record validator.
+  The 110 completed command events used only bounded trusted-guidance reads or
+  the exact sanitized Git prefix with read-only subcommands. The trusted
+  30-file control manifest remained byte-identical, no reviewer process
+  remained, and the exact owner-private task root was removed after identity
+  and inventory validation. A first parent-sandbox launch could not initialize
+  the Codex state database, produced no `thread.started` event or model output,
+  and remains zero-start/non-counting.
+- The pre-update snapshot now requires exact integer type and value for record
+  version before it recognizes ownership of a stable automation ID. A direct
+  `capture_automation_cutover_snapshot` regression proves that `version = true`
+  fails without publishing the snapshot file. The focused regression passes
+  alone and with three adjacent cutover tests; module boundaries pass 20/20,
+  and the combined result-contract, module-boundary, CI, Skill, and Bootstrap
+  entrypoints pass 96/96 in 14.202 seconds.
+- Final42 freezes 1,954 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `36065c41fe3a0de9b96ce1bffe4a74524adecf2d5380b447b62e59d4a78b47af`.
+  Shards 0 through 3 pass 465/465 in 1,866.364 seconds, 525/525 in
+  1,669.454 seconds, 525/525 in 1,568.990 seconds, and 439/439 in
+  1,618.526 seconds, for exact aggregate coverage of 1,954/1,954 without
+  skips. Their four bounded logs total 472,387 bytes. The independent Darwin
+  security inventory passes 14/14 in 70.046 seconds. Ruff 0.13.2 lint and
+  changed-file formatting, both workflows under `actionlint` 1.7.12, the
+  generated bootstrap manifest, the official OpenAI Skill validator using the
+  offline Python 3.13 cache, and tracked-bytecode exclusion are clean on the
+  same source tree. One sandboxed Skill-validator launch was blocked from the
+  existing uv cache and is non-counting; the approved offline retry returned
+  `Skill is valid!`.
+- Signed head `7cac345b` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..7cac345b` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 131 commits, 130 parent edges, graph digest
+  `d1a92ea653c21b7756b97f8b1a15b74cb470e3bd4aa07a2f88bc86a5e4983991`,
+  and the unchanged local-config digest. Thread
+  `01a03923-a36e-7b31-913d-5f541e8e423e` completed in 1,663 seconds and found
+  two retained-boundary gaps: patient name fields were missing from both the
+  delimited and camel-case personal-subject grammars, and failed cleanup of a
+  partial retained-export staging directory was silently discarded while a
+  primary staging failure was active. The reviewer completed 170 bounded
+  command events, postvalidation reproduced the original receipts and trusted
+  control digests, no reviewer process remained, and the exact task root was
+  removed after identity and inventory validation.
+- The shared personal-subject grammar now covers `patient` and `Patient`
+  without classifying narrative patient-name prose as a retained value.
+  Retained-export staging records cleanup uncertainty on the exact primary
+  exception with the existing content-free temporary-cleanup marker and uses
+  the shared primary-preserving descriptor close. The implementation keeps the
+  exact 10,001 engine branch budget unchanged. Focused regressions pass 2/2;
+  complete results/episodes and export modules pass 102/102 and 83/83; the
+  independent result-contract audit and module-boundary suites pass 25/25 and
+  20/20. One isolated package-selector command imported zero real tests and is
+  explicitly non-counting; the direct-file contract entrypoints are the
+  authoritative evidence.
+- Final44 freezes 1,955 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `bdda5298e2ab0fad0818018c7f375ff7466086c248b19a0ccf06ad55b6431c2a`.
+  Shards 0 through 3 pass 466/466 in 1,870.787 seconds, 525/525 in
+  1,652.834 seconds, 525/525 in 1,549.273 seconds, and 439/439 in
+  1,602.374 seconds, for exact aggregate coverage of 1,955/1,955 without
+  skips. Their four bounded logs total 472,721 bytes. The independent Darwin
+  security inventory passes 14/14 in 71.069 seconds. Result-contract,
+  module-boundary, CI, Skill, and Bootstrap entrypoints pass 25/25, 20/20,
+  33/33, 6/6, and 12/12. Repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint` 1.7.12, the generated
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, tracked bytecode exclusion, and `git diff --check` are clean.
+- Signed head `61abe5c3` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..61abe5c3` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 132 commits, 131 parent edges, graph digest
+  `40312a1f226b7dc17fb31e846eb546b83db56a84e173a02211316d9b49889815`,
+  and the unchanged local-config digest. Thread
+  `01a03973-c3ed-7511-a1ca-64aa6f1c2b54` completed in 670 seconds and found
+  one retained-privacy gap: plural patient subjects and plural name fields
+  such as `patients_name` and `patientNames` bypassed the shared personal-name
+  detector. The reviewer completed 82 read-only commands; two failed `rg`
+  commands had no matches, and one conservative audit match was a read-only
+  `git diff | awk | sort` pipeline. Postvalidation reproduced the original
+  receipts, the trusted 30-file control manifest remained byte-identical, no
+  reviewer process remained, and the exact owner-private task root was removed
+  after identity and inventory validation.
+- The shared personal-name grammar now covers singular and plural patient
+  subjects plus singular and plural delimited or camel-case name fields.
+  Positive regressions cover the named bypasses and their combined forms;
+  negative regressions keep ordinary patient-name parsing and documentation
+  prose retainable. The two focused entrypoints pass 2/2. Result-contract,
+  module-boundary, CI, Skill, and Bootstrap entrypoints pass 25/25, 20/20,
+  33/33, 6/6, and 12/12. Repository-wide Ruff 0.13.2 lint and changed-file
+  formatting, both workflows under `actionlint` 1.7.12, the generated
+  bootstrap manifest, the official OpenAI Skill validator, tracked bytecode
+  exclusion, and `git diff --check` are clean.
+- Final46 freezes 1,955 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `29029e6183157f7bc49f00066bdbd8725676f0dd3458d32c87dd4e83e1fe3664`.
+  Shards 0 through 3 pass 466/466 in 1,876 seconds, 525/525 in 1,651 seconds,
+  525/525 in 1,550 seconds, and 439/439 in 1,604 seconds, for exact aggregate
+  coverage of 1,955/1,955 without skips. The independent Darwin security
+  inventory passes 14/14 in 74 seconds. All five bounded logs total 475,128
+  bytes, and every process-group supervisor reached terminal exit zero.
+- Signed head `95a0575c` had clean exact-secret admission. The first isolated
+  Codex CLI launch was a zero-start, non-counting transport attempt: sandboxed
+  access to the Codex state database failed before `thread.started`, no model
+  result was produced, postvalidation and trusted-control revalidation were
+  clean, no process remained, and the exact task root was removed. A new
+  independently materialized and validated workspace then launched the one
+  actual fresh Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  over `a3836660..95a0575c`. Equal prelaunch and postvalidation receipts bind
+  133 commits, 132 parent edges, graph digest
+  `6a5e662b23cec51f0d09fc59d924609c4d1c41f4400276d4de9294ac8163c863`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a039a9-f757-7303-bb15-950033d4d977` completed in 876 seconds and
+  found one retained-privacy gap: plural compound health fields such as
+  `Medical histories`, `healthStatuses`, and `Genetic profiles` bypassed the
+  shared health-information grammar. The reviewer completed 121 read-only
+  commands; three failed commands were bounded read-only searches, and the
+  conservative command audit matched only read-only searches and `awk`
+  inspection. Postvalidation reproduced the original receipts and trusted
+  control digests, no reviewer process remained, and the exact owner-private
+  task root was removed after identity and inventory validation.
+- The shared health-information grammar now covers plural delimited and
+  camel-case forms of `history`, `status`, and `profile`. Positive regressions
+  cover `Medical histories`, `health_statuses`, `medicalHistories`,
+  `healthStatuses`, `Genetic profiles`, and `geneticProfiles`; negative
+  regressions keep documentation prose about those field families retainable.
+  The two focused entrypoints pass 2/2. Result-contract, module-boundary, CI,
+  Skill, and Bootstrap entrypoints pass 25/25, 20/20, 33/33, 6/6, and 12/12.
+  Repository-wide Ruff 0.13.2 lint and changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the official
+  OpenAI Skill validator, tracked bytecode exclusion, and `git diff --check`
+  are clean.
+- Final49 freezes 1,955 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `30646171e3df539b280f5fdc87f565d9e4df724e22e2839896c128504cc37bc5`.
+  Shards 0 through 3 pass 466/466 in 2,225.941 seconds, 525/525 in
+  1,982.544 seconds, 525/525 in 1,876.358 seconds, and 439/439 in
+  1,923.881 seconds, for exact aggregate coverage of 1,955/1,955 without
+  skips. The independent Darwin security inventory passes 14/14 in 113.015
+  seconds. All five bounded logs total 475,129 bytes, and every process-group
+  supervisor reached terminal exit zero.
+- Signed head `ec7a73f4` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..ec7a73f4` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 134 commits, 133 parent edges, graph digest
+  `ff124a11f5678df5eb269ab11ad13d0beb2271d303f3415fe05ae020ced8998e`,
+  and the unchanged local-config digest. Thread
+  `01a039e6-66ba-7b82-8bdd-e784dac606d6` completed in 598 seconds and found one
+  retained-privacy gap: plural disability nouns and plural identity-status
+  fields such as `Disabilities`, `disability_statuses`, `pregnancyStatuses`,
+  and `militaryStatuses` bypassed the shared controlled-demographic grammar.
+  The reviewer completed 75 read-only commands. Its one failed command was an
+  `rg` search with no match; the conservative command audit matched only
+  another read-only `rg` search. Postvalidation reproduced the original
+  receipts and trusted control digests, no reviewer process remained, and the
+  exact owner-private task root was removed after identity and inventory
+  validation.
+- The controlled-demographic grammar now covers singular and plural disability,
+  pregnancy, and veteran nouns; singular and plural delimited status fields;
+  and matching camel-case `Status` or `Statuses` forms across military,
+  immigration, residency, visa, and socioeconomic identities. Positive
+  regressions cover the reviewer examples and every updated branch; negative
+  regressions keep documentation prose about those plural forms retainable.
+  Focused regressions pass 2/2, complete results/episodes and export modules
+  pass 102/102 and 83/83, and the contract matrix passes 96/96. One
+  package-style selector imported zero real tests and one focused run whose
+  pollable session metadata was not retained; both are explicitly
+  non-counting, and direct-file pollable reruns provide the authoritative
+  evidence. Repository-wide Ruff 0.13.2 lint and changed-file formatting, both
+  workflows under `actionlint` 1.7.12, the generated bootstrap manifest, and
+  the official OpenAI Skill validator are clean.
+- Final51 freezes 1,955 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `f166d37aac5914b8f780a38bfd660d111164dba5ed773e8d972210c9e06c6cf7`.
+  Shards 0 through 3 pass 466/466 in 2,649.858 seconds, 525/525 in
+  2,434.486 seconds, 525/525 in 2,281.616 seconds, and 439/439 in
+  2,356.898 seconds, for exact aggregate coverage of 1,955/1,955 without
+  skips. The independent Darwin security inventory passes 14/14 in 123.033
+  seconds. All five bounded logs total 475,129 bytes, and every process-group
+  supervisor reached terminal exit zero.
+- Signed head `3746577d` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..3746577d` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 135 commits, 134 parent edges, graph digest
+  `6d5eec06253dee080dfb6303ea2b2b552e40c7e140fbce47cba8e7be761a0131`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  Thread `01a03a29-f761-7c02-80a4-cbc8b1c61a38` completed in 806 seconds and
+  returned two findings. Prefixed retained medical fields such as
+  `medicalDiagnosis`, `patientDiagnosis`, and `healthMedications` bypassed the
+  shared health-information policy. Cleanup inventory enumerated each
+  directory only once, while directory inode, mode, link count, and size could
+  not prove the protected child-name, object-type, and content set complete.
+  The reviewer completed 72 of 75 read-only commands; the three failed commands
+  were read-only searches. Postvalidation reproduced the original receipts,
+  the trusted 30-file control manifest remained byte-identical, no reviewer
+  process remained, and the exact owner-private task root was removed after
+  identity and inventory validation.
+- The retained-health grammar now covers prefixed allergy, blood-type,
+  condition, diagnosis, history, laboratory/test-result, medication,
+  procedure, prescription, record, status, symptom, and treatment fields for
+  `medical`, `health`, `clinical`, and `patient` prefixes in delimited and
+  camel-case forms. Positive regressions cover the reported bypasses; negative
+  regressions preserve documentation prose about the same field families.
+- Cleanup inventory now takes two complete descriptor-root snapshots. The
+  first pass consumes the caller's shared entry and path-byte budget; the
+  second pass uses the same absolute deadline and a validation budget bounded
+  by the first pass's exact observed scale. Both passes bind relative paths,
+  object type and identity, owner-only access policy, and complete regular-file
+  content commitments before the normalized snapshots are compared. Directory
+  link count and size are deliberately not protected properties because
+  completed child-entry churn can change them without changing the final child
+  set. This remains point-in-time detection and fail-closed retention, not a
+  claim that a malicious same-UID writer cannot mutate after the final
+  revalidation. A shared safe-component validator removes the duplicated
+  inspect/remove branches, so the exact engine branch inventory remains
+  10,001 rather than raising the complexity gate.
+- Focused privacy, same-size content mutation, inserted-child, benign directory
+  churn, shared cleanup budget, delete-time commitment, and partial-delete
+  recovery regressions pass. Complete identity I/O, results/episodes, and
+  export modules pass 54/54, 102/102, and 83/83; cleanup orchestrator selectors
+  pass 5/5; and module boundaries pass 20/20. One five-selector orchestrator
+  invocation omitted isolated mode and failed before each test body; it is
+  non-counting. The first Final53 shard attempt was intentionally interrupted
+  with exit 130 after the exact complexity gate exposed a 25-branch draft
+  increase; all four stale shard logs were removed before the refactored source
+  manifest was generated, and that attempt is also non-counting.
+- Final53 freezes 1,958 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `67338e58d9fca26b57ea9d152b2506bb88f7820c04190c542a996daa1f805148`.
+  Shards 0 through 3 pass 466/466 in 1,926.780 seconds, 526/526 in
+  1,705.641 seconds, 526/526 in 1,606.935 seconds, and 440/440 in
+  1,657.545 seconds, for exact aggregate coverage of 1,958/1,958 without
+  skips. The independent Darwin security inventory passes 14/14 in 73.323
+  seconds. All five bounded logs total 475,685 bytes, and every process-group
+  supervisor reached terminal exit zero. Result-contract, module-boundary, CI,
+  Skill, and Bootstrap entrypoints pass 25/25, 20/20, 33/33, 6/6, and 12/12.
+  Repository-wide Ruff 0.13.2 lint, changed-file formatting, both workflows
+  under `actionlint` 1.7.12, the generated bootstrap manifest, the official
+  OpenAI Skill validator, project-journal validation, tracked bytecode
+  exclusion, and `git diff --check` are clean on the same source tree.
+- Signed head `d99c413e` had clean exact-secret admission, then one fresh
+  ephemeral Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at `xhigh` reasoning
+  inspected `a3836660..d99c413e` from a new independently materialized and
+  validated read-only workspace. Equal prelaunch and postvalidation receipts
+  bind 136 commits, 135 parent edges, graph digest
+  `34102389cd7860b5c66d3a2e1d4f9ab4fcebeb1ec647ec083b4f3e2ca4b939c8`,
+  and the unchanged local-config digest. Thread
+  `01a03a77-9836-75a2-b0b2-891d15e4fbb5` completed in 904 seconds and found
+  one retained-privacy gap: dot-delimited health fields such as
+  `patient.record` bypassed the shared controlled-health grammar. The reviewer
+  completed 124 read-only commands; 123 exited zero and the only nonzero
+  command was a bounded `rg` search with no match. Postvalidation reproduced
+  the original receipts, the trusted 30-file control manifest remained
+  byte-identical, no reviewer process remained, and the exact owner-private
+  task root was removed after identity and inventory validation.
+- The controlled-health grammar now treats a dot as a structured delimiter at
+  every delimited branch rather than special-casing the reported field.
+  Positive regressions cover `known.allergy`, `blood.type`, `patient.record`,
+  `health.status`, `lab.result`, `patient.blood.type`, `patient.lab.result`,
+  `genetic.profile`, and `protected.health.information`; negative regressions
+  keep non-assignment documentation prose retainable. The focused privacy
+  entrypoints pass 2/2, and the complete results/episodes and export modules
+  pass 102/102 and 84/84.
+- The first post-fix full-suite attempt used manifest digest
+  `fb6fcc21cba93e8ccecc708c5f0500c3fbec9a89e50e738d29a8cab25693e0dc`.
+  It was intentionally interrupted once per shard and is non-counting after a
+  local audit noticed that several newly generalized dot-delimiter branches
+  still lacked direct regression cases. All four processes reached terminal
+  `KeyboardInterrupt` exits before tracked files changed. One interrupted
+  cleanup reported an incomplete-tree marker; the post-quiescence inspection
+  found no shard process and no retained child beneath the four expected
+  runtime temporary roots. No partial result from that attempt is used as gate
+  evidence.
+- Final56 freezes 1,959 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `63610a65e62ad541bbf8d9d2689f817716e948f7862c0d12a7614362174c3b43`.
+  Shards 0 through 3 pass 466/466 in 2,160.742 seconds, 526/526 in
+  1,931.751 seconds, 527/527 in 1,821.720 seconds, and 440/440 in
+  1,878.299 seconds, for exact aggregate coverage of 1,959/1,959 without
+  skips. The independent Darwin security inventory passes 14/14 in 70.513
+  seconds. Result-contract, module-boundary, CI, Skill, and Bootstrap
+  entrypoints pass 25/25, 20/20, 33/33, 6/6, and 12/12. Repository-wide Ruff
+  0.13.2 lint, changed-file formatting, both workflows under `actionlint`
+  1.7.12, the generated bootstrap manifest, the official OpenAI Skill
+  validator, project-journal validation, tracked bytecode exclusion, and
+  `git diff --check` are clean on the same source tree. A repository-wide Ruff
+  format probe is non-counting because it found four unrelated pre-existing
+  files outside this change that would be reformatted; none was modified.
+- Signed head `69cb2d2f` had clean exact-secret admission, then one fresh
+  independently materialized Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at
+  `xhigh` reasoning inspected `a3836660..69cb2d2f`. Equal prelaunch and
+  postvalidation receipts bind 137 commits, 136 parent edges, graph digest
+  `71acc97796b26bd75f55e8e8fc59d17286afb4d70797060071fc54c0669ecd55`,
+  and the unchanged local-config digest. Thread
+  `01a03aca-56ee-7232-8537-fa89bf6c3594` completed in 892 seconds and found
+  one remaining retained-privacy gap: dot-delimited personal, demographic,
+  sensitive-number, and biometric field labels still bypassed the shared
+  grammar outside the health-specific branches. Postvalidation and the
+  trusted control manifest remained clean, no reviewer process remained, and
+  the exact owner-private task root was removed after identity and inventory
+  validation.
+- The follow-up applies one structured-label delimiter policy across personal
+  names, birth dates, handles, relationship names, demographics, biometrics,
+  sensitive numbers, phone labels, addresses, coordinates, raw IDs, source
+  prompts, and tool-output labels. Positive regressions cover every family,
+  including `gender.identity`, `date.of.birth`, `medical.record.number`,
+  `biometric.template`, `tool.call.id`, `original.prompt`, and `tool.output`;
+  assignment-free prose remains covered where it is not independently a URL.
+  The two exact regressions pass, and the complete results/episodes plus export
+  modules pass 187/187 in 248.230 seconds.
+- The first four-shard attempt for this follow-up is non-counting because it
+  launched the Homebrew Python directly. Its group-writable `Cellar` ancestor
+  correctly failed the executable-authority contract and caused systematic
+  derived failures in shards 1 and 2; shards 0 and 3 were interrupted once,
+  all four sessions reached terminal state, and no shard process remained.
+  The trusted owner-private Python 3.13.12 copy produced the byte-identical
+  final inventory and was used for every accepted full-suite result.
+- Final58 freezes 1,960 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `7dce1fb5b0f32a7eff36ffd29036c008b12d39e9d1d41335fbdd496dcef81771`.
+  Shards 0 through 3 pass 467/467 in 1,850.337 seconds, 526/526 in
+  1,627.366 seconds, 526/526 in 1,529.439 seconds, and 441/441 in
+  1,578.829 seconds, for exact aggregate coverage of 1,960/1,960 without
+  skips. The independent Darwin security inventory passes 14/14 in 66.185
+  seconds. Result-contract, module-boundary, CI, Skill, and Bootstrap
+  entrypoints pass 25/25, 20/20, 33/33, 6/6, and 12/12. Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint` 1.7.12, the
+  generated bootstrap manifest, the official OpenAI Skill validator,
+  project-journal validation, tracked bytecode exclusion, and
+  `git diff --check` are clean on the same source tree.
+- Signed head `4e46a1bf` had clean exact-secret admission, then one fresh
+  independently materialized Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at
+  `xhigh` reasoning inspected `a3836660..4e46a1bf`. The fresh retry found one
+  private-output race: `remote_codex_probe.py` accepted an output parent under
+  a shared temporary ancestor, released its temporary descriptor before
+  publication, and used a predictable temporary name without proving the
+  parent access policy or the published file's identity and content.
+  Postvalidation reproduced the prelaunch receipts and trusted control
+  digests; the reviewer process and exact owner-private task root were then
+  safely removed.
+- Private output publication now has one module owner. It opens or creates an
+  exact owner-only, ACL-free parent through a held descriptor; creates a
+  random exclusive no-follow temporary; and binds parent identity/access
+  policy plus file identity, size, link count, content digest, and access
+  policy before and after same-directory replacement. Regressions distinguish
+  benign timestamp and pinned-parent rename churn from parent symlink/access
+  drift, temporary-entry replacement, same-inode same-size content mutation,
+  and extended ACLs. Temporary cleanup never unlinks a name that no longer
+  matches the held descriptor.
+- Two pre-final full-suite attempts are non-counting. The first exercised an
+  older oversized migration probe before the output owner was extracted. The
+  second started with a canonical `session_retrospective.pyc` already created
+  by the cross-process path-reference regression; later bootstrap authority
+  checks correctly failed closed on the source cache. The root cause was that
+  the test's two importlib child processes omitted `-B`; a parent's `-B` flag
+  is not inherited as an environment variable. Both child argv now include
+  `-B`, while both local and remote script-copy regressions prove that package
+  imports do not create bytecode when the ambient bytecode environment is
+  absent. No authority check was weakened.
+- The final focused evidence passes: secure output and bytecode entrypoints
+  9/9, the exact child-bytecode regressions 3/3, Bootstrap 12/12, module
+  boundaries 20/20, CI contracts 33/33, identity and safe I/O 54/54,
+  transport architecture 2/2, the complete legacy/session module 924/924 in
+  182.969 seconds, and the Darwin security inventory 15/15 in 67.205 seconds.
+  Ruff 0.13.2 lint, the generated bootstrap manifest, and `git diff --check`
+  are clean. A formatter probe still identifies only the legacy monolithic
+  `session_retrospective.py` as pre-existing whole-file format debt; the task
+  does not mechanically rewrite that 12,000-line source.
+- Final62 freezes 1,967 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `081246d11ad44cbeac79916fbd52b9996af97d1901c69e7ef0e743d3f528a6a6`.
+  Shards 0 through 3 pass 468/468 in 1,884.103 seconds, 528/528 in
+  1,659.861 seconds, 529/529 in 1,567.658 seconds, and 442/442 in
+  1,617.333 seconds, for exact aggregate coverage of 1,967/1,967 without
+  skips. The canonical source tree remains free of bytecode after inventory
+  generation and all four terminal shard runs.
+- Signed head `b68a2b7f` had clean exact-secret admission, then one fresh
+  independently materialized Codex CLI 0.149.1 `gpt-5.6-sol` reviewer at
+  `xhigh` reasoning inspected `a3836660..b68a2b7f`. Equal prelaunch and
+  postvalidation receipts bind 139 commits, 138 parent edges, graph digest
+  `1fc8d570cc7b791c6247b77f657065893168863f03c0fc13a3bbb8039e84a7aa`,
+  and the unchanged local-config digest. The 1,287-second review found three
+  issues: common plural demographic labels bypassed retained-data privacy;
+  private-output cleanup could suppress an unreadable or access-policy state
+  while leaving sensitive temporary data; and the CLI admitted a direct
+  `/tmp` output even though the publisher requires an owner-private parent.
+  Postvalidation and the trusted 30-file control manifest remained exact, no
+  reviewer process remained, and the exact owner-private task root was
+  removed after identity and inventory validation.
+- The replacement fix extends the shared demographic grammar across plural
+  spaced, snake, dot, kebab, and camel labels. Private-output cleanup now uses
+  the held file identity as deletion authority, never deletes a replacement,
+  distinguishes missing, unreadable, replaced, unlink-failed, and
+  still-linked states, and propagates descriptor-bound cleanup evidence to
+  the CLI. Direct `/tmp` leaf output is rejected before transport; a nested
+  owner-private temporary directory remains supported. Regressions cover
+  retained privacy, mode and ACL drift, replacement, residual hard links, and
+  direct versus nested temporary output.
+- Replacement focused evidence passes: exact reviewer-fix regressions 8/8,
+  complete results/episodes 103/103 in 13.800 seconds, complete legacy/session
+  929/929 in 191.926 seconds, module boundaries 20/20, CI contracts 33/33,
+  and Darwin security 16/16 in 70.366 seconds. Ruff 0.13.2 and
+  `git diff --check` are clean on the same source tree.
+- Final64 freezes 1,972 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `f076f0fb6efb7be150d995d377638f5ade847174b7279b54f89dc52225dc4400`.
+  Shards 0 through 3 pass 470/470 in 1,808.661 seconds, 530/530 in
+  1,687.570 seconds, 530/530 in 1,483.630 seconds, and 442/442 in
+  1,537.651 seconds, for exact aggregate coverage of 1,972/1,972 without
+  skips. The three resumed shards used independent process groups with a
+  3,600-second hard deadline; all reached terminal success and no matching
+  test process remained.
+- Signed replacement head `5ee30127` had clean exact-secret admission. A
+  clean-context Codex CLI launch then failed before model start because the
+  outer sandbox denied its state-database initialization; postvalidation and
+  trusted-control comparison were exact and the task root was safely removed,
+  so that zero-start attempt is non-counting. A separate `fork_context=false`
+  Codex subagent reviewed the independently materialized and validated exact
+  range after the dedicated reviewer role reported platform unavailability.
+  It found one P1: bare plural `Ages: 42 and 47` was the remaining demographic
+  label form that bypassed the shared result-redaction and retained-history
+  privacy matcher. Its workspace postvalidated clean, the trusted controls
+  remained byte-identical, and the exact task root was removed after the agent
+  completed.
+- The replacement follow-up admits bare singular and plural age labels while
+  retaining assignment-free prose such as `Ages parsing is documented.` The
+  shared policy regression exercises leak detection, post-redaction, and final
+  retained-value rejection for the positive case and preserves the negative
+  boundary. The complete results/episodes module passes 103/103 in 13.277
+  seconds.
+- Final65 freezes the same 1,972 exact Python 3.13.12 test IDs from 22
+  authenticated sources under manifest digest
+  `8c5b277a995d20f4c32fbd7d97cc8881a51173e85c3a2b757ef0200b0ce65aeb`.
+  Shards 0 through 3 pass 470/470 in 1,919.689 seconds, 530/530 in
+  1,689.870 seconds, 530/530 in 1,596.633 seconds, and 442/442 in
+  1,648.492 seconds, for exact aggregate coverage of 1,972/1,972 without
+  skips. Every shard used an independent process group with a 3,600-second
+  hard deadline, all reached terminal success, and no matching test process
+  remained.
+- A subsequent zero-inheritance Codex subagent reviewed the independently
+  materialized and validated exact range `a3836660..8b817f0d`. The dedicated
+  reviewer role was unavailable, so the parent used a default clean-context
+  agent with `fork_context=false` as explicitly authorized. The bounded review
+  found three issues: additional plural demographic field families still
+  bypassed the shared retained-data privacy grammar; raw-shard staging failures
+  did not mark sensitive cleanup incomplete when rollback also failed; and a
+  parent-directory close failure could replace the primary bounded JSON read
+  error. The workspace postvalidated clean, trusted control bytes remained
+  exact, and the reviewer task root was safely removed.
+- The final follow-up systematically covers plural sex, gender, ethnic, racial,
+  origin, ancestry, citizenship, language, and religion labels across spaced,
+  snake, dot, kebab, and camel forms while preserving assignment-free prose.
+  Both raw-shard rollback owners now attach the shared sensitive temporary
+  cleanup marker to the original staging failure, so the CLI emits the
+  fail-closed `temporary_cleanup_incomplete` machine result. Bounded JSON reads
+  use the existing close helper, retaining `UnsafePathError`,
+  `InvalidJsonError`, or `ReadLimitExceeded` as primary and attaching close
+  evidence without changing CLI classification.
+- Final focused evidence passes catalog/sharding 31/31, identity and safe I/O
+  55/55, results/privacy 103/103 in 13.719 seconds, and orchestrator 148/148 in
+  606.778 seconds. One earlier orchestrator run is explicitly non-counting
+  because the target `safe_io.py` correction changed the implementation
+  authority while that process was running; the frozen-tree rerun is the
+  accepted result. Module-boundary, CI, Skill, and Bootstrap contracts pass
+  20/20, 33/33, 6/6, and 12/12. The Darwin security inventory passes 16/16 in
+  75.435 seconds. Repository-wide isolated Ruff 0.13.2 lint, formatting for all
+  eight changed Python files, both workflows under `actionlint`, the generated
+  bootstrap manifest, the official OpenAI Skill validator, project-journal
+  validation, tracked bytecode exclusion, and `git diff --check` are clean.
+- Final66 freezes 1,975 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `c513775af04e2722c9e878273da5a16ed9b5dbb16fad86a8670a30416c9e5c8a`.
+  Shards 0 through 3 pass 471/471 in 1,976.000 seconds, 530/530 in
+  1,731.416 seconds, 532/532 in 1,625.204 seconds, and 442/442 in
+  1,682.668 seconds, for exact aggregate coverage of 1,975/1,975 without
+  skips. Every shard used an independent process group with a 3,600-second hard
+  deadline and reached terminal success.
+- Signed head `952f26ef` had clean exact-secret admission. Its dedicated
+  reviewer-role spawn was a zero-start platform rejection. One authorized
+  `fork_context=false` clean-context Codex subagent then ran for the full
+  30-minute parent deadline without a terminal artifact; it was interrupted
+  once and classified transport-inconclusive. Prelaunch, postvalidation, and
+  trusted-control receipts remained byte-identical, and its exact
+  owner-private task root was removed through an identity-bound cleanup.
+- A fresh independently materialized Codex CLI 0.149.1 `gpt-5.6-sol` reviewer
+  at `xhigh` reasoning then inspected `a3836660..952f26ef`. Two wrapper launches
+  were zero-start because a process-wide file-size limit also constrained the
+  existing Codex state database; a transport-only no-repository-read probe
+  isolated that startup issue. The bounded replacement used per-stream byte
+  ceilings and a 30-minute process-group deadline. Thread
+  `01a03ccc-af31-7de0-b3db-1a4d5a4e4262` completed in 645.474 seconds and found
+  two gaps: plural biometric and sensitive-ID labels could bypass retained
+  privacy, and bounded-read descriptor cleanup could attach its close failure
+  to an unrelated outer exception. Postvalidation and trusted-control digests
+  remained exact, and the task root was safely removed.
+- The follow-up pluralizes biometric templates, voiceprints, and every existing
+  labeled sensitive-number family across separated and camel forms. Bounded
+  reads now capture only an exception raised by the current read scope and pass
+  that explicit primary into descriptor cleanup; an unrelated outer
+  `FileExistsError` cannot suppress a successful read's file or parent close
+  failure. Exact reviewer-fix regressions and both complete affected modules
+  pass 160/160 in 13.994 seconds. Ruff 0.13.2 lint/format and
+  `git diff --check` are clean for the four changed Python files.
+- Final68 freezes 1,977 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `26965e2c3629d8f9dfc3a2835165e114e15df4bf538dba29195b324f571e1f2e`.
+  Shards 0 through 3 pass 471/471 in 2,628.002 seconds, 530/530 in
+  2,337.463 seconds, 533/533 in 2,189.864 seconds, and 443/443 in
+  2,272.255 seconds, for exact aggregate coverage of 1,977/1,977 without
+  skips. The Darwin security inventory passes 16/16 in 102.992 seconds;
+  module-boundary, CI, Skill, and Bootstrap contracts pass 20/20, 33/33,
+  6/6, and 12/12. Both workflows pass `actionlint`; the bootstrap manifest,
+  official Skill validator, and project-journal validator are clean.
+- Signed follow-up head `f1e01621` had clean exact-secret admission. A fresh
+  independently materialized Codex CLI `gpt-5.6-sol` reviewer at `xhigh`
+  reasoning inspected `a3836660..f1e01621` under the prior trusted review
+  bundle. Equal materialization and validation receipts bind 143 commits, 142
+  parent edges, graph digest
+  `a0f8d410520d72d39fc70ff74e827a5eda2a0d5d955aaca258fa4e5c6dbcd8a4`,
+  and the unchanged local-config digest. Thread
+  `01a03d0d-3324-7641-89ee-563d98097315` completed in 1,115.495 seconds and
+  found three gaps: suffixless CamelCase insurance, beneficiary, and vehicle
+  labels bypassed privacy detection; ordinary expired-bundle GC deleted
+  without an exact inventory binding; and a marker descriptor close failure
+  could skip rollback after a partial marker write. Postvalidation remained
+  exact, trusted controls were byte-identical, and the exact owner-private
+  review root was removed through identity-bound cleanup.
+- The follow-up aligns suffixless CamelCase sensitive labels with their
+  separated-form policy while retaining assignment-free prose. Ordinary
+  expired bundles now receive a bounded two-pass owner-only inventory before
+  content validation; deletion consumes that exact identity, access-policy,
+  structure, and content inventory, so a late file or directory survives and
+  GC fails closed. Marker rollback preserves the write failure as primary,
+  records a close failure as secondary evidence, verifies the created marker
+  identity before unlink, persists rollback, and permits a clean retry. The
+  module-boundary inventory explicitly records the resulting cleanup owner and
+  branch counts rather than silently weakening either runtime check.
+- Focused evidence passes the six exact reviewer regressions in 3.488 seconds,
+  results/privacy 104/104 in 16.439 seconds, export 86/86 in 267.560 seconds,
+  module boundaries 20/20, and CI contracts 33/33. One complete orchestrator
+  module attempt is non-counting because the response transport disappeared
+  before its terminal summary and no matching process remained; the canonical
+  full-suite shards provide the required replacement coverage. Ruff 0.13.2
+  lint and formatting are clean for all seven changed Python files. Both
+  workflows pass `actionlint` 1.7.12; Skill and Bootstrap contracts pass 6/6
+  and 12/12; the bootstrap manifest, official Skill validator, and
+  project-journal validator are clean.
+- Final70 freezes 1,980 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `0295e46c46a4ef3e7c51a6e9be75f550b4b084c0cc1fe952dda646bccab24683`.
+  Shards 0 through 3 pass 471/471 in 2,097.719 seconds, 531/531 in
+  1,833.092 seconds, 535/535 in 1,725.376 seconds, and 443/443 in
+  1,782.634 seconds, for exact aggregate coverage of 1,980/1,980 without
+  skips. Each shard used an independent process group with a 3,600-second
+  hard deadline and a 1 MiB retained-log ceiling. The independent Darwin
+  security inventory passes 16/16 in 89.857 seconds. The canonical source
+  tree remains free of bytecode after all terminal runs.
+- Signed head `9c629fad` had clean exact-secret admission. A fresh independently
+  materialized Codex CLI `gpt-5.6-sol` reviewer at `xhigh` reasoning inspected
+  `a3836660..9c629fad` under the prior trusted review bundle. Equal
+  materialization and validation receipts bind 144 commits, 143 parent edges,
+  graph digest
+  `f04efc9271aecaddc95e0d9dfd2d05320d30e257c9636b91dc0263435510ab02`,
+  and the unchanged local-config digest. Thread
+  `01a03d9e-8030-7030-88e3-fff1fcfae501` completed in 577.575 seconds and found
+  one P1: the suffixless sensitive-label branch admitted lowerCamel names but
+  missed PascalCase insurance, health-plan, and vehicle-identification labels.
+  Postvalidation remained exact, trusted controls were byte-identical, and the
+  exact owner-private review root was removed through identity-bound cleanup.
+- The follow-up admits the PascalCase forms into the same personal-identifier
+  policy without treating assignment-free explanatory prose as retained
+  personal data. The exact regression passes, the complete results/privacy
+  module passes 104/104 in 16.974 seconds, module-boundary and CI contracts pass
+  20/20 and 33/33, and Ruff 0.13.2 lint/format plus `git diff --check` are clean
+  for the two changed Python files.
+- Final signed head `4c0e0391` had clean exact-secret admission and a fresh
+  independently materialized Codex CLI review. Thread
+  `01a03dae-a848-7aa3-a3d5-45ded74fefc0` completed in 683.446 seconds with
+  `No findings.`; postvalidation remained exact, trusted controls were
+  byte-identical, and identity-bound cleanup completed. After push, the
+  automatic GitHub review gate correctly retained four unresolved historical
+  threads and eight combined thread/provider finding records. A direct
+  nine-case behavior probe proved the health-data and demographic examples
+  already rejected by all three privacy defenses, but confirmed that labeled
+  verification, SMS, and authenticator codes still bypassed them.
+- The gate follow-up adds only those controlled one-time authentication labels
+  to the existing credential field grammar. Space, snake, and camel forms now
+  produce credential findings, post-redaction, and final retained-value
+  rejection, while assignment-free parsing prose remains accepted. The exact
+  regression passes in 0.324 seconds; the complete results/privacy module
+  passes 104/104 in 14.358 seconds; module-boundary and CI contracts pass 20/20
+  and 33/33; and Ruff lint/format remain clean.
+- A fresh independently materialized Codex CLI review of signed head
+  `87963f5d` completed in 405.866 seconds and found one P1: the new compact
+  authentication-code labels were covered without a business prefix, but the
+  existing lower/Pascal suffix tables did not recognize forms such as
+  `userVerificationCode` and `AccountAuthenticatorCode`. Postvalidation and
+  trusted-control comparison remained exact, and task-root cleanup completed.
+- The follow-up extends both compact suffix tables with verification, SMS, and
+  authenticator code variants, including `Sms` and `SMS` capitalization. Eight
+  prefixed positive cases now share the full credential scan, redaction,
+  extractor, and retained-rejection assertions, while three prefixed
+  assignment-free prose cases remain accepted. The exact regression passes in
+  0.462 seconds; results/privacy passes 104/104 in 14.642 seconds; and the
+  module-boundary and CI contracts pass 20/20 and 33/33.
+- A fresh independently materialized Codex CLI review of signed head
+  `abb541b1` completed in 1,076.103 seconds. Thread
+  `01a03dce-7060-7183-bd21-3db791b35978` found two P1 privacy gaps: a labeled
+  credential wrapped in an array or object was only redacted through its first
+  unquoted fragment, and plural authentication-code field names were outside
+  the closed field grammar. Equal postvalidation receipts bind 147 commits,
+  146 parent edges, graph digest
+  `bb96850bc96b1d838b52d554677e7dff7d506e7e312fb4ec972d5b31435ddd75`,
+  and the unchanged local-config digest. The 30-file trusted control inventory
+  remained byte-identical, and identity-bound task-root cleanup completed.
+- Credential redaction now merges deterministic spans and extends only an
+  already recognized assignment, CLI, or narrative field through a balanced
+  structured container. A code-collection field additionally consumes bounded
+  comma-separated atoms without extending ordinary singular fields. Container
+  scalar values from all three field forms participate in source-overlap, so a
+  copied short code remains protected after its label disappears. Plural plain,
+  snake, lower-camel, and Pascal authentication-code fields share the same
+  closed grammar; assignment-free parsing prose remains accepted. The exact
+  regressions pass 2/2, results/episodes passes 105/105, result-contract audit
+  passes 25/25, module boundaries pass 20/20 with exact branch inventory
+  10,077, and CI contracts pass 33/33 under the required isolated runtime. One
+  CI-contract invocation without `-S` and one ambient official-validator
+  invocation without PyYAML are invocation-invalid and non-counting; their
+  corrected contract-shaped runs pass.
+- Final74 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `0bfd6709d8a2d690253e8c1214fb170db8a7767506421fc26a41018cd9bef541`.
+  Shards 0 through 3 pass 471/471 in 2,251.470 seconds, 531/531 in
+  2,015.829 seconds, 535/535 in 1,889.899 seconds, and 444/444 in
+  1,957.822 seconds, for exact aggregate coverage of 1,981/1,981 without
+  skips. Each shard used an independent process group with a 3,600-second hard
+  deadline and a 1 MiB retained-log ceiling; all four logs total 477,691
+  bytes. The independent Darwin security inventory passes 16/16 in 79.367
+  seconds. Repository-wide Ruff 0.13.2 lint, affected-file formatting, both
+  workflows under `actionlint` 1.7.12, Skill 6/6, Bootstrap 12/12, the
+  generated bootstrap manifest, official OpenAI Skill validator,
+  project-journal validator, source/test bytecode inventory, and
+  `git diff --check` are clean on the same tree.
+- Signed head `8f557aff` had clean exact-secret admission. The first bounded
+  Codex CLI launch was a zero-start sandbox transport failure, and the native
+  reviewer role was unavailable before an agent existed. A host-level
+  clean-context Codex CLI reviewer then inspected `a3836660..8f557aff` in an
+  independently materialized workspace. Thread
+  `01a03e1e-79b2-7703-a4f9-42961e9de668` completed in 613.050 seconds with
+  three findings: `authentication_code(s)` remained outside the credential
+  grammar, tuple/YAML/`and` code collections could be only partially redacted,
+  and credential-object keys could enter source-overlap. Its event stream also
+  shows a read of host-global skill documentation outside the prompt's exact
+  workspace and trusted-bundle allowance, so the artifact is retained as a
+  conservative findings producer but is not the final local Codex processor.
+  Postvalidation, trusted-control comparison, and identity-bound task-root
+  cleanup all completed exactly.
+- The follow-up adds separated and compact authentication-code fields, extends
+  code collections through balanced tuples plus comma, `and`, and normalized
+  YAML-list separators, and retains only credential-object values for
+  source-overlap. Personal and health containers keep their existing
+  value-as-key policy, so an allergen represented as an object key remains
+  protected while credential structure such as `primary` and `backup` does
+  not become source prose. Focused finding and health-policy regressions pass
+  2/2; results/episodes passes 105/105; result-contract and module-boundary
+  suites pass 45/45 with exact branch inventory 10,080; CI contracts pass
+  33/33 under owner-controlled Python 3.13 with `-I -B -S`; and Ruff 0.13.2
+  lint/format plus `git diff --check` are clean.
+- One broad 1,173-test invocation without isolated mode produced 95 identical
+  pre-test publication setup errors and is non-counting. A direct isolated
+  test-file retry could not import the repository package and is also
+  invocation-invalid. The canonical inventory/shard runner supplies the
+  replacement evidence under the required isolated bootstrap; neither invalid
+  invocation is treated as a product failure or a passed gate.
+- Final76 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `ca826ca92c6cd10b9ecd7c46f3270373d1aeceacca45a5448ba92fa9d70d1898`.
+  Shards 0 through 3 pass 471/471 in 2,413.488 seconds, 531/531 in
+  2,187.165 seconds, 535/535 in 2,063.608 seconds, and 444/444 in
+  2,136.704 seconds, for exact aggregate coverage of 1,981/1,981. Each shard
+  used an independent process group with a 3,600-second hard deadline, a
+  10-second termination grace, and a 1 MiB retained-log ceiling. The
+  independent Darwin security inventory passes 16/16 in 97.438 seconds.
+- On the same final implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint` 1.7.12, Skill
+  contracts 6/6, Bootstrap contracts 12/12, the generated bootstrap manifest,
+  the official OpenAI Skill validator, project-journal validation, source/test
+  bytecode inventories, and `git diff --check` are clean.
+- Signed head `b9eee7c5` had clean exact-secret admission. The native reviewer
+  role was unavailable before an agent existed, so the required local Codex
+  processor used Codex CLI 0.149.1 with a zero-context, read-only, ephemeral
+  launch in a newly materialized and validated workspace. The exact
+  `a3836660..b9eee7c5` receipts bind 149 commits, 148 parent edges, graph digest
+  `9f8d4bdb184542750c4f49fdfdd63f8fe5e48ddba667b0dd28334926d93c4d56`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The reviewer completed in 426.902 seconds and found three P1 privacy gaps:
+  narrative tuple collections and plural `are`/`were` connectors were outside
+  the closed grammar, a serial comma before `and` could leave the last code
+  unredacted, and narrative non-container collections contributed only one code
+  to source-overlap protection. Postvalidation was exact, the 53-command event
+  audit found no mutating, network, parent-traversal, or outside-allowance read,
+  the trusted controls remained byte-identical, and identity-bound task-root
+  cleanup completed.
+- Credential parsing now shares one closed narrative-connector grammar across
+  compact and ordinary field forms, recognizes balanced tuple values, and
+  prioritizes the serial-comma separator before the plain-comma alternative.
+  One collection-value iterator is shared by redaction and source-overlap, while
+  structured containers remain owned by the existing container parser. Direct,
+  post-redaction, retained-result, source-overlap, and safe-prose regressions
+  cover every reported case. Results/episodes passes 105/105 in 15.485 seconds,
+  result-contract audit passes 25/25 in 5.148 seconds, and module boundaries
+  pass 20/20 in 2.583 seconds with exact branch inventory 10,082.
+- Final78 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `f3762a68cfbbe8b9ecfe29ef19363ad603791c666dccce19fc38d4e448e3a273`.
+  Shards 0 through 3 pass 471/471 in 2,080.121 seconds, 531/531 in
+  1,824.614 seconds, 535/535 in 1,720.820 seconds, and 444/444 in
+  1,779.523 seconds, for exact aggregate coverage of 1,981/1,981. Each shard
+  used an independent process group with a 3,600-second hard deadline, a
+  10-second termination grace, and a 1 MiB retained-log ceiling; all four logs
+  total 477,691 bytes. The independent Darwin security inventory passes 16/16
+  in 71.547 seconds.
+- On the Final78 implementation tree, repository-wide Ruff 0.13.2 lint,
+  affected-file formatting, both workflows under `actionlint` 1.7.12, Skill
+  contracts 6/6, Bootstrap contracts 12/12, CI contracts 33/33, the generated
+  bootstrap manifest, official OpenAI Skill validator, project-journal
+  validator, tracked and source/test bytecode inventories, and `git diff
+  --check` are clean.
+- Signed head `972fd23a` had clean exact-secret admission. The first Codex CLI
+  launch was a zero-model-start Desktop-sandbox app-server initialization
+  failure and is non-counting. The host-level retry completed in 625.926
+  seconds against an independently materialized and validated workspace for
+  exact range `a3836660..972fd23a`. Matching receipts bind 150 commits, 149
+  parent edges, graph digest
+  `db4884ccf34a54d188ef13a203b68606e63e4251c031d1fd3237b0c5dacc161d`,
+  and the unchanged local-config digest. The 65-command event audit found no
+  mutating, network, test-execution, outside-path, or Git-prefix violation.
+  Postvalidation and the 30-file trusted-control digest were exact, and
+  identity-bound task-root cleanup completed.
+- The Final79 reviewer found two P1 privacy gaps. Narrative credential
+  collections using `include` or `contain` variants were outside the closed
+  connector grammar, so copied short codes could evade source-overlap. Also,
+  sentence punctuation on the final unquoted collection item entered the exact
+  short-value index, allowing a result that copied the bare code to miss it.
+  The closed connector grammar now includes bounded `include` and `contain`
+  forms. Collection extraction retains the exact normalized value and also
+  emits a nonempty sentence-punctuation-stripped privacy alias, preserving
+  punctuated credential protection while covering ordinary prose punctuation.
+  Positive and safe-prose connector cases plus bare-final-code overlap cases
+  cover both findings. Results/episodes passes 105/105 in 15.263 seconds,
+  result-contract audit passes 25/25 in 4.879 seconds, and module boundaries
+  pass 20/20 in 2.547 seconds with exact branch inventory 10,084.
+- Final80 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `84187542f219262c628422cf8759d7b7d731bad66b16c6791b87b90d45b22d3c`.
+  Shards 0 through 3 pass 471/471 in 2,138.100 seconds, 531/531 in
+  1,894.883 seconds, 535/535 in 1,788.740 seconds, and 444/444 in
+  1,840.309 seconds, for exact aggregate coverage of 1,981/1,981. Each shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The host wall clock
+  stepped during this run, so the shell status files' `date +%s` elapsed fields
+  are non-comparable and are not used as timing evidence. The independent
+  Darwin security inventory passes 16/16 in 71.412 seconds.
+- On the Final80 tree, repository-wide Ruff 0.13.2 lint, affected-file
+  formatting, both workflows under `actionlint` 1.7.12, Skill contracts 6/6,
+  Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, and the official OpenAI Skill validator are clean.
+- Final81 used a fresh Codex CLI reviewer with no inherited conversation in an
+  independently materialized and validated workspace for exact range
+  `a3836660..df7b7a44`. Matching receipts bind 151 commits, 150 parent edges,
+  graph digest
+  `2a27fb280860c63a98159f9abde0840a6a1d47f66de54dadfd967af2660503d2`,
+  and the unchanged local-config digest. The reviewer completed in 638.424
+  seconds with one P1 finding. Its 45-command event audit found no mutating,
+  network, test-execution, outside-path, or Git-prefix violation;
+  postvalidation and trusted-control revalidation were exact, and
+  identity-bound task-root cleanup completed.
+- The Final81 finding showed that a final quoted short credential followed by
+  sentence punctuation, such as `"654321".`, retained a trailing quote in the
+  privacy alias. A result that copied the bare six-digit value could therefore
+  evade source-overlap detection. Collection extraction now derives the alias
+  through the same bounded personal-value normalizer used elsewhere while
+  preserving the exact normalized form. Direct redaction and source-overlap
+  regressions cover single- and double-quoted final codes plus a safe quoted
+  prose value. Results/episodes passes 105/105 in 17.211 seconds,
+  result-contract audit passes 25/25 in 4.893 seconds, and module boundaries
+  pass 20/20 in 2.670 seconds with exact branch inventory 10,084.
+- Final82 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `d18bd29ef05bf378cfff386f55d838a661c04bfef882a28b693e788ff6444eac`.
+  Shards 0 through 3 pass 471/471 in 1,911.661 seconds, 531/531 in
+  1,685.879 seconds, 535/535 in 1,584.894 seconds, and 444/444 in
+  1,635.876 seconds, for exact aggregate coverage of 1,981/1,981. Every shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The independent
+  Darwin security inventory passes 16/16 in 67.976 seconds.
+- On the Final82 tree, repository-wide Ruff 0.13.2 lint, affected-file
+  formatting, both workflows under `actionlint`, Skill contracts 6/6,
+  Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean. A repository-wide Ruff
+  formatting probe still identifies four pre-existing files outside this
+  change as needing mechanical formatting; they remain outside this focused
+  privacy fix.
+- Final83 used a new zero-context Codex CLI reviewer in an independently
+  materialized and validated workspace for exact range
+  `a3836660..fb69c802`. Matching receipts bind 152 commits, 151 parent edges,
+  graph digest
+  `fa23abdfb359a0054f4e37007f22a35914f8107a84e5cc0eda916b0881ec077c`,
+  and the unchanged local-config digest. The reviewer completed in 764.509
+  seconds with one P1 finding. Its 137-command event audit found no mutating,
+  network, test-execution, outside-path, or Git-prefix violation;
+  postvalidation and the 30-file trusted-control digest were exact, and
+  identity-bound task-root cleanup completed.
+- The Final83 finding showed that plural credential-code collections separated
+  only by whitespace, semicolons, or unmarked newlines extended the redaction
+  span only through the first item. A copied later code could therefore evade
+  both direct redaction and short-value source-overlap. The collection parser
+  now distinguishes explicit separators from unmarked separators and accepts
+  an unmarked continuation only after a closed compact-code shape proof. This
+  covers numeric and uppercase-bearing code atoms while leaving ordinary
+  lowercase prose suffixes such as `during login` outside the credential span.
+  Newline separators are selected before space-only separators so trailing
+  horizontal whitespace cannot truncate an otherwise valid multiline
+  collection.
+  Direct redaction, source-overlap, and prose-preservation regressions cover all
+  three separator forms plus that ordering boundary. Results/episodes passes
+  105/105 in 15.516 seconds, result-contract audit passes 25/25 in 5.023
+  seconds, and module boundaries pass 20/20 in 2.975 seconds with exact branch
+  inventory 10,086.
+- Final84 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `6abd0c84fd55dd71aed160190c766a6ecf27f97f96c28e62ef0b55470ff86efa`.
+  Shards 0 through 3 pass 471/471 in 2,140.101 seconds, 531/531 in
+  1,888.599 seconds, 535/535 in 1,780.566 seconds, and 444/444 in
+  1,840.061 seconds, for exact aggregate coverage of 1,981/1,981. Every shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The independent
+  Darwin security inventory passes 16/16 in 78.269 seconds.
+- On the Final84 tree, repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint`, Skill contracts 6/6,
+  Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean.
+- A pre-commit diff audit after Final84 found that the space-only unmarked
+  separator alternative could consume horizontal whitespace before a newline
+  and prevent the newline alternative from matching. The alternatives were
+  reordered and an exact trailing-space multiline regression was added.
+  Final84 remains valid for its preceding tree but is superseded as final-tree
+  evidence by Final85.
+- Final85 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `985c006de0c43c83b498418f9d7a31af0716f2cbc9826974e11028f402d8f24a`.
+  Shards 0 through 3 pass 471/471 in 2,053.508 seconds, 531/531 in
+  1,795.486 seconds, 535/535 in 1,701.076 seconds, and 444/444 in
+  1,737.633 seconds, for exact aggregate coverage of 1,981/1,981. Every shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The independent
+  Darwin security inventory passes 16/16 in 77.880 seconds.
+- On the Final85 tree, repository-wide Ruff 0.13.2 lint, changed-file
+  formatting, both workflows under `actionlint`, Skill contracts 6/6,
+  Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean.
+- Final86 used a fresh zero-context Codex CLI reviewer in a newly materialized
+  and validated workspace for exact range `a3836660..694d1899`. Matching
+  receipts bind 153 commits, 152 parent edges, graph digest
+  `ac2272154f76a4c90041bc5696ca69b2d0f381988214448bd8f30661b7380b8f`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  The Codex CLI completed in 460.960 seconds with one P1 finding. Its
+  82-command event audit records only successful read-only commands and no
+  mutating, network, test-execution, outside-path, or Git-prefix violation;
+  postvalidation and trusted-control revalidation were exact, and
+  identity-bound task-root cleanup completed.
+- The Final86 finding showed that the compact-code proof for unmarked
+  credential collections required a digit or uppercase character. An
+  all-lowercase collection such as `recovery_codes: abcd-efgh ijkl-mnop`
+  therefore protected only the first item; a retained result could copy the
+  second item without entering the short-value overlap index. The closed
+  compact-code grammar now accepts bounded ASCII credential atoms regardless
+  of letter case while explicitly excluding the existing safe credential
+  values, narrative continuation words, connectors, and `then`. Direct
+  redaction and copied-source regressions cover lowercase hyphenated and plain
+  alphabetic collections, while safe prose such as `during login` and `before
+  retry` remains outside the credential span. Results/episodes passes 105/105
+  in 16.607 seconds, result-contract audit passes 25/25 in 5.168 seconds, and
+  module boundaries pass 20/20 in 2.851 seconds with exact branch inventory
+  10,086. Final85 remains valid for its preceding tree but is superseded as
+  final-tree evidence by Final87.
+- Final87 freezes 1,981 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `ec6070406d207869c778a3927c851a8f70051d5a02dcb5adfe0f447511b7b07c`.
+  Shards 0 through 3 pass 471/471 in 2,014.276 seconds, 531/531 in
+  1,807.388 seconds, 535/535 in 1,700.397 seconds, and 444/444 in
+  1,749.781 seconds, for exact aggregate coverage of 1,981/1,981. Every shard
+  returned status zero under its independent process-group deadline and 1 MiB
+  retained-log ceiling; all four logs total 477,691 bytes. The independent
+  Darwin security inventory passes 16/16 in 68.053 seconds.
+- On the Final87 implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint`, Skill contracts
+  6/6, Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean. One package-style
+  `unittest` invocation was invalid because isolated mode intentionally did
+  not expose `tests` as an importable package; the corrected file-based
+  contract entrypoints are the counted 6/6, 12/12, and 33/33 results.
+- Final89 used trusted review controls from private release
+  `284f0f54daba1e9e17e922e4fa87aa6b586e37a4`, control digest
+  `d12328d7a2da38c7c2edc58287a194faedbc4a37587ca047dbd48db34ac0a5b9`,
+  and guard digest
+  `2c8432731619e40cfae28a59e27d97be9cf58d48672d33a8b675141436a62cf8`.
+  Matching materialization and validation receipts for exact range
+  `a3836660..46d7e3a7` bind 154 commits, 153 parent edges, graph digest
+  `de4f1b48c181f3e213360b5831dd49f3965359ca25fbee6a7260727d5c3d3dfb`,
+  and local-config digest
+  `07990c1d83a78ea34a87e3f51883e3164c3098b21770082207e00a3a898ab24f`.
+  A zero-context Codex CLI reviewer completed in 586.263 seconds and reported
+  three actionable findings: generic plural credential labels could retain a
+  short value, complete cleanup replay compared derived directory size/link
+  metadata, and private-output identity compared benign file flags. The
+  55-command event audit contained two automated alerts for read-only `rg`
+  queries whose search patterns named mutating syscalls; manual adjudication
+  confirmed that neither command mutated state. Postvalidation, trusted-control
+  revalidation, and identity-bound task-root cleanup all completed exactly.
+- Final90 fixes those findings without widening unrelated policy. Plain
+  `credentials`, `passwords`, `tokens`, and `secrets` labels now share the
+  retained credential detector, redactor, and short source-overlap index while
+  existing safe camel/PascalCase concepts such as `CancellationToken` and
+  `DesignToken` remain allowed. Complete cleanup replay now ignores only
+  directory `size` and `link_count`, while exact path ordering, object type and
+  identity, content commitment, ownership, mode, ACL, and access-policy flags
+  remain bound. Private-output identity masks benign file flags and continues
+  to bind immutable, append-only, no-unlink, and restricted authority flags.
+  Focused results pass 106/106, result-contract/identity/module-boundary tests
+  pass 102/102, and the v1 compatibility module passes 930/930.
+- Final90 freezes 1,984 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `0c64c8b97a05b56ab34eb0135a077ea4125036ecaf3860f27eb7102cb5590470`.
+  Shards 0 through 3 pass 471/471 in 1,903.818 seconds, 533/533 in
+  1,669.407 seconds, 535/535 in 1,567.256 seconds, and 445/445 in
+  1,625.480 seconds, for exact aggregate coverage of 1,984/1,984. The
+  independent Darwin security inventory passes 16/16 in 69.624 seconds.
+- On the Final90 implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint`, Skill contracts
+  6/6, Bootstrap contracts 12/12, CI contracts 33/33, the generated bootstrap
+  manifest, the official OpenAI Skill validator under Python 3.13.0, tracked
+  and source/test-tree bytecode exclusion, and `git diff --check` are clean.
+  A separate repository-wide format probe remains non-counting because it
+  identified four pre-existing unformatted files outside this change.
+- Final91 reviewed signed head `99f42170ebc8fa63aa9c3b00bb825c1ca1010840`
+  with the same trusted release, control digest, guard digest, and Python
+  3.13.12 interpreter. Matching materialization and validation receipts for
+  exact range `a3836660..99f42170` bind 155 commits, 154 parent edges, graph
+  digest
+  `168c16baa351f4053b8c5f66aa229894851ddd1309a1f423db100377ec8d17d6`,
+  and the unchanged local-config digest. The first Codex CLI invocation failed
+  before model start because the outer Desktop sandbox denied in-process
+  app-server initialization; its zero-byte event stream is retained as a
+  non-counting launch failure. The authorized host-level retry used the same
+  validated workspace and completed in 761.668 seconds with one P1 finding.
+  Its 139 commands contained no mutation, network, test execution,
+  outside-path, or Git-prefix violation. Six read-only commands returned
+  nonzero because of one malformed quoting attempt and five absent-match or
+  absent-file queries. Postvalidation and trusted-control revalidation were
+  exact, and identity-bound task-root cleanup completed.
+- The Final91 finding showed that retained-export construction declared
+  `coverage_complete=true` whenever structured run gaps and explicit source
+  gaps were absent, even when an accepted extractor result produced a
+  nonzero meaningfulness gap. Reporting independently recomputed that state as
+  incomplete and rejected the contradictory inventory, preventing a legal
+  uncertainty-preserving run from exporting. Final92 includes
+  `meaningfulness_gap_count == 0` in the orchestrator's completion predicate.
+  A new end-to-end regression drives an `uncertain` extractor result through
+  orchestration and synthesis, then proves the retained run exports with one
+  explicit meaningfulness gap and incomplete coverage. The exact regression
+  passes 1/1 in 8.300 seconds, the full orchestrator module passes 150/150 in
+  641.088 seconds, and the full retained export/reporting module passes 86/86
+  in 247.205 seconds. One package-style isolated-mode invocation discovered no
+  target tests and remains non-counting; the file-based invocations above are
+  authoritative.
+- Final92 freezes 1,985 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `71418a4deec2dae715bacbe963bad0829f31a20a8ac951b9fb6780f69fcfc84f`.
+  Four bounded parallel shards pass 472/472 in 1,881.500 seconds, 533/533 in
+  1,647.280 seconds, 535/535 in 1,551.606 seconds, and 445/445 in 1,601.012
+  seconds, for exact aggregate coverage of 1,985/1,985. Every shard returned
+  zero under a 45-minute process-group deadline and 1 MiB retained-log ceiling;
+  aggregate supervisor wall time was 1,882.899 seconds. The independent Darwin
+  security inventory passes 16/16 in 69.131 seconds. An earlier invocation
+  supplied the unsupported `--help` argument and actually started the runner;
+  its plain-pipe session handle was not retained, so that run was allowed to
+  finish without interference and remains explicitly non-counting. The later
+  pollable TTY run is the authoritative Darwin result.
+- On the Final92 implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under `actionlint`, project-journal
+  validation, and `git diff --check` are clean. The full test inventory above
+  also includes the Skill, Bootstrap, CI, generated-manifest, module-boundary,
+  and retained-output contract suites on this exact code and test tree.
+- Final93 reviewed signed head `cc3a104313dbefd438e45d43640017c7fbfb73f4`
+  with a new zero-context Codex CLI process in an independently materialized,
+  validated, and read-only workspace. The reviewer completed in 860.947
+  seconds with `No findings.`; postvalidation, trusted-control revalidation,
+  and identity-bound task-root cleanup were exact.
+- The current-head GitHub review gate then exposed ten unresolved historical
+  provider threads. Seven findings were already covered by the current source
+  and regressions; the remaining three identified real gaps in raw-shard
+  destination isolation, retained function-result detection, and rollout
+  metadata accounting.
+- Raw shard and job-manifest writes now open the run directory through the
+  shared source-separation authority, retain the directory descriptor across
+  every descriptor-relative create/read/write, and revalidate the bound object
+  against active and archived source roots before and after each write. Both
+  eager and ordered entrypoints reject a source-tree destination before any
+  directory creation.
+- The shared retained privacy detector now classifies and redacts exact
+  `function output`, `function response`, and `function result` payload labels.
+  The same cases fail retained validation while assignment-free parser prose
+  remains allowed.
+- Session-meta scanning now distinguishes active appendable rollouts that have
+  not yet published metadata from immutable or malformed rollouts. A matching
+  `session_meta` without a valid `payload.id`, or an immutable rollout without
+  any session metadata, raises an explicit source error instead of becoming a
+  successful empty activity scan. The first full compatibility run exposed an
+  over-broad rejection of active no-metadata rollouts and is non-counting; the
+  corrected full module passes 931/931 in 203.298 seconds.
+- On the corrected implementation tree, raw-sharding tests pass 32/32,
+  retained result/privacy tests pass 106/106, module-boundary tests pass 20/20
+  with exact branch inventory 10,095, and isolated CI contracts pass 33/33.
+  Ruff lint, changed-file formatting, both workflows under bounded
+  `actionlint`, and `git diff --check` are clean. A repository-wide formatting
+  probe still reports the same four untouched inherited files and remains
+  outside this focused change.
+- Final94 freezes 1,987 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `2d3c7298afbeba4d7a49f3b1a13793b58788bf74eb48fb7b82e23a61834057ce`.
+  Shards 0 through 3 pass 473/473 in 1,897.518 seconds, 533/533 in
+  1,670.509 seconds, 536/536 in 1,573.966 seconds, and 445/445 in
+  1,623.966 seconds, for exact aggregate coverage of 1,987/1,987. Every shard
+  returned zero under the 45-minute process-group deadline and 1 MiB retained
+  output ceiling; aggregate supervisor wall time was 1,898.930 seconds. The
+  independent Darwin security inventory passes 16/16 in 66.944 seconds.
+- On the Final94 implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under bounded `actionlint`, the
+  official OpenAI Skill validator through the offline Python 3.13 PyYAML
+  environment, project-journal validation, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean. A direct isolated
+  official-validator attempt without PyYAML failed at import time and is
+  non-counting; the offline dependency-bound invocation is authoritative.
+
+## Follow-up Work
+
+1. Register `Joey-Tools/codex-session-retrospective` in `codex-workspace` after
+   the standalone source PR merges.
+2. Extend and release the canonical `remote-host-context` transport with the
+   exact `session-shards` and `source-transport` declarations before enabling
+   remote retrospective runs. That integration belongs to its owning
+   repository and is not implemented by this standalone source PR.
+3. Design and review replacement private sync and installed-release
+   integration as a separate workstream.
+
+## Acceptance Criteria
+
+- Python 3.13 focused and full repository tests pass on the final committed
+  tree.
+- Source/session classification is receipt-bound and cannot silently discard
+  the exact Session target.
+- The skill and CLI contracts use the standalone root layout.
+- Exact-secret admission, the required local Codex processor, hosted CI, and
+  current-head GitHub Codex evidence pass for the final PR head.
+- The signed source PR remains independent of replacement private sync work.

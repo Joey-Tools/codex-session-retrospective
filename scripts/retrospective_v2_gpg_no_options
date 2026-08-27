@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+: "${CODEX_SESSION_RETROSPECTIVE_GPG_PROGRAM:?}"
+exec "$CODEX_SESSION_RETROSPECTIVE_GPG_PROGRAM" --no-options "$@"

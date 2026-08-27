@@ -67,8 +67,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Gate on Codex review
-        # v1 release line
-        uses: JoeyTeng/codex-review-gate-action@v1
+        # Audited v1 release identity from the provider-evidence authority.
+        uses: JoeyTeng/codex-review-gate-action@2a7f9d8cd98f90cb56dc1540bf54d9dc7484afc6
         with:
           github-token: ${{ github.token }}
           pull-request: ${{ github.event.pull_request.number || github.event.issue.number || github.event.inputs.pull_request }}
