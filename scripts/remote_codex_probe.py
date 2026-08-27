@@ -1753,7 +1753,10 @@ def _parse_session_meta_snapshot(
     require_record_date_match: bool,
     rollout_start: dt.datetime | None,
     rollout_end: dt.datetime | None,
+    invalid_reasons: list[str] | None = None,
 ) -> tuple[dt.date | None, str, str, dt.datetime | None] | None:
+    saw_session_meta = False
+    saw_matching_session_meta = False
     for line in _bounded_session_meta_lines(
         scan_handle,
         MAX_SESSION_META_SCAN_BYTES,
@@ -1766,6 +1769,7 @@ def _parse_session_meta_snapshot(
             continue
         if obj.get("type") != "session_meta":
             continue
+        saw_session_meta = True
         timestamp = _session_meta_record_timestamp(obj)
         if require_record_date_match:
             if date_value is None or not _session_meta_record_matches_window(
@@ -1787,6 +1791,7 @@ def _parse_session_meta_snapshot(
                 continue
             if rollout_end is not None and timestamp >= rollout_end:
                 continue
+        saw_matching_session_meta = True
         payload = obj.get("payload", {})
         if not isinstance(payload, dict):
             continue
@@ -1801,6 +1806,11 @@ def _parse_session_meta_snapshot(
             cwd,
             timestamp,
         )
+    if invalid_reasons is not None:
+        if saw_matching_session_meta:
+            invalid_reasons.append("session-meta record is missing a valid payload.id")
+        elif not saw_session_meta:
+            invalid_reasons.append("rollout has no session-meta record")
     return None
 
 
@@ -1849,6 +1859,7 @@ def _session_meta_from_rollout(
         ) from exc
     try:
         with handle:
+            invalid_reasons: list[str] = []
             if expected_identity is not None:
                 if allow_append:
                     identity = handle.assert_append_only_identity(
@@ -1879,6 +1890,7 @@ def _session_meta_from_rollout(
                 require_record_date_match=require_record_date_match,
                 rollout_start=rollout_start,
                 rollout_end=rollout_end,
+                invalid_reasons=invalid_reasons,
             )
             if expected_identity is None:
                 handle.assert_identity(identity, phase="after session-meta scan")
@@ -1902,6 +1914,7 @@ def _session_meta_from_rollout(
                 ):
                     raise ValueError("rollout identity changed after session-meta scan")
                 if result is None and not same_verified_snapshot:
+                    invalid_reasons.clear()
                     result = _parse_session_meta_snapshot(
                         _session_meta_snapshot_reader(
                             refreshed_snapshot_identity,
@@ -1911,6 +1924,7 @@ def _session_meta_from_rollout(
                         require_record_date_match=require_record_date_match,
                         rollout_start=rollout_start,
                         rollout_end=rollout_end,
+                        invalid_reasons=invalid_reasons,
                     )
                     final_identity = handle.assert_append_only_identity(
                         refreshed_identity,
@@ -1935,6 +1949,12 @@ def _session_meta_from_rollout(
                     identity,
                     phase="after session-meta scan",
                 )
+            if result is None and expected_identity is not None and invalid_reasons:
+                reason = invalid_reasons[-1]
+                if not (
+                    allow_append and reason == "rollout has no session-meta record"
+                ):
+                    raise ValueError(reason)
             return result
     except OSError as error:
         raise SessionMetaRolloutError(

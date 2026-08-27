@@ -955,21 +955,21 @@ class ShardingTests(unittest.TestCase):
         record = candidate("unit-1", payload)
         self.assertIsNotNone(sharding._safe_io)
         assert sharding._safe_io is not None
-        real_ensure = sharding._safe_io.ensure_owner_only_directory
-        real_write = sharding._safe_io.atomic_write_bytes
+        real_open = sharding._temporary_paths.open_run_directory
+        real_write = sharding._safe_io.atomic_write_bytes_at
 
         with tempfile.TemporaryDirectory() as temporary:
             if not sharding._safe_io.secure_io_capability_issues():
                 run_directory = Path(temporary) / "raw-run"
                 with (
                     mock.patch.object(
-                        sharding._safe_io,
-                        "ensure_owner_only_directory",
-                        wraps=real_ensure,
-                    ) as ensure_mock,
+                        sharding._temporary_paths,
+                        "open_run_directory",
+                        wraps=real_open,
+                    ) as open_mock,
                     mock.patch.object(
                         sharding._safe_io,
-                        "atomic_write_bytes",
+                        "atomic_write_bytes_at",
                         wraps=real_write,
                     ) as write_mock,
                 ):
@@ -978,7 +978,7 @@ class ShardingTests(unittest.TestCase):
                         run_directory,
                     )
 
-                self.assertGreaterEqual(ensure_mock.call_count, 1)
+                self.assertEqual(open_mock.call_count, 1)
                 self.assertEqual(write_mock.call_count, len(result.shards) + 1)
                 self.assertEqual(stat.S_IMODE(run_directory.stat().st_mode), 0o700)
                 expected_files = {
@@ -1002,6 +1002,51 @@ class ShardingTests(unittest.TestCase):
                         fallback_directory,
                     )
             self.assertFalse(fallback_directory.exists())
+
+    def test_materialization_rejects_session_sources_before_creation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            codex_root = Path(temporary) / "account-home" / ".codex"
+            codex_root.mkdir(parents=True, mode=0o700)
+            for source_name in ("sessions", "archived_sessions"):
+                for entrypoint in ("eager", "ordered"):
+                    with self.subTest(
+                        source_name=source_name,
+                        entrypoint=entrypoint,
+                    ):
+                        source_root = codex_root / source_name
+                        run_directory = source_root / "2026" / "08" / "raw-shards"
+                        plan = sharding.plan_ordered_raw_shards(())
+
+                        def materialize() -> object:
+                            if entrypoint == "eager":
+                                return sharding.materialize_raw_shards(
+                                    (), run_directory
+                                )
+                            return sharding.materialize_ordered_raw_shards(
+                                (),
+                                run_directory,
+                                plan=plan,
+                            )
+
+                        with (
+                            mock.patch.object(
+                                sharding._temporary_paths,
+                                "local_codex_root",
+                                return_value=codex_root,
+                            ),
+                            mock.patch.object(
+                                sharding._safe_io,
+                                "open_owner_only_directory",
+                            ) as open_directory,
+                            self.assertRaisesRegex(
+                                sharding._safe_io.UnsafePathError,
+                                "overlaps a retrospective source root",
+                            ),
+                        ):
+                            materialize()
+
+                        open_directory.assert_not_called()
+                        self.assertFalse(source_root.exists())
 
     def test_streaming_plan_and_materialization_keep_raw_working_set_bounded(
         self,

@@ -3,7 +3,7 @@ id: 20260814-srstandalone01
 title: Standalone Session Retrospective Repository
 status: completed
 created: 2026-08-14
-updated: 2026-08-26
+updated: 2026-08-27
 branch: wip/standalone-retrospective
 pr: https://github.com/Joey-Tools/codex-session-retrospective/pull/1
 supersedes:
@@ -5651,6 +5651,56 @@ superseded_by:
   validation, and `git diff --check` are clean. The full test inventory above
   also includes the Skill, Bootstrap, CI, generated-manifest, module-boundary,
   and retained-output contract suites on this exact code and test tree.
+- Final93 reviewed signed head `cc3a104313dbefd438e45d43640017c7fbfb73f4`
+  with a new zero-context Codex CLI process in an independently materialized,
+  validated, and read-only workspace. The reviewer completed in 860.947
+  seconds with `No findings.`; postvalidation, trusted-control revalidation,
+  and identity-bound task-root cleanup were exact.
+- The current-head GitHub review gate then exposed ten unresolved historical
+  provider threads. Seven findings were already covered by the current source
+  and regressions; the remaining three identified real gaps in raw-shard
+  destination isolation, retained function-result detection, and rollout
+  metadata accounting.
+- Raw shard and job-manifest writes now open the run directory through the
+  shared source-separation authority, retain the directory descriptor across
+  every descriptor-relative create/read/write, and revalidate the bound object
+  against active and archived source roots before and after each write. Both
+  eager and ordered entrypoints reject a source-tree destination before any
+  directory creation.
+- The shared retained privacy detector now classifies and redacts exact
+  `function output`, `function response`, and `function result` payload labels.
+  The same cases fail retained validation while assignment-free parser prose
+  remains allowed.
+- Session-meta scanning now distinguishes active appendable rollouts that have
+  not yet published metadata from immutable or malformed rollouts. A matching
+  `session_meta` without a valid `payload.id`, or an immutable rollout without
+  any session metadata, raises an explicit source error instead of becoming a
+  successful empty activity scan. The first full compatibility run exposed an
+  over-broad rejection of active no-metadata rollouts and is non-counting; the
+  corrected full module passes 931/931 in 203.298 seconds.
+- On the corrected implementation tree, raw-sharding tests pass 32/32,
+  retained result/privacy tests pass 106/106, module-boundary tests pass 20/20
+  with exact branch inventory 10,095, and isolated CI contracts pass 33/33.
+  Ruff lint, changed-file formatting, both workflows under bounded
+  `actionlint`, and `git diff --check` are clean. A repository-wide formatting
+  probe still reports the same four untouched inherited files and remains
+  outside this focused change.
+- Final94 freezes 1,987 exact Python 3.13.12 test IDs from 22 authenticated
+  sources under manifest digest
+  `2d3c7298afbeba4d7a49f3b1a13793b58788bf74eb48fb7b82e23a61834057ce`.
+  Shards 0 through 3 pass 473/473 in 1,897.518 seconds, 533/533 in
+  1,670.509 seconds, 536/536 in 1,573.966 seconds, and 445/445 in
+  1,623.966 seconds, for exact aggregate coverage of 1,987/1,987. Every shard
+  returned zero under the 45-minute process-group deadline and 1 MiB retained
+  output ceiling; aggregate supervisor wall time was 1,898.930 seconds. The
+  independent Darwin security inventory passes 16/16 in 66.944 seconds.
+- On the Final94 implementation tree, repository-wide Ruff 0.13.2 lint,
+  changed-file formatting, both workflows under bounded `actionlint`, the
+  official OpenAI Skill validator through the offline Python 3.13 PyYAML
+  environment, project-journal validation, tracked and source/test-tree
+  bytecode exclusion, and `git diff --check` are clean. A direct isolated
+  official-validator attempt without PyYAML failed at import time and is
+  non-counting; the offline dependency-bound invocation is authoritative.
 
 ## Follow-up Work
 

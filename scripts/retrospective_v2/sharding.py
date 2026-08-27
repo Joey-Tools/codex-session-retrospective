@@ -1080,16 +1080,28 @@ def build_raw_shards(
     return result
 
 
-def _ensure_private_directory(path: Path) -> Path:
+def _write_bound_private_bytes(
+    run_path: Path,
+    run_descriptor: int,
+    file_name: str,
+    data: bytes,
+) -> None:
     if _safe_io is None:
         raise ShardingValidationError("secure raw shard I/O is unavailable")
-    return _safe_io.ensure_owner_only_directory(path)
-
-
-def _write_private_bytes(path: Path, data: bytes) -> Path:
-    if _safe_io is None:
-        raise ShardingValidationError("secure raw shard I/O is unavailable")
-    return _safe_io.atomic_write_bytes(path, data, create_parents=False)
+    _temporary_paths.require_bound_run_directory_outside_sources(
+        run_path,
+        run_descriptor,
+    )
+    _safe_io.atomic_write_bytes_at(
+        run_descriptor,
+        file_name,
+        data,
+        display_path=run_path / file_name,
+    )
+    _temporary_paths.require_bound_run_directory_outside_sources(
+        run_path,
+        run_descriptor,
+    )
 
 
 def materialize_raw_shards(
@@ -1101,35 +1113,70 @@ def materialize_raw_shards(
     """Build and persist deterministic owner-only raw shards and their manifest."""
 
     result = build_raw_shards(records, limits=limits)
-    run_path = _ensure_private_directory(Path(run_directory))
-    for artifact in result.shards:
-        _write_private_bytes(run_path / artifact.manifest.file_name, artifact.data)
-    _write_private_bytes(
-        run_path / RAW_SHARDS_MANIFEST_FILE,
-        result.canonical_manifest_bytes() + b"\n",
+    if _safe_io is None:
+        raise ShardingValidationError("secure raw shard I/O is unavailable")
+    run_path, run_descriptor = _temporary_paths.open_run_directory(
+        Path(run_directory),
+        create=True,
     )
+    primary: BaseException | None = None
+    try:
+        for artifact in result.shards:
+            _write_bound_private_bytes(
+                run_path,
+                run_descriptor,
+                artifact.manifest.file_name,
+                artifact.data,
+            )
+        _write_bound_private_bytes(
+            run_path,
+            run_descriptor,
+            RAW_SHARDS_MANIFEST_FILE,
+            result.canonical_manifest_bytes() + b"\n",
+        )
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        try:
+            os.close(run_descriptor)
+        except OSError as close_error:
+            if primary is None:
+                raise
+            primary.add_note(
+                f"raw shard run-directory close failed: {type(close_error).__name__}"
+            )
     return result
 
 
 def _create_or_validate_staged_file(
-    path: Path,
+    run_path: Path,
+    run_descriptor: int,
+    file_name: str,
     payload: bytes,
     materialized: MaterializedShardFile,
 ) -> None:
     if _safe_io is None:
         raise ShardingValidationError("secure raw shard I/O is unavailable")
-    _safe_io.ensure_owner_only_directory(path.parent)
+    display_path = run_path / file_name
+    _temporary_paths.require_bound_run_directory_outside_sources(
+        run_path,
+        run_descriptor,
+    )
     try:
         _safe_io.atomic_create_bytes_with_receipt(
-            path,
+            display_path,
             payload,
             create_parents=False,
             receipt_slot=materialized.slot,
+            bound_parent_descriptor=run_descriptor,
         )
     except FileExistsError:
         try:
-            existing = _safe_io.read_bounded_bytes(
-                path,
+            existing = _safe_io.read_bounded_bytes_at(
+                run_descriptor,
+                file_name,
+                display_path=display_path,
                 max_bytes=max(1, len(payload)),
                 require_owner_only=True,
             )
@@ -1139,9 +1186,12 @@ def _create_or_validate_staged_file(
             ) from error
         if existing != payload:
             raise ShardingValidationError("staged raw shard changed")
-        return
     except (OSError, _safe_io.UnsafePathError) as error:
         raise ShardingValidationError("staged raw shard cannot be created") from error
+    _temporary_paths.require_bound_run_directory_outside_sources(
+        run_path,
+        run_descriptor,
+    )
 
 
 def materialize_ordered_raw_shards(
@@ -1154,9 +1204,12 @@ def materialize_ordered_raw_shards(
     """Stream one exact plan to owner-only files with bounded working data."""
 
     selected_limits = limits or ShardLimits()
-    run_path = _ensure_private_directory(Path(run_directory))
     if _safe_io is None:
         raise ShardingValidationError("secure raw shard I/O is unavailable")
+    run_path, run_descriptor = _temporary_paths.open_run_directory(
+        Path(run_directory),
+        create=True,
+    )
     stage_receipt = RawShardStageReceipt(
         tuple(
             MaterializedShardFile(_safe_io.AtomicCreateReceiptSlot())
@@ -1174,12 +1227,15 @@ def materialize_ordered_raw_shards(
                 "raw shard materialization diverged from plan"
             )
         _create_or_validate_staged_file(
-            run_path / artifact.manifest.file_name,
+            run_path,
+            run_descriptor,
+            artifact.manifest.file_name,
             artifact.data,
             stage_receipt.files[observed_ordinal],
         )
         observed_ordinal += 1
 
+    primary: BaseException | None = None
     try:
         observed = _stream_ordered_raw_shards(
             records,
@@ -1195,11 +1251,14 @@ def materialize_ordered_raw_shards(
                 "raw shard materialization manifest changed after planning"
             )
         _create_or_validate_staged_file(
-            run_path / RAW_SHARDS_MANIFEST_FILE,
+            run_path,
+            run_descriptor,
+            RAW_SHARDS_MANIFEST_FILE,
             plan.canonical_manifest_bytes() + b"\n",
             stage_receipt.files[-1],
         )
     except BaseException as error:
+        primary = error
         try:
             rollback_ordered_raw_shards(stage_receipt)
         except BaseException as rollback_error:
@@ -1213,6 +1272,16 @@ def materialize_ordered_raw_shards(
                     f"{type(rollback_error).__name__}"
                 )
         raise
+    finally:
+        try:
+            os.close(run_descriptor)
+        except OSError as close_error:
+            if primary is None:
+                raise
+            primary.add_note(
+                "ordered raw shard run-directory close failed: "
+                f"{type(close_error).__name__}"
+            )
     return stage_receipt
 
 
@@ -1391,6 +1460,31 @@ make_job_manifest = build_job_manifest
 def write_job_manifest(manifest: JobManifest, path: str | os.PathLike[str]) -> Path:
     if not isinstance(manifest, JobManifest):
         raise ShardingValidationError("manifest must be a JobManifest")
+    if _safe_io is None:
+        raise ShardingValidationError("secure raw shard I/O is unavailable")
     target = Path(path)
-    _ensure_private_directory(target.parent)
-    return _write_private_bytes(target, manifest.canonical_bytes() + b"\n")
+    run_path, run_descriptor = _temporary_paths.open_run_directory(
+        target.parent,
+        create=True,
+    )
+    primary: BaseException | None = None
+    try:
+        _write_bound_private_bytes(
+            run_path,
+            run_descriptor,
+            target.name,
+            manifest.canonical_bytes() + b"\n",
+        )
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        try:
+            os.close(run_descriptor)
+        except OSError as close_error:
+            if primary is None:
+                raise
+            primary.add_note(
+                f"job manifest run-directory close failed: {type(close_error).__name__}"
+            )
+    return run_path / target.name

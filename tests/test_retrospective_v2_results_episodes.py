@@ -2324,6 +2324,21 @@ class ResultValidationTests(unittest.TestCase):
                 "tool_output",
                 "[REDACTED_TOOL_OUTPUT]",
             ),
+            (
+                "Function output: proprietary payload.",
+                "tool_output",
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
+            (
+                "Function response: proprietary payload.",
+                "tool_output",
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
+            (
+                "Function result: proprietary payload.",
+                "tool_output",
+                "[REDACTED_TOOL_OUTPUT]",
+            ),
         ):
             with self.subTest(source=source):
                 self.assertIn(
@@ -2334,6 +2349,8 @@ class ResultValidationTests(unittest.TestCase):
                     replacement, result_validation_module.post_redact(source)
                 )
                 self.assertEqual((), scan_for_leaks(replacement))
+                with self.assertRaises(reporting_module.RetainedPrivacyError):
+                    reporting_module.validate_retained_value({"cause": source})
 
         for safe_prose in (
             "Improve user input handling.",
@@ -2343,6 +2360,9 @@ class ResultValidationTests(unittest.TestCase):
             "The transcript validator was too strict.",
             "Improve process output handling.",
             "The execution output parser needs a regression test.",
+            "Improve function output handling.",
+            "Function response parsing needs a regression test.",
+            "Function result handling is documented.",
         ):
             with self.subTest(safe_prose=safe_prose):
                 self.assertEqual((), scan_for_leaks(safe_prose))

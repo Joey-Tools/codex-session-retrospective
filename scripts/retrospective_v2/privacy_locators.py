@@ -1607,7 +1607,7 @@ _SOURCE_PROMPT_LABEL_PATTERN_TEXT = (
 )
 _SOURCE_TOOL_OUTPUT_LABEL_PATTERN_TEXT = (
     r"(?:"
-    r"(?:tool|command)[._ -]+(?:output|response|result)|"
+    r"(?:tool|command|function)[._ -]+(?:output|response|result)|"
     r"(?:execution|process|subprocess)[._ -]+output|"
     r"(?:terminal|console|shell)[._ -]+output|stdout|stderr|transcript"
     r")"

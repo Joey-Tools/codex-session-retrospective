@@ -7331,6 +7331,53 @@ class SessionRetrospectiveTests(unittest.TestCase):
                     ("2026/05/01", "later-valid-session", "/later-valid/repo"),
                 )
 
+    def test_remote_probe_session_meta_rejects_rollouts_without_valid_metadata(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "missing-id",
+                {
+                    "type": "session_meta",
+                    "timestamp": "2026-05-01T10:00:00Z",
+                    "payload": {"cwd": "/missing-id/repo"},
+                },
+                "session-meta record is missing a valid payload.id",
+            ),
+            (
+                "missing-meta",
+                {
+                    "type": "response_item",
+                    "timestamp": "2026-05-01T10:00:00Z",
+                    "payload": {"type": "message", "role": "user"},
+                },
+                "rollout has no session-meta record",
+            ),
+        )
+        for label, row, expected_error in cases:
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw) / ".codex"
+                source_directory = (
+                    "archived_sessions/2026/05/01"
+                    if label == "missing-meta"
+                    else "sessions/2026/05/01"
+                )
+                rollout_ref = (
+                    f"{source_directory}/rollout-2026-05-01T10-00-00-{label}.jsonl"
+                )
+                write_jsonl(root / rollout_ref, [row])
+
+                with self.assertRaises(REMOTE_PROBE.SessionMetaRolloutError) as raised:
+                    REMOTE_PROBE._scan_session_meta_records(
+                        codex_root=root,
+                        dates=[dt.date(2026, 5, 1)],
+                        limit=10,
+                        host="local",
+                    )
+
+            self.assertEqual(raised.exception.error, expected_error)
+            self.assertEqual(raised.exception.rollout, rollout_ref)
+
     def test_remote_probe_session_meta_skips_overflowing_timestamp_local_and_embedded(
         self,
     ) -> None:
