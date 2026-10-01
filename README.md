@@ -19,8 +19,9 @@ The verifier uses `JoeyTeng/codex-review-gate-action@v2` and produces the native
 `codex/github-review-gate` check for each ready pull request head. The separate
 controller handles official Codex comments and exact-head manual reconciliation.
 It can also request review after an eligible same-repository PR verifier failure
-when `CODEX_REVIEW_GATE_AUTO_REQUEST=true`; it has no scheduled job. The
-floating major-version reference is intentional:
+when `CODEX_REVIEW_GATE_AUTO_REQUEST=true`; it checks the linked PR's head
+repository ID and excludes forks before starting the controller job. It has no
+scheduled job. The floating major-version reference is intentional:
 compatible v2 releases can reach consumers without changing each repository.
 The included ruleset file is only an import template; copying it does not
 activate repository protection.

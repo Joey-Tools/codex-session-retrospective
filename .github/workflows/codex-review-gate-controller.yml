@@ -71,6 +71,7 @@ jobs:
           github.event.workflow_run.run_attempt == 1 &&
           github.event.workflow_run.conclusion == 'failure' &&
           github.event.workflow_run.pull_requests[0].number &&
+          github.event.workflow_run.pull_requests[0].head.repo.id == github.event.repository.id &&
           !github.event.workflow_run.pull_requests[1]
         )
       }}
