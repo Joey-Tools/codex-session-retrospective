@@ -8,7 +8,7 @@ repository is created from the template.
 ## Included
 
 - `.github/workflows/codex-review-gate.yml` (read-only pull-request verifier)
-- `.github/workflows/codex-review-gate-controller.yml` (review-event and manual controller)
+- `.github/workflows/codex-review-gate-controller.yml` (review-event, manual, and opt-in automatic controller)
 - `.github/CODEOWNERS` (control-plane ownership)
 - `rulesets/codex-review-gate.json` (Disabled v2 ruleset import template)
 - `.gitignore`
@@ -17,8 +17,11 @@ repository is created from the template.
 
 The verifier uses `JoeyTeng/codex-review-gate-action@v2` and produces the native
 `codex/github-review-gate` check for each ready pull request head. The separate
-controller handles official Codex comments and exact-head manual reconciliation;
-it has no scheduled job. The floating major-version reference is intentional:
+controller handles official Codex comments and exact-head manual reconciliation.
+It can also request review after an eligible same-repository PR verifier failure
+when `CODEX_REVIEW_GATE_AUTO_REQUEST=true`; it checks the linked PR's head
+repository ID and excludes forks before starting the controller job. It has no
+scheduled job. The floating major-version reference is intentional:
 compatible v2 releases can reach consumers without changing each repository.
 The included ruleset file is only an import template; copying it does not
 activate repository protection.
@@ -79,6 +82,10 @@ Rust when those modules are selected.
 
 ## Optional Repository Variables
 
+- `CODEX_REVIEW_GATE_AUTO_REQUEST=true`: opt in to automatic review requests
+  after an eligible same-repository PR verifier fails on its first attempt.
+  Unset or `false` keeps this off; the variable may be set at repository or
+  organization scope. The verifier still decides whether the PR can pass.
 - `CODEX_REVIEW_GATE_USE_UBUNTU_LATEST=true`: use `ubuntu-latest` when the
   default `ubuntu-slim` runner is unsuitable.
 - `CODEX_REVIEW_GATE_LIMITS_PROFILE=expanded`: raise the bounded scan profile
