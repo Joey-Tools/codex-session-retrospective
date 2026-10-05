@@ -25,12 +25,13 @@ The `workflow_run` completion filter does not exclude fork heads before runner
 allocation. A completed fork-PR verifier run can therefore start the controller
 job with its declared `actions: write` and `pull-requests: write` permissions. The
 job runs the released action without checking out or executing pull-request
-code. Runtime validates the completion-event shape and reads repository/PR
-metadata, then classifies a fork PR as unsupported (`not_applicable`) before
-loading the verifier workflow/run/check completion snapshot. This fail-closed
-path exits nonzero, does not write a PR diagnostic comment or request a review,
-and is not a gate pass. Treat it as metadata-only rejection, not authorization
-or approval. Supported same-repository completion runs continue to exact
+code. Runtime rejects a present mismatched association head repository during
+trigger validation; otherwise, read-only repository/PR classification rejects a
+fork PR as unsupported (`not_applicable`). Either path stops before loading the
+verifier workflow/run/check completion snapshot or performing GitHub side
+effects. It exits nonzero, does not request a review, and is not a gate pass.
+Treat it as fail-closed unsupported-target handling, not authorization or
+approval. Supported same-repository completion runs continue to exact
 workflow/run/attempt/check validation before refreshing metadata diagnostics;
 that report is not itself a gate pass or a new review request. The controller
 has no scheduled job. The floating major-version reference is intentional:
